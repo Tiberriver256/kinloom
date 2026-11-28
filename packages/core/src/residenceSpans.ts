@@ -8,12 +8,12 @@ export interface ResidenceAnchor {
   place_id: string;
   time_min: number;
   time_max: number;
-  year?: number | null;
+  year?: number | null | undefined;
 }
 
 export interface DeriveResidenceSpansOptions {
-  includeLiving?: boolean;
-  placesCacheKey?: object;
+  includeLiving?: boolean | undefined;
+  placesCacheKey?: object | undefined;
 }
 
 const proximityCacheByObj = new WeakMap<object, Map<string, boolean>>();
@@ -163,29 +163,39 @@ export function appendResidenceSpansForPerson(
   out: ResidenceSpan[],
   startOffset: number
 ): void {
-  const n = anchors.length;
-  if (n < 2) {
+  const [firstAnchor, secondAnchor] = anchors;
+  if (!firstAnchor || !secondAnchor) {
     return;
   }
   let sorted: readonly ResidenceAnchor[];
-  if (n === 2) {
-    sorted = compareResidenceAnchors(anchors[0], anchors[1]) <= 0 ? anchors : [anchors[1], anchors[0]];
+  if (anchors.length === 2) {
+    sorted = compareResidenceAnchors(firstAnchor, secondAnchor) <= 0 ? anchors : [secondAnchor, firstAnchor];
   } else {
     let alreadySorted = true;
-    for (let i = 1; i < n; i += 1) {
-      if (compareResidenceAnchors(anchors[i - 1], anchors[i]) > 0) {
+    let prevCheck = firstAnchor;
+    for (let i = 1; i < anchors.length; i += 1) {
+      const cur = anchors[i];
+      if (!cur) {
+        continue;
+      }
+      if (compareResidenceAnchors(prevCheck, cur) > 0) {
         alreadySorted = false;
         break;
       }
+      prevCheck = cur;
     }
     sorted = alreadySorted ? anchors : anchors.toSorted(compareResidenceAnchors);
   }
 
   const personStartIdx = out.length;
+  let prevAnchor: ResidenceAnchor | undefined;
 
-  for (let i = 0; i < n - 1; i += 1) {
-    const a = sorted[i];
-    const b = sorted[i + 1];
+  for (const b of sorted) {
+    const a = prevAnchor;
+    prevAnchor = b;
+    if (!a) {
+      continue;
+    }
     if (!isWithin15MilesCached(placesById, pairCache, a.place_id, b.place_id)) {
       continue;
     }
@@ -198,28 +208,26 @@ export function appendResidenceSpansForPerson(
     const endYear = b.year !== undefined ? b.year : edtfYear(b.edtf_date);
     const nextTimeMax = Math.max(a.time_max, b.time_max);
 
-    if (out.length > personStartIdx) {
-      const prev = out[out.length - 1];
-      if (prev.place_id === a.place_id) {
-        const sameYearWindow =
-          prev.start_year !== null &&
-          prev.end_year !== null &&
-          prev.start_year === startYear &&
-          prev.end_year === endYear;
-        const overlappingSameTier = prev.confidence_tier === tier && a.time_min <= prev.time_max;
-        if (sameYearWindow || overlappingSameTier) {
-          if (a.time_min < prev.time_min) {
-            prev.time_min = a.time_min;
-          }
-          if (nextTimeMax > prev.time_max) {
-            prev.time_max = nextTimeMax;
-          }
-          prev.start_year = minNullableYear(prev.start_year, startYear);
-          prev.end_year = maxNullableYear(prev.end_year, endYear);
-          prev.confidence_tier = higherConfidenceTier(prev.confidence_tier, tier);
-          prev.to_event_id = b.id;
-          continue;
+    const prev = out.length > personStartIdx ? out[out.length - 1] : undefined;
+    if (prev && prev.place_id === a.place_id) {
+      const sameYearWindow =
+        prev.start_year !== null &&
+        prev.end_year !== null &&
+        prev.start_year === startYear &&
+        prev.end_year === endYear;
+      const overlappingSameTier = prev.confidence_tier === tier && a.time_min <= prev.time_max;
+      if (sameYearWindow || overlappingSameTier) {
+        if (a.time_min < prev.time_min) {
+          prev.time_min = a.time_min;
         }
+        if (nextTimeMax > prev.time_max) {
+          prev.time_max = nextTimeMax;
+        }
+        prev.start_year = minNullableYear(prev.start_year, startYear);
+        prev.end_year = maxNullableYear(prev.end_year, endYear);
+        prev.confidence_tier = higherConfidenceTier(prev.confidence_tier, tier);
+        prev.to_event_id = b.id;
+        continue;
       }
     }
 
@@ -271,24 +279,22 @@ export function deriveResidenceSpans(
   events: readonly (Pick<
     ArchiveEvent,
     'id' | 'event_kind' | 'edtf_date' | 'place_id' | 'time_min' | 'time_max' | 'participants'
-  > & { year?: number | null })[],
+  > & { year?: number | null | undefined })[],
   placesById: ReadonlyMap<string, Place>,
   options?: DeriveResidenceSpansOptions
 ): ResidenceSpan[] {
   const includeLiving = options?.includeLiving ?? false;
   const pairCache = getProximityPairCache(placesById, options?.placesCacheKey);
   const personIdxById = new Map<string, number>();
-  for (let i = 0; i < people.length; i += 1) {
-    const p = people[i];
+  people.forEach((p, i) => {
     if (!p.is_living || includeLiving) {
       personIdxById.set(p.id, i);
     }
-  }
+  });
 
   const anchorsByPersonIdx = new Array<ResidenceAnchor[] | undefined>(people.length);
 
-  for (let i = 0; i < events.length; i += 1) {
-    const ev = events[i];
+  for (const ev of events) {
     if (
       ev.event_kind !== 'residence_anchor' ||
       ev.time_min === null ||
@@ -298,9 +304,8 @@ export function deriveResidenceSpans(
       continue;
     }
     const anchor = ev as ResidenceAnchor;
-    const pts = ev.participants;
-    for (let j = 0; j < pts.length; j += 1) {
-      const pIdx = personIdxById.get(pts[j].person_id);
+    for (const pt of ev.participants) {
+      const pIdx = personIdxById.get(pt.person_id);
       if (pIdx === undefined) {
         continue;
       }
@@ -314,13 +319,13 @@ export function deriveResidenceSpans(
   }
 
   const spans: ResidenceSpan[] = [];
-  for (let i = 0; i < people.length; i += 1) {
+  people.forEach((person, i) => {
     const anchors = anchorsByPersonIdx[i];
     if (!anchors || anchors.length < 2) {
-      continue;
+      return;
     }
-    appendResidenceSpansForPerson(people[i].id, anchors, placesById, pairCache, spans, spans.length);
-  }
+    appendResidenceSpansForPerson(person.id, anchors, placesById, pairCache, spans, spans.length);
+  });
 
   return spans;
 }

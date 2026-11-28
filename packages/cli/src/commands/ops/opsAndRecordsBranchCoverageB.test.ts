@@ -213,10 +213,10 @@ async function makeTempDir(prefix = 'kinloom-branch-b-'): Promise<string> {
 }
 
 afterEach(async () => {
-  delete process.env.FORVO_API_KEY;
-  delete process.env.KINLOOM_PRONOUNCE_CACHE_DIR;
-  delete process.env.KINLOOM_TELEMETRY_FILE;
-  delete process.env.KINLOOM_TELEMETRY_PARENT;
+  delete process.env['FORVO_API_KEY'];
+  delete process.env['KINLOOM_PRONOUNCE_CACHE_DIR'];
+  delete process.env['KINLOOM_TELEMETRY_FILE'];
+  delete process.env['KINLOOM_TELEMETRY_PARENT'];
   while (tempDirs.length > 0) {
     const dir = tempDirs.pop();
     if (dir) {
@@ -413,9 +413,9 @@ describe('ops/context/graph.ts branch coverage', () => {
       },
     };
     const evRes = collectPersonEventsAndReferences(rawEvents, targetPerson, privacyState);
-    expect(evRes.events[0].edtf_date).toBe('1995');
-    expect(evRes.events[0].place_id).toBeNull();
-    expect(evRes.events[1].edtf_date).toBe('');
+    expect(evRes.events[0]['edtf_date']).toBe('1995');
+    expect(evRes.events[0]['place_id']).toBeNull();
+    expect(evRes.events[1]['edtf_date']).toBe('');
     expect(evRes.referencedSourceIds.has('src_valid')).toBe(true);
     expect(evRes.referencedSourceIds.has('src_ext_str')).toBe(true);
     expect(evRes.referencedSourceIds.has('src_ext_obj')).toBe(true);
@@ -443,7 +443,7 @@ describe('ops/context/graph.ts branch coverage', () => {
       privacyState,
     });
     expect(narRes).toHaveLength(2);
-    expect(narRes[1].person_ids).toEqual(['per_clara_alder', REDACTED_RELATIVE_LABEL]);
+    expect(narRes[1]['person_ids']).toEqual(['per_clara_alder', REDACTED_RELATIVE_LABEL]);
 
     const refs = collectReferencedPlacesAndSources({
       placeBlocks: ['- id: plc_b\n  name: Birch', '- id: plc_a\n  name: Alder'],
@@ -452,8 +452,8 @@ describe('ops/context/graph.ts branch coverage', () => {
       referencedSourceIds: new Set(['src_b', 'src_a']),
       livingNamePattern: privacyState.livingNamePattern,
     });
-    expect(refs.places.map((p) => p.id)).toEqual(['plc_a', 'plc_b']);
-    expect(refs.sources.map((s) => s.id)).toEqual(['src_a', 'src_b']);
+    expect(refs.places.map((p) => p['id'])).toEqual(['plc_a', 'plc_b']);
+    expect(refs.sources.map((s) => s['id'])).toEqual(['src_a', 'src_b']);
 
     // Relative archive media: exercise relation ranking & tie-breaking + non-string caption
     const peopleById = new Map<string, LooseYamlRecord>([
@@ -887,10 +887,10 @@ describe('ops/pronounce (lookupProviders, mediaWiki, lookup, deduplicate, audit,
       'utf8'
     );
     const loaded = loadArchivePronunciationLexicon(tmp, { Mercer: { phonetic: 'MER-ser' } });
-    expect(loaded.Alder?.phonetic).toBe('AWL-der');
-    expect(loaded.Mercer?.phonetic).toBe('MER-ser');
-    expect(loaded.BadScalar).toBeUndefined();
-    expect(loaded.BadSchema).toBeUndefined();
+    expect(loaded['Alder']?.phonetic).toBe('AWL-der');
+    expect(loaded['Mercer']?.phonetic).toBe('MER-ser');
+    expect(loaded['BadScalar']).toBeUndefined();
+    expect(loaded['BadSchema']).toBeUndefined();
 
     // Array top-level YAML and malformed YAML both fall back cleanly
     await writeFile(path.join(tmp, 'data', 'pronunciations.yaml'), '- item1\n- item2\n', 'utf8');
@@ -2485,7 +2485,7 @@ describe('records/clients/findagrave (formatters, transport, commands) branch co
     expect((await loadOrFetchMemorialsWithHits(emptyDataCtx, ['101'], cacheOpts)).memorials).toEqual([]);
 
     const cRes = await loadOrFetchCemeteryById(emptyDataCtx, '202', cacheOpts);
-    expect(cRes.result.cemeteries).toEqual([]);
+    expect(cRes.result['cemeteries']).toEqual([]);
   });
 
   it('covers findagrave/commands default options, empty payloads, and bare URL generation', async () => {

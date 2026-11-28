@@ -64,16 +64,30 @@ export function buildPublicPwaFallbackResponse(
       body = `${JSON.stringify(buildWebManifest(siteConfig), null, 2)}\n`;
       break;
     case 'service_worker':
-      body = renderPrivacySafeServiceWorkerScript({ siteTitle: siteConfig?.site.title });
+      body = renderPrivacySafeServiceWorkerScript(
+        siteConfig?.site.title !== undefined ? { siteTitle: siteConfig.site.title } : {}
+      );
       break;
     case 'favicon_adaptive':
-      body = renderFaviconSvg({ accent, accentDark, label });
+      body = renderFaviconSvg({
+        ...(accent !== undefined ? { accent } : {}),
+        ...(accentDark !== undefined ? { accentDark } : {}),
+        ...(label !== undefined ? { label } : {}),
+      });
       break;
     case 'favicon_light':
-      body = renderLightFaviconSvg({ accent, accentDark, label });
+      body = renderLightFaviconSvg({
+        ...(accent !== undefined ? { accent } : {}),
+        ...(accentDark !== undefined ? { accentDark } : {}),
+        ...(label !== undefined ? { label } : {}),
+      });
       break;
     case 'favicon_dark':
-      body = renderDarkFaviconSvg({ accent, accentDark, label });
+      body = renderDarkFaviconSvg({
+        ...(accent !== undefined ? { accent } : {}),
+        ...(accentDark !== undefined ? { accentDark } : {}),
+        ...(label !== undefined ? { label } : {}),
+      });
       break;
     case 'none':
       return null;
@@ -95,7 +109,7 @@ export function buildPublicPwaFallbackResponse(
 
 export interface PublicPwaRouteHandlerDeps {
   readonly siteConfig: KinloomSiteConfig;
-  readonly assetHandler?: AssetHandler;
+  readonly assetHandler?: AssetHandler | undefined;
 }
 
 /**

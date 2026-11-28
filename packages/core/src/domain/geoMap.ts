@@ -198,15 +198,17 @@ export function buildMigrationStops(
 
 export function buildMigrationSegments(stops: readonly MigrationStop[], minMiles = 15): MigrationSegment[] {
   const segments: MigrationSegment[] = [];
-  for (let i = 1; i < stops.length; i += 1) {
-    const from = stops[i - 1];
-    const to = stops[i];
-    const distanceMiles = Math.round(
-      haversineMiles(from.place.lat, from.place.lng, to.place.lat, to.place.lng)
-    );
-    if (distanceMiles >= minMiles) {
-      segments.push({ from, to, distanceMiles });
+  let from: MigrationStop | undefined;
+  for (const to of stops) {
+    if (from) {
+      const distanceMiles = Math.round(
+        haversineMiles(from.place.lat, from.place.lng, to.place.lat, to.place.lng)
+      );
+      if (distanceMiles >= minMiles) {
+        segments.push({ from, to, distanceMiles });
+      }
     }
+    from = to;
   }
   return segments;
 }

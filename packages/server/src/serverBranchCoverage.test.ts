@@ -334,7 +334,7 @@ describe('wikiWrite payloadPolicy branch coverage', () => {
       }),
       previousPayload: prevPersonPayload,
     });
-    expect((changedLangRes.pronunciation as { audio_url?: string }).audio_url).toMatch(
+    expect((changedLangRes['pronunciation'] as { audio_url?: string }).audio_url).toMatch(
       /^\/media\/pronunciation-/
     );
 
@@ -348,7 +348,7 @@ describe('wikiWrite payloadPolicy branch coverage', () => {
       },
       previousPayload: null,
     });
-    expect((fallbackPhonetic.pronunciation as { audio_url?: string }).audio_url).toMatch(
+    expect((fallbackPhonetic['pronunciation'] as { audio_url?: string }).audio_url).toMatch(
       /^\/media\/pronunciation-/
     );
 
@@ -361,7 +361,7 @@ describe('wikiWrite payloadPolicy branch coverage', () => {
       },
       previousPayload: null,
     });
-    expect((fallbackIpa.pronunciation as { audio_url?: string }).audio_url).toMatch(
+    expect((fallbackIpa['pronunciation'] as { audio_url?: string }).audio_url).toMatch(
       /^\/media\/pronunciation-/
     );
 
@@ -406,7 +406,7 @@ describe('wikiWrite payloadPolicy branch coverage', () => {
         pronunciation: { audio_url: '/media/p.wav' },
       },
     });
-    expect((placeFullNameChanged.pronunciation as { audio_url?: string }).audio_url).toMatch(
+    expect((placeFullNameChanged['pronunciation'] as { audio_url?: string }).audio_url).toMatch(
       /^\/media\/pronunciation-/
     );
 
@@ -1109,7 +1109,7 @@ describe('httpPrimitives, session, authMiddleware, authService, and authRoutes b
     };
     const serverNoGoogle = createKinloomServer({
       siteConfig,
-      ports: { ...ports, authProvider: undefined, plugins: [securityPlugin] },
+      ports: { ...(({ authProvider: _ap, ...rest }) => rest)(ports), plugins: [securityPlugin] },
       sessionSecret: CONTRACT_SESSION_SECRET,
     });
     const startNoGoogleJson = await serverNoGoogle.fetch(
@@ -1369,7 +1369,7 @@ describe('wikiWriteService, batchCompiler, batchRevertCompiler, and commitPipeli
       summary: 'Restore with updated full name',
       author: EDITOR_AUTHOR,
     });
-    expect(restored.entity.full_name).toBe('Arthur Restored Alder');
+    expect(restored.entity['full_name']).toBe('Arthur Restored Alder');
 
     // Kinship edge delete & restore exercises 'edge' in existing branch
     const edgeCreated = await service.createEntity({
@@ -1481,7 +1481,7 @@ describe('wikiWriteService, batchCompiler, batchRevertCompiler, and commitPipeli
     expect(batch1.revisions).toHaveLength(3);
 
     // Batch updating existing media WITHOUT event_id in patch triggers extraEventKeys prefetch + full replace merge:false
-    const mediaRev = batch1.revisions[2].revision_id;
+    const mediaRev = batch1.revisions[2]!.revision_id;
     const batch2 = await service.submitBatch({
       submission: {
         batch_id: 'bat_media_2',
@@ -2312,7 +2312,7 @@ describe('InMemory stores, BundleReadService, AdminService, GoogleOAuthProvider,
       status: 404,
     });
     const readEv = await bundleRead.getEntity({ entityType: 'event', entityId: ev.id });
-    expect(readEv.entity.id).toBe(ev.id);
+    expect(readEv.entity['id']).toBe(ev.id);
 
     const exportedSnap = await bundleRead.exportSnapshot({ ifNoneMatch: null });
     expect(exportedSnap.status).toBe('ok');

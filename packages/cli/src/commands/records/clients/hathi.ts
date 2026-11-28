@@ -300,7 +300,7 @@ async function runBib(argv: readonly string[], ctx: RecordCommandContext): Promi
   }
 
   const ttlHours = parseCacheTtlHours(
-    cliTtl !== undefined ? cliTtl : ctx.env.KINLOOM_HATHI_CACHE_TTL_HOURS,
+    cliTtl !== undefined ? cliTtl : ctx.env['KINLOOM_HATHI_CACHE_TTL_HOURS'],
     DEFAULT_CACHE_TTL_HOURS,
     cliTtl !== undefined ? '--cache-ttl-hours' : 'KINLOOM_HATHI_CACHE_TTL_HOURS'
   );

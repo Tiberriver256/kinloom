@@ -101,7 +101,7 @@ export interface FreeregCachePayload {
 }
 
 export function isFreeregCachePayload(value: unknown): value is FreeregCachePayload {
-  return isPlainRecord(value) && Array.isArray(value.records);
+  return isPlainRecord(value) && Array.isArray(value['records']);
 }
 
 export function getCacheDir(ctx: RecordCommandContext): string {
@@ -216,18 +216,18 @@ function toStringArray(value: unknown): string[] {
 }
 
 export function mapDiscoveryHit(rec: Record<string, unknown>): DiscoveryHit {
-  const recId = typeof rec.id === 'string' ? rec.id : '';
-  const ref = typeof rec.reference === 'string' ? rec.reference : '';
+  const recId = typeof rec['id'] === 'string' ? rec['id'] : '';
+  const ref = typeof rec['reference'] === 'string' ? rec['reference'] : '';
   return {
     id: recId,
     iaid: recId,
     reference: ref,
-    title: typeof rec.title === 'string' ? rec.title : '',
-    description: typeof rec.description === 'string' ? rec.description : '',
-    covering_dates: typeof rec.coveringDates === 'string' ? rec.coveringDates : '',
-    department: typeof rec.department === 'string' ? rec.department : '',
-    places: toStringArray(rec.places),
-    held_by: toStringArray(rec.heldBy),
+    title: typeof rec['title'] === 'string' ? rec['title'] : '',
+    description: typeof rec['description'] === 'string' ? rec['description'] : '',
+    covering_dates: typeof rec['coveringDates'] === 'string' ? rec['coveringDates'] : '',
+    department: typeof rec['department'] === 'string' ? rec['department'] : '',
+    places: toStringArray(rec['places']),
+    held_by: toStringArray(rec['heldBy']),
     record_url: recId ? `${DISCOVERY_WEB}${recId}` : '',
   };
 }
@@ -245,19 +245,19 @@ export function matchesCollection(
 }
 
 export function mapDiscoveryDetail(raw: Record<string, unknown>): DiscoveryDetailPayload {
-  const scope = isPlainRecord(raw.scopeContent) ? raw.scopeContent : {};
-  const rawDesc = typeof scope.description === 'string' ? scope.description : null;
+  const scope = isPlainRecord(raw['scopeContent']) ? raw['scopeContent'] : {};
+  const rawDesc = typeof scope['description'] === 'string' ? scope['description'] : null;
   const description = rawDesc ? cleanHtmlText(rawDesc) : null;
 
-  const heldRaw = Array.isArray(raw.heldBy) ? raw.heldBy : [];
+  const heldRaw = Array.isArray(raw['heldBy']) ? raw['heldBy'] : [];
   const heldNames: string[] = [];
   for (const item of heldRaw) {
     if (isPlainRecord(item)) {
       const name =
-        typeof item.xReferenceName === 'string'
-          ? item.xReferenceName
-          : typeof item.name === 'string'
-            ? item.name
+        typeof item['xReferenceName'] === 'string'
+          ? item['xReferenceName']
+          : typeof item['name'] === 'string'
+            ? item['name']
             : '';
       if (name) {
         heldNames.push(name);
@@ -267,28 +267,28 @@ export function mapDiscoveryDetail(raw: Record<string, unknown>): DiscoveryDetai
     }
   }
 
-  const recId = typeof raw.id === 'string' ? raw.id : null;
+  const recId = typeof raw['id'] === 'string' ? raw['id'] : null;
   const citableRef =
-    typeof raw.citableReference === 'string'
-      ? raw.citableReference
-      : typeof raw.referencePart === 'string'
-        ? raw.referencePart
+    typeof raw['citableReference'] === 'string'
+      ? raw['citableReference']
+      : typeof raw['referencePart'] === 'string'
+        ? raw['referencePart']
         : null;
 
   return {
     id: recId,
     iaid: recId,
     citable_reference: citableRef,
-    title: typeof raw.title === 'string' ? raw.title : null,
-    covering_dates: typeof raw.coveringDates === 'string' ? raw.coveringDates : null,
-    covering_from_date: raw.coveringFromDate ?? null,
-    covering_to_date: raw.coveringToDate ?? null,
+    title: typeof raw['title'] === 'string' ? raw['title'] : null,
+    covering_dates: typeof raw['coveringDates'] === 'string' ? raw['coveringDates'] : null,
+    covering_from_date: raw['coveringFromDate'] ?? null,
+    covering_to_date: raw['coveringToDate'] ?? null,
     description,
     held_by: heldNames,
-    digitised: raw.digitised ?? null,
-    legal_status: typeof raw.legalStatus === 'string' ? raw.legalStatus : null,
-    catalogue_level: raw.catalogueLevel ?? null,
-    parent_id: typeof raw.parentId === 'string' ? raw.parentId : null,
+    digitised: raw['digitised'] ?? null,
+    legal_status: typeof raw['legalStatus'] === 'string' ? raw['legalStatus'] : null,
+    catalogue_level: raw['catalogueLevel'] ?? null,
+    parent_id: typeof raw['parentId'] === 'string' ? raw['parentId'] : null,
     record_url: `${DISCOVERY_WEB}${recId ?? ''}`,
   };
 }

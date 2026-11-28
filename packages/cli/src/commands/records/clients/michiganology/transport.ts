@@ -172,12 +172,12 @@ function readFileCache(
       }
       size = stat.size;
       const rawMeta = readJsonRecordIfValid(metaPath);
-      if (!rawMeta || rawMeta.schema !== CACHE_SCHEMA) {
+      if (!rawMeta || rawMeta['schema'] !== CACHE_SCHEMA) {
         return null;
       }
-      const fetched = rawMeta.fetched_at;
-      const filename = rawMeta.filename;
-      const contentType = rawMeta.content_type;
+      const fetched = rawMeta['fetched_at'];
+      const filename = rawMeta['filename'];
+      const contentType = rawMeta['content_type'];
       if (
         typeof fetched !== 'number' ||
         !Number.isFinite(fetched) ||
@@ -185,7 +185,7 @@ function readFileCache(
         !filename ||
         typeof contentType !== 'string' ||
         !contentType ||
-        rawMeta.bytes !== size
+        rawMeta['bytes'] !== size
       ) {
         return null;
       }

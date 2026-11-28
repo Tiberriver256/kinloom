@@ -71,9 +71,11 @@ export function transitionEntityLifecycle(
 
   if (command.type === 'revert') {
     const currentPayload = state.kind === 'active' ? state.data : null;
-    const revert = buildRevertPayload(currentPayload, command.targetRevision, {
-      summary: command.summary,
-    });
+    const revert = buildRevertPayload(
+      currentPayload,
+      command.targetRevision,
+      command.summary !== undefined ? { summary: command.summary } : undefined
+    );
     if (currentPayload === null && revert.after_json === null) {
       return {
         ok: false,
@@ -237,7 +239,7 @@ export function transitionBatchRevertLifecycle(
       {
         type: 'revert',
         targetRevision: rev,
-        summary,
+        ...(summary !== undefined ? { summary } : {}),
         nowIso: options.nowIso,
       },
       nextRevId

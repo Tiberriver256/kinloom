@@ -374,12 +374,12 @@ function applySettingsValuesToConfig(
   values: Readonly<Record<string, PluginSettingScalarValue>>,
   fallback: BookPublishingRuntimeConfig
 ): BookPublishingRuntimeConfig {
-  const providerParsed = BookPublisherProviderIdSchema.safeParse(values.publisher_provider);
-  const envParsed = BookPublisherEnvironmentSchema.safeParse(values.environment);
-  const trimParsed = BookTrimPresetIdSchema.safeParse(values.default_trim_preset);
-  const bindingParsed = BookBindingStyleSchema.safeParse(values.default_binding);
-  const paperParsed = BookPaperStockSchema.safeParse(values.default_paper_stock);
-  const shippingParsed = BookShippingLevelSchema.safeParse(values.default_shipping_level);
+  const providerParsed = BookPublisherProviderIdSchema.safeParse(values['publisher_provider']);
+  const envParsed = BookPublisherEnvironmentSchema.safeParse(values['environment']);
+  const trimParsed = BookTrimPresetIdSchema.safeParse(values['default_trim_preset']);
+  const bindingParsed = BookBindingStyleSchema.safeParse(values['default_binding']);
+  const paperParsed = BookPaperStockSchema.safeParse(values['default_paper_stock']);
+  const shippingParsed = BookShippingLevelSchema.safeParse(values['default_shipping_level']);
 
   return {
     publisherProvider: providerParsed.success ? providerParsed.data : fallback.publisherProvider,
@@ -389,7 +389,7 @@ function applySettingsValuesToConfig(
     defaultPaperStock: paperParsed.success ? paperParsed.data : fallback.defaultPaperStock,
     defaultShippingLevel: shippingParsed.success ? shippingParsed.data : fallback.defaultShippingLevel,
     contactEmail:
-      typeof values.contact_email === 'string' ? values.contact_email.trim() : fallback.contactEmail,
+      typeof values['contact_email'] === 'string' ? values['contact_email'].trim() : fallback.contactEmail,
   };
 }
 
@@ -612,20 +612,20 @@ export function createBookPublishingServerPlugin(
       if (
         typeof raw !== 'object' ||
         raw === null ||
-        typeof (raw as Record<string, unknown>).aid !== 'string' ||
-        typeof (raw as Record<string, unknown>).exp !== 'number'
+        typeof (raw as Record<string, unknown>)['aid'] !== 'string' ||
+        typeof (raw as Record<string, unknown>)['exp'] !== 'number'
       ) {
         return null;
       }
       const rawRec = raw as Record<string, unknown>;
-      const aid = rawRec.aid as string;
+      const aid = rawRec['aid'] as string;
       if (!SAFE_ARTIFACT_ID_PATTERN.test(aid)) {
         return null;
       }
       parsed = {
         aid,
-        exp: rawRec.exp as number,
-        fn: typeof rawRec.fn === 'string' ? sanitizePdfFilename(rawRec.fn) : 'kinloom-book.pdf',
+        exp: rawRec['exp'] as number,
+        fn: typeof rawRec['fn'] === 'string' ? sanitizePdfFilename(rawRec['fn']) : 'kinloom-book.pdf',
       };
     } catch {
       return null;

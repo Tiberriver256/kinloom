@@ -149,8 +149,8 @@ export function readCachedCensus1950(
   if (!envelope) {
     return null;
   }
-  const cachedAt = envelope.cached_at;
-  const data = envelope.data;
+  const cachedAt = envelope['cached_at'];
+  const data = envelope['data'];
   if (typeof cachedAt !== 'number' || !Number.isFinite(cachedAt) || !isPlainRecord(data)) {
     return null;
   }

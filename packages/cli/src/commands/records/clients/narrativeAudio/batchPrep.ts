@@ -190,8 +190,8 @@ export function hasExistingNarrativeAudio(narrative: Narrative): boolean {
   if (!ext || !isPlainRecord(ext)) {
     return false;
   }
-  const raw = ext.narrative_audio ?? ext.audio;
-  return isPlainRecord(raw) && typeof raw.file === 'string' && raw.file.trim().length > 0;
+  const raw = ext['narrative_audio'] ?? ext['audio'];
+  return isPlainRecord(raw) && typeof raw['file'] === 'string' && raw['file'].trim().length > 0;
 }
 
 function parseMetaRecord(raw: unknown): ImportedAudioMeta | undefined {
@@ -200,17 +200,17 @@ function parseMetaRecord(raw: unknown): ImportedAudioMeta | undefined {
   }
   return {
     duration_seconds:
-      typeof raw.duration_seconds === 'number' && Number.isFinite(raw.duration_seconds)
-        ? raw.duration_seconds
+      typeof raw['duration_seconds'] === 'number' && Number.isFinite(raw['duration_seconds'])
+        ? raw['duration_seconds']
         : undefined,
     editor_notes_start_seconds:
-      typeof raw.editor_notes_start_seconds === 'number' && Number.isFinite(raw.editor_notes_start_seconds)
-        ? raw.editor_notes_start_seconds
+      typeof raw['editor_notes_start_seconds'] === 'number' && Number.isFinite(raw['editor_notes_start_seconds'])
+        ? raw['editor_notes_start_seconds']
         : undefined,
     story_voice:
-      typeof raw.story_voice === 'string' && raw.story_voice.trim() ? raw.story_voice.trim() : undefined,
+      typeof raw['story_voice'] === 'string' && raw['story_voice'].trim() ? raw['story_voice'].trim() : undefined,
     notes_voice:
-      typeof raw.notes_voice === 'string' && raw.notes_voice.trim() ? raw.notes_voice.trim() : undefined,
+      typeof raw['notes_voice'] === 'string' && raw['notes_voice'].trim() ? raw['notes_voice'].trim() : undefined,
   };
 }
 
@@ -230,11 +230,11 @@ export function loadImportMetaMap(importDir: string): Map<string, ImportedAudioM
       if (!meta) {
         continue;
       }
-      if (typeof item.id === 'string') {
-        map.set(item.id, meta);
+      if (typeof item['id'] === 'string') {
+        map.set(item['id'], meta);
       }
-      if (typeof item.slug === 'string') {
-        map.set(item.slug, meta);
+      if (typeof item['slug'] === 'string') {
+        map.set(item['slug'], meta);
       }
     }
   } else if (isPlainRecord(parsed)) {
@@ -272,13 +272,13 @@ export function withNarrativeAudioExtension(
     file: meta.publicUrl,
   };
   if (meta.durationSeconds !== undefined) {
-    audioEntry.duration_seconds = Math.round(meta.durationSeconds);
+    audioEntry['duration_seconds'] = Math.round(meta.durationSeconds);
   }
   if (meta.editorNotesStartSeconds !== undefined) {
-    audioEntry.editor_notes_start_seconds = Math.round(meta.editorNotesStartSeconds);
+    audioEntry['editor_notes_start_seconds'] = Math.round(meta.editorNotesStartSeconds);
   }
-  audioEntry.story_voice = meta.storyVoice;
-  audioEntry.notes_voice = meta.notesVoice;
+  audioEntry['story_voice'] = meta.storyVoice;
+  audioEntry['notes_voice'] = meta.notesVoice;
 
   return {
     ...narrative,

@@ -304,10 +304,10 @@ export function parsePageSpec(spec: string, total: number): number[] {
 export function isRosettaFilesCache(value: unknown): value is RosettaFilesCache {
   return (
     isPlainRecord(value) &&
-    typeof value.ie === 'string' &&
-    typeof value.delivery_url === 'string' &&
-    Array.isArray(value.files) &&
-    value.files.length > 0
+    typeof value['ie'] === 'string' &&
+    typeof value['delivery_url'] === 'string' &&
+    Array.isArray(value['files']) &&
+    value['files'].length > 0
   );
 }
 

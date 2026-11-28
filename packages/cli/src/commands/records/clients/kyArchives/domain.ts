@@ -122,9 +122,9 @@ export function resolveKyTtl(cliTtl: number | undefined, ctx: RecordCommandConte
 }
 
 export function trimCdmSearchData(data: Record<string, unknown>): CdmSearchPayload {
-  const rawTotal = data.totalResults;
+  const rawTotal = data['totalResults'];
   const total = typeof rawTotal === 'number' ? rawTotal : 0;
-  const rawItems = Array.isArray(data.items) ? data.items : [];
+  const rawItems = Array.isArray(data['items']) ? data['items'] : [];
 
   const trimmed: CdmTrimmedItem[] = [];
   for (const item of rawItems) {
@@ -132,34 +132,34 @@ export function trimCdmSearchData(data: Record<string, unknown>): CdmSearchPaylo
       continue;
     }
     const fields: Record<string, unknown> = {};
-    const metaFields = item.metadataFields;
+    const metaFields = item['metadataFields'];
     if (Array.isArray(metaFields)) {
       for (const entry of metaFields) {
-        if (isPlainRecord(entry) && typeof entry.field === 'string') {
-          fields[entry.field] = entry.value;
+        if (isPlainRecord(entry) && typeof entry['field'] === 'string') {
+          fields[entry['field']] = entry['value'];
         }
       }
     }
     trimmed.push({
-      collectionAlias: item.collectionAlias ?? null,
-      itemId: item.itemId ?? null,
-      title: item.title ?? null,
-      filetype: item.filetype ?? null,
-      itemLink: item.itemLink ?? null,
+      collectionAlias: item['collectionAlias'] ?? null,
+      itemId: item['itemId'] ?? null,
+      title: item['title'] ?? null,
+      filetype: item['filetype'] ?? null,
+      itemLink: item['itemLink'] ?? null,
       fields,
     });
   }
 
-  const verified = Array.isArray(data.items) && typeof data.totalResults === 'number';
+  const verified = Array.isArray(data['items']) && typeof data['totalResults'] === 'number';
   return { totalResults: total, items: trimmed, verified };
 }
 
 export function isCdmSearchPayload(value: unknown): value is CdmSearchPayload {
   return (
     isPlainRecord(value) &&
-    typeof value.totalResults === 'number' &&
-    Array.isArray(value.items) &&
-    typeof value.verified === 'boolean'
+    typeof value['totalResults'] === 'number' &&
+    Array.isArray(value['items']) &&
+    typeof value['verified'] === 'boolean'
   );
 }
 
@@ -208,9 +208,9 @@ export function parseLandResults(pageHtml: string): KyLandPayload {
 export function isKyLandPayload(value: unknown): value is KyLandPayload {
   return (
     isPlainRecord(value) &&
-    typeof value.totalResults === 'number' &&
-    Array.isArray(value.results) &&
-    typeof value.verified === 'boolean'
+    typeof value['totalResults'] === 'number' &&
+    Array.isArray(value['results']) &&
+    typeof value['verified'] === 'boolean'
   );
 }
 
@@ -230,15 +230,15 @@ export function parsePreservicaRss(
       isArray: (tagName) => tagName === 'item',
     });
     if (isPlainRecord(parsed)) {
-      const rssNode = isPlainRecord(parsed.rss) ? parsed.rss : parsed;
-      const channel = isPlainRecord(rssNode.channel) ? rssNode.channel : undefined;
-      const items = channel ? toArray<unknown>(channel.item) : [];
+      const rssNode = isPlainRecord(parsed['rss']) ? parsed['rss'] : parsed;
+      const channel = isPlainRecord(rssNode['channel']) ? rssNode['channel'] : undefined;
+      const items = channel ? toArray<unknown>(channel['item']) : [];
       for (const rawItem of items) {
         if (!isPlainRecord(rawItem)) {
           continue;
         }
-        const rawTitle = extractXmlText(rawItem.title);
-        const rawLink = extractXmlText(rawItem.link).trim();
+        const rawTitle = extractXmlText(rawItem['title']);
+        const rawLink = extractXmlText(rawItem['link']).trim();
         if (!rawTitle || !rawLink || seen.has(rawLink)) {
           continue;
         }
@@ -267,10 +267,10 @@ export function parsePreservicaRss(
 export function isKyPreservicaPayload(value: unknown): value is KyPreservicaPayload {
   return (
     isPlainRecord(value) &&
-    typeof value.search_url === 'string' &&
-    typeof value.feed_url === 'string' &&
-    Array.isArray(value.results) &&
-    typeof value.verified === 'boolean'
+    typeof value['search_url'] === 'string' &&
+    typeof value['feed_url'] === 'string' &&
+    Array.isArray(value['results']) &&
+    typeof value['verified'] === 'boolean'
   );
 }
 

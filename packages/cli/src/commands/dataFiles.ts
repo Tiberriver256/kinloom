@@ -308,7 +308,7 @@ export function snapshotToArchiveData(snapshot: ArchiveRawSnapshot): LocalArchiv
       continue;
     }
     const rawWithCitation: Record<string, unknown> =
-      row.data.has_primary_source === undefined && row.has_primary_source === false
+      row.data['has_primary_source'] === undefined && row.has_primary_source === false
         ? { ...row.data, has_primary_source: false }
         : row.data;
     appendEntityByType[row.entity_type](rawWithCitation);

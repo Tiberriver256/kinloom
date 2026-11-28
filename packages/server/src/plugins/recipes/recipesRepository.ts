@@ -31,16 +31,16 @@ export interface UpdateRecipeRepoInput {
 }
 
 export interface ListRecipesQuery {
-  readonly q?: string;
-  readonly course?: RecipeCourse;
-  readonly tag?: string;
-  readonly attributed_person_id?: string;
-  readonly favorites_for_actor_key?: string;
-  readonly viewer_actor_key?: string;
-  readonly sort?: RecipeSortMode;
-  readonly limit?: number;
-  readonly offset?: number;
-  readonly exclude_living_person_ids?: ReadonlySet<string>;
+  readonly q?: string | undefined;
+  readonly course?: RecipeCourse | undefined;
+  readonly tag?: string | undefined;
+  readonly attributed_person_id?: string | undefined;
+  readonly favorites_for_actor_key?: string | undefined;
+  readonly viewer_actor_key?: string | undefined;
+  readonly sort?: RecipeSortMode | undefined;
+  readonly limit?: number | undefined;
+  readonly offset?: number | undefined;
+  readonly exclude_living_person_ids?: ReadonlySet<string> | undefined;
 }
 
 export interface RecipeListItem {
@@ -82,8 +82,8 @@ export interface AddRecipePhotoRepoInput {
   readonly orientation: number;
   readonly caption: string;
   readonly card_side: RecipeCardSide;
-  readonly sort_order?: number;
-  readonly set_cover?: boolean;
+  readonly sort_order?: number | undefined;
+  readonly set_cover?: boolean | undefined;
   readonly uploaded_by: RecipeActorIdentity;
   readonly nowIso: string;
 }
@@ -91,10 +91,10 @@ export interface AddRecipePhotoRepoInput {
 export interface UpdateRecipePhotoRepoInput {
   readonly recipe_id: string;
   readonly photo_id: string;
-  readonly caption?: string;
-  readonly card_side?: RecipeCardSide;
-  readonly sort_order?: number;
-  readonly set_cover?: boolean;
+  readonly caption?: string | undefined;
+  readonly card_side?: RecipeCardSide | undefined;
+  readonly sort_order?: number | undefined;
+  readonly set_cover?: boolean | undefined;
   readonly nowIso: string;
 }
 

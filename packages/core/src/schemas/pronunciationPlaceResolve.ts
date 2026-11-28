@@ -27,16 +27,16 @@ function getPreindexedPlaceLexicon(lexicon: Readonly<Record<string, Pronunciatio
   const byLowerKey = new Map<string, Pronunciation>();
   const qualifiedByNameLower = new Map<string, QualifiedPlaceLexiconCandidate[]>();
 
-  for (const key of Object.keys(lexicon)) {
-    const entry = lexicon[key];
+  for (const [key, entry] of Object.entries(lexicon)) {
     const lower = key.toLowerCase();
     if (!byLowerKey.has(lower)) {
       byLowerKey.set(lower, entry);
     }
     if (key.includes(',')) {
       const keySegments = splitPlaceSegments(key);
-      if (keySegments.length >= 2) {
-        const firstLower = keySegments[0].toLowerCase();
+      const firstSeg = keySegments[0];
+      if (keySegments.length >= 2 && firstSeg) {
+        const firstLower = firstSeg.toLowerCase();
         const qualifiersLower = keySegments.slice(1).map((s) => s.toLowerCase());
         let bucket = qualifiedByNameLower.get(firstLower);
         if (!bucket) {
@@ -64,10 +64,10 @@ function getPreindexedPlaceLexicon(lexicon: Readonly<Record<string, Pronunciatio
  */
 export function resolvePlacePronunciation(
   place: {
-    readonly id?: string;
-    readonly name?: string;
-    readonly full_name?: string;
-    readonly pronunciation?: Pronunciation | null;
+    readonly id?: string | undefined;
+    readonly name?: string | undefined;
+    readonly full_name?: string | undefined;
+    readonly pronunciation?: Pronunciation | null | undefined;
   },
   lexicon?: Readonly<Record<string, Pronunciation>> | null
 ): Pronunciation | null {
@@ -96,8 +96,7 @@ export function resolvePlacePronunciation(
         const qualifierJoined = qualifierSegments.join(', ');
         let bestQualified: QualifiedPlaceLexiconCandidate | null = null;
 
-        for (let i = 0; i < qualifiedCandidates.length; i += 1) {
-          const cand = qualifiedCandidates[i];
+        for (const cand of qualifiedCandidates) {
           const allMatch = cand.qualifiersLower.every(
             (q) => qualifierSegments.includes(q) || (q.length >= 3 && qualifierJoined.includes(q))
           );

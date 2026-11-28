@@ -145,7 +145,7 @@ export function auditDtcgTokenFile(filePath: string, findings: DesignAuditFindin
 
   if (filePath.endsWith('.resolver.json')) {
     const rec = parsed as Record<string, unknown> | null;
-    if (!rec || !Array.isArray(rec.resolutionOrder)) {
+    if (!rec || !Array.isArray(rec['resolutionOrder'])) {
       findings.push({
         ruleId: 'DA-06-DTCG-RESOLVER-ORDER',
         metricId: '06',

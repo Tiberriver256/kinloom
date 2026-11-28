@@ -73,12 +73,12 @@ export async function runPhoto(
   }
 
   const memorial = memorials[0];
-  const photosObj = isPlainRecord(memorial.photos) ? memorial.photos : {};
-  let photoList = (Array.isArray(photosObj.photos) ? photosObj.photos : []).filter((p): p is JsonRecord =>
+  const photosObj = isPlainRecord(memorial['photos']) ? memorial['photos'] : {};
+  let photoList = (Array.isArray(photosObj['photos']) ? photosObj['photos'] : []).filter((p): p is JsonRecord =>
     isPlainRecord(p)
   );
   if (photoType && !allTypes) {
-    photoList = photoList.filter((p) => p.type === photoType);
+    photoList = photoList.filter((p) => p['type'] === photoType);
   }
 
   if (photoList.length === 0) {
@@ -102,8 +102,8 @@ export async function runPhoto(
   let bytesOut = 0;
 
   for (const item of photoList) {
-    const url = validatePhotoUrl(typeof item.path === 'string' ? item.path : '');
-    const cacheFilename = safePhotoFilename(item.id, url);
+    const url = validatePhotoUrl(typeof item['path'] === 'string' ? item['path'] : '');
+    const cacheFilename = safePhotoFilename(item['id'], url);
     const cachedPath = resolveSafeChildPath(photosCacheDir, cacheFilename);
     const dest = resolveSafeChildPath(outDir, `${stemPrefix}${cacheFilename}`);
 
@@ -140,7 +140,7 @@ export async function runPhoto(
           if (!photoBytesAccepted(content, contentType)) {
             rejected = true;
             itemRejected = true;
-            const photoLabel = item.id !== null && item.id !== undefined ? String(item.id) : url;
+            const photoLabel = item['id'] !== null && item['id'] !== undefined ? String(item['id']) : url;
             ctx.io.stderr(`Rejected non-image body for photo ${photoLabel}`);
             return;
           }
@@ -156,9 +156,9 @@ export async function runPhoto(
 
     fileHits.push(fromCache);
     savedItems.push({
-      id: item.id ?? null,
-      type: item.type ?? null,
-      caption: item.caption ?? null,
+      id: item['id'] ?? null,
+      type: item['type'] ?? null,
+      caption: item['caption'] ?? null,
       url,
       file: path.basename(dest),
       bytes: size,
@@ -170,11 +170,11 @@ export async function runPhoto(
   if (saveMetadata) {
     const metaPath = resolveSafeChildPath(outDir, `${stemPrefix}${cleanId}.metadata.json`);
     const metaPayload = {
-      memorial_id: String(memorial.id ?? ''),
+      memorial_id: String(memorial['id'] ?? ''),
       name: primaryName(memorial),
-      url: memorialUrl(String(memorial.id ?? '')),
-      cemetery: fmtCemetery(memorial.cemetery),
-      plot: memorial.plot ?? null,
+      url: memorialUrl(String(memorial['id'] ?? '')),
+      cemetery: fmtCemetery(memorial['cemetery']),
+      plot: memorial['plot'] ?? null,
       photos: savedItems.map((item) => ({
         id: item.id,
         type: item.type,
@@ -200,7 +200,7 @@ export async function runPhoto(
       cache_hit: cacheHit,
     };
     if (metadataPath !== undefined) {
-      payload.metadata_file = metadataPath;
+      payload['metadata_file'] = metadataPath;
     }
     bytesOut += emitJsonStdout(ctx.io, payload);
   }

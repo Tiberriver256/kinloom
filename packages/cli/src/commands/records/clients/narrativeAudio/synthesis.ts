@@ -23,7 +23,7 @@ import {
 export interface SynthesisOutcome {
   readonly combinedPcm: Buffer;
   readonly sampleRate: number;
-  readonly notesStartSec?: number;
+  readonly notesStartSec?: number | undefined;
   readonly usageStr: string;
 }
 
@@ -70,7 +70,7 @@ export function defaultExecFile(
 }
 
 export function findExecutableOnPath(name: string, env: NodeJS.ProcessEnv): string | null {
-  const pathVar = env.PATH ?? process.env.PATH ?? '';
+  const pathVar = env['PATH'] ?? process.env['PATH'] ?? '';
   for (const dir of pathVar.split(path.delimiter).filter(Boolean)) {
     const candidate = path.join(dir, name);
     try {
@@ -105,7 +105,7 @@ export function resolveGeminiApiKey(keyFile: string | undefined, ctx: RecordComm
     const abs = resolveUserPathFromContext(keyFile, ctx);
     return fs.readFileSync(abs, 'utf8').trim();
   }
-  const key = (ctx.env.GEMINI_API_KEY ?? ctx.env.GOOGLE_API_KEY ?? '').trim();
+  const key = (ctx.env['GEMINI_API_KEY'] ?? ctx.env['GOOGLE_API_KEY'] ?? '').trim();
   if (!key) {
     throw new RecordRuntimeError('Set GEMINI_API_KEY (or GOOGLE_API_KEY), or pass --key-file.');
   }
@@ -121,7 +121,7 @@ export async function resolveCloudTtsHeaders(
     const abs = resolveUserPathFromContext(keyFile, ctx);
     return { 'x-goog-api-key': fs.readFileSync(abs, 'utf8').trim() };
   }
-  const envKey = (ctx.env.GOOGLE_CLOUD_TTS_API_KEY ?? '').trim();
+  const envKey = (ctx.env['GOOGLE_CLOUD_TTS_API_KEY'] ?? '').trim();
   if (envKey) {
     return { 'x-goog-api-key': envKey };
   }
@@ -129,7 +129,7 @@ export async function resolveCloudTtsHeaders(
   const execFn = ctx.execFileImpl ?? defaultExecFile;
   const hasGcloud = ctx.execFileImpl !== undefined || findExecutableOnPath('gcloud', ctx.env) !== null;
 
-  let token = (ctx.env.GOOGLE_CLOUD_ACCESS_TOKEN ?? '').trim();
+  let token = (ctx.env['GOOGLE_CLOUD_ACCESS_TOKEN'] ?? '').trim();
   if (!token) {
     if (!hasGcloud) {
       throw new RecordRuntimeError(
@@ -141,8 +141,8 @@ export async function resolveCloudTtsHeaders(
       token = res.stdout.toString('utf8').trim();
     } catch (err: unknown) {
       const detail =
-        isPlainRecord(err) && Buffer.isBuffer(err.stderr)
-          ? err.stderr.toString('utf8').trim()
+        isPlainRecord(err) && Buffer.isBuffer(err['stderr'])
+          ? err['stderr'].toString('utf8').trim()
           : err instanceof Error
             ? err.message
             : '';
@@ -155,8 +155,8 @@ export async function resolveCloudTtsHeaders(
 
   let project =
     (gcpProject ?? '').trim() ||
-    (ctx.env.GOOGLE_CLOUD_PROJECT ?? '').trim() ||
-    (ctx.env.GCP_PROJECT ?? '').trim();
+    (ctx.env['GOOGLE_CLOUD_PROJECT'] ?? '').trim() ||
+    (ctx.env['GCP_PROJECT'] ?? '').trim();
 
   if (!project && hasGcloud) {
     try {
@@ -236,7 +236,7 @@ export async function synthesizeWithChirp(options: {
     if (Object.keys(options.namesMap).length > 0) {
       const prons = buildChirpPronunciations(chunk.text, options.namesMap);
       if (prons.length > 0) {
-        inputObj.customPronunciations = { pronunciations: prons };
+        inputObj['customPronunciations'] = { pronunciations: prons };
       }
     }
     const payload = {
@@ -251,10 +251,10 @@ export async function synthesizeWithChirp(options: {
       label: 'cloud-tts',
       ctx: options.ctx,
     });
-    if (typeof resp.audioContent !== 'string') {
+    if (typeof resp['audioContent'] !== 'string') {
       throw new RecordRuntimeError('cloud-tts response missing audioContent');
     }
-    const decoded = Buffer.from(resp.audioContent, 'base64');
+    const decoded = Buffer.from(resp['audioContent'], 'base64');
     const stripped = stripWavHeader(decoded, 24000);
     rate = stripped.sampleRate;
     if (pcmLength > 0) {
@@ -314,17 +314,17 @@ export async function synthesizeWithGemini(options: {
       ctx: options.ctx,
     });
 
-    const candidates = Array.isArray(resp.candidates) ? resp.candidates : [];
+    const candidates = Array.isArray(resp['candidates']) ? resp['candidates'] : [];
     const firstCand = isPlainRecord(candidates[0]) ? candidates[0] : undefined;
-    const content = firstCand && isPlainRecord(firstCand.content) ? firstCand.content : undefined;
-    const parts = content && Array.isArray(content.parts) ? content.parts : [];
+    const content = firstCand && isPlainRecord(firstCand['content']) ? firstCand['content'] : undefined;
+    const parts = content && Array.isArray(content['parts']) ? content['parts'] : [];
     const firstPart = isPlainRecord(parts[0]) ? parts[0] : undefined;
-    const inlineData = firstPart && isPlainRecord(firstPart.inlineData) ? firstPart.inlineData : undefined;
-    if (!inlineData || typeof inlineData.data !== 'string') {
+    const inlineData = firstPart && isPlainRecord(firstPart['inlineData']) ? firstPart['inlineData'] : undefined;
+    if (!inlineData || typeof inlineData['data'] !== 'string') {
       throw new RecordRuntimeError(`${options.model}: response missing inline audio data`);
     }
 
-    const decoded = Buffer.from(inlineData.data, 'base64');
+    const decoded = Buffer.from(inlineData['data'], 'base64');
     let chunkPcm: Buffer;
     if (decoded.length >= 4 && decoded.toString('ascii', 0, 4) === 'RIFF') {
       const stripped = stripWavHeader(decoded, rate);
@@ -332,7 +332,7 @@ export async function synthesizeWithGemini(options: {
       rate = stripped.sampleRate;
     } else {
       chunkPcm = decoded;
-      const mimeType = typeof inlineData.mimeType === 'string' ? inlineData.mimeType : '';
+      const mimeType = typeof inlineData['mimeType'] === 'string' ? inlineData['mimeType'] : '';
       const rateMatch = /rate=(\d+)/.exec(mimeType);
       if (rateMatch) {
         rate = Number.parseInt(rateMatch[1], 10);
@@ -351,8 +351,8 @@ export async function synthesizeWithGemini(options: {
     pcmParts.push(chunkPcm);
     pcmLength += chunkPcm.length;
 
-    const usage = isPlainRecord(resp.usageMetadata) ? resp.usageMetadata : {};
-    const tokens = typeof usage.totalTokenCount === 'number' ? usage.totalTokenCount : 0;
+    const usage = isPlainRecord(resp['usageMetadata']) ? resp['usageMetadata'] : {};
+    const tokens = typeof usage['totalTokenCount'] === 'number' ? usage['totalTokenCount'] : 0;
     totalTokens += tokens;
     options.ctx.io.stderr(
       `  section ${i + 1}/${options.chunks.length} [${chunk.voice}]: ${countWords(chunk.text)} words, ` +
@@ -402,7 +402,7 @@ export async function encodePcmToMp3(options: {
       { env: options.ctx.env }
     );
   } catch (err: unknown) {
-    if (isPlainRecord(err) && err.code === 'ENOENT') {
+    if (isPlainRecord(err) && err['code'] === 'ENOENT') {
       throw new RecordRuntimeError('ffmpeg not found on PATH');
     }
     throw err;
@@ -443,9 +443,9 @@ export async function transcribeAudioFile(options: {
     ctx: options.ctx,
   });
 
-  const candidates = Array.isArray(resp.candidates) ? resp.candidates : [];
+  const candidates = Array.isArray(resp['candidates']) ? resp['candidates'] : [];
   const firstCand = isPlainRecord(candidates[0]) ? candidates[0] : undefined;
-  const content = firstCand && isPlainRecord(firstCand.content) ? firstCand.content : undefined;
-  const parts = content && Array.isArray(content.parts) ? content.parts : [];
-  return parts.map((p) => (isPlainRecord(p) && typeof p.text === 'string' ? p.text : '')).join('');
+  const content = firstCand && isPlainRecord(firstCand['content']) ? firstCand['content'] : undefined;
+  const parts = content && Array.isArray(content['parts']) ? content['parts'] : [];
+  return parts.map((p) => (isPlainRecord(p) && typeof p['text'] === 'string' ? p['text'] : '')).join('');
 }

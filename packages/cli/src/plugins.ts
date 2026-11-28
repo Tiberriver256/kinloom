@@ -83,10 +83,10 @@ function isKinloomCliCommand(value: unknown): value is KinloomCliCommand {
   }
   const candidate = value as Record<string, unknown>;
   return (
-    isNonEmptyString(candidate.name) &&
-    typeof candidate.summary === 'string' &&
-    typeof candidate.help === 'string' &&
-    typeof candidate.run === 'function'
+    isNonEmptyString(candidate['name']) &&
+    typeof candidate['summary'] === 'string' &&
+    typeof candidate['help'] === 'string' &&
+    typeof candidate['run'] === 'function'
   );
 }
 
@@ -96,7 +96,7 @@ function isKinloomCheck(value: unknown): value is { id: string; name: string; ru
   }
   const candidate = value as Record<string, unknown>;
   return (
-    isNonEmptyString(candidate.id) && isNonEmptyString(candidate.name) && typeof candidate.run === 'function'
+    isNonEmptyString(candidate['id']) && isNonEmptyString(candidate['name']) && typeof candidate['run'] === 'function'
   );
 }
 
@@ -105,27 +105,27 @@ function isKinloomCliPlugin(value: unknown): value is KinloomCliPlugin {
     return false;
   }
   const candidate = value as Record<string, unknown>;
-  if (!isNonEmptyString(candidate.id) || !isNonEmptyString(candidate.name)) {
+  if (!isNonEmptyString(candidate['id']) || !isNonEmptyString(candidate['name'])) {
     return false;
   }
-  const hasCommands = candidate.commands !== undefined;
-  const hasAuditChecks = candidate.auditChecks !== undefined;
-  const hasVerifyChecks = candidate.verifyChecks !== undefined;
+  const hasCommands = candidate['commands'] !== undefined;
+  const hasAuditChecks = candidate['auditChecks'] !== undefined;
+  const hasVerifyChecks = candidate['verifyChecks'] !== undefined;
   if (!hasCommands && !hasAuditChecks && !hasVerifyChecks) {
     return false;
   }
-  if (hasCommands && (!Array.isArray(candidate.commands) || !candidate.commands.every(isKinloomCliCommand))) {
+  if (hasCommands && (!Array.isArray(candidate['commands']) || !candidate['commands'].every(isKinloomCliCommand))) {
     return false;
   }
   if (
     hasAuditChecks &&
-    (!Array.isArray(candidate.auditChecks) || !candidate.auditChecks.every(isKinloomCheck))
+    (!Array.isArray(candidate['auditChecks']) || !candidate['auditChecks'].every(isKinloomCheck))
   ) {
     return false;
   }
   if (
     hasVerifyChecks &&
-    (!Array.isArray(candidate.verifyChecks) || !candidate.verifyChecks.every(isKinloomCheck))
+    (!Array.isArray(candidate['verifyChecks']) || !candidate['verifyChecks'].every(isKinloomCheck))
   ) {
     return false;
   }

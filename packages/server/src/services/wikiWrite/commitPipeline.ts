@@ -35,7 +35,7 @@ export interface WikiCommitPipelineDeps {
   readonly bundleCache: BundleCache;
   readonly clock: Clock;
   readonly plugins: readonly KinloomServerPlugin[];
-  readonly onPluginError?: (pluginId: string, error: unknown) => void;
+  readonly onPluginError?: ((pluginId: string, error: unknown) => void) | undefined;
 }
 
 export function buildInitialSnapshotFromRevisions(
@@ -174,9 +174,10 @@ export class WikiCommitPipeline {
       }
     }
 
-    if (this.deps.bundleCache.applyMutationsAndStore && committedRevisions.length > 0) {
+    const firstCommitted = committedRevisions[0];
+    if (this.deps.bundleCache.applyMutationsAndStore && firstCommitted !== undefined) {
       const cached = await this.deps.bundleCache.getCached(null);
-      const firstNewRevId = committedRevisions[0].revision_id;
+      const firstNewRevId = firstCommitted.revision_id;
       if (cached.status === 'hit') {
         if (cached.object.revision_id === firstNewRevId - 1) {
           let previousBundle: ArchiveBundle | null = null;
@@ -218,7 +219,7 @@ export class WikiCommitPipeline {
 
     // When the first committed revision is r1, materialize the active snapshot directly without a full DB roundtrip.
     const snapshot =
-      committedRevisions.length > 0 && committedRevisions[0].revision_id === 1
+      firstCommitted !== undefined && firstCommitted.revision_id === 1
         ? buildInitialSnapshotFromRevisions(committedRevisions, headRevisionId)
         : await this.deps.repository.loadActiveSnapshot();
     const rebuilt = await this.deps.bundleCache.rebuildAndStore(snapshot);

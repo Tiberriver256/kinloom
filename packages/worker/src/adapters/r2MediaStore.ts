@@ -10,7 +10,7 @@ import type { R2Bucket, R2ObjectBody } from '../types.js';
 const KEY_SHA256_PATTERN = /(?:^|\/)([0-9a-f]{64})\.[a-z0-9]+$/i;
 
 function resolveSha256(key: string, obj: R2ObjectBody): Sha256Hex | undefined {
-  const metaSha = obj.customMetadata?.sha256;
+  const metaSha = obj.customMetadata?.['sha256'];
   if (metaSha && /^[0-9a-f]{64}$/i.test(metaSha)) {
     return asSha256Hex(metaSha);
   }
@@ -40,7 +40,9 @@ export class R2MediaStore implements MediaStore {
     return {
       exists: true,
       sizeBytes: obj.size,
-      contentType: obj.httpMetadata?.contentType,
+      ...(obj.httpMetadata?.contentType !== undefined
+        ? { contentType: obj.httpMetadata.contentType }
+        : {}),
     };
   }
 

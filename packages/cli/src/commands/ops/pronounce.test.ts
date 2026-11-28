@@ -1741,19 +1741,19 @@ describe('IPA-in-phonetic audit checks and kinloom pronounce deduplicate', () =>
     const persistedConfig = parseKinloomConfigYaml(
       fs.readFileSync(path.join(repoDir, 'kinloom.config.yaml'), 'utf8')
     );
-    expect(persistedConfig.pronunciations?.Jane).toEqual({
+    expect(persistedConfig.pronunciations?.['Jane']).toEqual({
       phonetic: 'JAYN',
       ipa: '/ˈdʒeɪn/',
       language: 'en-US',
       source_label: 'Wiktionary',
     });
-    expect(persistedConfig.pronunciations?.Sterling).toEqual({
+    expect(persistedConfig.pronunciations?.['Sterling']).toEqual({
       phonetic: 'STER-ling',
       ipa: '/ˈstɜːr.lɪŋ/',
       language: 'en-US',
       source_label: 'Wiktionary',
     });
-    expect(persistedConfig.pronunciations?.Thomas).toEqual({
+    expect(persistedConfig.pronunciations?.['Thomas']).toEqual({
       phonetic: 'TOM-us',
       ipa: '/ˈtɒm.əs/',
       language: 'en-US',

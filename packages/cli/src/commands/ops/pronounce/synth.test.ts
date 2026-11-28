@@ -285,7 +285,7 @@ describe('kinloom pronounce synth', () => {
       fs.readFileSync(path.join(repoDir, 'kinloom.config.yaml'), 'utf8')
     );
     expect(updatedConfig.pronunciations?.['Hendrik van der Meer']?.audio_url).toBe(hendrikTarget?.audio_url);
-    expect(updatedConfig.pronunciations?.Oakville?.audio_url).toBe(
+    expect(updatedConfig.pronunciations?.['Oakville']?.audio_url).toBe(
       'https://commons.wikimedia.org/wiki/Special:FilePath/En-us-Oakville.ogg'
     );
 
@@ -304,7 +304,7 @@ describe('kinloom pronounce synth', () => {
     const forcedConfig = parseKinloomConfigYaml(
       fs.readFileSync(path.join(repoDir, 'kinloom.config.yaml'), 'utf8')
     );
-    expect(forcedConfig.pronunciations?.Oakville?.audio_url).toBe(oakvilleTarget?.audio_url);
+    expect(forcedConfig.pronunciations?.['Oakville']?.audio_url).toBe(oakvilleTarget?.audio_url);
   });
 
   it('supports true --dry-run on --import-dir and updates explicit person/place overrides in YAML on --update-config', async () => {
@@ -429,8 +429,8 @@ describe('kinloom pronounce synth', () => {
     expect(openAiBodies).toHaveLength(2);
     for (const body of openAiBodies) {
       expect('seed' in body).toBe(false);
-      expect(body.model).toBe('fishaudio/drama-3');
-      expect(Array.isArray(body.references)).toBe(true);
+      expect(body['model']).toBe('fishaudio/drama-3');
+      expect(Array.isArray(body['references'])).toBe(true);
     }
 
     // Second run skips both existing files cleanly without calling fetch

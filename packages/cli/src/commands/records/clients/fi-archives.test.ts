@@ -254,7 +254,7 @@ describe('fi-archives native client', () => {
     expect(d2.cache_hit).toBe(true);
     expect(d1.parish).toBe('Ahlainen');
     expect(d1.permalink_id).toBe('t149288');
-    expect(d1.fields.Child).toBe('Johan');
+    expect(d1.fields['Child']).toBe('Johan');
     expect(d1.fields['Village / Farm']).toBe('Bocköö');
     expect(d1.sshy_url).toContain('sukuhistoria.fi');
   });

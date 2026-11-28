@@ -77,12 +77,12 @@ export interface DesignAuditFinding {
   readonly theme: DesignAuditTheme | 'all';
   readonly uiState: DesignAuditUiState;
   readonly message: string;
-  readonly measuredValue?: number | string;
-  readonly thresholdValue?: number | string;
-  readonly physicalLocation?: DesignAuditPhysicalLocation;
+  readonly measuredValue?: number | string | undefined;
+  readonly thresholdValue?: number | string | undefined;
+  readonly physicalLocation?: DesignAuditPhysicalLocation | undefined;
   readonly evidence: DesignAuditEvidence;
   readonly masterCitations: readonly string[];
-  readonly remediationHint?: string;
+  readonly remediationHint?: string | undefined;
 }
 
 export interface DesignAuditInteractiveSample {

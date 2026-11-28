@@ -30,13 +30,13 @@ export function normalizeAndValidatePatch(rawPatch: unknown, expectedPersonId: s
     }
   }
 
-  if (typeof rawPatch.person_id !== 'string' || rawPatch.person_id !== expectedPersonId) {
+  if (typeof rawPatch['person_id'] !== 'string' || rawPatch['person_id'] !== expectedPersonId) {
     throw new Error(
-      `patch.json person_id '${String(rawPatch.person_id)}' does not match --person '${expectedPersonId}'.`
+      `patch.json person_id '${String(rawPatch['person_id'])}' does not match --person '${expectedPersonId}'.`
     );
   }
 
-  const rawUpdates = rawPatch.person_updates ?? null;
+  const rawUpdates = rawPatch['person_updates'] ?? null;
   if (rawUpdates !== null && !isPlainObject(rawUpdates)) {
     throw new Error('patch.json person_updates must be an object when provided.');
   }
@@ -60,18 +60,18 @@ export function normalizeAndValidatePatch(rawPatch: unknown, expectedPersonId: s
   };
 
   return {
-    person_id: rawPatch.person_id,
+    person_id: rawPatch['person_id'],
     person_updates: rawUpdates,
     people: readArrayField('people'),
     events: readArrayField('events'),
-    remove_event_ids: parseOptionalStringList(rawPatch.remove_event_ids, 'patch.json remove_event_ids'),
+    remove_event_ids: parseOptionalStringList(rawPatch['remove_event_ids'], 'patch.json remove_event_ids'),
     places: readArrayField('places'),
     sources: readArrayField('sources'),
-    remove_source_ids: parseOptionalStringList(rawPatch.remove_source_ids, 'patch.json remove_source_ids'),
+    remove_source_ids: parseOptionalStringList(rawPatch['remove_source_ids'], 'patch.json remove_source_ids'),
     media: readArrayField('media'),
-    remove_media_ids: parseOptionalStringList(rawPatch.remove_media_ids, 'patch.json remove_media_ids'),
+    remove_media_ids: parseOptionalStringList(rawPatch['remove_media_ids'], 'patch.json remove_media_ids'),
     kinship: readArrayField('kinship'),
-    remove_kinship: parseRemoveKinshipEntries(rawPatch.remove_kinship, 'patch.json remove_kinship'),
+    remove_kinship: parseRemoveKinshipEntries(rawPatch['remove_kinship'], 'patch.json remove_kinship'),
     narratives: readArrayField('narratives'),
   };
 }

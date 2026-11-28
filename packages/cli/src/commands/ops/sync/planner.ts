@@ -111,7 +111,7 @@ function normalizeForDiff(entityType: EntityType, data: EntityPayload): EntityPa
   }
   return {
     ...data,
-    has_primary_source: data.has_primary_source ?? true,
+    has_primary_source: data['has_primary_source'] ?? true,
   };
 }
 
@@ -229,7 +229,7 @@ export function indexRemoteSnapshot(
       continue;
     }
     const rawData: EntityPayload =
-      row.data.has_primary_source === undefined && row.has_primary_source === false
+      row.data['has_primary_source'] === undefined && row.has_primary_source === false
         ? { ...row.data, has_primary_source: false }
         : row.data;
     const normalized = parseEntityPayload(row.entity_type, rawData);

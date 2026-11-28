@@ -74,7 +74,7 @@ function findPageDataNode(node: unknown): unknown {
   }
   const record = node as Record<string, unknown>;
   if (Object.hasOwn(record, 'pageData')) {
-    return record.pageData;
+    return record['pageData'];
   }
   for (const value of Object.values(record)) {
     const found = findPageDataNode(value);
@@ -97,7 +97,7 @@ export function parseScandataXml(xmlBytes: Uint8Array): PageIndex {
 
   let rawPages: unknown[] = [];
   if (isPlainRecord(pageDataNode) && Object.hasOwn(pageDataNode, 'page')) {
-    const pageField = pageDataNode.page;
+    const pageField = pageDataNode['page'];
     rawPages = Array.isArray(pageField) ? pageField : pageField ? [pageField] : [];
   }
 
@@ -119,13 +119,13 @@ export function parseScandataXml(xmlBytes: Uint8Array): PageIndex {
         ? Number.parseInt(rawLeaf.trim(), 10)
         : seqIdx;
 
-    const pageType = extractXmlText(pageEl.pageType).trim();
+    const pageType = extractXmlText(pageEl['pageType']).trim();
     const inAccess =
-      Object.hasOwn(pageEl, 'addToAccessFormats') && pageEl.addToAccessFormats !== undefined
-        ? extractXmlText(pageEl.addToAccessFormats).trim().toLowerCase() === 'true'
+      Object.hasOwn(pageEl, 'addToAccessFormats') && pageEl['addToAccessFormats'] !== undefined
+        ? extractXmlText(pageEl['addToAccessFormats']).trim().toLowerCase() === 'true'
         : pageType.toLowerCase() !== 'delete';
 
-    const printed = extractXmlText(pageEl.pageNumber).trim();
+    const printed = extractXmlText(pageEl['pageNumber']).trim();
     const leafKey = String(leafNum);
     if (printed) {
       scandataToPrinted[leafKey] = printed;

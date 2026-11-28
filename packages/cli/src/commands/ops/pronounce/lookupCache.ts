@@ -85,7 +85,7 @@ export function defaultSleep(ms: number): Promise<void> {
 }
 
 export function getPronounceCacheDir(overrideDir?: string): string {
-  const raw = overrideDir?.trim() || process.env.KINLOOM_PRONOUNCE_CACHE_DIR?.trim();
+  const raw = overrideDir?.trim() || process.env['KINLOOM_PRONOUNCE_CACHE_DIR']?.trim();
   return raw ? path.resolve(raw) : DEFAULT_CACHE_DIR;
 }
 

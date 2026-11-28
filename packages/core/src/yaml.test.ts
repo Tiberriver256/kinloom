@@ -147,8 +147,8 @@ describe('deterministic YAML serializer and loader', () => {
   death_edtf: 1920
 `;
     const parsed = parsePeopleYaml(rawYaml);
-    expect(parsed[0].birth_edtf).toBe('1852');
-    expect(parsed[0].death_edtf).toBe('1920');
+    expect(parsed[0]?.birth_edtf).toBe('1852');
+    expect(parsed[0]?.death_edtf).toBe('1920');
 
     expect(() =>
       parseKinloomConfigYaml(`

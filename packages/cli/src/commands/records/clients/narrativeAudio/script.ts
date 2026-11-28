@@ -325,19 +325,19 @@ export function parseNarrativesYaml(rawYaml: string): NarrativeRecord[] {
   let list: unknown[];
   if (Array.isArray(parsed)) {
     list = parsed;
-  } else if (isPlainRecord(parsed) && Array.isArray(parsed.narratives)) {
-    list = parsed.narratives;
+  } else if (isPlainRecord(parsed) && Array.isArray(parsed['narratives'])) {
+    list = parsed['narratives'];
   } else {
     list = [];
   }
   return list
-    .filter((item): item is Record<string, unknown> => isPlainRecord(item) && typeof item.id === 'string')
+    .filter((item): item is Record<string, unknown> => isPlainRecord(item) && typeof item['id'] === 'string')
     .map((item) => ({
-      id: item.id as string,
-      slug: typeof item.slug === 'string' ? item.slug : undefined,
-      title: typeof item.title === 'string' ? item.title : undefined,
-      kind: typeof item.kind === 'string' ? item.kind : undefined,
-      body_md: typeof item.body_md === 'string' ? item.body_md : undefined,
+      id: item['id'] as string,
+      slug: typeof item['slug'] === 'string' ? item['slug'] : undefined,
+      title: typeof item['title'] === 'string' ? item['title'] : undefined,
+      kind: typeof item['kind'] === 'string' ? item['kind'] : undefined,
+      body_md: typeof item['body_md'] === 'string' ? item['body_md'] : undefined,
     }));
 }
 

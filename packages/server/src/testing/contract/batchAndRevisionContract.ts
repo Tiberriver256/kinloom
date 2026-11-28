@@ -117,7 +117,7 @@ export function registerBatchAndRevisionContractTests(withHarness: WithContractH
       expect(await ports.repository.getHeadRevisionId()).toBe(3);
       const storedP1 = await ports.repository.getEntity('person', p1.id);
       expect(storedP1?.current_revision_id).toBe(1);
-      expect(storedP1 && !('edge' in storedP1) ? storedP1.data.full_name : null).toBe('Arthur Alder');
+      expect(storedP1 && !('edge' in storedP1) ? storedP1.data['full_name'] : null).toBe('Arthur Alder');
     });
   });
 
@@ -289,20 +289,24 @@ export function registerBatchAndRevisionContractTests(withHarness: WithContractH
         { entityType: 'event', entityId: 'evt_does_not_exist' },
         { entityType: 'kinship_edge', entityId: 'kinship_missing_edge' },
       ];
-      const fetched = await getEntitiesBatch([...lookupKeys, lookupKeys[0], ...missingKeys]);
+      const firstLookup = lookupKeys[0];
+      if (!firstLookup) throw new Error('Expected lookupKeys[0]');
+      const fetched = await getEntitiesBatch([...lookupKeys, firstLookup, ...missingKeys]);
       expect(fetched.size).toBe(128);
 
       const firstPerson = fetched.get(entityLookupCompositeKey('person', 'per_bulk_000'));
-      expect(firstPerson && !('edge' in firstPerson) ? firstPerson.data.full_name : null).toBe(
+      expect(firstPerson && !('edge' in firstPerson) ? firstPerson.data['full_name'] : null).toBe(
         'Historical Person 0'
       );
       const lastPerson = fetched.get(entityLookupCompositeKey('person', 'per_bulk_094'));
-      expect(lastPerson && !('edge' in lastPerson) ? lastPerson.data.full_name : null).toBe(
+      expect(lastPerson && !('edge' in lastPerson) ? lastPerson.data['full_name'] : null).toBe(
         'Historical Person 94'
       );
       const lastEvent = fetched.get(entityLookupCompositeKey('event', 'evt_bulk_19'));
-      expect(lastEvent && !('edge' in lastEvent) ? lastEvent.data.summary : null).toBe('Historical Event 19');
-      const firstEdge = fetched.get(entityLookupCompositeKey('kinship_edge', lookupKeys[115].entityId));
+      expect(lastEvent && !('edge' in lastEvent) ? lastEvent.data['summary'] : null).toBe('Historical Event 19');
+      const edgeLookup = lookupKeys[115];
+      if (!edgeLookup) throw new Error('Expected lookupKeys[115]');
+      const firstEdge = fetched.get(entityLookupCompositeKey('kinship_edge', edgeLookup.entityId));
       expect(firstEdge && 'edge' in firstEdge ? firstEdge.edge.relation : null).toBe('parent');
 
       for (const missing of missingKeys) {

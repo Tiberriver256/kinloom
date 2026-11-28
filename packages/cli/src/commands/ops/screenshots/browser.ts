@@ -72,7 +72,7 @@ export function resolveScreenshotChromiumPath(options: {
   readonly isExecutable?: (filePath: string) => boolean;
 }): { readonly executablePath?: string; readonly isSystemBinary: boolean } {
   const checkExec = options.isExecutable ?? isExecutableBinary;
-  const envOverride = options.env.KINLOOM_CHROMIUM_PATH?.trim();
+  const envOverride = options.env['KINLOOM_CHROMIUM_PATH']?.trim();
   if (envOverride && checkExec(envOverride)) {
     return { executablePath: envOverride, isSystemBinary: false };
   }
@@ -85,7 +85,7 @@ export function resolveScreenshotChromiumPath(options: {
       return { executablePath: candidate, isSystemBinary: true };
     }
   }
-  const pathEnv = options.env.PATH ?? '';
+  const pathEnv = options.env['PATH'] ?? '';
   for (const dir of pathEnv.split(path.delimiter)) {
     if (!dir) {
       continue;
@@ -110,7 +110,7 @@ export function buildHeadlessEnv(env: NodeJS.ProcessEnv): Record<string, string>
   for (const key of DESKTOP_ENV_STRIP) {
     delete cleaned[key];
   }
-  cleaned.XDG_CONFIG_HOME = path.join(os.tmpdir(), 'kinloom-headless-xdg-config');
+  cleaned['XDG_CONFIG_HOME'] = path.join(os.tmpdir(), 'kinloom-headless-xdg-config');
   return cleaned;
 }
 
@@ -409,11 +409,11 @@ export async function inspectThemeSurface(page: ScreenshotPageHandle): Promise<R
       return null;
     }
     const backgroundColor =
-      typeof raw.backgroundColor === 'string' ? raw.backgroundColor.trim() || null : null;
-    const textColor = typeof raw.textColor === 'string' ? raw.textColor.trim() || null : null;
-    const dataTheme = typeof raw.dataTheme === 'string' ? raw.dataTheme.trim() || null : null;
-    const colorScheme = typeof raw.colorScheme === 'string' ? raw.colorScheme.trim() || null : null;
-    const prefersDark = typeof raw.prefersDark === 'boolean' ? raw.prefersDark : null;
+      typeof raw['backgroundColor'] === 'string' ? raw['backgroundColor'].trim() || null : null;
+    const textColor = typeof raw['textColor'] === 'string' ? raw['textColor'].trim() || null : null;
+    const dataTheme = typeof raw['dataTheme'] === 'string' ? raw['dataTheme'].trim() || null : null;
+    const colorScheme = typeof raw['colorScheme'] === 'string' ? raw['colorScheme'].trim() || null : null;
+    const prefersDark = typeof raw['prefersDark'] === 'boolean' ? raw['prefersDark'] : null;
     if (backgroundColor === null && textColor === null && dataTheme === null && prefersDark === null) {
       return null;
     }

@@ -39,11 +39,11 @@ export interface BookPrivacyGateInput {
   readonly bundle: ArchiveBundle;
   readonly siteConfig: KinloomSiteConfig;
   readonly edition: BookEdition;
-  readonly includeLiving?: boolean;
-  readonly allowLivingPortraits?: boolean;
-  readonly acknowledgeReviewFlags?: boolean;
+  readonly includeLiving?: boolean | undefined;
+  readonly allowLivingPortraits?: boolean | undefined;
+  readonly acknowledgeReviewFlags?: boolean | undefined;
   readonly referenceYear: number;
-  readonly dedication?: string;
+  readonly dedication?: string | undefined;
 }
 
 export interface RedactedBookArchive {

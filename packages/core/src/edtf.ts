@@ -517,7 +517,7 @@ function parseSingleGedcomDate(text: string): string {
   // Old Style split year: JAN 1620/1 -> 1621-01
   const mOs = /^(?:(\d{1,2})\s+)?([A-Z]{3,9})\s+(\d{4})\/(\d{1,2})$/.exec(t);
   if (mOs) {
-    const mon = GEDCOM_MONTH_MAP[mOs[2]];
+    const mon = mOs[2] ? GEDCOM_MONTH_MAP[mOs[2]] : undefined;
     if (mon) {
       const yr = String(Number(mOs[3]) + 1).padStart(4, '0');
       if (mOs[1]) {
@@ -530,7 +530,7 @@ function parseSingleGedcomDate(text: string): string {
   // DD MON YYYY
   const mFull = /^(\d{1,2})\s+([A-Z]{3,9})\.?\s+(\d{4})$/.exec(t);
   if (mFull) {
-    const mon = GEDCOM_MONTH_MAP[mFull[2]];
+    const mon = mFull[2] ? GEDCOM_MONTH_MAP[mFull[2]] : undefined;
     if (mon) {
       const y = Number(mFull[3]);
       const d = Math.min(Number(mFull[1]), lastDayOfMonth(y, mon));
@@ -541,7 +541,7 @@ function parseSingleGedcomDate(text: string): string {
   // MON DD, YYYY
   const mUs = /^([A-Z]{3,9})\.?\s+(\d{1,2}),?\s+(\d{4})$/.exec(t);
   if (mUs) {
-    const mon = GEDCOM_MONTH_MAP[mUs[1]];
+    const mon = mUs[1] ? GEDCOM_MONTH_MAP[mUs[1]] : undefined;
     if (mon) {
       const y = Number(mUs[3]);
       const d = Math.min(Number(mUs[2]), lastDayOfMonth(y, mon));
@@ -552,7 +552,7 @@ function parseSingleGedcomDate(text: string): string {
   // MON YYYY
   const mMo = /^([A-Z]{3,9})\.?\s+(\d{4})$/.exec(t);
   if (mMo) {
-    const mon = GEDCOM_MONTH_MAP[mMo[1]];
+    const mon = mMo[1] ? GEDCOM_MONTH_MAP[mMo[1]] : undefined;
     if (mon) {
       return `${mMo[2]}-${String(mon).padStart(2, '0')}`;
     }
@@ -564,7 +564,7 @@ function parseSingleGedcomDate(text: string): string {
   }
 
   const mYr = /\b(1[4-9]\d{2}|20\d{2})\b/.exec(t);
-  if (mYr) {
+  if (mYr && mYr[1]) {
     return mYr[1];
   }
   return '';

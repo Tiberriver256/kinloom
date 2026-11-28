@@ -374,11 +374,11 @@ export function parseTesseractTsv(tsv: string): ParsedTsvLayout {
     for (let c = 0; c < header.length; c += 1) {
       rec[header[c]] = raw[c] ?? '';
     }
-    const level = Number.parseInt(rec.level ?? '', 10);
-    const left = Number.parseInt(rec.left ?? '', 10);
-    const top = Number.parseInt(rec.top ?? '', 10);
-    const width = Number.parseInt(rec.width ?? '', 10);
-    const height = Number.parseInt(rec.height ?? '', 10);
+    const level = Number.parseInt(rec['level'] ?? '', 10);
+    const left = Number.parseInt(rec['left'] ?? '', 10);
+    const top = Number.parseInt(rec['top'] ?? '', 10);
+    const width = Number.parseInt(rec['width'] ?? '', 10);
+    const height = Number.parseInt(rec['height'] ?? '', 10);
     const right = left + width;
     const bottom = top + height;
 
@@ -387,15 +387,15 @@ export function parseTesseractTsv(tsv: string): ParsedTsvLayout {
       imageHeight = Math.max(imageHeight, bottom);
       continue;
     }
-    const text = (rec.text ?? '').trim();
+    const text = (rec['text'] ?? '').trim();
     if (level !== 5 || !text) {
       continue;
     }
-    const conf = Number.parseFloat(rec.conf ?? '-1');
-    const page = Number.parseInt(rec.page_num ?? '0', 10);
-    const block = Number.parseInt(rec.block_num ?? '0', 10);
-    const par = Number.parseInt(rec.par_num ?? '0', 10);
-    const lineNum = Number.parseInt(rec.line_num ?? '0', 10);
+    const conf = Number.parseFloat(rec['conf'] ?? '-1');
+    const page = Number.parseInt(rec['page_num'] ?? '0', 10);
+    const block = Number.parseInt(rec['block_num'] ?? '0', 10);
+    const par = Number.parseInt(rec['par_num'] ?? '0', 10);
+    const lineNum = Number.parseInt(rec['line_num'] ?? '0', 10);
     const key = `${page}:${block}:${par}:${lineNum}`;
     let group = lineMap.get(key);
     if (!group) {

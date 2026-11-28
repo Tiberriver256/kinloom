@@ -284,7 +284,7 @@ describe('Cloudflare Worker behavioral lifecycle (talk, admin D1 store, and stat
       const missingFile = await worker.fetch(new Request(`${CONTRACT_TEST_ORIGIN}/missing-file.txt`), env);
       expect(missingFile.status).toBe(404);
 
-      const noAssetsEnv: KinloomWorkerEnv = { ...env, ASSETS: undefined };
+      const { ASSETS: _assets, ...noAssetsEnv }: KinloomWorkerEnv = env;
       const exportYaml = await worker.fetch(
         new Request(`${CONTRACT_TEST_ORIGIN}/api/export/yaml`, { headers: { cookie: adminCookie } }),
         env

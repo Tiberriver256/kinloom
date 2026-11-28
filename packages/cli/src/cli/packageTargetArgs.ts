@@ -19,7 +19,7 @@ export function readPersonIdFromPackageDir(packageDir: string): string | undefin
   try {
     const raw: unknown = JSON.parse(fs.readFileSync(patchPath, 'utf8'));
     if (typeof raw === 'object' && raw !== null && !Array.isArray(raw)) {
-      const personId = (raw as Record<string, unknown>).person_id;
+      const personId = (raw as Record<string, unknown>)['person_id'];
       if (typeof personId === 'string' && personId.trim().length > 0) {
         return personId.trim();
       }
@@ -60,15 +60,15 @@ function resolvePositionalIntegratePackage(
 
 export interface PackageTargetFlagsInput {
   positionals: readonly string[];
-  person?: string;
-  personId?: string;
-  repo?: string;
-  package?: string;
-  packageDir?: string;
-  patch?: string;
+  person?: string | undefined;
+  personId?: string | undefined;
+  repo?: string | undefined;
+  package?: string | undefined;
+  packageDir?: string | undefined;
+  patch?: string | undefined;
   allStaged: boolean;
   pendingOnly: boolean;
-  markIntegrated?: boolean;
+  markIntegrated?: boolean | undefined;
 }
 
 export interface ResolvedPackageTargetFlags {

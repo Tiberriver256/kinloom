@@ -97,52 +97,52 @@ export async function runSearch(
 
   const searchInput: JsonRecord = {};
   if (firstName) {
-    searchInput.firstName = firstName;
+    searchInput['firstName'] = firstName;
   }
   if (lastName) {
-    searchInput.lastName = lastName;
+    searchInput['lastName'] = lastName;
   }
   if (birthYear !== undefined) {
-    searchInput.birthYear = birthYear;
+    searchInput['birthYear'] = birthYear;
   }
   if (deathYear !== undefined) {
-    searchInput.deathYear = deathYear;
+    searchInput['deathYear'] = deathYear;
   }
   if (yearRange !== undefined) {
     if (birthYear !== undefined) {
-      searchInput.birthYearRange = yearRange;
+      searchInput['birthYearRange'] = yearRange;
     }
     if (deathYear !== undefined) {
-      searchInput.deathYearRange = yearRange;
+      searchInput['deathYearRange'] = yearRange;
     }
   }
   if (normBirthFilter) {
-    searchInput.birthYearFilter = normBirthFilter;
+    searchInput['birthYearFilter'] = normBirthFilter;
   }
   if (normDeathFilter) {
-    searchInput.deathYearFilter = normDeathFilter;
+    searchInput['deathYearFilter'] = normDeathFilter;
   }
   if (cemeteryIds.length > 0) {
-    searchInput.cemeteryIds = cemeteryIds.map((cid) => validateEntityId(cid, 'cemetery id'));
+    searchInput['cemeteryIds'] = cemeteryIds.map((cid) => validateEntityId(cid, 'cemetery id'));
   }
   if (locationId) {
-    searchInput.locationId = locationId;
+    searchInput['locationId'] = locationId;
   }
   if (bio) {
-    searchInput.bio = bio;
+    searchInput['bio'] = bio;
   }
   if (text) {
-    searchInput.fullText = text;
+    searchInput['fullText'] = text;
   }
   if (relative) {
-    searchInput.linkedToName = relative;
+    searchInput['linkedToName'] = relative;
   }
   if (exact) {
-    searchInput.exactName = true;
+    searchInput['exactName'] = true;
   }
-  searchInput.includeMaidenName = includeMaiden;
-  searchInput.from = resolvedOffset;
-  searchInput.size = pageSize;
+  searchInput['includeMaidenName'] = includeMaiden;
+  searchInput['from'] = resolvedOffset;
+  searchInput['size'] = pageSize;
 
   const { data, cacheHit } = await cachedGqlQuery(
     ctx,
@@ -153,8 +153,8 @@ export async function runSearch(
     { cacheRoot, ttlHours, refresh }
   );
 
-  const rawResult = isPlainRecord(data.memorialSearch) ? data.memorialSearch : {};
-  const rawMemorials = Array.isArray(rawResult.memorials) ? rawResult.memorials : [];
+  const rawResult = isPlainRecord(data['memorialSearch']) ? data['memorialSearch'] : {};
+  const rawMemorials = Array.isArray(rawResult['memorials']) ? rawResult['memorials'] : [];
   const memorials = rawMemorials
     .filter((m): m is JsonRecord => isPlainRecord(m))
     .map((m) => enrichMemorial(m));
@@ -165,7 +165,7 @@ export async function runSearch(
     return { exitCode: 0, bytesOut, cacheHit };
   }
 
-  const bytesOut = emitStdout(ctx.io, formatSearchText(result.total, memorials));
+  const bytesOut = emitStdout(ctx.io, formatSearchText(result['total'], memorials));
   return { exitCode: 0, bytesOut, cacheHit };
 }
 
@@ -237,7 +237,7 @@ export async function runCemetery(
     });
     result = loaded.result;
     cacheHit = loaded.cacheHit;
-    cemeteriesList = (Array.isArray(result.cemeteries) ? result.cemeteries : []).filter(
+    cemeteriesList = (Array.isArray(result['cemeteries']) ? result['cemeteries'] : []).filter(
       (c): c is JsonRecord => isPlainRecord(c)
     );
   } else {
@@ -246,10 +246,10 @@ export async function runCemetery(
     }
     const searchInput: JsonRecord = { name };
     if (place) {
-      searchInput.containingLocationName = place;
+      searchInput['containingLocationName'] = place;
     }
-    searchInput.from = offset;
-    searchInput.size = Math.min(limit, 100);
+    searchInput['from'] = offset;
+    searchInput['size'] = Math.min(limit, 100);
     const queried = await cachedGqlQuery(
       ctx,
       'cemetery_search',
@@ -259,8 +259,8 @@ export async function runCemetery(
       { cacheRoot, ttlHours, refresh }
     );
     cacheHit = queried.cacheHit;
-    const rawResult = isPlainRecord(queried.data.cemeteries) ? queried.data.cemeteries : {};
-    const rawCems = Array.isArray(rawResult.cemeteries) ? rawResult.cemeteries : [];
+    const rawResult = isPlainRecord(queried.data['cemeteries']) ? queried.data['cemeteries'] : {};
+    const rawCems = Array.isArray(rawResult['cemeteries']) ? rawResult['cemeteries'] : [];
     cemeteriesList = rawCems.map((c) => enrichCemetery(c)).filter((c): c is JsonRecord => isPlainRecord(c));
     result = { ...rawResult, cemeteries: cemeteriesList };
   }
@@ -270,7 +270,7 @@ export async function runCemetery(
     return { exitCode: 0, bytesOut, cacheHit };
   }
 
-  const bytesOut = emitStdout(ctx.io, formatCemeteriesText(result.total, cemeteriesList));
+  const bytesOut = emitStdout(ctx.io, formatCemeteriesText(result['total'], cemeteriesList));
   return { exitCode: 0, bytesOut, cacheHit };
 }
 
@@ -311,7 +311,7 @@ export async function runPlace(
     { s: searchInput },
     { cacheRoot, ttlHours, refresh }
   );
-  const result = isPlainRecord(data.locationsByTypeahead) ? data.locationsByTypeahead : {};
+  const result = isPlainRecord(data['locationsByTypeahead']) ? data['locationsByTypeahead'] : {};
 
   if (asJson) {
     const bytesOut = emitJsonStdout(ctx.io, { ...result, cache_hit: cacheHit });

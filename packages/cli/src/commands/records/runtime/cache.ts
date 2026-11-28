@@ -14,7 +14,7 @@ export interface ResolveCacheDirOptions {
 
 export function expandHomePath(rawPath: string, env: NodeJS.ProcessEnv = process.env): string {
   const trimmed = rawPath.trim();
-  const home = env.HOME || os.homedir();
+  const home = env['HOME'] || os.homedir();
   if (trimmed === '~') {
     return home;
   }
@@ -35,12 +35,12 @@ export function resolveCacheDir(options: ResolveCacheDirOptions): string {
     }
   }
   if (options.useXdgCacheHome) {
-    const xdg = options.env.XDG_CACHE_HOME;
+    const xdg = options.env['XDG_CACHE_HOME'];
     if (xdg && xdg.trim().length > 0) {
       return path.resolve(expandHomePath(xdg, options.env), options.defaultSubdir);
     }
   }
-  const home = options.env.HOME || os.homedir();
+  const home = options.env['HOME'] || os.homedir();
   return path.join(home, '.cache', options.defaultSubdir);
 }
 
@@ -136,10 +136,10 @@ export function readSchemaCacheEntry<T>(
       return undefined;
     }
     const entry = raw as Record<string, unknown>;
-    if (entry.schema !== schema) {
+    if (entry['schema'] !== schema) {
       return undefined;
     }
-    const fetchedAt = entry.fetched_at;
+    const fetchedAt = entry['fetched_at'];
     if (typeof fetchedAt !== 'number' || !Number.isFinite(fetchedAt)) {
       return undefined;
     }
@@ -147,7 +147,7 @@ export function readSchemaCacheEntry<T>(
     if (nowSec - fetchedAt > ttlHours * 3600) {
       return undefined;
     }
-    const result = entry.result;
+    const result = entry['result'];
     return validateCached(result) ? result : undefined;
   } catch {
     return undefined;

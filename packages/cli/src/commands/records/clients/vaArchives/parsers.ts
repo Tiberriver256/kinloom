@@ -208,10 +208,10 @@ export function parseLocalitiesPage(page: string): ChanceryLocalityRow[] {
 
 export function mapPnxsRecord(doc: unknown): PrimoCatalogRecord {
   const docObj = isPlainRecord(doc) ? doc : {};
-  const pnx = isPlainRecord(docObj.pnx) ? docObj.pnx : {};
-  const disp = isPlainRecord(pnx.display) ? pnx.display : {};
-  const control = isPlainRecord(pnx.control) ? pnx.control : {};
-  const recordIds = Array.isArray(control.recordid) ? control.recordid : [];
+  const pnx = isPlainRecord(docObj['pnx']) ? docObj['pnx'] : {};
+  const disp = isPlainRecord(pnx['display']) ? pnx['display'] : {};
+  const control = isPlainRecord(pnx['control']) ? pnx['control'] : {};
+  const recordIds = Array.isArray(control['recordid']) ? control['recordid'] : [];
   const recordid = typeof recordIds[0] === 'string' ? recordIds[0] : '';
 
   const first = (key: string): string => {

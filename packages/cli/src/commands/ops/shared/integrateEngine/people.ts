@@ -50,8 +50,8 @@ function dedupeExtensionSources(
     if (typeof entry === 'string') {
       return `str:${entry.trim()}`;
     }
-    if (isPlainObject(entry) && typeof entry.source_id === 'string') {
-      return `sid:${entry.source_id}`;
+    if (isPlainObject(entry) && typeof entry['source_id'] === 'string') {
+      return `sid:${entry['source_id']}`;
     }
     return `json:${JSON.stringify(entry)}`;
   };
@@ -76,13 +76,13 @@ function resolveValidDeathEdtfUpdate(updates: Record<string, unknown> | null): s
     return null;
   }
   if (
-    updates.death_edtf !== undefined &&
-    updates.death_date !== undefined &&
-    String(updates.death_edtf) !== String(updates.death_date)
+    updates['death_edtf'] !== undefined &&
+    updates['death_date'] !== undefined &&
+    String(updates['death_edtf']) !== String(updates['death_date'])
   ) {
     throw new Error('person_updates has conflicting death_edtf and death_date.');
   }
-  const raw = updates.death_edtf !== undefined ? updates.death_edtf : updates.death_date;
+  const raw = updates['death_edtf'] !== undefined ? updates['death_edtf'] : updates['death_date'];
   return parseValidDeathEdtf(raw);
 }
 
@@ -95,32 +95,32 @@ function mergePersonUpdates(
     return { updated: existingPerson, changed: false };
   }
 
-  if (updates.id !== undefined && updates.id !== existingPerson.id) {
+  if (updates['id'] !== undefined && updates['id'] !== existingPerson.id) {
     throw new Error(
-      `person_updates cannot change person id from '${existingPerson.id}' to '${String(updates.id)}'.`
+      `person_updates cannot change person id from '${existingPerson.id}' to '${String(updates['id'])}'.`
     );
   }
-  if (updates.is_living === true || updates.living === true) {
+  if (updates['is_living'] === true || updates['living'] === true) {
     throw new Error(`person_updates cannot mark target '${existingPerson.id}' as living.`);
   }
   if (
-    updates.birth_edtf !== undefined &&
-    updates.birth_date !== undefined &&
-    String(updates.birth_edtf) !== String(updates.birth_date)
+    updates['birth_edtf'] !== undefined &&
+    updates['birth_date'] !== undefined &&
+    String(updates['birth_edtf']) !== String(updates['birth_date'])
   ) {
     throw new Error('person_updates has conflicting birth_edtf and birth_date.');
   }
   if (
-    updates.death_edtf !== undefined &&
-    updates.death_date !== undefined &&
-    String(updates.death_edtf) !== String(updates.death_date)
+    updates['death_edtf'] !== undefined &&
+    updates['death_date'] !== undefined &&
+    String(updates['death_edtf']) !== String(updates['death_date'])
   ) {
     throw new Error('person_updates has conflicting death_edtf and death_date.');
   }
   if (
-    updates.bio !== undefined &&
-    updates.biography !== undefined &&
-    String(updates.bio) !== String(updates.biography)
+    updates['bio'] !== undefined &&
+    updates['biography'] !== undefined &&
+    String(updates['bio']) !== String(updates['biography'])
   ) {
     throw new Error('person_updates has conflicting bio and biography.');
   }
@@ -147,20 +147,20 @@ function mergePersonUpdates(
     }
   }
 
-  const birthVal = updates.birth_edtf !== undefined ? updates.birth_edtf : updates.birth_date;
+  const birthVal = updates['birth_edtf'] !== undefined ? updates['birth_edtf'] : updates['birth_date'];
   if (birthVal !== undefined) {
-    next.birth_edtf = birthVal === null ? '' : String(birthVal);
+    next['birth_edtf'] = birthVal === null ? '' : String(birthVal);
   }
-  const deathVal = updates.death_edtf !== undefined ? updates.death_edtf : updates.death_date;
+  const deathVal = updates['death_edtf'] !== undefined ? updates['death_edtf'] : updates['death_date'];
   if (deathVal !== undefined) {
-    next.death_edtf = deathVal === null ? '' : String(deathVal);
+    next['death_edtf'] = deathVal === null ? '' : String(deathVal);
   }
 
-  if (updates.alt_names !== undefined) {
-    if (!Array.isArray(updates.alt_names)) {
+  if (updates['alt_names'] !== undefined) {
+    if (!Array.isArray(updates['alt_names'])) {
       throw new Error('person_updates.alt_names must be an array of strings.');
     }
-    next.alt_names = dedupeStrings(existingPerson.alt_names, updates.alt_names);
+    next['alt_names'] = dedupeStrings(existingPerson.alt_names, updates['alt_names']);
   }
 
   const existingExt: Record<string, unknown> = isPlainObject(existingPerson.extensions)
@@ -168,14 +168,14 @@ function mergePersonUpdates(
     : {};
   let extTouched = false;
 
-  if (updates.extensions !== undefined) {
-    if (!isPlainObject(updates.extensions)) {
+  if (updates['extensions'] !== undefined) {
+    if (!isPlainObject(updates['extensions'])) {
       throw new Error('person_updates.extensions must be an object.');
     }
-    for (const [k, v] of Object.entries(updates.extensions)) {
+    for (const [k, v] of Object.entries(updates['extensions'])) {
       if (k === 'sources' && Array.isArray(v)) {
-        existingExt.sources = dedupeExtensionSources(
-          Array.isArray(existingExt.sources) ? existingExt.sources : [],
+        existingExt['sources'] = dedupeExtensionSources(
+          Array.isArray(existingExt['sources']) ? existingExt['sources'] : [],
           v
         );
       } else {
@@ -185,32 +185,32 @@ function mergePersonUpdates(
     extTouched = true;
   }
 
-  const bioVal = updates.biography !== undefined ? updates.biography : updates.bio;
+  const bioVal = updates['biography'] !== undefined ? updates['biography'] : updates['bio'];
   if (bioVal !== undefined) {
-    existingExt.biography = String(bioVal);
+    existingExt['biography'] = String(bioVal);
     extTouched = true;
   }
-  if (updates.summary !== undefined) {
-    existingExt.summary = String(updates.summary);
+  if (updates['summary'] !== undefined) {
+    existingExt['summary'] = String(updates['summary']);
     extTouched = true;
   }
-  if (updates.research_notes !== undefined) {
-    existingExt.research_notes = String(updates.research_notes);
+  if (updates['research_notes'] !== undefined) {
+    existingExt['research_notes'] = String(updates['research_notes']);
     extTouched = true;
   }
-  if (updates.sources !== undefined) {
-    if (!Array.isArray(updates.sources)) {
+  if (updates['sources'] !== undefined) {
+    if (!Array.isArray(updates['sources'])) {
       throw new Error('person_updates.sources must be an array.');
     }
-    existingExt.sources = dedupeExtensionSources(
-      Array.isArray(existingExt.sources) ? existingExt.sources : [],
-      updates.sources
+    existingExt['sources'] = dedupeExtensionSources(
+      Array.isArray(existingExt['sources']) ? existingExt['sources'] : [],
+      updates['sources']
     );
     extTouched = true;
   }
 
   if (extTouched) {
-    next.extensions = existingExt;
+    next['extensions'] = existingExt;
   }
 
   const parsed = RawPersonSchema.parse(next);
@@ -279,25 +279,25 @@ function mergeStagedPersonWithExisting(
     }
   }
 
-  if (Object.hasOwn(rawObj, 'alt_names') && rawObj.alt_names !== undefined) {
-    next.alt_names = dedupeStrings(existing.alt_names, parsedIncoming.alt_names);
+  if (Object.hasOwn(rawObj, 'alt_names') && rawObj['alt_names'] !== undefined) {
+    next['alt_names'] = dedupeStrings(existing.alt_names, parsedIncoming.alt_names);
   }
 
-  if (Object.hasOwn(rawObj, 'extensions') && rawObj.extensions !== undefined) {
+  if (Object.hasOwn(rawObj, 'extensions') && rawObj['extensions'] !== undefined) {
     const existingExt: Record<string, unknown> = isPlainObject(existing.extensions)
       ? structuredClone(existing.extensions)
       : {};
     for (const [k, v] of Object.entries(parsedIncoming.extensions ?? {})) {
       if (k === 'sources' && Array.isArray(v)) {
-        existingExt.sources = dedupeExtensionSources(
-          Array.isArray(existingExt.sources) ? existingExt.sources : [],
+        existingExt['sources'] = dedupeExtensionSources(
+          Array.isArray(existingExt['sources']) ? existingExt['sources'] : [],
           v
         );
       } else {
         existingExt[k] = structuredClone(v);
       }
     }
-    next.extensions = existingExt;
+    next['extensions'] = existingExt;
   }
 
   const parsedMerged = RawPersonSchema.parse(next);
@@ -335,20 +335,20 @@ function upsertPatchPeople(
     if (!isPlainObject(raw)) {
       throw new CliValidationError(`${label} must be a JSON object.`);
     }
-    if (raw.is_living === true || raw.living === true) {
+    if (raw['is_living'] === true || raw['living'] === true) {
       throw new CliValidationError(
-        `PRIVACY REFUSAL: ${label} ('${String(raw.id ?? 'unknown')}') cannot insert or mark a person as living.`
+        `PRIVACY REFUSAL: ${label} ('${String(raw['id'] ?? 'unknown')}') cannot insert or mark a person as living.`
       );
     }
-    if (typeof raw.id !== 'string' || !SAFE_PERSON_ID_RE.test(raw.id) || raw.id !== raw.id.trim()) {
+    if (typeof raw['id'] !== 'string' || !SAFE_PERSON_ID_RE.test(raw['id']) || raw['id'] !== raw['id'].trim()) {
       throw new CliValidationError(
-        `${label} has invalid id '${String(raw.id)}'. Only ASCII letters, digits, _, and - are allowed.`
+        `${label} has invalid id '${String(raw['id'])}'. Only ASCII letters, digits, _, and - are allowed.`
       );
     }
-    if (seenPatchIds.has(raw.id)) {
-      throw new CliValidationError(`Duplicate person id '${raw.id}' in patch.people.`);
+    if (seenPatchIds.has(raw['id'])) {
+      throw new CliValidationError(`Duplicate person id '${raw['id']}' in patch.people.`);
     }
-    seenPatchIds.add(raw.id);
+    seenPatchIds.add(raw['id']);
 
     const parsedResult = RawPersonSchema.safeParse(raw);
     if (!parsedResult.success) {

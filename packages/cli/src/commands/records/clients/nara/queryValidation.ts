@@ -47,7 +47,7 @@ export function resolveQueryTtlHours(cliTtl: number | undefined, env: NodeJS.Pro
     }
     return cliTtl;
   }
-  const raw = env.KINLOOM_NARA_QUERY_TTL_HOURS;
+  const raw = env['KINLOOM_NARA_QUERY_TTL_HOURS'];
   if (raw !== undefined && raw.trim().length > 0) {
     const parsed = Number(raw.trim());
     if (!Number.isFinite(parsed)) {

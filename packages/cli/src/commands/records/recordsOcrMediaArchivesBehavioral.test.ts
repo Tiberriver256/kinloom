@@ -589,9 +589,9 @@ describe('ocr engines, subprocess, pipeline, and singleRunner behavioral coverag
       maxDim: 200,
       ctx: tsvCtx,
     });
-    expect(res.meta.downscaled).toBe(true);
-    expect(res.meta.original_size).toEqual([400, 200]);
-    expect(res.meta.scaled_size).toEqual([200, 100]);
+    expect(res.meta['downscaled']).toBe(true);
+    expect(res.meta['original_size']).toEqual([400, 200]);
+    expect(res.meta['scaled_size']).toEqual([200, 100]);
     const parsedTsv = parseTesseractTsv(res.output);
     expect(parsedTsv.lines[0]).toMatchObject({ text: 'Chronicle', x0: 20, y0: 40, x1: 120, y1: 60 });
 
@@ -716,7 +716,7 @@ describe('ocr engines, subprocess, pipeline, and singleRunner behavioral coverag
       hugeFake
     );
     expect(hugeRes.text).toBe('Jane Doe 1895');
-    expect(hugeRes.meta.downscaled).toBe(false);
+    expect(hugeRes.meta['downscaled']).toBe(false);
 
     // CLI cursive OCR error branches
     const runCli = (execFileImpl: ExecFileFn, customPrompt?: string) =>

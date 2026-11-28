@@ -226,7 +226,7 @@ export interface SubprocessOutput {
 }
 
 export function resolveVisionCli(env: NodeJS.ProcessEnv = process.env): string {
-  const configured = (env.KINLOOM_OCR_CLI ?? '').trim();
+  const configured = (env['KINLOOM_OCR_CLI'] ?? '').trim();
   return configured || DEFAULT_VISION_CLI;
 }
 

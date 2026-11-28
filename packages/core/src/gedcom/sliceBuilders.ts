@@ -19,6 +19,12 @@ import {
 } from './sliceNormalization.js';
 import type { GedcomLineageSelection, NormalizedPersonName } from './sliceTypes.js';
 
+const DEFAULT_TAG_META = {
+  titleTpl: 'Recorded event for {name}',
+  kind: 'point_event' as const,
+  role: 'resident',
+};
+
 const TAG_METADATA: Readonly<
   Record<string, { titleTpl: string; kind: 'point_event' | 'residence_anchor'; role: string }>
 > = {
@@ -33,7 +39,7 @@ const TAG_METADATA: Readonly<
   EMIG: { titleTpl: 'Emigration of {name}', kind: 'point_event', role: 'resident' },
   BAPM: { titleTpl: 'Baptism of {name}', kind: 'point_event', role: 'birth_subject' },
   CHR: { titleTpl: 'Christening of {name}', kind: 'point_event', role: 'birth_subject' },
-  EVEN: { titleTpl: 'Recorded event for {name}', kind: 'point_event', role: 'resident' },
+  EVEN: DEFAULT_TAG_META,
 };
 
 export function collectRawSlicePlaces(
@@ -261,14 +267,14 @@ export function buildSliceEventsAndSources(params: {
 
     for (const tag of ['BIRT', 'DEAT'] as const) {
       const matching = ind.events.filter((e) => e.tag === tag);
-      if (matching.length === 0) {
+      const [primary] = matching;
+      if (!primary) {
         continue;
       }
       if (matching.length > 1) {
         const desc = matching.map((m) => `${m.date || '?'} (${m.place || '?'})`).join(', ');
         anomalies.push(`${pname} (${xref}) has ${matching.length} ${tag} entries: ${desc}`);
       }
-      const primary = matching[0];
       const edtf = parseGedcomDateToEdtf(primary.date);
       const yr = edtfYear(edtf);
       const plId = primary.place ? (rawToPlaceId.get(primary.place) ?? null) : null;
@@ -278,10 +284,10 @@ export function buildSliceEventsAndSources(params: {
       const altDates: AlternateDate[] = [];
       for (const extra of matching.slice(1)) {
         const extraEdtf = parseGedcomDateToEdtf(extra.date);
-        const extraSid =
-          extra.sources.length > 0
-            ? registerGedcomSource(extra.sources[0].sourXref)
-            : UNVERIFIED_TREE_SOURCE_ID;
+        const firstExtraSrc = extra.sources[0];
+        const extraSid = firstExtraSrc
+          ? registerGedcomSource(firstExtraSrc.sourXref)
+          : UNVERIFIED_TREE_SOURCE_ID;
         const noteParts: string[] = [];
         if (extra.date && extra.date !== primary.date) {
           noteParts.push(`Alternate date: ${extra.date}`);
@@ -298,7 +304,7 @@ export function buildSliceEventsAndSources(params: {
         }
       }
 
-      const meta = TAG_METADATA[tag];
+      const meta = TAG_METADATA[tag] ?? DEFAULT_TAG_META;
       const verb = tag === 'BIRT' ? 'was born' : 'died';
       const datePhrase = primary.date ? ` on ${primary.date}` : '';
       const placePhrase = primary.place ? ` in ${normalizeRawPlace(primary.place)}` : '';
@@ -345,7 +351,7 @@ export function buildSliceEventsAndSources(params: {
       }
 
       const yr = edtfYear(edtf);
-      const meta = TAG_METADATA[ev.tag] ?? TAG_METADATA.EVEN;
+      const meta = TAG_METADATA[ev.tag] ?? DEFAULT_TAG_META;
       const pl = plId ? placesById.get(plId) : undefined;
       const plPrec = pl ? placePrecisionFromType(pl.place_type) : 'county';
       const placePhrase = ev.place ? normalizeRawPlace(ev.place) : 'recorded location';

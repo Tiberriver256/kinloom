@@ -210,7 +210,7 @@ export function parseGrid(pageHtml: string, tableHint: string): readonly [string
     for (let i = 0; i < limit; i += 1) {
       rowObj[headers[i]] = texts[i];
     }
-    rowObj.links = links;
+    rowObj['links'] = links;
     rows.push(rowObj as NjGridRow);
   });
 
@@ -308,14 +308,14 @@ export function validateCriteria(
       resolved[option] = matched;
     }
   }
-  if (spec.roles && resolved.role !== null && resolved.role !== undefined) {
-    const matchedRole = matchOptionValue(resolved.role, spec.roles);
+  if (spec.roles && resolved['role'] !== null && resolved['role'] !== undefined) {
+    const matchedRole = matchOptionValue(resolved['role'], spec.roles);
     if (matchedRole === null) {
       throw new CliValidationError(
-        `--role '${resolved.role}' is not valid here; valid: ${spec.roles.join(', ')}`
+        `--role '${resolved['role']}' is not valid here; valid: ${spec.roles.join(', ')}`
       );
     }
-    resolved.role = matchedRole;
+    resolved['role'] = matchedRole;
   }
   return resolved;
 }
@@ -323,8 +323,8 @@ export function validateCriteria(
 export function isNjSearchResult(value: unknown): value is NjSearchResult {
   return (
     isPlainRecord(value) &&
-    typeof value.database === 'string' &&
-    Array.isArray(value.headers) &&
-    Array.isArray(value.rows)
+    typeof value['database'] === 'string' &&
+    Array.isArray(value['headers']) &&
+    Array.isArray(value['rows'])
   );
 }

@@ -31,8 +31,8 @@ function getCachedPeopleById(people: readonly Person[]): Map<string, Person> {
   let cached = peopleByIdCache.get(people);
   if (!cached) {
     cached = new Map();
-    for (let i = 0; i < people.length; i += 1) {
-      cached.set(people[i].id, people[i]);
+    for (const p of people) {
+      cached.set(p.id, p);
     }
     peopleByIdCache.set(people, cached);
   }
@@ -45,13 +45,12 @@ function getCachedEventPlacesByPerson(
   let cached = eventPlacesCache.get(events);
   if (!cached) {
     cached = new Map();
-    for (let i = 0; i < events.length; i += 1) {
-      const ev = events[i];
+    for (const ev of events) {
       if (!ev.place_id) {
         continue;
       }
-      for (let j = 0; j < ev.participants.length; j += 1) {
-        const pid = ev.participants[j].person_id;
+      for (const pt of ev.participants) {
+        const pid = pt.person_id;
         let set = cached.get(pid);
         if (!set) {
           set = new Set();
@@ -69,8 +68,7 @@ function getCachedKinshipAdj(kinship: readonly KinshipEdge[]): Map<string, Kinsh
   let cached = kinshipAdjCache.get(kinship);
   if (!cached) {
     cached = new Map();
-    for (let i = 0; i < kinship.length; i += 1) {
-      const k = kinship[i];
+    for (const k of kinship) {
       let list = cached.get(k.from);
       if (!list) {
         list = [k];
@@ -161,10 +159,11 @@ export function describeBloodRelation(up: number, down: number): string {
 }
 
 export function describeKinshipSteps(steps: readonly KinshipStep[]): string {
-  if (steps.length === 0) {
+  const [firstStep] = steps;
+  if (!firstStep) {
     return 'Same person';
   }
-  if (steps.length === 1 && steps[0].relation === 'spouse') {
+  if (steps.length === 1 && firstStep.relation === 'spouse') {
     return 'Spouse of';
   }
 
@@ -244,7 +243,7 @@ export function findKinshipPath(params: {
   toId: string;
   bundle: ArchiveBundle;
   placesById: ReadonlyMap<string, Place>;
-  referenceYear?: number;
+  referenceYear?: number | undefined;
 }): KinshipPathResult {
   const { fromId, toId, bundle, placesById, referenceYear = getCurrentReferenceYear() } = params;
   const peopleById = getCachedPeopleById(bundle.people);
@@ -289,15 +288,14 @@ export function findKinshipPath(params: {
   while (qHead < queue.length) {
     const cur = queue[qHead];
     qHead += 1;
-    if (cur === toId) {
+    if (cur === undefined || cur === toId) {
       break;
     }
     const edges = adj.get(cur);
     if (!edges) {
       continue;
     }
-    for (let i = 0; i < edges.length; i += 1) {
-      const edge = edges[i];
+    for (const edge of edges) {
       if (visited.has(edge.to)) {
         continue;
       }

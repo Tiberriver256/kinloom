@@ -546,7 +546,7 @@ describe('Shared pronunciation lexicon endpoints (GET /api/pronunciations, PUT /
     expect(putNewBody.pronunciation?.note).toBe('Historic Illinois village');
     expect(putNewBody.pronunciation?.audio_url).toMatch(/^\/media\/pronunciation-[a-f0-9]{16}\.wav$/);
     expect(putNewBody.pronunciations['New Salem']?.audio_url).toBe(putNewBody.pronunciation?.audio_url);
-    expect(putNewBody.pronunciations.Mercer?.phonetic).toBe('MER-ser');
+    expect(putNewBody.pronunciations['Mercer']?.phonetic).toBe('MER-ser');
     expect(generateSpy).toHaveBeenCalledTimes(1);
 
     // 5. PUT same phonetic again (different casing) -> deduplicates R2 audio with 0 extra TTS calls
@@ -588,9 +588,9 @@ describe('Shared pronunciation lexicon endpoints (GET /api/pronunciations, PUT /
       pronunciations: Record<string, { phonetic?: string; ipa?: string; audio_url?: string }>;
     };
     expect(overrideBody.pronunciation.phonetic).toBe('MUR-sur');
-    expect(overrideBody.pronunciations.Mercer.phonetic).toBe('MUR-sur');
-    expect(overrideBody.pronunciations.Mercer.ipa).toBe('ˈmɜːrsər');
-    expect(overrideBody.pronunciations.Mercer.audio_url).toMatch(
+    expect(overrideBody.pronunciations['Mercer']!.phonetic).toBe('MUR-sur');
+    expect(overrideBody.pronunciations['Mercer']!.ipa).toBe('ˈmɜːrsər');
+    expect(overrideBody.pronunciations['Mercer']!.audio_url).toMatch(
       /^\/media\/pronunciation-[a-f0-9]{16}\.wav$/
     );
     expect(generateSpy).toHaveBeenCalledTimes(2);
@@ -628,7 +628,7 @@ describe('Shared pronunciation lexicon endpoints (GET /api/pronunciations, PUT /
     };
     expect(clearMercerBody.term).toBe('Mercer');
     expect(clearMercerBody.pronunciation).toBeNull();
-    expect(clearMercerBody.pronunciations.Mercer).toEqual({
+    expect(clearMercerBody.pronunciations['Mercer']).toEqual({
       phonetic: 'MER-ser',
       language: 'en-US',
     });
@@ -646,7 +646,7 @@ describe('Shared pronunciation lexicon endpoints (GET /api/pronunciations, PUT /
       pronunciations: Record<string, unknown>;
     };
     expect(clearSpringfieldBody.pronunciation).toBeNull();
-    expect(clearSpringfieldBody.pronunciations.Springfield).toBeUndefined();
+    expect(clearSpringfieldBody.pronunciations['Springfield']).toBeUndefined();
   });
 
   it('allows unauthenticated GET /api/pronunciations in public mode', async () => {
@@ -1495,7 +1495,7 @@ describe('Shared pronunciation lexicon endpoints (GET /api/pronunciations, PUT /
     expect(ipaRes.bytes.byteLength).toBe(44 + rawPcm.byteLength);
     expect(requests[0]?.url).toBe(CLOUD_TTS_SYNTHESIZE_ENDPOINT);
     expect(requests[0]?.headers['x-goog-user-project']).toBe('proj-alpha');
-    expect(requests[0]?.body.voice).toEqual({ languageCode: 'nl-NL', name: 'nl-NL-Chirp3-HD-Charon' });
+    expect(requests[0]?.body['voice']).toEqual({ languageCode: 'nl-NL', name: 'nl-NL-Chirp3-HD-Charon' });
 
     // 2. Plain mode with phonetic + RIFF WAV passthrough + full voice name language extraction
     returnWav = true;
@@ -1506,8 +1506,8 @@ describe('Shared pronunciation lexicon endpoints (GET /api/pronunciations, PUT /
       phonemeMode: 'plain',
     });
     expect(plainRes.bytes).toEqual(existingWav);
-    expect(requests[1]?.body.input).toEqual({ text: 'TOM-us MER-ser' });
-    expect(requests[1]?.body.voice).toEqual({ languageCode: 'en-GB', name: 'en-GB-Chirp3-HD-Kore' });
+    expect(requests[1]?.body['input']).toEqual({ text: 'TOM-us MER-ser' });
+    expect(requests[1]?.body['voice']).toEqual({ languageCode: 'en-GB', name: 'en-GB-Chirp3-HD-Kore' });
 
     // 3. Plain mode without phonetic, unrecognized single-part language, non-BCP47 voice, custom endpoint
     const genCustom = new Chirp3HdPronunciationAudioGenerator({
@@ -1521,8 +1521,8 @@ describe('Shared pronunciation lexicon endpoints (GET /api/pronunciations, PUT /
     await genCustom.generate({ text: 'Bramwell', phonetic: 'BRAM-wel', phonemeMode: 'arpabet' });
     expect(requests[2]?.url).toBe('https://tts-custom.example.test/v1/text:synthesize');
     expect(requests[2]?.headers['x-goog-user-project']).toBeUndefined();
-    expect(requests[2]?.body.voice).toEqual({ languageCode: 'en-US', name: 'Chirp3-HD-Puck' });
-    expect(requests[3]?.body.input).toEqual({ text: 'BRAM-wel' });
+    expect(requests[2]?.body['voice']).toEqual({ languageCode: 'en-US', name: 'Chirp3-HD-Puck' });
+    expect(requests[3]?.body['input']).toEqual({ text: 'BRAM-wel' });
     expect(DEFAULT_CHIRP3_HD_VOICE).toBe('en-US-Chirp3-HD-Charon');
 
     // 4. Error paths: empty text, HTTP 429, malformed JSON

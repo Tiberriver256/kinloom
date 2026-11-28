@@ -37,12 +37,12 @@ function parseD1JsonOutput(stdout: string, dbName: string): D1StatementResult[] 
   }
   const statements: D1StatementResult[] = [];
   for (const stmt of parsed) {
-    if (!isPlainRecord(stmt) || stmt.success !== true) {
+    if (!isPlainRecord(stmt) || stmt['success'] !== true) {
       throw new Error(`D1 statement failed on ${dbName}.`);
     }
     statements.push({
       success: true,
-      results: Array.isArray(stmt.results) ? stmt.results.filter(isPlainRecord) : [],
+      results: Array.isArray(stmt['results']) ? stmt['results'].filter(isPlainRecord) : [],
     });
   }
   return statements;
@@ -109,8 +109,8 @@ export async function inspectD1Schema(
   const tables = new Set<string>();
   const indexes = new Set<string>();
   for (const row of masterStatements[0]?.results ?? []) {
-    const type = typeof row.type === 'string' ? row.type : '';
-    const name = typeof row.name === 'string' ? row.name : '';
+    const type = typeof row['type'] === 'string' ? row['type'] : '';
+    const name = typeof row['name'] === 'string' ? row['name'] : '';
     if (!name) {
       continue;
     }
@@ -125,8 +125,8 @@ export async function inspectD1Schema(
   if (tables.has('d1_migrations')) {
     const trackedStatements = await executeD1Command(ctx, 'SELECT name FROM d1_migrations;');
     for (const row of trackedStatements[0]?.results ?? []) {
-      if (typeof row.name === 'string' && row.name.trim().length > 0) {
-        trackedMigrations.add(row.name.trim());
+      if (typeof row['name'] === 'string' && row['name'].trim().length > 0) {
+        trackedMigrations.add(row['name'].trim());
       }
     }
   }
@@ -140,18 +140,18 @@ export async function inspectD1Schema(
     );
     for (const row of ledgerStatements[0]?.results ?? []) {
       if (
-        typeof row.plugin_id === 'string' &&
-        typeof row.namespace === 'string' &&
-        typeof row.version === 'number' &&
-        typeof row.migration_id === 'string' &&
-        typeof row.checksum_sha256 === 'string'
+        typeof row['plugin_id'] === 'string' &&
+        typeof row['namespace'] === 'string' &&
+        typeof row['version'] === 'number' &&
+        typeof row['migration_id'] === 'string' &&
+        typeof row['checksum_sha256'] === 'string'
       ) {
-        pluginLedger.set(`${row.plugin_id}:${row.version}`, {
-          pluginId: row.plugin_id,
-          namespace: row.namespace,
-          version: row.version,
-          migrationId: row.migration_id,
-          checksumSha256: row.checksum_sha256,
+        pluginLedger.set(`${row['plugin_id']}:${row['version']}`, {
+          pluginId: row['plugin_id'],
+          namespace: row['namespace'],
+          version: row['version'],
+          migrationId: row['migration_id'],
+          checksumSha256: row['checksum_sha256'],
         });
       }
     }
@@ -174,8 +174,8 @@ export async function inspectD1Schema(
     for (const [idx, table] of orderedColumnTables.entries()) {
       const colSet = new Set<string>();
       for (const row of pragmaStatements[idx]?.results ?? []) {
-        if (typeof row.name === 'string' && row.name.trim().length > 0) {
-          colSet.add(row.name.trim());
+        if (typeof row['name'] === 'string' && row['name'].trim().length > 0) {
+          colSet.add(row['name'].trim());
         }
       }
       columnsByTable.set(table, colSet);

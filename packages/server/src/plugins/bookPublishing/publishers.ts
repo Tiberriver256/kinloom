@@ -36,15 +36,16 @@ export function parseDecimalDollarsToCents(raw: string | number | null | undefin
     return 0;
   }
   const match = /^(-)?(\d+)(?:\.(\d+))?$/.exec(str);
-  if (!match) {
+  const wholeStr = match?.[2];
+  if (!match || !wholeStr) {
     throw new RangeError(`Invalid decimal currency amount: '${raw}'.`);
   }
   const sign = match[1] ? -1 : 1;
-  const whole = Number.parseInt(match[2], 10);
+  const whole = Number.parseInt(wholeStr, 10);
   const fracRaw = match[3] ?? '';
   const fracPadded = `${fracRaw}00`;
   const fracCents = Number.parseInt(fracPadded.slice(0, 2), 10);
-  const roundUp = fracPadded.length > 2 && Number.parseInt(fracPadded[2], 10) >= 5 ? 1 : 0;
+  const roundUp = fracPadded.length > 2 && Number.parseInt(fracPadded.charAt(2), 10) >= 5 ? 1 : 0;
   return sign * (whole * 100 + fracCents + roundUp);
 }
 
@@ -246,9 +247,9 @@ export interface LuluBookPublisherOptions {
   readonly environment: BookPublisherEnvironment;
   readonly clientId: string;
   readonly clientSecret: string;
-  readonly webhookSecret?: string;
+  readonly webhookSecret?: string | undefined;
   readonly baseUrlOverride?: string;
-  readonly fetchImpl?: typeof fetch;
+  readonly fetchImpl?: typeof fetch | undefined;
   readonly nowMs?: () => number;
 }
 
@@ -533,7 +534,7 @@ export function createLuluBookPublisherAdapter(options: LuluBookPublisherOptions
 }
 
 export interface MockBookPublisherOptions {
-  readonly webhookSecret?: string;
+  readonly webhookSecret?: string | undefined;
   readonly nowIso?: () => string;
   readonly failValidationMessage?: string;
 }

@@ -20,7 +20,7 @@ import type { ExtractedSnapshotCollections } from './types.js';
 
 type NonKinshipEntityType = Exclude<EntityType, 'kinship_edge'>;
 
-function applyPrimarySourceDefault<T extends { has_primary_source?: boolean }>(
+function applyPrimarySourceDefault<T extends { has_primary_source?: boolean | undefined }>(
   entity: T,
   rowHasPrimarySource: boolean
 ): T {
@@ -79,16 +79,14 @@ export function extractCollectionsFromSnapshot(snapshot: ArchiveRawSnapshot): Ex
     kinship: [],
   };
 
-  for (let i = 0; i < snapshot.entities.length; i += 1) {
-    const row = snapshot.entities[i];
+  for (const row of snapshot.entities) {
     if (row.deleted_at !== null) {
       continue;
     }
     SNAPSHOT_ENTITY_COLLECTORS[row.entity_type](collections, row);
   }
 
-  for (let i = 0; i < snapshot.kinship.length; i += 1) {
-    const row = snapshot.kinship[i];
+  for (const row of snapshot.kinship) {
     if (row.deleted_at === null) {
       collections.kinship.push(cloneKinship(row.edge));
     }
@@ -191,18 +189,12 @@ export function clonePerson(p: RawPerson): RawPerson {
 }
 
 export function cloneEvent(e: RawEvent): RawEvent {
-  const ptsLen = e.participants.length;
-  const participants = new Array<EventParticipant>(ptsLen);
-  for (let i = 0; i < ptsLen; i += 1) {
-    const pt = e.participants[i];
-    participants[i] = { person_id: pt.person_id, role: pt.role };
-  }
+  const participants: EventParticipant[] = e.participants.map((pt) => ({
+    person_id: pt.person_id,
+    role: pt.role,
+  }));
 
-  const srcLen = e.sources.length;
-  const sources = new Array<EventSourceRef>(srcLen);
-  for (let i = 0; i < srcLen; i += 1) {
-    sources[i] = cloneEventSourceRefFast(e.sources[i]);
-  }
+  const sources: EventSourceRef[] = e.sources.map(cloneEventSourceRefFast);
 
   const out = {
     id: e.id,
@@ -215,31 +207,29 @@ export function cloneEvent(e: RawEvent): RawEvent {
   }
   out.edtf_date = e.edtf_date;
   if (e.alternate_dates !== undefined) {
-    const altDates = new Array<AlternateDate>(e.alternate_dates.length);
-    for (let i = 0; i < e.alternate_dates.length; i += 1) {
-      const a = e.alternate_dates[i];
-      altDates[i] = { edtf_date: a.edtf_date, source_id: a.source_id, note: a.note };
-    }
+    const altDates: AlternateDate[] = e.alternate_dates.map((a) => ({
+      edtf_date: a.edtf_date,
+      source_id: a.source_id,
+      note: a.note,
+    }));
     out.alternate_dates = altDates;
   }
   if (e.alternate_places !== undefined) {
-    const altPlaces = new Array<AlternatePlace>(e.alternate_places.length);
-    for (let i = 0; i < e.alternate_places.length; i += 1) {
-      const a = e.alternate_places[i];
+    const altPlaces: AlternatePlace[] = e.alternate_places.map((a) => {
       const cp: AlternatePlace = { place_name: a.place_name, source_id: a.source_id, note: a.note };
       if (a.place_id !== undefined) {
         cp.place_id = a.place_id;
       }
-      altPlaces[i] = cp;
-    }
+      return cp;
+    });
     out.alternate_places = altPlaces;
   }
   if (e.fact_conflicts !== undefined) {
-    const conflicts = new Array<FactConflict>(e.fact_conflicts.length);
-    for (let i = 0; i < e.fact_conflicts.length; i += 1) {
-      const a = e.fact_conflicts[i];
-      conflicts[i] = { claim: a.claim, source_id: a.source_id, note: a.note };
-    }
+    const conflicts: FactConflict[] = e.fact_conflicts.map((a) => ({
+      claim: a.claim,
+      source_id: a.source_id,
+      note: a.note,
+    }));
     out.fact_conflicts = conflicts;
   }
   out.place_id = e.place_id;
@@ -300,9 +290,7 @@ export function clonePlace(p: Place): Place {
     out.ancestor_ids = p.ancestor_ids.slice();
   }
   if (p.historical_names !== undefined) {
-    const hist = new Array<HistoricalName>(p.historical_names.length);
-    for (let i = 0; i < p.historical_names.length; i += 1) {
-      const h = p.historical_names[i];
+    const hist: HistoricalName[] = p.historical_names.map((h) => {
       const ch: HistoricalName = { name: h.name };
       if (h.valid_from !== undefined) {
         ch.valid_from = h.valid_from;
@@ -310,8 +298,8 @@ export function clonePlace(p: Place): Place {
       if (h.valid_to !== undefined) {
         ch.valid_to = h.valid_to;
       }
-      hist[i] = ch;
-    }
+      return ch;
+    });
     out.historical_names = hist;
   }
   if (p.summary !== undefined) {
@@ -327,11 +315,7 @@ export function clonePlace(p: Place): Place {
     out.pronunciation = clonePronunciationFast(p.pronunciation);
   }
   if (p.sources !== undefined) {
-    const srcs = new Array<EventSourceRef>(p.sources.length);
-    for (let i = 0; i < p.sources.length; i += 1) {
-      srcs[i] = cloneEventSourceRefFast(p.sources[i]);
-    }
-    out.sources = srcs;
+    out.sources = p.sources.map(cloneEventSourceRefFast);
   }
   if (p.has_primary_source !== undefined) {
     out.has_primary_source = p.has_primary_source;

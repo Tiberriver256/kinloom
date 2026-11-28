@@ -37,8 +37,8 @@ async function makeTempDir(prefix: string): Promise<string> {
 }
 
 afterEach(async () => {
-  delete process.env.KINLOOM_TELEMETRY_FILE;
-  delete process.env.KINLOOM_TELEMETRY_PARENT;
+  delete process.env['KINLOOM_TELEMETRY_FILE'];
+  delete process.env['KINLOOM_TELEMETRY_PARENT'];
   while (tempDirs.length > 0) {
     const dir = tempDirs.pop();
     if (dir) {
@@ -377,7 +377,7 @@ describe('kinloom media dedupe', () => {
 
     // Check extensions.media_ids rewritten in events.yaml.
     const afterEvents = parseEventsYaml(await readFile(eventsPath, 'utf8'));
-    expect(afterEvents[0].extensions?.media_ids).toEqual(['med_dup_1']);
+    expect(afterEvents[0].extensions?.['media_ids']).toEqual(['med_dup_1']);
 
     // Staged research/ file was NEVER mutated.
     expect(await readFile(stagedPatchPath, 'utf8')).toBe(stagedPatchOriginal);

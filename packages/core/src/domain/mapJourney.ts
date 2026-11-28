@@ -14,7 +14,7 @@ function select(state: MapJourneyState, stepIndex: number, stopIds: readonly str
   return {
     ...state,
     stepIndex,
-    selectedStopId: stepIndex >= 0 && stepIndex < stopIds.length ? stopIds[stepIndex] : null,
+    selectedStopId: stepIndex >= 0 && stepIndex < stopIds.length ? (stopIds[stepIndex] ?? null) : null,
   };
 }
 

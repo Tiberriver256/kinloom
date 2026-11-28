@@ -541,8 +541,8 @@ export function validateOpenFinanceConfig(raw: unknown): ParseOpenFinanceConfigR
   let primaryPlatform = data.primary_platform;
   if (primaryPlatform !== null) {
     const matchingEnabled = normalizedPlatforms.some((p) => p.platform === primaryPlatform && p.enabled);
-    if (!matchingEnabled && !fieldErrors.primary_platform) {
-      fieldErrors.primary_platform = `Primary platform '${primaryPlatform}' must be configured and enabled.`;
+    if (!matchingEnabled && !fieldErrors['primary_platform']) {
+      fieldErrors['primary_platform'] = `Primary platform '${primaryPlatform}' must be configured and enabled.`;
     }
   } else {
     const firstEnabled = normalizedPlatforms.find((p) => p.enabled);
@@ -824,38 +824,38 @@ export function settingsValuesToOpenFinanceConfig(
   fallback: OpenFinanceConfig
 ): OpenFinanceConfig {
   const currency =
-    typeof values.currency === 'string' &&
-    (OPEN_FINANCE_CURRENCIES as readonly string[]).includes(values.currency)
-      ? (values.currency as OpenFinanceCurrency)
+    typeof values['currency'] === 'string' &&
+    (OPEN_FINANCE_CURRENCIES as readonly string[]).includes(values['currency'])
+      ? (values['currency'] as OpenFinanceCurrency)
       : fallback.currency;
 
   const pageTitle =
-    typeof values.page_title === 'string' && values.page_title.trim().length > 0
-      ? values.page_title.trim()
+    typeof values['page_title'] === 'string' && values['page_title'].trim().length > 0
+      ? values['page_title'].trim()
       : fallback.page_title;
 
   const navLabel =
-    typeof values.nav_label === 'string' && values.nav_label.trim().length > 0
-      ? values.nav_label.trim()
+    typeof values['nav_label'] === 'string' && values['nav_label'].trim().length > 0
+      ? values['nav_label'].trim()
       : fallback.nav_label;
 
   const supporterMessage =
-    typeof values.supporter_message === 'string'
-      ? values.supporter_message.trim()
+    typeof values['supporter_message'] === 'string'
+      ? values['supporter_message'].trim()
       : fallback.supporter_message;
 
   const visibility: OpenFinanceVisibility = {
     show_support_page:
-      typeof values.show_support_page === 'boolean'
-        ? values.show_support_page
+      typeof values['show_support_page'] === 'boolean'
+        ? values['show_support_page']
         : fallback.visibility.show_support_page,
     show_in_nav:
-      typeof values.show_in_nav === 'boolean' ? values.show_in_nav : fallback.visibility.show_in_nav,
+      typeof values['show_in_nav'] === 'boolean' ? values['show_in_nav'] : fallback.visibility.show_in_nav,
     show_in_footer:
-      typeof values.show_in_footer === 'boolean' ? values.show_in_footer : fallback.visibility.show_in_footer,
+      typeof values['show_in_footer'] === 'boolean' ? values['show_in_footer'] : fallback.visibility.show_in_footer,
   };
 
-  const parsedPlatformList = safeJsonParse(values.platform_order_json);
+  const parsedPlatformList = safeJsonParse(values['platform_order_json']);
   const existingByPlatform = new Map<DonationPlatformId, OpenFinancePlatformInput>();
   const orderedIds: DonationPlatformId[] = [];
 
@@ -915,16 +915,16 @@ export function settingsValuesToOpenFinanceConfig(
     }
   }
 
-  const parsedCostItems = safeJsonParse(values.cost_ledger_json);
+  const parsedCostItems = safeJsonParse(values['cost_ledger_json']);
   const costItemsInput = Array.isArray(parsedCostItems) ? parsedCostItems : fallback.cost_items;
 
-  const parsedGoal = safeJsonParse(values.funding_goal_json);
+  const parsedGoal = safeJsonParse(values['funding_goal_json']);
   const fundingGoalInput =
     parsedGoal === null || (typeof parsedGoal === 'object' && parsedGoal !== undefined)
       ? parsedGoal
       : fallback.funding_goal;
 
-  const rawPrimary = values.primary_platform;
+  const rawPrimary = values['primary_platform'];
   let primaryPlatform: DonationPlatformId | null = fallback.primary_platform;
   if (rawPrimary === 'auto' || rawPrimary === null || rawPrimary === '') {
     primaryPlatform = null;

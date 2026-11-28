@@ -465,7 +465,7 @@ describe('Cloudflare Worker multi-isolate D1 + R2 persistence (Book Publishing, 
     );
     expect(savePronRes.status).toBe(200);
     const savePronJson = AdminPluginSettingsUpdateResponseSchema.parse(await savePronRes.json());
-    expect(savePronJson.plugin.readonly_values.active_generator).toBe('gemini-tts');
+    expect(savePronJson.plugin.readonly_values['active_generator']).toBe('gemini-tts');
 
     // Fresh Isolate D generates audio using D1 secret + voice + plain mode (no env.GEMINI_API_KEY!)
     const isolateD = makeIsolate([]);
@@ -631,7 +631,7 @@ describe('Cloudflare Worker multi-isolate D1 + R2 persistence (Book Publishing, 
     );
     const recipesPluginSnap = unmigratedSettings.plugins.find((p) => p.plugin_id === RECIPES_PLUGIN_ID);
     expect(recipesPluginSnap?.status).toBe('degraded');
-    expect(String(recipesPluginSnap?.readonly_values.storage_adapter)).toContain('migration required');
+    expect(String(recipesPluginSnap?.readonly_values['storage_adapter'])).toContain('migration required');
 
     // Confirm book artifacts route rejects forged tokens cleanly as well.
     const badTokenRes = await isolateE.fetch(

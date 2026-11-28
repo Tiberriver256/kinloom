@@ -160,8 +160,8 @@ export function mergeDuplicateMediaGroup(
       canonical.caption = longest;
     }
   }
-  const existingAltCaptions = Array.isArray(mergedExtensions.alternate_captions)
-    ? mergedExtensions.alternate_captions.filter((c): c is string => typeof c === 'string')
+  const existingAltCaptions = Array.isArray(mergedExtensions['alternate_captions'])
+    ? mergedExtensions['alternate_captions'].filter((c): c is string => typeof c === 'string')
     : [];
   const altCaptions = uniqueNonEmptyStrings([
     ...existingAltCaptions,
@@ -170,7 +170,7 @@ export function mergeDuplicateMediaGroup(
       .filter((cap) => cap.length > 0 && !chosenCaption.toLowerCase().includes(cap.toLowerCase())),
   ]);
   if (altCaptions.length > 0) {
-    mergedExtensions.alternate_captions = altCaptions;
+    mergedExtensions['alternate_captions'] = altCaptions;
   }
 
   // 4. Provenance: fill if empty; preserve distinct alternate provenance notes.
@@ -182,8 +182,8 @@ export function mergeDuplicateMediaGroup(
       canonical.provenance = firstProv;
     }
   }
-  const existingAltProv = Array.isArray(mergedExtensions.alternate_provenance)
-    ? mergedExtensions.alternate_provenance.filter((p): p is string => typeof p === 'string')
+  const existingAltProv = Array.isArray(mergedExtensions['alternate_provenance'])
+    ? mergedExtensions['alternate_provenance'].filter((p): p is string => typeof p === 'string')
     : [];
   const altProvenance = uniqueNonEmptyStrings([
     ...existingAltProv,
@@ -192,7 +192,7 @@ export function mergeDuplicateMediaGroup(
       .filter((prov) => prov.length > 0 && prov.toLowerCase() !== chosenProvenance.toLowerCase()),
   ]);
   if (altProvenance.length > 0) {
-    mergedExtensions.alternate_provenance = altProvenance;
+    mergedExtensions['alternate_provenance'] = altProvenance;
   }
 
   // 5. source_id / event_id: fill missing, warn and record conflicts in extensions.
@@ -205,10 +205,10 @@ export function mergeDuplicateMediaGroup(
   const distinctSources = uniqueNonEmptyStrings(ordered.map((item) => item.source_id));
   const additionalSources = distinctSources.filter((sid) => sid !== canonical.source_id);
   if (additionalSources.length > 0) {
-    const prevAdditional = Array.isArray(mergedExtensions.additional_source_ids)
-      ? mergedExtensions.additional_source_ids.filter((s): s is string => typeof s === 'string')
+    const prevAdditional = Array.isArray(mergedExtensions['additional_source_ids'])
+      ? mergedExtensions['additional_source_ids'].filter((s): s is string => typeof s === 'string')
       : [];
-    mergedExtensions.additional_source_ids = uniqueNonEmptyStrings([...prevAdditional, ...additionalSources]);
+    mergedExtensions['additional_source_ids'] = uniqueNonEmptyStrings([...prevAdditional, ...additionalSources]);
     warnings.push(
       `Conflicting source_id on '${normalizedFile}': kept canonical '${canonical.source_id}' on ${canonical.id}; recorded additional [${additionalSources.join(', ')}] in extensions.additional_source_ids.`
     );
@@ -223,10 +223,10 @@ export function mergeDuplicateMediaGroup(
   const distinctEvents = uniqueNonEmptyStrings(ordered.map((item) => item.event_id));
   const additionalEvents = distinctEvents.filter((eid) => eid !== canonical.event_id);
   if (additionalEvents.length > 0) {
-    const prevAdditional = Array.isArray(mergedExtensions.additional_event_ids)
-      ? mergedExtensions.additional_event_ids.filter((s): s is string => typeof s === 'string')
+    const prevAdditional = Array.isArray(mergedExtensions['additional_event_ids'])
+      ? mergedExtensions['additional_event_ids'].filter((s): s is string => typeof s === 'string')
       : [];
-    mergedExtensions.additional_event_ids = uniqueNonEmptyStrings([...prevAdditional, ...additionalEvents]);
+    mergedExtensions['additional_event_ids'] = uniqueNonEmptyStrings([...prevAdditional, ...additionalEvents]);
     warnings.push(
       `Conflicting event_id on '${normalizedFile}': kept canonical '${canonical.event_id}' on ${canonical.id}; recorded additional [${additionalEvents.join(', ')}] in extensions.additional_event_ids.`
     );
@@ -243,10 +243,10 @@ export function mergeDuplicateMediaGroup(
   }
 
   // 8. Record auditability trail in extensions.merged_from_media_ids.
-  const prevMergedFrom = Array.isArray(mergedExtensions.merged_from_media_ids)
-    ? mergedExtensions.merged_from_media_ids.filter((id): id is string => typeof id === 'string')
+  const prevMergedFrom = Array.isArray(mergedExtensions['merged_from_media_ids'])
+    ? mergedExtensions['merged_from_media_ids'].filter((id): id is string => typeof id === 'string')
     : [];
-  mergedExtensions.merged_from_media_ids = uniqueNonEmptyStrings([...prevMergedFrom, ...retiredIds]).toSorted(
+  mergedExtensions['merged_from_media_ids'] = uniqueNonEmptyStrings([...prevMergedFrom, ...retiredIds]).toSorted(
     (a, b) => a.localeCompare(b)
   );
   canonical.extensions = mergedExtensions;

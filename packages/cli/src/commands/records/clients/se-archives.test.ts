@@ -263,11 +263,11 @@ describe('se-archives native client', () => {
 
     expect([r1.exitCode, r2.exitCode, r3.exitCode, r4.exitCode]).toEqual([0, 0, 0, 0]);
     expect(seenParams).toHaveLength(2);
-    expect(seenParams[0].transcribed_text).toBe('Anders Andersson');
-    expect(seenParams[0].only_digitised_materials).toBe('true');
-    expect(seenParams[0].facet).toBe('ObjectType:Record;Type:Volume');
-    expect(seenParams[0].year_min).toBe('1840');
-    expect(seenParams[0].year_max).toBe('1896');
+    expect(seenParams[0]['transcribed_text']).toBe('Anders Andersson');
+    expect(seenParams[0]['only_digitised_materials']).toBe('true');
+    expect(seenParams[0]['facet']).toBe('ObjectType:Record;Type:Volume');
+    expect(seenParams[0]['year_min']).toBe('1840');
+    expect(seenParams[0]['year_max']).toBe('1896');
 
     const p1 = JSON.parse(r1.stdout) as {
       cache_hit: boolean;

@@ -197,12 +197,12 @@ export async function getJson(
     throw new RecordRuntimeError(`Invalid JSON from ${baseUrl}: ${message}`);
   }
 
-  if (isPlainRecord(data) && data.error_code !== undefined && data.error_code !== null) {
+  if (isPlainRecord(data) && data['error_code'] !== undefined && data['error_code'] !== null) {
     const desc =
-      (typeof data.error_description === 'string' && data.error_description) ||
-      (typeof data.error === 'string' && data.error) ||
+      (typeof data['error_description'] === 'string' && data['error_description']) ||
+      (typeof data['error'] === 'string' && data['error']) ||
       'Unknown API error';
-    throw new RecordRuntimeError(`OpenArchieven API error ${String(data.error_code)}: ${desc}`);
+    throw new RecordRuntimeError(`OpenArchieven API error ${String(data['error_code'])}: ${desc}`);
   }
   return data;
 }
@@ -228,12 +228,12 @@ export function searchWindow(
 }
 
 function isSearchCacheable(result: Record<string, unknown>): boolean {
-  const resp = result.response;
+  const resp = result['response'];
   if (!isPlainRecord(resp)) {
     return false;
   }
-  const docs = resp.docs;
-  const found = resp.number_found;
+  const docs = resp['docs'];
+  const found = resp['number_found'];
   return (
     Array.isArray(docs) &&
     typeof found === 'number' &&
@@ -411,11 +411,11 @@ export function readCachedScan(
         return undefined;
       }
       const raw = readJsonRecordIfValid(metaPath);
-      if (!raw || raw.schema !== CACHE_SCHEMA) {
+      if (!raw || raw['schema'] !== CACHE_SCHEMA) {
         return undefined;
       }
-      const fetched = raw.fetched_at;
-      const nbytes = raw.nbytes;
+      const fetched = raw['fetched_at'];
+      const nbytes = raw['nbytes'];
       if (
         typeof fetched !== 'number' ||
         !Number.isFinite(fetched) ||

@@ -422,7 +422,7 @@ describe('narrative-audio CLI subcommands', () => {
     expect(attemptCount).toBe(3); // 1 transient 503 + 2 successful chunks
     expect(sentRequests).toHaveLength(2);
     expect(sentRequests[0].url).toContain('texttospeech.googleapis.com');
-    expect(sentRequests[0].headers.authorization).toBe('Bearer adc-token-123');
+    expect(sentRequests[0].headers['authorization']).toBe('Bearer adc-token-123');
     expect(sentRequests[0].headers['x-goog-user-project']).toBe('synthetic-gcp-project');
 
     const firstBody = sentRequests[0].body as {

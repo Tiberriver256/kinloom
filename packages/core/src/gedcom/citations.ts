@@ -244,7 +244,7 @@ export function cleanEventSummaryProse(summary: string): string {
   if (mayHaveDayMonthYear(out) && RE_DAY_MONTH_YEAR_PROBE.test(out)) {
     out = out.replaceAll(
       RE_DAY_MONTH_YEAR,
-      (_, d: string, m: string, y: string) => `${d} ${m[0].toUpperCase()}${m.slice(1).toLowerCase()} ${y}`
+      (_, d: string, m: string, y: string) => `${d} ${(m[0] ?? '').toUpperCase()}${m.slice(1).toLowerCase()} ${y}`
     );
   }
   if (out.includes(' .')) {
@@ -287,8 +287,7 @@ export function applyCitationCleanings(
   legacyContainerSourceIds: ReadonlySet<string> = new Set()
 ): void {
   const hasLegacyIds = legacyContainerSourceIds.size > 0;
-  for (let i = 0; i < events.length; i += 1) {
-    const ev = events[i];
+  for (const ev of events) {
     if (ev.summary) {
       ev.summary = cleanEventSummaryProse(ev.summary);
     }
@@ -322,8 +321,7 @@ export function applyCitationCleanings(
         }
       }
     }
-    for (let j = 0; j < ev.sources.length; j += 1) {
-      const sr = ev.sources[j];
+    for (const sr of ev.sources) {
       if (hasLegacyIds && legacyContainerSourceIds.has(sr.source_id)) {
         sr.source_id = UNVERIFIED_TREE_SOURCE_ID;
       }
@@ -333,8 +331,7 @@ export function applyCitationCleanings(
     }
   }
 
-  for (let i = 0; i < sources.length; i += 1) {
-    const src = sources[i];
+  for (const src of sources) {
     if (src.citation) {
       src.citation = cleanSourceCitationTitle(src.citation);
     }

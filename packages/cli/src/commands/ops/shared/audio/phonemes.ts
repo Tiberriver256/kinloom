@@ -6,9 +6,9 @@ export type PhonemeMode = (typeof PHONEME_MODES)[number];
 
 export interface PhonemeTermHint {
   readonly text: string;
-  readonly ipa?: string;
-  readonly phonetic?: string;
-  readonly arpabet?: string;
+  readonly ipa?: string | undefined;
+  readonly phonetic?: string | undefined;
+  readonly arpabet?: string | undefined;
 }
 
 export interface PronunciationCacheKeyInput {

@@ -156,9 +156,9 @@ export interface ManifestCaptureEntry {
   readonly height: number;
   readonly durationMs: number;
   readonly status: ScreenshotStatus;
-  readonly reason?: string;
-  readonly fallbackUsed?: 'viewport-after-fullpage-timeout';
-  readonly themeAudit?: CaptureThemeAudit;
+  readonly reason?: string | undefined;
+  readonly fallbackUsed?: 'viewport-after-fullpage-timeout' | undefined;
+  readonly themeAudit?: CaptureThemeAudit | undefined;
   readonly consoleErrors: readonly string[];
   readonly failedRequests: readonly string[];
 }

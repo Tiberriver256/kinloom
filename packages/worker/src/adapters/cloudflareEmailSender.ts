@@ -5,8 +5,8 @@ import type { SendEmailBinding, SendEmailMessageBuilder } from '../types.js';
 export const DEFAULT_EMAIL_FROM = 'noreply@familyloom.org';
 
 export interface CloudflareEmailSenderOptions {
-  binding?: SendEmailBinding;
-  fromEmail?: string;
+  binding?: SendEmailBinding | undefined;
+  fromEmail?: string | undefined;
   clock?: Clock;
 }
 
@@ -158,7 +158,7 @@ function readErrorCode(error: unknown): string | null {
  */
 export class CloudflareEmailSender implements EmailSender {
   readonly adapterKind = 'cloudflare-email';
-  private readonly binding?: SendEmailBinding;
+  private readonly binding?: SendEmailBinding | undefined;
   private readonly fromEmail: string;
 
   constructor(options: CloudflareEmailSenderOptions = {}) {

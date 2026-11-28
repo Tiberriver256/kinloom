@@ -236,9 +236,9 @@ async function apiGetOneRecord(
     }
     throw err;
   }
-  const body = isPlainRecord(raw.body) ? raw.body : raw;
-  const hitsObj = isPlainRecord(body.hits) ? body.hits : {};
-  const hits = Array.isArray(hitsObj.hits) ? hitsObj.hits : [];
+  const body = isPlainRecord(raw['body']) ? raw['body'] : raw;
+  const hitsObj = isPlainRecord(body['hits']) ? body['hits'] : {};
+  const hits = Array.isArray(hitsObj['hits']) ? hitsObj['hits'] : [];
   if (hits.length > 0) {
     return extractRecord(hits[0], {
       includeObjects: options.includeObjects,

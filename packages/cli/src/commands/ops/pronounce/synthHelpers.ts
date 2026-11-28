@@ -149,21 +149,21 @@ export async function synthesizeTargetWithGemini(params: {
 
     const parsed: unknown = JSON.parse(bodyText);
     const root = isPlainRecord(parsed) ? parsed : {};
-    const candidates = Array.isArray(root.candidates) ? root.candidates : [];
+    const candidates = Array.isArray(root['candidates']) ? root['candidates'] : [];
     const firstCand = isPlainRecord(candidates[0]) ? candidates[0] : undefined;
-    const content = firstCand && isPlainRecord(firstCand.content) ? firstCand.content : undefined;
-    const parts = content && Array.isArray(content.parts) ? content.parts : [];
+    const content = firstCand && isPlainRecord(firstCand['content']) ? firstCand['content'] : undefined;
+    const parts = content && Array.isArray(content['parts']) ? content['parts'] : [];
     const firstPart = isPlainRecord(parts[0]) ? parts[0] : undefined;
-    const inlineData = firstPart && isPlainRecord(firstPart.inlineData) ? firstPart.inlineData : undefined;
-    if (!inlineData || typeof inlineData.data !== 'string') {
+    const inlineData = firstPart && isPlainRecord(firstPart['inlineData']) ? firstPart['inlineData'] : undefined;
+    if (!inlineData || typeof inlineData['data'] !== 'string') {
       throw new Error(`gemini-tts response missing inline audio data for '${params.target.text}'`);
     }
 
-    const decoded = Buffer.from(inlineData.data, 'base64');
+    const decoded = Buffer.from(inlineData['data'], 'base64');
     if (decoded.length >= 4 && decoded.toString('ascii', 0, 4) === 'RIFF') {
       return decoded;
     }
-    const mimeType = typeof inlineData.mimeType === 'string' ? inlineData.mimeType : '';
+    const mimeType = typeof inlineData['mimeType'] === 'string' ? inlineData['mimeType'] : '';
     const rateMatch = /rate=(\d+)/.exec(mimeType);
     const rate = rateMatch ? Number.parseInt(rateMatch[1], 10) : 24000;
     return wrapPcmAsWav(decoded, rate);

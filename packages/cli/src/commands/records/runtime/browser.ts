@@ -102,14 +102,14 @@ export interface BrowserSession {
 
 export interface RunWithBrowserSessionOptions {
   readonly env: NodeJS.ProcessEnv;
-  readonly overrideEnvVar?: string;
-  readonly userAgent?: string;
-  readonly totalTimeoutMs?: number;
-  readonly launchTimeoutMs?: number;
-  readonly closeTimeoutMs?: number;
-  readonly killGraceMs?: number;
-  readonly nowMs?: () => number;
-  readonly launcher?: ChromiumLauncher;
+  readonly overrideEnvVar?: string | undefined;
+  readonly userAgent?: string | undefined;
+  readonly totalTimeoutMs?: number | undefined;
+  readonly launchTimeoutMs?: number | undefined;
+  readonly closeTimeoutMs?: number | undefined;
+  readonly killGraceMs?: number | undefined;
+  readonly nowMs?: (() => number) | undefined;
+  readonly launcher?: ChromiumLauncher | undefined;
 }
 
 const DIRECT_SYSTEM_CHROMIUM_PATHS = [
@@ -158,7 +158,7 @@ function findPathSystemChromium(
   env: NodeJS.ProcessEnv,
   isExecutable: (filePath: string) => boolean
 ): string | undefined {
-  const pathVar = env.PATH ?? '';
+  const pathVar = env['PATH'] ?? '';
   for (const dir of pathVar.split(path.delimiter)) {
     if (!dir) {
       continue;
@@ -227,7 +227,7 @@ export function buildSanitizedBrowserEnv(env: NodeJS.ProcessEnv): Record<string,
     delete cleaned[key];
   }
   // Prevent Arch/Omarchy /usr/bin/chromium wrappers from reading ~/.config/chromium-flags.conf.
-  cleaned.XDG_CONFIG_HOME = path.join(os.tmpdir(), 'kinloom-headless-xdg-config');
+  cleaned['XDG_CONFIG_HOME'] = path.join(os.tmpdir(), 'kinloom-headless-xdg-config');
   return cleaned;
 }
 

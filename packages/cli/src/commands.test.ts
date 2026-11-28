@@ -512,7 +512,7 @@ describe('kinloom CLI commands', () => {
             entities: [...store.values()].map((row) => ({
               entity_type: row.type,
               entity_id: row.id,
-              slug: typeof row.data.slug === 'string' ? row.data.slug : null,
+              slug: typeof row.data['slug'] === 'string' ? row.data['slug'] : null,
               data: row.data,
               current_revision_id: row.rev,
               has_primary_source: true,

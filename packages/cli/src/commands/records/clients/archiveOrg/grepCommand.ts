@@ -200,7 +200,7 @@ export async function runGrep(
     hits: allHits,
   };
   if (itemErrors.length > 0) {
-    payload.errors = itemErrors;
+    payload['errors'] = itemErrors;
   }
 
   if (asJson) {

@@ -76,11 +76,11 @@ export interface DownloadedFileData {
 }
 
 export function isSearchResult(value: unknown): value is MichiganologySearchResult {
-  return isPlainRecord(value) && Array.isArray(value.results);
+  return isPlainRecord(value) && Array.isArray(value['results']);
 }
 
 export function isItemData(value: unknown): value is MichiganologyItemData {
-  return isPlainRecord(value) && typeof value.id === 'string' && Array.isArray(value.fields);
+  return isPlainRecord(value) && typeof value['id'] === 'string' && Array.isArray(value['fields']);
 }
 
 export function validateTimeout(value: number): number {

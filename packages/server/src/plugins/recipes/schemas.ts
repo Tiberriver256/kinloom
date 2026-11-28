@@ -415,7 +415,7 @@ export async function assertDeceasedRecipeAttribution(
     );
   }
 
-  if ('data' in entity && entity.data.is_living === true) {
+  if ('data' in entity && entity.data['is_living'] === true) {
     throw new PrivacyViolationError(`Recipe attribution cannot reference living person '${normalizedId}'.`, {
       code: 'PRIVACY_VIOLATION',
       blockedPersonIds: [normalizedId],

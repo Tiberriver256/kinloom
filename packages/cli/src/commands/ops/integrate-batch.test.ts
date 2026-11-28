@@ -40,8 +40,8 @@ async function makeTempDir(prefix: string): Promise<string> {
 }
 
 afterEach(async () => {
-  delete process.env.KINLOOM_TELEMETRY_FILE;
-  delete process.env.KINLOOM_TELEMETRY_PARENT;
+  delete process.env['KINLOOM_TELEMETRY_FILE'];
+  delete process.env['KINLOOM_TELEMETRY_PARENT'];
   while (tempDirs.length > 0) {
     const dir = tempDirs.pop();
     if (dir) {
@@ -156,7 +156,7 @@ async function createSyntheticRepo(): Promise<string> {
   const repoDir = await makeTempDir('kinloom-batch-integrate-');
   const dataDir = path.join(repoDir, 'data');
   await mkdir(dataDir, { recursive: true });
-  process.env.KINLOOM_TELEMETRY_FILE = path.join(repoDir, 'telemetry.jsonl');
+  process.env['KINLOOM_TELEMETRY_FILE'] = path.join(repoDir, 'telemetry.jsonl');
 
   await writeFile(
     path.join(repoDir, 'kinloom.config.yaml'),
@@ -407,10 +407,10 @@ describe('kinloom batch integrate and --pending-only', () => {
     );
     expect(code, single.stderr.join('\n')).toBe(EXIT_OK);
     const parsed = JSON.parse(single.stdout.join('\n')) as Record<string, unknown>;
-    expect(parsed.ok).toBe(true);
-    expect(parsed.personId).toBe('per_arthur_alder');
-    expect(parsed.mode).toBeUndefined();
-    expect(parsed.dryRun).toBe(false);
+    expect(parsed['ok']).toBe(true);
+    expect(parsed['personId']).toBe('per_arthur_alder');
+    expect(parsed['mode']).toBeUndefined();
+    expect(parsed['dryRun']).toBe(false);
     expect(existsSync(path.join(repoDir, 'media', 'per_arthur_alder-record.png'))).toBe(true);
   });
 
@@ -1473,7 +1473,7 @@ describe('kinloom batch integrate and --pending-only', () => {
     // 4. Edit patch.json -> classifyStagedPackages marks it pending (reason: 'package_modified').
     const patchPath = path.join(pkgDir, 'patch.json');
     const rawPatch = JSON.parse(await readFile(patchPath, 'utf8')) as Record<string, unknown>;
-    rawPatch.person_updates = { alt_names: ['Artie Alder'] };
+    rawPatch['person_updates'] = { alt_names: ['Artie Alder'] };
     await writeFile(patchPath, JSON.stringify(rawPatch, null, 2), 'utf8');
 
     const classifiedModified = await classifyStagedPackages(repoDir);

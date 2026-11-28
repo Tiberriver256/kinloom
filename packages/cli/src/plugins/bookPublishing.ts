@@ -83,8 +83,8 @@ function resolveCliPublisher(params: {
     return createMockBookPublisherAdapter({ nowIso: params.pluginOptions.nowIso });
   }
   const env = params.pluginOptions.env ?? process.env;
-  const clientId = env.KINLOOM_LULU_CLIENT_ID?.trim() || env.KINLOOM_LULU_CLIENT_KEY?.trim() || '';
-  const clientSecret = env.KINLOOM_LULU_CLIENT_SECRET?.trim() || '';
+  const clientId = env['KINLOOM_LULU_CLIENT_ID']?.trim() || env['KINLOOM_LULU_CLIENT_KEY']?.trim() || '';
+  const clientSecret = env['KINLOOM_LULU_CLIENT_SECRET']?.trim() || '';
   if (!clientId || !clientSecret) {
     throw new CliValidationError(
       'Lulu Print API requires KINLOOM_LULU_CLIENT_ID (or KINLOOM_LULU_CLIENT_KEY) and KINLOOM_LULU_CLIENT_SECRET environment variables.'
@@ -94,7 +94,7 @@ function resolveCliPublisher(params: {
     environment: params.environment,
     clientId,
     clientSecret,
-    webhookSecret: env.KINLOOM_LULU_WEBHOOK_SECRET?.trim() || undefined,
+    webhookSecret: env['KINLOOM_LULU_WEBHOOK_SECRET']?.trim() || undefined,
     fetchImpl: params.fetchImpl,
   });
 }

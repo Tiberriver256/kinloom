@@ -60,7 +60,7 @@ function sampleRecordResponse(
       objectUrl: `https://s3.amazonaws.com/NARAprodstorage/mock/${naid}/sheet_${String(idx).padStart(3, '0')}.jpg`,
     };
     if (withText) {
-      obj.extractedText = `Transcribed page ${idx} for ${title}`;
+      obj['extractedText'] = `Transcribed page ${idx} for ${title}`;
     }
     return obj;
   });
@@ -624,8 +624,8 @@ describe('NARA disk caching and path safety', () => {
     expect(apiCalls).toHaveLength(1);
     const p1 = JSON.parse(r1.stdout) as Record<string, unknown>;
     const p2 = JSON.parse(r2.stdout) as Record<string, unknown>;
-    expect(p1.cache_hit).toBe(false);
-    expect(p2.cache_hit).toBe(true);
+    expect(p1['cache_hit']).toBe(false);
+    expect(p2['cache_hit']).toBe(true);
     const { cache_hit: _h1, ...rest1 } = p1;
     const { cache_hit: _h2, ...rest2 } = p2;
     expect(rest2).toEqual(rest1);
@@ -848,8 +848,8 @@ describe('1950 Census search cache', () => {
     expect(asJson.exitCode).toBe(0);
     const body = JSON.parse(asJson.stdout) as Record<string, unknown>;
     expect(Object.keys(body).toSorted()).toEqual(['cache_hit', 'page', 'results', 'size', 'total']);
-    expect((body.results as unknown[])[0]).toEqual(payload.results[0]);
-    expect(body.cache_hit).toBe(true);
+    expect((body['results'] as unknown[])[0]).toEqual(payload.results[0]);
+    expect(body['cache_hit']).toBe(true);
     expect(urls).toHaveLength(1);
   });
 });
@@ -875,7 +875,7 @@ describe('1950 Census IIIF images', () => {
         });
       }
       if (url.includes('/full/full/0/default.jpg')) {
-        return new Response(bodies.full, {
+        return new Response(bodies['full'], {
           status: 200,
           headers: { 'content-type': 'image/jpeg' },
         });
@@ -1014,7 +1014,7 @@ describe('1950 Census IIIF images', () => {
     expect(first.exitCode).toBe(0);
     expect((JSON.parse(first.stdout) as { cache_hit: boolean }).cache_hit).toBe(false);
 
-    bodies.full = JPEG_REFRESHED;
+    bodies['full'] = JPEG_REFRESHED;
     const refreshed = await invokeNara([...args, '--refresh'], { cacheDir, fetchImpl });
     expect(refreshed.exitCode).toBe(0);
     const body = JSON.parse(refreshed.stdout) as { cache_hit: boolean; bytes: number };
@@ -1714,7 +1714,7 @@ describe('NARA download hardening and telemetry', () => {
     });
     expect(attempts).toBe(3);
     expect(sleeps[0]).toBe(2000);
-    const body = data.body as { hits: { total: number } };
+    const body = data['body'] as { hits: { total: number } };
     expect(body.hits.total).toBe(1);
   });
 

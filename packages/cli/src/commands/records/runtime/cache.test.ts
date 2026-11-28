@@ -98,8 +98,8 @@ describe('records runtime cache', () => {
       typeof value === 'object' &&
       value !== null &&
       !Array.isArray(value) &&
-      typeof (value as Record<string, unknown>).ok === 'boolean' &&
-      typeof (value as Record<string, unknown>).id === 'number';
+      typeof (value as Record<string, unknown>)['ok'] === 'boolean' &&
+      typeof (value as Record<string, unknown>)['id'] === 'number';
 
     const now = Date.now();
     atomicWriteJsonSync(jsonPath, {
@@ -185,7 +185,7 @@ describe('records runtime cache', () => {
       typeof value === 'object' &&
       value !== null &&
       !Array.isArray(value) &&
-      typeof (value as Record<string, unknown>).count === 'number';
+      typeof (value as Record<string, unknown>)['count'] === 'number';
 
     const r1 = await cachedJsonCall({
       cacheDir: tmp,

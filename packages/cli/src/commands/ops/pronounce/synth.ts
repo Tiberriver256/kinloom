@@ -355,11 +355,11 @@ export async function runPronounceSynthCommand(
     );
   }
 
-  const endpointRaw = options.endpoint?.trim() || env.KINLOOM_TTS_ENDPOINT?.trim() || '';
+  const endpointRaw = options.endpoint?.trim() || env['KINLOOM_TTS_ENDPOINT']?.trim() || '';
   const openAiUrl = backend === 'openai-speech' ? normalizeSpeechEndpointUrl(endpointRaw) : '';
-  const openAiApiKey = options.apiKey?.trim() || env.OPENAI_SPEECH_API_KEY?.trim() || undefined;
+  const openAiApiKey = options.apiKey?.trim() || env['OPENAI_SPEECH_API_KEY']?.trim() || undefined;
   const geminiApiKey =
-    options.apiKey?.trim() || env.GEMINI_API_KEY?.trim() || env.GOOGLE_API_KEY?.trim() || '';
+    options.apiKey?.trim() || env['GEMINI_API_KEY']?.trim() || env['GOOGLE_API_KEY']?.trim() || '';
   if (backend === 'gemini' && !geminiApiKey) {
     throw new CliValidationError('Set GEMINI_API_KEY (or pass --api-key) for --backend gemini.');
   }

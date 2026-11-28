@@ -427,7 +427,7 @@ describe('michiganology native client', () => {
       metadata: Record<string, string>;
     };
     expect(body.cache_hit).toBe(false);
-    expect(body.metadata.County).toBe('Kent');
+    expect(body.metadata['County']).toBe('Kent');
   });
 
   it('retries download on 429 and timeout and supports fetch alias + -o/--output', async () => {

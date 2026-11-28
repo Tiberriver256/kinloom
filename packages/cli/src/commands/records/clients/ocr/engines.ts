@@ -130,9 +130,9 @@ export async function runPrintedOcr(params: {
     }
     const meta: Record<string, unknown> = { psm, omp_thread_limit: 1, timeout_s: timeoutSeconds };
     if (prepared.scaleInfo !== null) {
-      meta.downscaled = true;
-      meta.original_size = [prepared.scaleInfo.original_width, prepared.scaleInfo.original_height];
-      meta.scaled_size = [prepared.scaleInfo.scaled_width, prepared.scaleInfo.scaled_height];
+      meta['downscaled'] = true;
+      meta['original_size'] = [prepared.scaleInfo.original_width, prepared.scaleInfo.original_height];
+      meta['scaled_size'] = [prepared.scaleInfo.scaled_width, prepared.scaleInfo.scaled_height];
     }
     return { output: out, meta };
   } finally {
@@ -175,7 +175,7 @@ export async function runCursiveGeminiOcr(params: {
   readonly ctx: RecordCommandContext;
 }): Promise<{ readonly text: string; readonly meta: Record<string, unknown>; readonly engine: string }> {
   const { imgPath, rawBytes, effort, timeoutSeconds, customPrompt, apiKey, ctx } = params;
-  const model = (ctx.env.KINLOOM_OCR_MODEL ?? '').trim() || DEFAULT_CURSIVE_GEMINI_MODEL;
+  const model = (ctx.env['KINLOOM_OCR_MODEL'] ?? '').trim() || DEFAULT_CURSIVE_GEMINI_MODEL;
   const prepared = await prepareCursiveBuffer(imgPath, rawBytes);
   const prompt = customPrompt
     ? customPrompt.replaceAll('{image_path}', path.basename(imgPath))
@@ -213,20 +213,20 @@ export async function runCursiveGeminiOcr(params: {
     } catch {
       throw new Error(`gemini OCR returned non-JSON response: ${bodyText.slice(0, 300)}`);
     }
-    if (!isPlainRecord(parsed) || !Array.isArray(parsed.candidates) || parsed.candidates.length === 0) {
+    if (!isPlainRecord(parsed) || !Array.isArray(parsed['candidates']) || parsed['candidates'].length === 0) {
       throw new Error('gemini OCR returned no candidates.');
     }
-    const firstCandidate = parsed.candidates[0];
-    const content = isPlainRecord(firstCandidate) ? firstCandidate.content : undefined;
-    const parts = isPlainRecord(content) && Array.isArray(content.parts) ? content.parts : [];
+    const firstCandidate = parsed['candidates'][0];
+    const content = isPlainRecord(firstCandidate) ? firstCandidate['content'] : undefined;
+    const parts = isPlainRecord(content) && Array.isArray(content['parts']) ? content['parts'] : [];
     const text = parts
-      .map((part) => (isPlainRecord(part) && typeof part.text === 'string' ? part.text : ''))
+      .map((part) => (isPlainRecord(part) && typeof part['text'] === 'string' ? part['text'] : ''))
       .join('')
       .trim();
     if (!text) {
       throw new Error('gemini OCR returned an empty transcription response.');
     }
-    const usage = isPlainRecord(parsed.usageMetadata) ? parsed.usageMetadata : {};
+    const usage = isPlainRecord(parsed['usageMetadata']) ? parsed['usageMetadata'] : {};
     return {
       text,
       engine: `gemini:${model}`,
@@ -236,7 +236,7 @@ export async function runCursiveGeminiOcr(params: {
         effort,
         sent_bytes: prepared.buffer.length,
         downscaled: prepared.downscaled,
-        total_tokens: typeof usage.totalTokenCount === 'number' ? usage.totalTokenCount : undefined,
+        total_tokens: typeof usage['totalTokenCount'] === 'number' ? usage['totalTokenCount'] : undefined,
       },
     };
   } catch (err: unknown) {
@@ -267,7 +267,7 @@ export async function runCursiveCliOcr(params: {
 }): Promise<{ readonly text: string; readonly meta: Record<string, unknown>; readonly engine: string }> {
   const { imgPath, rawBytes, effort, timeoutSeconds, cacheDir, customPrompt, cliName, cliBin, ctx } = params;
 
-  const model = (ctx.env.KINLOOM_OCR_MODEL ?? '').trim() || `gemini-4-hydrogen-${effort}`;
+  const model = (ctx.env['KINLOOM_OCR_MODEL'] ?? '').trim() || `gemini-4-hydrogen-${effort}`;
   const prepared = await prepareCursiveBuffer(imgPath, rawBytes);
 
   let sendPath = imgPath;
@@ -320,15 +320,15 @@ export async function runCursiveCliOcr(params: {
     } catch {
       throw new Error(`${cliName} returned non-JSON stdout: ${proc.stdout.slice(0, 300)}`);
     }
-    if (!isPlainRecord(payload) || payload.status !== 'SUCCESS') {
-      const status = isPlainRecord(payload) ? String(payload.status) : 'unknown';
+    if (!isPlainRecord(payload) || payload['status'] !== 'SUCCESS') {
+      const status = isPlainRecord(payload) ? String(payload['status']) : 'unknown';
       throw new Error(`${cliName} returned status=${status}: ${JSON.stringify(payload).slice(0, 300)}`);
     }
-    const text = typeof payload.response === 'string' ? payload.response.trim() : '';
+    const text = typeof payload['response'] === 'string' ? payload['response'].trim() : '';
     if (!text) {
       throw new Error(`${cliName} returned an empty transcription response.`);
     }
-    const usage = isPlainRecord(payload.usage) ? payload.usage : {};
+    const usage = isPlainRecord(payload['usage']) ? payload['usage'] : {};
     return {
       text,
       engine: `${cliName}:${model}`,
@@ -337,9 +337,9 @@ export async function runCursiveCliOcr(params: {
         model,
         effort,
         sent_bytes: prepared.buffer.length,
-        duration_seconds: payload.duration_seconds,
-        thinking_tokens: usage.thinking_tokens,
-        output_tokens: usage.output_tokens,
+        duration_seconds: payload['duration_seconds'],
+        thinking_tokens: usage['thinking_tokens'],
+        output_tokens: usage['output_tokens'],
       },
     };
   } finally {
@@ -360,7 +360,7 @@ export async function runCursiveOcr(params: {
   readonly ctx: RecordCommandContext;
 }): Promise<{ readonly text: string; readonly meta: Record<string, unknown>; readonly engine: string }> {
   const { provider, ctx } = params;
-  const geminiKey = (ctx.env.GEMINI_API_KEY ?? ctx.env.GOOGLE_API_KEY ?? '').trim();
+  const geminiKey = (ctx.env['GEMINI_API_KEY'] ?? ctx.env['GOOGLE_API_KEY'] ?? '').trim();
   const cliName = resolveVisionCli(ctx.env);
   const cliBin = ctx.execFileImpl ? cliName : resolveExecutable(cliName, ctx.env);
 

@@ -205,7 +205,7 @@ describe('mn-archives native client', () => {
     expect(r4.exitCode).toBe(0);
     expect(seenBodies).toHaveLength(2);
 
-    expect(seenBodies[0].filters).toEqual([
+    expect(seenBodies[0]['filters']).toEqual([
       { conjunction: 'and', filters: [{ field: 'familyName', term: 'Alder', op: '=' }] },
       { conjunction: 'or', filters: [{ field: 'county', term: 'Hennepin.*', op: '*' }] },
       {
@@ -409,7 +409,7 @@ describe('mn-archives native client', () => {
     expect(mp1.cache_hit).toBe(false);
     expect((JSON.parse(m2.stdout) as { cache_hit: boolean }).cache_hit).toBe(true);
     expect(mp1.fields['Subject-County']).toBe('Kandiyohi');
-    expect(mp1.fields.LCCN).toBe('sn89081022');
+    expect(mp1.fields['LCCN']).toBe('sn89081022');
   });
 
   it('validates host, path traversal, and image magic bytes on newspaper download', async () => {

@@ -117,8 +117,8 @@ async function makeTempDir(prefix: string): Promise<string> {
 }
 
 afterEach(async () => {
-  delete process.env.KINLOOM_PRONOUNCE_CACHE_DIR;
-  delete process.env.KINLOOM_ANCESTRY_FACTS_DIR;
+  delete process.env['KINLOOM_PRONOUNCE_CACHE_DIR'];
+  delete process.env['KINLOOM_ANCESTRY_FACTS_DIR'];
   while (tempDirs.length > 0) {
     const dir = tempDirs.pop();
     if (dir) {
@@ -718,8 +718,8 @@ describe('pronounce deduplicate command and rules behavioral coverage', () => {
     const updatedConfig = parseKinloomConfigYaml(
       fs.readFileSync(path.join(repoDir, 'kinloom.config.yaml'), 'utf8')
     );
-    expect(updatedConfig.pronunciations?.Clara).toEqual({ phonetic: 'KLAR-ah', ipa: '/ˈklɑrə/' });
-    expect(updatedConfig.pronunciations?.Martin).toEqual({ phonetic: 'MAR-tin', ipa: '/ˈmɑrtɪn/' });
+    expect(updatedConfig.pronunciations?.['Clara']).toEqual({ phonetic: 'KLAR-ah', ipa: '/ˈklɑrə/' });
+    expect(updatedConfig.pronunciations?.['Martin']).toEqual({ phonetic: 'MAR-tin', ipa: '/ˈmɑrtɪn/' });
 
     const updatedPeople = parsePeopleYaml(fs.readFileSync(path.join(repoDir, 'data', 'people.yaml'), 'utf8'));
     expect(updatedPeople.find((p) => p.id === 'p_martin_nosrc')?.pronunciation).toBeUndefined();
@@ -794,7 +794,7 @@ describe('pronounce mediaWiki parsing and lookupCache retry/persistence', () => 
     await defaultSleep(1);
 
     const cacheDir = await makeTempDir('kinloom-lookup-cache-');
-    process.env.KINLOOM_PRONOUNCE_CACHE_DIR = cacheDir;
+    process.env['KINLOOM_PRONOUNCE_CACHE_DIR'] = cacheDir;
     expect(getPronounceCacheDir()).toBe(path.resolve(cacheDir));
 
     const cachePath = buildLookupCachePath({
@@ -1523,7 +1523,7 @@ describe('context ancestry, graph, and formatter behavioral coverage', () => {
       referencedSourceIds: refSources,
       privacyState,
     });
-    expect(ownMedia.map((m) => m.id)).toEqual(['med_ok']);
+    expect(ownMedia.map((m) => m['id'])).toEqual(['med_ok']);
     expect(refSources.has('src_m1')).toBe(true);
 
     // collectRelativeArchiveMedia: empty deceased relatives -> []

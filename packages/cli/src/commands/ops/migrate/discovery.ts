@@ -89,12 +89,12 @@ export function resolveD1DatabaseBinding(repoDir: string): D1DatabaseBinding {
     throw new CliValidationError(`Expected a JSON object in ${configPath}.`);
   }
 
-  const d1List = Array.isArray(parsed.d1_databases) ? parsed.d1_databases : [];
+  const d1List = Array.isArray(parsed['d1_databases']) ? parsed['d1_databases'] : [];
   const firstD1 = isPlainRecord(d1List[0]) ? d1List[0] : null;
-  const dbName = typeof firstD1?.database_name === 'string' ? firstD1.database_name.trim() : '';
+  const dbName = typeof firstD1?.['database_name'] === 'string' ? firstD1['database_name'].trim() : '';
   const migrationsDirHint =
-    typeof firstD1?.migrations_dir === 'string' && firstD1.migrations_dir.trim().length > 0
-      ? firstD1.migrations_dir.trim()
+    typeof firstD1?.['migrations_dir'] === 'string' && firstD1['migrations_dir'].trim().length > 0
+      ? firstD1['migrations_dir'].trim()
       : undefined;
 
   if (!dbName) {

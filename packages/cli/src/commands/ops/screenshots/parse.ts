@@ -33,9 +33,9 @@ export const PRESET_VIEWPORTS: Readonly<Record<string, ViewportSpec>> = Object.f
 });
 
 export const DEFAULT_VIEWPORTS: readonly ViewportSpec[] = Object.freeze([
-  PRESET_VIEWPORTS.mobile,
-  PRESET_VIEWPORTS.tablet,
-  PRESET_VIEWPORTS.desktop,
+  PRESET_VIEWPORTS['mobile'],
+  PRESET_VIEWPORTS['tablet'],
+  PRESET_VIEWPORTS['desktop'],
 ]);
 
 export const DEFAULT_THEMES: readonly ScreenshotTheme[] = Object.freeze(['light', 'dark']);
@@ -332,7 +332,7 @@ export function buildAuthRequestHeaders(options: {
     }
   }
   if (options.authCookie?.trim()) {
-    headers.Cookie = options.authCookie.trim();
+    headers['Cookie'] = options.authCookie.trim();
   }
   return headers;
 }
@@ -362,11 +362,11 @@ export function resolveCaptureTimeoutPolicy(input: {
 }): CaptureTimeoutPolicy {
   const baseTimeoutMs = Math.max(500, Math.min(MAX_CAPTURE_TIMEOUT_MS, Math.floor(input.baseTimeoutMs)));
   const envHeavyMs = parseBoundedTimeoutEnv(
-    input.env?.KINLOOM_SCREENSHOT_HEAVY_TIMEOUT_MS,
+    input.env?.['KINLOOM_SCREENSHOT_HEAVY_TIMEOUT_MS'],
     500,
     MAX_CAPTURE_TIMEOUT_MS
   );
-  const envMapSettleMs = parseBoundedTimeoutEnv(input.env?.KINLOOM_SCREENSHOT_MAP_SETTLE_MS, 250, 30_000);
+  const envMapSettleMs = parseBoundedTimeoutEnv(input.env?.['KINLOOM_SCREENSHOT_MAP_SETTLE_MS'], 250, 30_000);
 
   const effectiveHeavyTimeoutMs =
     input.heavyTimeoutMs ??

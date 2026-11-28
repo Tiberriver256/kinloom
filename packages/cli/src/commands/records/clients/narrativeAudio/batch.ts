@@ -132,14 +132,14 @@ export async function runBatch(
 
   const rawEndpoint = (
     getStringOption(parsed, 'endpoint') ??
-    ctx.env.KINLOOM_TTS_ENDPOINT ??
-    ctx.env.NARRATIVE_AUDIO_ENDPOINT ??
+    ctx.env['KINLOOM_TTS_ENDPOINT'] ??
+    ctx.env['NARRATIVE_AUDIO_ENDPOINT'] ??
     ''
   ).trim();
 
   const rawBackend = (
     getStringOption(parsed, 'backend') ??
-    ctx.env.NARRATIVE_AUDIO_BACKEND ??
+    ctx.env['NARRATIVE_AUDIO_BACKEND'] ??
     (rawEndpoint ? 'openai-speech' : DEFAULT_BACKEND)
   )
     .trim()
@@ -164,12 +164,12 @@ export async function runBatch(
   const bitrate = getStringOption(parsed, 'bitrate') ?? '96k';
   const languageCode = (
     getStringOption(parsed, 'languageCode') ??
-    ctx.env.NARRATIVE_AUDIO_LANGUAGE ??
+    ctx.env['NARRATIVE_AUDIO_LANGUAGE'] ??
     DEFAULT_LANGUAGE
   ).trim();
   const gcpProject = getStringOption(parsed, 'gcpProject');
   const keyFile = getStringOption(parsed, 'keyFile');
-  const apiKey = getStringOption(parsed, 'apiKey') ?? ctx.env.OPENAI_SPEECH_API_KEY;
+  const apiKey = getStringOption(parsed, 'apiKey') ?? ctx.env['OPENAI_SPEECH_API_KEY'];
   const outDirArg = getStringOption(parsed, 'outDir');
   const outDir = outDirArg ? resolveUserPathFromContext(outDirArg, ctx) : path.join(repoDir, 'media');
 

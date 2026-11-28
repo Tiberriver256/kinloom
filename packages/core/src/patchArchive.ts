@@ -31,8 +31,7 @@ export function patchCompiledBundle(
   options?: PatchCompiledBundleOptions
 ): ArchiveBundle {
   let maxRevisionId = previousBundle.meta.max_revision_id;
-  for (let i = 0; i < mutations.length; i += 1) {
-    const m = mutations[i];
+  for (const m of mutations) {
     if (m.revision_id !== undefined) {
       maxRevisionId = maxRevisionId === undefined ? m.revision_id : Math.max(maxRevisionId, m.revision_id);
     }
@@ -65,15 +64,15 @@ export function patchCompiledBundle(
   const state = createPatchWorkingState(previousBundle, siteConfig, mode, options);
 
   // Pre-scan whether any media mutation exists in the batch so person/event updates know if media changed!
-  for (let i = 0; i < mutations.length; i += 1) {
-    if (mutations[i].entity_type === 'media') {
+  for (const m of mutations) {
+    if (m.entity_type === 'media') {
       state.mediaMutated = true;
       break;
     }
   }
 
-  for (let i = 0; i < mutations.length; i += 1) {
-    applyPatchMutation(state, mutations[i]);
+  for (const m of mutations) {
+    applyPatchMutation(state, m);
   }
 
   reconcileNewlyLivingEntities(state);

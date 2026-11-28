@@ -75,9 +75,9 @@ async function makeTempDir(prefix: string): Promise<string> {
 }
 
 afterEach(async () => {
-  delete process.env.KINLOOM_TELEMETRY_FILE;
-  delete process.env.KINLOOM_TELEMETRY_PARENT;
-  delete process.env.KINLOOM_ANCESTRY_FACTS_DIR;
+  delete process.env['KINLOOM_TELEMETRY_FILE'];
+  delete process.env['KINLOOM_TELEMETRY_PARENT'];
+  delete process.env['KINLOOM_ANCESTRY_FACTS_DIR'];
   while (tempDirs.length > 0) {
     const dir = tempDirs.pop();
     if (dir) {
@@ -533,7 +533,7 @@ describe('ops/telemetry', () => {
   it('measures command success/error and honors KINLOOM_TELEMETRY_PARENT suppression', async () => {
     const dir = await makeTempDir('kinloom-measure-');
     const telemetryFile = path.join(dir, 'calls.jsonl');
-    process.env.KINLOOM_TELEMETRY_FILE = telemetryFile;
+    process.env['KINLOOM_TELEMETRY_FILE'] = telemetryFile;
 
     expect(getTelemetryFilePath()).toBe(telemetryFile);
 
@@ -553,7 +553,7 @@ describe('ops/telemetry', () => {
       })
     ).rejects.toThrow('living person refused');
 
-    process.env.KINLOOM_TELEMETRY_PARENT = '1';
+    process.env['KINLOOM_TELEMETRY_PARENT'] = '1';
     recordTelemetryEvent({ subcmd: 'suppressed_cmd', duration_ms: 50 });
 
     const lines = (await readFile(telemetryFile, 'utf8')).trim().split('\n');
@@ -659,10 +659,10 @@ describe('ops/context', () => {
     expect(result.context.relatives.children).toEqual([REDACTED_RELATIVE_LABEL]);
     expect(result.rendered).not.toContain('Clara Maple');
 
-    const sharedEvent = result.context.events.find((e) => e.id === 'evt_arthur_living_visit');
-    expect(sharedEvent?.edtf_date).toBe('1955');
-    expect(sharedEvent?.place_id).toBeNull();
-    expect(sharedEvent?.participants).toEqual([
+    const sharedEvent = result.context.events.find((e) => e['id'] === 'evt_arthur_living_visit');
+    expect(sharedEvent?.['edtf_date']).toBe('1955');
+    expect(sharedEvent?.['place_id']).toBeNull();
+    expect(sharedEvent?.['participants']).toEqual([
       { person_id: 'per_arthur_alder', role: 'ancestor' },
       { person_id: REDACTED_RELATIVE_LABEL, role: 'descendant' },
     ]);
@@ -1036,7 +1036,7 @@ describe('ops/context', () => {
       personId: 'per_arthur_alder',
       includeFamily: true,
     });
-    expect(opened.context.media.map((item) => item.id)).toContain('med_arthur_and_helen');
+    expect(opened.context.media.map((item) => item['id'])).toContain('med_arthur_and_helen');
     expect(opened.context.relativeArchiveMedia).toEqual([
       {
         id: 'med_edwin_baptism',
@@ -3641,7 +3641,7 @@ describe('ops/audit', () => {
       sources: [{ source_id: 'src_1880_census', confidence: 'high' }],
     };
     if (options.placePrecision) {
-      event.place_precision = options.placePrecision;
+      event['place_precision'] = options.placePrecision;
     }
     const patch: Record<string, unknown> = {
       person_id: options.personId,
@@ -3670,7 +3670,7 @@ describe('ops/audit', () => {
       ],
     };
     if (options.sourceId) {
-      patch.sources = [
+      patch['sources'] = [
         {
           id: options.sourceId,
           citation: 'Synthetic Oak County register',
@@ -3684,7 +3684,7 @@ describe('ops/audit', () => {
 
   it('audits several staged packages and reports identical and conflicting overlaps', async () => {
     const repoDir = await createSyntheticRepo();
-    process.env.KINLOOM_TELEMETRY_FILE = path.join(repoDir, 'telemetry.jsonl');
+    process.env['KINLOOM_TELEMETRY_FILE'] = path.join(repoDir, 'telemetry.jsonl');
     await dropArthurLivingVisit(repoDir);
     const sharedScan = makeMinimalPng(640, 480, 12_000);
     await writeCitedPackage({
@@ -3864,7 +3864,7 @@ describe('ops/audit', () => {
 
   it('reports a staged media file that already belongs to another live media id', async () => {
     const repoDir = await createSyntheticRepo();
-    process.env.KINLOOM_TELEMETRY_FILE = path.join(repoDir, 'telemetry.jsonl');
+    process.env['KINLOOM_TELEMETRY_FILE'] = path.join(repoDir, 'telemetry.jsonl');
     const mediaPath = path.join(repoDir, 'data', 'media.yaml');
     const media = parseMediaYaml(await readFile(mediaPath, 'utf8'));
     media.push({
@@ -3923,7 +3923,7 @@ describe('ops/audit', () => {
 
   it('fails a single-person strict audit when a new media id reuses a live file', async () => {
     const repoDir = await createSyntheticRepo();
-    process.env.KINLOOM_TELEMETRY_FILE = path.join(repoDir, 'telemetry.jsonl');
+    process.env['KINLOOM_TELEMETRY_FILE'] = path.join(repoDir, 'telemetry.jsonl');
     const mediaPath = path.join(repoDir, 'data', 'media.yaml');
     const media = parseMediaYaml(await readFile(mediaPath, 'utf8'));
     media.push({
@@ -4494,7 +4494,7 @@ describe('ops/audit', () => {
 
   it('detects conflicting new patch.people ids and slugs across concurrent staged packages', async () => {
     const repoDir = await createSyntheticRepo();
-    process.env.KINLOOM_TELEMETRY_FILE = path.join(repoDir, 'telemetry.jsonl');
+    process.env['KINLOOM_TELEMETRY_FILE'] = path.join(repoDir, 'telemetry.jsonl');
     await dropArthurLivingVisit(repoDir);
 
     const writePackageWithPeople = async (ownerId: string, stagedPeople: Array<Record<string, unknown>>) => {
@@ -4886,7 +4886,7 @@ describe('ops/sync', () => {
         init?.headers instanceof Headers
           ? (init.headers.get('authorization') ?? undefined)
           : init?.headers && !Array.isArray(init.headers)
-            ? (init.headers as Record<string, string>).Authorization
+            ? (init.headers as Record<string, string>)['Authorization']
             : undefined;
       if (auth) {
         seenAuthHeaders.push(auth);

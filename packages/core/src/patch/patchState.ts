@@ -17,19 +17,19 @@ import type {
 import type { EntityPayload, EntityType, RevisionAction } from '../schemas/revisions.js';
 
 export interface BundlePatchMutation {
-  revision_id?: number;
+  revision_id?: number | undefined;
   entity_type: EntityType;
   entity_id: string;
   action: RevisionAction;
-  before_json?: EntityPayload | null;
+  before_json?: EntityPayload | null | undefined;
   after_json: EntityPayload | null;
-  has_primary_source?: boolean;
+  has_primary_source?: boolean | undefined;
 }
 
 export interface PatchCompiledBundleOptions {
-  generatedAt?: string;
-  referenceYear?: number;
-  legacyContainerSourceIds?: ReadonlySet<string>;
+  generatedAt?: string | undefined;
+  referenceYear?: number | undefined;
+  legacyContainerSourceIds?: ReadonlySet<string> | undefined;
 }
 
 export interface BundleIndexMemo {
@@ -70,7 +70,7 @@ export interface PatchWorkingState {
   readonly privacy: PrivacyConfig;
   readonly stripLivingPortraits: boolean;
   readonly includeLivingSpans: boolean;
-  readonly legacyContainerSourceIds?: ReadonlySet<string>;
+  readonly legacyContainerSourceIds?: ReadonlySet<string> | undefined;
 
   readonly people: Person[];
   readonly events: ArchiveEvent[];
@@ -207,15 +207,16 @@ export function createPatchWorkingState(
 
     ensurePeopleIndex(forMutation = false) {
       if (peopleIdxById === null || livingIds === null) {
-        peopleIdxById = new Map<string, number>();
-        livingIds = new Set<string>();
-        for (let i = 0; i < people.length; i += 1) {
-          const p = people[i];
-          peopleIdxById.set(p.id, i);
+        const idxMap = new Map<string, number>();
+        const livSet = new Set<string>();
+        people.forEach((p, i) => {
+          idxMap.set(p.id, i);
           if (p.is_living) {
-            livingIds.add(p.id);
+            livSet.add(p.id);
           }
-        }
+        });
+        peopleIdxById = idxMap;
+        livingIds = livSet;
         if (people.length === previousBundle.people.length) {
           baseMemo.peopleIdxById = peopleIdxById;
           baseMemo.livingIds = livingIds;
@@ -234,10 +235,11 @@ export function createPatchWorkingState(
 
     ensureEventsIndex(forMutation = false) {
       if (eventsIdxById === null) {
-        eventsIdxById = new Map<string, number>();
-        for (let i = 0; i < events.length; i += 1) {
-          eventsIdxById.set(events[i].id, i);
-        }
+        const idxMap = new Map<string, number>();
+        events.forEach((ev, i) => {
+          idxMap.set(ev.id, i);
+        });
+        eventsIdxById = idxMap;
         if (events.length === previousBundle.events.length) {
           baseMemo.eventsIdxById = eventsIdxById;
           eventsIndexCloned = false;
@@ -259,10 +261,11 @@ export function createPatchWorkingState(
 
     ensurePlacesById(forMutation = false) {
       if (placesById === null) {
-        placesById = new Map<string, Place>();
-        for (let i = 0; i < places.length; i += 1) {
-          placesById.set(places[i].id, places[i]);
+        const map = new Map<string, Place>();
+        for (const pl of places) {
+          map.set(pl.id, pl);
         }
+        placesById = map;
         if (!this.placesMutated) {
           baseMemo.placesById = placesById;
           placesIndexCloned = false;
@@ -318,7 +321,8 @@ export function binarySearchEventInsertIndex(events: readonly ArchiveEvent[], ta
   let hi = events.length;
   while (lo < hi) {
     const mid = (lo + hi) >>> 1;
-    if (compareArchiveEvents(events[mid], target) <= 0) {
+    const midEv = events[mid];
+    if (midEv && compareArchiveEvents(midEv, target) <= 0) {
       lo = mid + 1;
     } else {
       hi = mid;
@@ -373,7 +377,7 @@ export function updateUncitedKey(
 }
 
 export function resolveEffectivePrimarySource(
-  entity: { has_primary_source?: boolean },
+  entity: { has_primary_source?: boolean | undefined },
   mutationHasPrimarySource: boolean | undefined
 ): boolean | undefined {
   const effective =

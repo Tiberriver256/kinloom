@@ -350,7 +350,7 @@ function readCachedPdfPages(cachePath: string): string[] | null {
     if (!isPlainRecord(parsed)) {
       return null;
     }
-    const pages = parsed.pages;
+    const pages = parsed['pages'];
     if (!Array.isArray(pages) || !pages.every((p): p is string => typeof p === 'string')) {
       return null;
     }

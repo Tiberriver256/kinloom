@@ -558,12 +558,12 @@ export function createPageVisitStatsPlugin(options: PageVisitStatsPluginOptions 
       try {
         const stored = await ports.pluginSettingsStore.getSettings(PAGE_VISIT_STATS_PLUGIN_ID);
         if (stored) {
-          if (typeof stored.values.show_public_visit_badges === 'boolean') {
-            showPublicBadges = stored.values.show_public_visit_badges;
+          if (typeof stored.values['show_public_visit_badges'] === 'boolean') {
+            showPublicBadges = stored.values['show_public_visit_badges'];
             publicVisitBadges = showPublicBadges;
           }
-          if (isWindowValue(stored.values.default_window)) {
-            preferredWindow = stored.values.default_window;
+          if (isWindowValue(stored.values['default_window'])) {
+            preferredWindow = stored.values['default_window'];
             defaultWindow = preferredWindow;
           }
         }
@@ -622,8 +622,8 @@ export function createPageVisitStatsPlugin(options: PageVisitStatsPluginOptions 
       const serverPorts = ctx.ports as KinloomServerPorts;
       const store = resolveStore(options.store, serverPorts, fallbackStore);
       const badgesOn =
-        typeof ctx.values.show_public_visit_badges === 'boolean'
-          ? ctx.values.show_public_visit_badges
+        typeof ctx.values['show_public_visit_badges'] === 'boolean'
+          ? ctx.values['show_public_visit_badges']
           : publicVisitBadges;
       return {
         tracking_status: 'active',
@@ -632,11 +632,11 @@ export function createPageVisitStatsPlugin(options: PageVisitStatsPluginOptions 
       };
     },
     onSettingsUpdated: (event) => {
-      if (typeof event.values.show_public_visit_badges === 'boolean') {
-        publicVisitBadges = event.values.show_public_visit_badges;
+      if (typeof event.values['show_public_visit_badges'] === 'boolean') {
+        publicVisitBadges = event.values['show_public_visit_badges'];
       }
-      if (isWindowValue(event.values.default_window)) {
-        defaultWindow = event.values.default_window;
+      if (isWindowValue(event.values['default_window'])) {
+        defaultWindow = event.values['default_window'];
       }
     },
 

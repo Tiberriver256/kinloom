@@ -50,7 +50,7 @@ function createCaptureIo(): { io: CliIo; stdout: string[]; stderr: string[] } {
 }
 
 afterEach(async () => {
-  delete process.env.KINLOOM_TELEMETRY_FILE;
+  delete process.env['KINLOOM_TELEMETRY_FILE'];
   while (tempDirs.length > 0) {
     const dir = tempDirs.pop();
     if (dir) {
@@ -375,7 +375,7 @@ describe('design-audit deterministic probes, capture matrix & SARIF 2.1.0', () =
 describe('kinloom design-audit CLI subcommand dispatch', () => {
   it('supports help, guide, archetypes, standards, init, css, static-only run, and sarif', async () => {
     const tmp = await makeTempDir('kinloom-da-cli-');
-    process.env.KINLOOM_TELEMETRY_FILE = path.join(tmp, 'calls.jsonl');
+    process.env['KINLOOM_TELEMETRY_FILE'] = path.join(tmp, 'calls.jsonl');
 
     const helpCap = createCaptureIo();
     expect(await runCli(['design-audit', '--help'], { io: helpCap.io })).toBe(EXIT_OK);
@@ -441,7 +441,7 @@ describe('kinloom design-audit CLI subcommand dispatch', () => {
 
   it('exercises UI Stack route interceptors, focus occlusion trace, plan-based runs, and text/fail-on-error CLI paths', async () => {
     const tmp = await makeTempDir('kinloom-da-branches-');
-    process.env.KINLOOM_TELEMETRY_FILE = path.join(tmp, 'calls.jsonl');
+    process.env['KINLOOM_TELEMETRY_FILE'] = path.join(tmp, 'calls.jsonl');
 
     const fulfilledStatuses: number[] = [];
     const fakeBrowser: DesignAuditBrowser = {
@@ -588,7 +588,7 @@ describe('kinloom design-audit CLI subcommand dispatch', () => {
 
   it('covers clean telemetry, empty SARIF dossier, phase-3b override, APCA low-clip, and CLI theme/state flags', async () => {
     const tmp = await makeTempDir('kinloom-da-edge-');
-    process.env.KINLOOM_TELEMETRY_FILE = path.join(tmp, 'calls.jsonl');
+    process.env['KINLOOM_TELEMETRY_FILE'] = path.join(tmp, 'calls.jsonl');
 
     // APCA low-clip both polarities & default archetype
     expect(parseCssRgbTuple(undefined)).toBeNull();

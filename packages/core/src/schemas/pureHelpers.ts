@@ -10,14 +10,14 @@ export type PureEntityPayload = Record<string, unknown>;
 export interface PureMigrationEraConfig {
   id: string;
   label: string;
-  description?: string;
-  color?: string;
-  minLat?: number;
-  maxLat?: number;
-  minLng?: number;
-  maxLng?: number;
-  startYear?: number;
-  endYear?: number;
+  description?: string | undefined;
+  color?: string | undefined;
+  minLat?: number | undefined;
+  maxLat?: number | undefined;
+  minLng?: number | undefined;
+  maxLng?: number | undefined;
+  startYear?: number | undefined;
+  endYear?: number | undefined;
 }
 
 export interface PureAnchorYearConfig {
@@ -50,7 +50,7 @@ export const DEFAULT_ANCHOR_YEARS: readonly PureAnchorYearConfig[] = [
 
 export function resolveDefaultBranchId(
   config?: {
-    readonly defaultBranchId?: string;
+    readonly defaultBranchId?: string | undefined;
     readonly branches: readonly { readonly id: string }[];
   } | null
 ): string {
@@ -60,8 +60,9 @@ export function resolveDefaultBranchId(
   if (config.defaultBranchId) {
     return config.defaultBranchId;
   }
-  if (config.branches.length > 0) {
-    return config.branches[0].id;
+  const firstBranch = config.branches[0];
+  if (firstBranch) {
+    return firstBranch.id;
   }
   return 'primary';
 }
@@ -70,8 +71,8 @@ export function resolveDefaultBranchId(
  * Returns every person ID linked to a media item across both `person_ids` and legacy `person_id`.
  */
 export function getMediaPersonIds(item: {
-  readonly person_id?: string | null;
-  readonly person_ids?: readonly string[];
+  readonly person_id?: string | null | undefined;
+  readonly person_ids?: readonly string[] | undefined;
 }): string[] {
   const pids = item.person_ids;
   if (!pids || pids.length === 0) {
@@ -87,8 +88,7 @@ export function getMediaPersonIds(item: {
   if (item.person_id) {
     ids.add(item.person_id);
   }
-  for (let i = 0; i < pids.length; i += 1) {
-    const id = pids[i];
+  for (const id of pids) {
     if (id) {
       ids.add(id);
     }

@@ -113,29 +113,29 @@ export async function runSearch(
     lang,
   };
   if (place) {
-    params.eventplace = place;
+    params['eventplace'] = place;
   }
   if (birthPlace) {
-    params.birthplace = birthPlace;
+    params['birthplace'] = birthPlace;
   }
   if (sourceType) {
-    params.sourcetype = sourceType;
+    params['sourcetype'] = sourceType;
   }
   if (eventType) {
     if (isSourceType(eventType) && !('sourcetype' in params)) {
-      params.sourcetype = eventType;
+      params['sourcetype'] = eventType;
     } else {
-      params.eventtype = eventType;
+      params['eventtype'] = eventType;
     }
   }
   if (archive) {
-    params.archive = archive;
+    params['archive'] = archive;
   }
   if (relation) {
-    params.relationtype = relation;
+    params['relationtype'] = relation;
   }
   if (country) {
-    params.country_code = country;
+    params['country_code'] = country;
   }
 
   const ttlHours = resolveTtlHours(cliTtl, ctx);
@@ -147,9 +147,9 @@ export async function runSearch(
     return { exitCode: 0, bytesOut, cacheHit };
   }
 
-  const resp = isPlainRecord(data.response) ? data.response : {};
-  const total = typeof resp.number_found === 'number' ? resp.number_found : 0;
-  const docs = Array.isArray(resp.docs) ? resp.docs : [];
+  const resp = isPlainRecord(data['response']) ? data['response'] : {};
+  const total = typeof resp['number_found'] === 'number' ? resp['number_found'] : 0;
+  const docs = Array.isArray(resp['docs']) ? resp['docs'] : [];
   const marker = cacheHit ? ' [cache]' : '';
   const lines: string[] = [
     `Found ${total} records (showing ${docs.length} from offset ${effectiveStart})${marker}`,
@@ -158,23 +158,23 @@ export async function runSearch(
     if (!isPlainRecord(rawDoc)) {
       continue;
     }
-    const code = typeof rawDoc.archive_code === 'string' ? rawDoc.archive_code : '';
-    const ident = typeof rawDoc.identifier === 'string' ? rawDoc.identifier : '';
+    const code = typeof rawDoc['archive_code'] === 'string' ? rawDoc['archive_code'] : '';
+    const ident = typeof rawDoc['identifier'] === 'string' ? rawDoc['identifier'] : '';
     const person =
-      typeof rawDoc.personname === 'string' && rawDoc.personname ? rawDoc.personname : '(unnamed)';
-    const role = typeof rawDoc.relationtype === 'string' ? rawDoc.relationtype : '';
+      typeof rawDoc['personname'] === 'string' && rawDoc['personname'] ? rawDoc['personname'] : '(unnamed)';
+    const role = typeof rawDoc['relationtype'] === 'string' ? rawDoc['relationtype'] : '';
     const stype =
-      (typeof rawDoc.sourcetype === 'string' && rawDoc.sourcetype) ||
-      (typeof rawDoc.eventtype === 'string' && rawDoc.eventtype) ||
+      (typeof rawDoc['sourcetype'] === 'string' && rawDoc['sourcetype']) ||
+      (typeof rawDoc['eventtype'] === 'string' && rawDoc['eventtype']) ||
       '';
-    const dateStr = fmtEventdate(rawDoc.eventdate);
-    const places = rawDoc.eventplace;
+    const dateStr = fmtEventdate(rawDoc['eventdate']);
+    const places = rawDoc['eventplace'];
     const placeStr = Array.isArray(places)
       ? places.map((p) => String(p)).join(', ')
       : places !== undefined && places !== null
         ? String(places)
         : '';
-    const url = typeof rawDoc.url === 'string' && rawDoc.url ? rawDoc.url : `${WEB_BASE}/${code}:${ident}`;
+    const url = typeof rawDoc['url'] === 'string' && rawDoc['url'] ? rawDoc['url'] : `${WEB_BASE}/${code}:${ident}`;
     lines.push(`- ${code}:${ident} | ${person} (${role}) | ${stype} | ${dateStr} | ${placeStr}`);
     lines.push(`  ${url}`);
   }

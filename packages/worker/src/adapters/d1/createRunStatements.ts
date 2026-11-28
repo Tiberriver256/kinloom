@@ -26,17 +26,21 @@ export function pushCreateRunStatements(
 ): void {
   const { ops, batchId, author, nowIso, statements, revisionResultEntries } = params;
 
+  const [firstOp] = ops;
+  if (!firstOp) {
+    return;
+  }
   const afterJsons = new Array<string>(ops.length);
-  for (let i = 0; i < ops.length; i += 1) {
-    const afterJson = ops[i].after_json;
+  for (const [i, op] of ops.entries()) {
+    const afterJson = op.after_json;
     if (!afterJson) {
-      throw new Error(`Create ${ops[i].entity_type} operation requires after_json.`);
+      throw new Error(`Create ${op.entity_type} operation requires after_json.`);
     }
     afterJsons[i] = JSON.stringify(afterJson);
   }
 
-  const firstSummary = ops[0].summary;
-  const firstPrimary = ops[0].has_primary_source;
+  const firstSummary = firstOp.summary;
+  const firstPrimary = firstOp.has_primary_source;
   const uniformMetadata = ops.every(
     (op) =>
       op.summary === firstSummary &&
@@ -115,8 +119,7 @@ export function pushCreateRunStatements(
 
   const entityRows: unknown[] = [];
   const kinshipRows: unknown[] = [];
-  for (let i = 0; i < ops.length; i += 1) {
-    const op = ops[i];
+  for (const [i, op] of ops.entries()) {
     const afterPayload = op.after_json;
     if (!afterPayload) {
       throw new Error(`Create ${op.entity_type} operation requires after_json.`);
@@ -216,13 +219,17 @@ export function pushUpdateRunStatements(
 ): void {
   const { ops, batchId, author, nowIso, statements, revisionResultEntries } = params;
 
+  const [firstOp] = ops;
+  if (!firstOp) {
+    return;
+  }
   const afterJsons = new Array<string>(ops.length);
-  for (let i = 0; i < ops.length; i += 1) {
-    afterJsons[i] = JSON.stringify(ops[i].after_json);
+  for (const [i, op] of ops.entries()) {
+    afterJsons[i] = JSON.stringify(op.after_json);
   }
 
-  const firstSummary = ops[0].summary;
-  const firstPrimary = ops[0].has_primary_source;
+  const firstSummary = firstOp.summary;
+  const firstPrimary = firstOp.has_primary_source;
   const uniformMetadata = ops.every(
     (op) =>
       op.summary === firstSummary &&

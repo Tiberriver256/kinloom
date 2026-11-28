@@ -271,7 +271,7 @@ describe('GEDCOM citations, parse, export, and sliceGedcom', () => {
     expect(reparsed.indis.size).toBe(sliced.people.length);
     const livingIndis = [...reparsed.indis.values()].filter((i) => i.resn === 'CONFIDENTIAL');
     expect(livingIndis).toHaveLength(1);
-    expect(livingIndis[0].fullName).toBe('Owen Alder');
+    expect(livingIndis[0]?.fullName).toBe('Owen Alder');
 
     expect(
       buildGedcomExportFilename({

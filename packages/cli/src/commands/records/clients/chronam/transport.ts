@@ -86,11 +86,11 @@ function readCachedFileMeta(
   } catch {
     return null;
   }
-  if (!isPlainRecord(raw) || raw.schema !== CACHE_SCHEMA) {
+  if (!isPlainRecord(raw) || raw['schema'] !== CACHE_SCHEMA) {
     return null;
   }
-  const fetchedAt = raw.fetched_at;
-  const nbytes = raw.nbytes;
+  const fetchedAt = raw['fetched_at'];
+  const nbytes = raw['nbytes'];
   if (
     typeof fetchedAt !== 'number' ||
     !Number.isFinite(fetchedAt) ||
@@ -104,8 +104,8 @@ function readCachedFileMeta(
   if (nowSec - fetchedAt > ttlHours * 3600) {
     return null;
   }
-  const contentType = typeof raw.content_type === 'string' ? raw.content_type : '';
-  const fallbackUrl = typeof raw.url === 'string' ? raw.url : '';
+  const contentType = typeof raw['content_type'] === 'string' ? raw['content_type'] : '';
+  const fallbackUrl = typeof raw['url'] === 'string' ? raw['url'] : '';
   try {
     const actual = validateDownloadFile(binPath, {
       url: options.url || fallbackUrl,

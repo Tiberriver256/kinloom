@@ -49,7 +49,7 @@ export class InMemoryEntityAndMutationStore
   private readonly kinship = new Map<string, StoredKinshipRow>();
   private readonly revisions: RevisionRecord[] = [];
   private readonly stewardReviews = new Map<string, StewardReviewStamp>();
-  private readonly privacyConfig?: Partial<PrivacyConfig>;
+  private readonly privacyConfig?: Partial<PrivacyConfig> | undefined;
   private readonly clock: Clock;
 
   constructor(options?: { privacyConfig?: Partial<PrivacyConfig>; clock?: Clock }) {
@@ -86,7 +86,7 @@ export class InMemoryEntityAndMutationStore
       if (row.slug === slugOrId || row.entity_id === slugOrId) {
         return structuredClone(row);
       }
-      const rawDataSlug = (row.data as Record<string, unknown>).slug;
+      const rawDataSlug = (row.data as Record<string, unknown>)['slug'];
       if (typeof rawDataSlug === 'string' && rawDataSlug === slugOrId) {
         return structuredClone(row);
       }
@@ -159,7 +159,7 @@ export class InMemoryEntityAndMutationStore
   ): RevisionRecord | null {
     for (let i = workingRevisions.length - 1; i >= 0; i -= 1) {
       const rev = workingRevisions[i];
-      if (rev.entity_type === entityType && rev.entity_id === entityId) {
+      if (rev && rev.entity_type === entityType && rev.entity_id === entityId) {
         return rev;
       }
     }
@@ -303,8 +303,8 @@ export class InMemoryEntityAndMutationStore
         const nextSlug =
           op.slug !== undefined
             ? op.slug
-            : typeof nextData.slug === 'string'
-              ? nextData.slug
+            : typeof nextData['slug'] === 'string'
+              ? nextData['slug']
               : (prevRow?.slug ?? null);
         const nextRow: StoredEntityRow = {
           entity_type: op.entity_type,
@@ -360,6 +360,9 @@ export class InMemoryEntityAndMutationStore
     const filtered: RevisionRecord[] = [];
     for (let i = this.revisions.length - 1; i >= 0; i -= 1) {
       const rev = this.revisions[i];
+      if (!rev) {
+        continue;
+      }
       if (query.cursor !== undefined && rev.revision_id >= query.cursor) {
         continue;
       }

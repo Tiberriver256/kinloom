@@ -80,7 +80,7 @@ const FULL_SCHEMA: PluginSettingsSchema = {
             { value: 'strict', label: 'Strict' },
           ],
           validate: (val, all) =>
-            val === 'strict' && all.max_retries === 0 ? 'Strict mode requires at least 1 retry.' : null,
+            val === 'strict' && all['max_retries'] === 0 ? 'Strict mode requires at least 1 retry.' : null,
         },
       ],
     },
@@ -310,9 +310,9 @@ describe('Declarative PluginSettingsSchema contract & validation', () => {
     });
     expect(valid.ok).toBe(true);
     if (valid.ok) {
-      expect(valid.nextValues.display_label).toBe('Custom Voice');
-      expect(valid.nextValues.endpoint_url).toBe('https://tts.example.test/v1');
-      expect(valid.nextValues.enabled_flag).toBe(false);
+      expect(valid.nextValues['display_label']).toBe('Custom Voice');
+      expect(valid.nextValues['endpoint_url']).toBe('https://tts.example.test/v1');
+      expect(valid.nextValues['enabled_flag']).toBe(false);
       expect(valid.secretMutations).toEqual([
         { key: 'legacy_text_secret', action: 'set', value: 'valid-secret-123' },
       ]);
@@ -341,13 +341,13 @@ describe('Declarative PluginSettingsSchema contract & validation', () => {
     });
     expect(invalidRouting.ok).toBe(false);
     if (!invalidRouting.ok) {
-      expect(invalidRouting.fieldErrors.unknown_key).toMatch(/Unknown setting field/);
-      expect(invalidRouting.fieldErrors.adapter_kind).toMatch(/read-only/);
-      expect(invalidRouting.fieldErrors.primary_api_key).toMatch(/API key must start with sk-/);
-      expect(invalidRouting.fieldErrors.unknown_secret).toMatch(/Unknown secret field/);
-      expect(invalidRouting.fieldErrors.display_label).toMatch(/not a secret field/);
-      expect(invalidRouting.fieldErrors.webhook_signing_secret).toMatch(/required and cannot be cleared/);
-      expect(invalidRouting.fieldErrors.legacy_text_secret).toBe('Secret value is not allowed.');
+      expect(invalidRouting.fieldErrors['unknown_key']).toMatch(/Unknown setting field/);
+      expect(invalidRouting.fieldErrors['adapter_kind']).toMatch(/read-only/);
+      expect(invalidRouting.fieldErrors['primary_api_key']).toMatch(/API key must start with sk-/);
+      expect(invalidRouting.fieldErrors['unknown_secret']).toMatch(/Unknown secret field/);
+      expect(invalidRouting.fieldErrors['display_label']).toMatch(/not a secret field/);
+      expect(invalidRouting.fieldErrors['webhook_signing_secret']).toMatch(/required and cannot be cleared/);
+      expect(invalidRouting.fieldErrors['legacy_text_secret']).toBe('Secret value is not allowed.');
       // Never echo secret values in error messages.
       expect(JSON.stringify(invalidRouting.fieldErrors)).not.toContain('sk-leaked-in-values');
       expect(JSON.stringify(invalidRouting.fieldErrors)).not.toContain('forbidden-val');
@@ -371,10 +371,10 @@ describe('Declarative PluginSettingsSchema contract & validation', () => {
     });
     expect(crossFieldInvalid.ok).toBe(false);
     if (!crossFieldInvalid.ok) {
-      expect(crossFieldInvalid.fieldErrors.display_label).toMatch(/at least 3/);
-      expect(crossFieldInvalid.fieldErrors.region_code).toMatch(/allowed values/);
-      expect(crossFieldInvalid.fieldErrors.endpoint_url).toMatch(/allowed protocol/);
-      expect(crossFieldInvalid.fieldErrors.mode).toBe('Strict mode requires at least 1 retry.');
+      expect(crossFieldInvalid.fieldErrors['display_label']).toMatch(/at least 3/);
+      expect(crossFieldInvalid.fieldErrors['region_code']).toMatch(/allowed values/);
+      expect(crossFieldInvalid.fieldErrors['endpoint_url']).toMatch(/allowed protocol/);
+      expect(crossFieldInvalid.fieldErrors['mode']).toBe('Strict mode requires at least 1 retry.');
     }
 
     // Exercise edge cases on validatePluginSettingFieldValue directly

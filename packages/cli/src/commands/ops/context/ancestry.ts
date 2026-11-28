@@ -76,7 +76,7 @@ async function findAncestryMatch(
     return null;
   }
 
-  const numericId = extractNumericXref(person.gedcom_xref);
+  const numericId = extractNumericXref(person['gedcom_xref']);
   if (numericId && !blockedPersonDbIds.has(numericId)) {
     const directPath = path.join(ancestryDir, `${numericId}.json`);
     if (fs.existsSync(directPath)) {
@@ -87,9 +87,9 @@ async function findAncestryMatch(
     }
   }
 
-  const altNames = Array.isArray(person.alt_names) ? person.alt_names : [];
+  const altNames = Array.isArray(person['alt_names']) ? person['alt_names'] : [];
   const targetNames = new Set(
-    [person.full_name, ...altNames]
+    [person['full_name'], ...altNames]
       .filter((n): n is string => typeof n === 'string' && n.trim().length > 0)
       .map((n) => n.trim().toLowerCase())
   );
@@ -121,20 +121,20 @@ function collectRecordImagesForPerson(
   sourceTitleByImageId: ReadonlyMap<string, string>
 ): ContextRecordImage[] {
   const imagesByPath = new Map<string, ContextRecordImage>();
-  const rawImages = Array.isArray(raw?.recordImages) ? raw.recordImages : [];
+  const rawImages = Array.isArray(raw?.['recordImages']) ? raw['recordImages'] : [];
   for (const entry of rawImages) {
     if (!isPlainRecord(entry)) {
       continue;
     }
-    const localPath = typeof entry.local === 'string' ? entry.local : null;
+    const localPath = typeof entry['local'] === 'string' ? entry['local'] : null;
     if (!localPath || !fs.existsSync(localPath)) {
       continue;
     }
     const imageId =
-      entry.RecordImageId !== undefined && entry.RecordImageId !== null ? String(entry.RecordImageId) : null;
+      entry['RecordImageId'] !== undefined && entry['RecordImageId'] !== null ? String(entry['RecordImageId']) : null;
     const bytes =
-      typeof entry.bytes === 'number' && Number.isFinite(entry.bytes)
-        ? entry.bytes
+      typeof entry['bytes'] === 'number' && Number.isFinite(entry['bytes'])
+        ? entry['bytes']
         : fs.statSync(localPath).size;
     imagesByPath.set(localPath, {
       path: localPath,
@@ -179,8 +179,8 @@ function buildAncestrySummary(
   }
 
   const raw = match.data;
-  const card = isPlainRecord(raw.personCard) ? raw.personCard : {};
-  if (raw.isLiving === true || card.IsLiving === true) {
+  const card = isPlainRecord(raw['personCard']) ? raw['personCard'] : {};
+  if (raw['isLiving'] === true || card['IsLiving'] === true) {
     return {
       matchMode: match.matchMode,
       jsonPath: match.jsonPath,
@@ -189,82 +189,82 @@ function buildAncestrySummary(
     };
   }
 
-  const personDbId = String(raw.personDbId ?? path.basename(match.jsonPath, '.json'));
+  const personDbId = String(raw['personDbId'] ?? path.basename(match.jsonPath, '.json'));
   const facts: ContextAncestryFact[] = [];
   let redactedLivingFactsCount = 0;
 
-  for (const factEntry of Array.isArray(raw.facts) ? raw.facts : []) {
+  for (const factEntry of Array.isArray(raw['facts']) ? raw['facts'] : []) {
     if (!isPlainRecord(factEntry)) {
       continue;
     }
-    const target = isPlainRecord(factEntry.FactTargetPerson) ? factEntry.FactTargetPerson : null;
-    const targetPid = target?.Id !== undefined && target?.Id !== null ? String(target.Id) : null;
-    if (target?.IsLiving === true || (targetPid && livingAncestryPids.has(targetPid))) {
+    const target = isPlainRecord(factEntry['FactTargetPerson']) ? factEntry['FactTargetPerson'] : null;
+    const targetPid = target?.['Id'] !== undefined && target?.['Id'] !== null ? String(target['Id']) : null;
+    if (target?.['IsLiving'] === true || (targetPid && livingAncestryPids.has(targetPid))) {
       redactedLivingFactsCount += 1;
       continue;
     }
 
     const type =
-      (typeof factEntry.TypeString === 'string' && factEntry.TypeString) ||
-      (typeof factEntry.Title === 'string' && factEntry.Title) ||
+      (typeof factEntry['TypeString'] === 'string' && factEntry['TypeString']) ||
+      (typeof factEntry['Title'] === 'string' && factEntry['Title']) ||
       'Fact';
     const compact: ContextAncestryFact = { type };
-    if (typeof factEntry.Date === 'string' && factEntry.Date) {
-      compact.date = factEntry.Date;
+    if (typeof factEntry['Date'] === 'string' && factEntry['Date']) {
+      compact.date = factEntry['Date'];
     }
-    if (typeof factEntry.Place === 'string' && factEntry.Place) {
-      compact.place = scrubText(factEntry.Place, livingNamePattern);
+    if (typeof factEntry['Place'] === 'string' && factEntry['Place']) {
+      compact.place = scrubText(factEntry['Place'], livingNamePattern);
     }
-    if (factEntry.Value !== undefined && factEntry.Value !== null && String(factEntry.Value)) {
-      compact.value = scrubText(String(factEntry.Value), livingNamePattern);
+    if (factEntry['Value'] !== undefined && factEntry['Value'] !== null && String(factEntry['Value'])) {
+      compact.value = scrubText(String(factEntry['Value']), livingNamePattern);
     }
     if (
-      factEntry.Description !== undefined &&
-      factEntry.Description !== null &&
-      String(factEntry.Description)
+      factEntry['Description'] !== undefined &&
+      factEntry['Description'] !== null &&
+      String(factEntry['Description'])
     ) {
-      compact.description = scrubText(String(factEntry.Description), livingNamePattern);
+      compact.description = scrubText(String(factEntry['Description']), livingNamePattern);
     }
-    if (typeof target?.FullName === 'string' && target.FullName) {
+    if (typeof target?.['FullName'] === 'string' && target['FullName']) {
       compact.targetPerson = {
-        name: scrubText(target.FullName, livingNamePattern),
-        lifeRange: target.LifeRange ? String(target.LifeRange).replaceAll('&ndash;', '-') : null,
+        name: scrubText(target['FullName'], livingNamePattern),
+        lifeRange: target['LifeRange'] ? String(target['LifeRange']).replaceAll('&ndash;', '-') : null,
         pid: targetPid,
       };
     }
-    if (typeof factEntry.SourceCitationCount === 'number' && factEntry.SourceCitationCount > 0) {
-      compact.sourceCount = factEntry.SourceCitationCount;
+    if (typeof factEntry['SourceCitationCount'] === 'number' && factEntry['SourceCitationCount'] > 0) {
+      compact.sourceCount = factEntry['SourceCitationCount'];
     }
     facts.push(compact);
   }
 
   const sourceTitleByImageId = new Map<string, string>();
   const sources: ContextAncestrySource[] = [];
-  for (const srcEntry of Array.isArray(raw.sources) ? raw.sources : []) {
+  for (const srcEntry of Array.isArray(raw['sources']) ? raw['sources'] : []) {
     if (!isPlainRecord(srcEntry)) {
       continue;
     }
-    const title = typeof srcEntry.Title === 'string' ? srcEntry.Title : '';
-    if (srcEntry.RecordImageId && title && !sourceTitleByImageId.has(String(srcEntry.RecordImageId))) {
-      sourceTitleByImageId.set(String(srcEntry.RecordImageId), scrubText(title, livingNamePattern));
+    const title = typeof srcEntry['Title'] === 'string' ? srcEntry['Title'] : '';
+    if (srcEntry['RecordImageId'] && title && !sourceTitleByImageId.has(String(srcEntry['RecordImageId']))) {
+      sourceTitleByImageId.set(String(srcEntry['RecordImageId']), scrubText(title, livingNamePattern));
     }
     const entry: ContextAncestrySource = {
       title: scrubText(title, livingNamePattern),
     };
-    if (typeof srcEntry.Detail === 'string' && srcEntry.Detail) {
-      entry.detail = scrubText(srcEntry.Detail, livingNamePattern);
+    if (typeof srcEntry['Detail'] === 'string' && srcEntry['Detail']) {
+      entry.detail = scrubText(srcEntry['Detail'], livingNamePattern);
     }
-    if (srcEntry.CitationId !== undefined && srcEntry.CitationId !== null) {
-      entry.citationId = String(srcEntry.CitationId);
+    if (srcEntry['CitationId'] !== undefined && srcEntry['CitationId'] !== null) {
+      entry.citationId = String(srcEntry['CitationId']);
     }
-    if (srcEntry.DatabaseId !== undefined && srcEntry.DatabaseId !== null) {
-      entry.databaseId = String(srcEntry.DatabaseId);
+    if (srcEntry['DatabaseId'] !== undefined && srcEntry['DatabaseId'] !== null) {
+      entry.databaseId = String(srcEntry['DatabaseId']);
     }
-    if (srcEntry.RecordId !== undefined && srcEntry.RecordId !== null) {
-      entry.recordId = String(srcEntry.RecordId);
+    if (srcEntry['RecordId'] !== undefined && srcEntry['RecordId'] !== null) {
+      entry.recordId = String(srcEntry['RecordId']);
     }
-    if (srcEntry.RecordImageId !== undefined && srcEntry.RecordImageId !== null) {
-      entry.recordImageId = String(srcEntry.RecordImageId);
+    if (srcEntry['RecordImageId'] !== undefined && srcEntry['RecordImageId'] !== null) {
+      entry.recordImageId = String(srcEntry['RecordImageId']);
     }
     sources.push(entry);
   }
@@ -278,10 +278,10 @@ function buildAncestrySummary(
   );
 
   const rawFullName =
-    typeof raw.fullName === 'string'
-      ? raw.fullName
-      : typeof card.FullName === 'string'
-        ? card.FullName
+    typeof raw['fullName'] === 'string'
+      ? raw['fullName']
+      : typeof card['FullName'] === 'string'
+        ? card['FullName']
         : null;
 
   return {
@@ -289,12 +289,12 @@ function buildAncestrySummary(
     jsonPath: match.jsonPath,
     personDbId,
     fullName: rawFullName ? scrubText(rawFullName, livingNamePattern) : null,
-    lifeRange: card.LifeRange ? String(card.LifeRange).replaceAll('&ndash;', '-') : null,
-    birthDate: typeof card.BirthDate === 'string' ? card.BirthDate : null,
-    birthPlace: typeof card.BirthPlace === 'string' ? scrubText(card.BirthPlace, livingNamePattern) : null,
-    deathDate: typeof card.DeathDate === 'string' ? card.DeathDate : null,
-    deathPlace: typeof card.DeathPlace === 'string' ? scrubText(card.DeathPlace, livingNamePattern) : null,
-    factsUrl: typeof raw.factsUrl === 'string' ? raw.factsUrl : null,
+    lifeRange: card['LifeRange'] ? String(card['LifeRange']).replaceAll('&ndash;', '-') : null,
+    birthDate: typeof card['BirthDate'] === 'string' ? card['BirthDate'] : null,
+    birthPlace: typeof card['BirthPlace'] === 'string' ? scrubText(card['BirthPlace'], livingNamePattern) : null,
+    deathDate: typeof card['DeathDate'] === 'string' ? card['DeathDate'] : null,
+    deathPlace: typeof card['DeathPlace'] === 'string' ? scrubText(card['DeathPlace'], livingNamePattern) : null,
+    factsUrl: typeof raw['factsUrl'] === 'string' ? raw['factsUrl'] : null,
     redactedLivingFactsCount,
     facts,
     sources,
@@ -352,31 +352,31 @@ async function collectDeceasedRelativeRecordImages(params: {
       livingAncestryPids
     );
     const raw = match?.data ?? null;
-    const card = isPlainRecord(raw?.personCard) ? raw.personCard : null;
-    if (raw && (raw.isLiving === true || card?.IsLiving === true)) {
+    const card = isPlainRecord(raw?.['personCard']) ? raw['personCard'] : null;
+    if (raw && (raw['isLiving'] === true || card?.['IsLiving'] === true)) {
       continue;
     }
 
     const personDbId =
       raw && match
-        ? String(raw.personDbId ?? path.basename(match.jsonPath, '.json'))
-        : extractNumericXref(rel.gedcom_xref);
+        ? String(raw['personDbId'] ?? path.basename(match.jsonPath, '.json'))
+        : extractNumericXref(rel['gedcom_xref']);
     if (!personDbId) {
       continue;
     }
 
     const sourceTitleByImageId = new Map<string, string>();
-    const rawSources = Array.isArray(raw?.sources) ? raw.sources : [];
+    const rawSources = Array.isArray(raw?.['sources']) ? raw['sources'] : [];
     for (const src of rawSources) {
       if (!isPlainRecord(src)) {
         continue;
       }
       if (
-        src.RecordImageId &&
-        typeof src.Title === 'string' &&
-        !sourceTitleByImageId.has(String(src.RecordImageId))
+        src['RecordImageId'] &&
+        typeof src['Title'] === 'string' &&
+        !sourceTitleByImageId.has(String(src['RecordImageId']))
       ) {
-        sourceTitleByImageId.set(String(src.RecordImageId), scrubText(src.Title, livingNamePattern));
+        sourceTitleByImageId.set(String(src['RecordImageId']), scrubText(src['Title'], livingNamePattern));
       }
     }
 
@@ -398,8 +398,8 @@ async function collectDeceasedRelativeRecordImages(params: {
       }
       relativeImages.push({
         ...img,
-        relativeId: String(rel.id),
-        relativeName: scrubText(asNonEmptyString(rel.full_name), livingNamePattern),
+        relativeId: String(rel['id']),
+        relativeName: scrubText(asNonEmptyString(rel['full_name']), livingNamePattern),
         relation,
         personDbId,
       });

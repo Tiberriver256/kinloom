@@ -177,7 +177,7 @@ describe('ocr native client', () => {
     const mockExec: ExecFileFn = async (_file, _args, options) => {
       observedEnvs.push({ ...options?.env });
       return {
-        stdout: Buffer.from(`OMP=${options?.env?.OMP_THREAD_LIMIT ?? ''}`),
+        stdout: Buffer.from(`OMP=${options?.env?.['OMP_THREAD_LIMIT'] ?? ''}`),
         stderr: Buffer.alloc(0),
       };
     };
@@ -189,8 +189,8 @@ describe('ocr native client', () => {
 
     expect(res.exitCode, res.stderr).toBe(0);
     expect(observedEnvs).toHaveLength(1);
-    expect(observedEnvs[0].OMP_THREAD_LIMIT).toBe('1');
-    expect(observedEnvs[0].OMP_NUM_THREADS).toBe('1');
+    expect(observedEnvs[0]['OMP_THREAD_LIMIT']).toBe('1');
+    expect(observedEnvs[0]['OMP_NUM_THREADS']).toBe('1');
     const parsed = JSON.parse(res.stdout) as {
       text: string;
       meta: { omp_thread_limit: number; timeout_s: number };
@@ -230,7 +230,7 @@ describe('ocr native client', () => {
 
     const env: NodeJS.ProcessEnv = {
       ...process.env,
-      PATH: `${binDir}:${process.env.PATH ?? ''}`,
+      PATH: `${binDir}:${process.env['PATH'] ?? ''}`,
       OMP_THREAD_LIMIT: '16',
     };
 
@@ -290,7 +290,7 @@ describe('ocr native client', () => {
 
     const env: NodeJS.ProcessEnv = {
       ...process.env,
-      PATH: `${binDir}:${process.env.PATH ?? ''}`,
+      PATH: `${binDir}:${process.env['PATH'] ?? ''}`,
       OMP_THREAD_LIMIT: '28',
     };
 
@@ -379,7 +379,7 @@ describe('ocr native client', () => {
 
     const env: NodeJS.ProcessEnv = {
       ...process.env,
-      PATH: `${binDir}:${process.env.PATH ?? ''}`,
+      PATH: `${binDir}:${process.env['PATH'] ?? ''}`,
       OMP_THREAD_LIMIT: '16',
     };
 
@@ -480,7 +480,7 @@ describe('ocr native client', () => {
       await new Promise((resolve) => setTimeout(resolve, delayMs));
       inFlight -= 1;
       return {
-        stdout: Buffer.from(`OUT:${base}:OMP=${options?.env?.OMP_THREAD_LIMIT ?? ''}`),
+        stdout: Buffer.from(`OUT:${base}:OMP=${options?.env?.['OMP_THREAD_LIMIT'] ?? ''}`),
         stderr: Buffer.alloc(0),
       };
     };
@@ -737,7 +737,7 @@ describe('ocr native client', () => {
     let inFlight = 0;
     let maxInFlight = 0;
     const mockBatchExec: ExecFileFn = async (_bin, args, options) => {
-      expect(options?.env?.OMP_THREAD_LIMIT).toBe('1');
+      expect(options?.env?.['OMP_THREAD_LIMIT']).toBe('1');
       inFlight += 1;
       maxInFlight = Math.max(maxInFlight, inFlight);
       const base = path.basename(args[0]);

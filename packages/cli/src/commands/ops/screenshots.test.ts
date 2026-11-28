@@ -419,7 +419,7 @@ describe('runScreenshotsCommand orchestration and redaction', () => {
 
     expect(browserClosed).toBe(true);
     expect(result.ok).toBe(false);
-    expect(seenContextOpts[0]?.extraHTTPHeaders?.Authorization).toBe(secretHeaderValue);
+    expect(seenContextOpts[0]?.extraHTTPHeaders?.['Authorization']).toBe(secretHeaderValue);
     expect(seenCookies[0]?.[0]?.name).toBe('kinloom_session');
 
     const manifestRaw = await fs.readFile(result.manifestPath, 'utf8');
@@ -679,8 +679,8 @@ function createHttpBackedBrowserFactory(): ScreenshotBrowserFactory {
           return {
             goto: async (url) => {
               const headers: Record<string, string> = { ...(ctxOpts.extraHTTPHeaders ?? {}) };
-              if (!headers.Cookie && cookies.length > 0) {
-                headers.Cookie = cookies.map((c) => `${c.name}=${c.value}`).join('; ');
+              if (!headers['Cookie'] && cookies.length > 0) {
+                headers['Cookie'] = cookies.map((c) => `${c.name}=${c.value}`).join('; ');
               }
               const res = await fetch(url, { headers });
               if (!res.ok) {

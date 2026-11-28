@@ -224,7 +224,7 @@ export async function synthesizeOpenAiSpeech(req: OpenAiSpeechRequest): Promise<
   };
   const trimmedKey = req.apiKey?.trim();
   if (trimmedKey) {
-    headers.authorization = `Bearer ${trimmedKey}`;
+    headers['authorization'] = `Bearer ${trimmedKey}`;
   }
 
   let lastError: Error | null = null;

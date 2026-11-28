@@ -129,7 +129,7 @@ describe('nj-archives pagination, retries, and grid parsing', () => {
     expect(postedEvents[0][1]).toContain('ddlCountyList=Hunterdon');
     expect(result.pages_read).toBe(1);
     expect(result.rows).toHaveLength(1);
-    expect(result.rows[0].Name).toBe('Lincoln, A.');
+    expect(result.rows[0]['Name']).toBe('Lincoln, A.');
   });
 
   it('retries once on transient 500 and recovers', async () => {
@@ -171,7 +171,7 @@ describe('nj-archives pagination, retries, and grid parsing', () => {
     const [headers, rows] = parseGrid(htmlWithPager, 'GridView1');
     expect(headers).toEqual(['Name', 'Year']);
     expect(rows).toHaveLength(1);
-    expect(rows[0].Name).toBe('Smith, John');
+    expect(rows[0]['Name']).toBe('Smith, John');
     expect(hasPageLink(htmlWithPager, 2)).toBe(true);
     expect(hasPageLink(htmlWithPager, 4)).toBe(false);
   });

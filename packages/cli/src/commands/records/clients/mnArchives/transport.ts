@@ -73,14 +73,14 @@ export async function fetchPeopleSearch(
   } catch {
     throw new RecordRuntimeError(`MNHS People API returned non-JSON response from ${url}`);
   }
-  if (!isPlainRecord(body) || !(body.success === true || body.status === 200)) {
+  if (!isPlainRecord(body) || !(body['success'] === true || body['status'] === 200)) {
     throw new RecordRuntimeError(`MNHS People API returned unsuccessful status from ${url}`);
   }
-  const data = body.data;
+  const data = body['data'];
   if (!isPlainRecord(data)) {
     throw new RecordRuntimeError(`MNHS People API missing 'data' object from ${url}`);
   }
-  const rawHits = data.hits;
+  const rawHits = data['hits'];
   if (!Array.isArray(rawHits)) {
     throw new RecordRuntimeError(`MNHS People API missing 'hits' list from ${url}`);
   }
@@ -88,13 +88,13 @@ export async function fetchPeopleSearch(
     .filter((item): item is Record<string, unknown> => isPlainRecord(item))
     .map((item) => normalizePeopleHit(recordType, item));
 
-  const total = Number(data.totalHitCount ?? 0) || 0;
+  const total = Number(data['totalHitCount'] ?? 0) || 0;
   return {
     record_type: recordType,
     total,
-    page: Number(data.pageNum ?? page) || page,
-    page_size: Number(data.pageSize ?? limit) || limit,
-    page_count: Number(data.pageCount ?? 0) || 0,
+    page: Number(data['pageNum'] ?? page) || page,
+    page_size: Number(data['pageSize'] ?? limit) || limit,
+    page_count: Number(data['pageCount'] ?? 0) || 0,
     results: records,
     verified: true,
   };
@@ -132,11 +132,11 @@ export async function fetchPeopleRecord(
   } catch {
     throw new RecordRuntimeError(`MNHS People API returned non-JSON detail response from ${url}`);
   }
-  if (!isPlainRecord(body) || !(body.success === true || body.status === 200)) {
+  if (!isPlainRecord(body) || !(body['success'] === true || body['status'] === 200)) {
     throw new RecordRuntimeError(`MNHS People API detail lookup failed for ${cleanId}`);
   }
-  const data = body.data;
-  if (!isPlainRecord(data) || !data.id) {
+  const data = body['data'];
+  if (!isPlainRecord(data) || !data['id']) {
     throw new RecordRuntimeError(`MNHS record not found: ${cleanId} (${recordType})`);
   }
   return {

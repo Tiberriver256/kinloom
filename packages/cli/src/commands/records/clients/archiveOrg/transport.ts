@@ -188,21 +188,21 @@ export async function httpGetBytesIa(
 }
 
 function isValidQueryPayload(kind: string, data: Record<string, unknown>): boolean {
-  if (data.error) {
+  if (data['error']) {
     return false;
   }
   if (kind === 'search') {
-    const header = data.responseHeader;
+    const header = data['responseHeader'];
     if (isPlainRecord(header)) {
-      const status = header.status;
+      const status = header['status'];
       if (status !== undefined && status !== null && status !== 0) {
         return false;
       }
     }
-    return isPlainRecord(data.response);
+    return isPlainRecord(data['response']);
   }
   if (kind === 'fulltext') {
-    return isPlainRecord(data.response);
+    return isPlainRecord(data['response']);
   }
   return true;
 }
@@ -315,8 +315,8 @@ export async function cachedQueryJson(
     if (!envelope) {
       return undefined;
     }
-    const cachedAt = envelope.cached_at;
-    const data = envelope.data;
+    const cachedAt = envelope['cached_at'];
+    const data = envelope['data'];
     if (typeof cachedAt !== 'number' || !Number.isFinite(cachedAt) || !isPlainRecord(data)) {
       return undefined;
     }
@@ -354,8 +354,8 @@ export async function cachedQueryJson(
           data = candidate;
           break;
         }
-        const responseHeader = isPlainRecord(candidate.responseHeader) ? candidate.responseHeader : undefined;
-        const errMsg = candidate.error ?? responseHeader?.status;
+        const responseHeader = isPlainRecord(candidate['responseHeader']) ? candidate['responseHeader'] : undefined;
+        const errMsg = candidate['error'] ?? responseHeader?.['status'];
         lastError = new RecordRuntimeError(
           `Internet Archive ${kind} API returned an error response (${String(errMsg)}) from ${url}`
         );

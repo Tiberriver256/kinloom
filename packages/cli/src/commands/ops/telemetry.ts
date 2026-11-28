@@ -32,8 +32,8 @@ export interface TelemetryEventInput {
 }
 
 export interface RecordTelemetryOptions {
-  force?: boolean;
-  filePath?: string;
+  force?: boolean | undefined;
+  filePath?: string | undefined;
 }
 
 export interface MeasureCommandMeta<TResult> {
@@ -44,7 +44,7 @@ export interface MeasureCommandMeta<TResult> {
   force?: boolean;
   extractResultMeta?: (result: TResult) => {
     personId?: string | null;
-    cacheHit?: boolean | null;
+    cacheHit?: boolean | undefined | null;
     exitCode?: number;
     bytesOut?: number;
   };
@@ -86,7 +86,7 @@ export function getTelemetryFilePath(overridePath?: string): string {
   if (overridePath && overridePath.trim().length > 0) {
     return path.resolve(overridePath.trim());
   }
-  const envOverride = process.env.KINLOOM_TELEMETRY_FILE;
+  const envOverride = process.env['KINLOOM_TELEMETRY_FILE'];
   if (envOverride && envOverride.trim().length > 0) {
     return path.resolve(envOverride.trim());
   }
@@ -94,7 +94,7 @@ export function getTelemetryFilePath(overridePath?: string): string {
 }
 
 export function isTelemetrySuppressedByParent(): boolean {
-  return process.env.KINLOOM_TELEMETRY_PARENT === '1';
+  return process.env['KINLOOM_TELEMETRY_PARENT'] === '1';
 }
 
 export function recordTelemetryEvent(record: TelemetryEventInput, options?: RecordTelemetryOptions): void {
@@ -175,18 +175,18 @@ function parseTelemetryLine(line: string): TelemetryEvent | null {
       return null;
     }
     const obj = raw as Record<string, unknown>;
-    const ts = typeof obj.ts === 'string' ? obj.ts : '';
-    const cmd = typeof obj.cmd === 'string' ? obj.cmd : 'kinloom';
-    const subcmd = typeof obj.subcmd === 'string' ? obj.subcmd : '';
-    const personId = typeof obj.person_id === 'string' ? obj.person_id : null;
+    const ts = typeof obj['ts'] === 'string' ? obj['ts'] : '';
+    const cmd = typeof obj['cmd'] === 'string' ? obj['cmd'] : 'kinloom';
+    const subcmd = typeof obj['subcmd'] === 'string' ? obj['subcmd'] : '';
+    const personId = typeof obj['person_id'] === 'string' ? obj['person_id'] : null;
     const durationMs =
-      typeof obj.duration_ms === 'number' && Number.isFinite(obj.duration_ms)
-        ? Math.max(0, obj.duration_ms)
+      typeof obj['duration_ms'] === 'number' && Number.isFinite(obj['duration_ms'])
+        ? Math.max(0, obj['duration_ms'])
         : 0;
-    const cacheHit = typeof obj.cache_hit === 'boolean' ? obj.cache_hit : null;
-    const exitCode = typeof obj.exit_code === 'number' && Number.isInteger(obj.exit_code) ? obj.exit_code : 0;
+    const cacheHit = typeof obj['cache_hit'] === 'boolean' ? obj['cache_hit'] : null;
+    const exitCode = typeof obj['exit_code'] === 'number' && Number.isInteger(obj['exit_code']) ? obj['exit_code'] : 0;
     const bytesOut =
-      typeof obj.bytes_out === 'number' && Number.isFinite(obj.bytes_out) ? Math.max(0, obj.bytes_out) : 0;
+      typeof obj['bytes_out'] === 'number' && Number.isFinite(obj['bytes_out']) ? Math.max(0, obj['bytes_out']) : 0;
     return {
       ts,
       cmd,

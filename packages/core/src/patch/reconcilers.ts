@@ -34,7 +34,7 @@ export function reconcileNewlyLivingEntities(state: PatchWorkingState): void {
 
   for (let i = state.events.length - 1; i >= 0; i -= 1) {
     const ev = state.events[i];
-    if (!ev.participants.some((pt) => state.newlyLivingPersonIds.has(pt.person_id))) {
+    if (!ev || !ev.participants.some((pt) => state.newlyLivingPersonIds.has(pt.person_id))) {
       continue;
     }
     const redacted = redactSingleEvent(ev, living, livingPattern, state.mode, {
@@ -57,16 +57,16 @@ export function reconcileNewlyLivingEntities(state: PatchWorkingState): void {
   }
 
   if (state.narratives) {
-    for (let i = 0; i < state.narratives.length; i += 1) {
-      const nar = state.narratives[i];
+    const narratives = state.narratives;
+    narratives.forEach((nar, i) => {
       const hitsNewlyLiving =
         (nar.subject_person_id !== undefined && state.newlyLivingPersonIds.has(nar.subject_person_id)) ||
         nar.person_ids.some((pid) => state.newlyLivingPersonIds.has(pid));
       if (!hitsNewlyLiving) {
-        continue;
+        return;
       }
-      state.narratives[i] = redactSingleNarrative(nar, living, livingPattern, state.mode, { clone: true });
-    }
+      narratives[i] = redactSingleNarrative(nar, living, livingPattern, state.mode, { clone: true });
+    });
   }
 }
 
@@ -83,6 +83,9 @@ export function reconcileAffectedMedia(state: PatchWorkingState): void {
   const evIdxMap = state.ensureEventsIndex();
   for (let i = state.media.length - 1; i >= 0; i -= 1) {
     const item = state.media[i];
+    if (!item) {
+      continue;
+    }
     const linkedPids = getMediaPersonIds(item);
     let drop = false;
     for (const pid of linkedPids) {
@@ -93,7 +96,8 @@ export function reconcileAffectedMedia(state: PatchWorkingState): void {
     }
     if (!drop && state.stripLivingPortraits && item.event_id) {
       const eIdx = evIdxMap.get(item.event_id);
-      if (eIdx !== undefined && state.events[eIdx].participants.some((pt) => living.has(pt.person_id))) {
+      const ev = eIdx !== undefined ? state.events[eIdx] : undefined;
+      if (ev && ev.participants.some((pt) => living.has(pt.person_id))) {
         drop = true;
       }
     }
@@ -117,8 +121,8 @@ export function reconcileAffectedMedia(state: PatchWorkingState): void {
       }
     } else if (item.person_id && state.renamedPersonIds.has(item.person_id)) {
       const pIdx = idxById.get(item.person_id);
-      if (pIdx !== undefined) {
-        const target = state.people[pIdx];
+      const target = pIdx !== undefined ? state.people[pIdx] : undefined;
+      if (target) {
         state.mediaMutated = true;
         state.media[i] = {
           ...item,
@@ -155,8 +159,7 @@ export function reconcilePlaceAncestorsAndSpans(state: PatchWorkingState): void 
     oldPlacesById.set(pid, oldPlace);
   }
 
-  for (let i = 0; i < state.events.length; i += 1) {
-    const ev = state.events[i];
+  state.events.forEach((ev, i) => {
     if (ev.place_id && changedAncestorPlaceIds.has(ev.place_id)) {
       state.events[i] = {
         ...ev,
@@ -184,7 +187,7 @@ export function reconcilePlaceAncestorsAndSpans(state: PatchWorkingState): void 
         }
       }
     }
-  }
+  });
 }
 
 function reconcileEventCounts(state: PatchWorkingState): void {
@@ -201,8 +204,9 @@ function reconcileEventCounts(state: PatchWorkingState): void {
 
   for (const ev of state.events) {
     const pts = ev.participants;
-    if (pts.length === 1) {
-      const pid = pts[0].person_id;
+    const [pt0] = pts;
+    if (pts.length === 1 && pt0) {
+      const pid = pt0.person_id;
       if (state.affectedEventCountPersonIds.has(pid)) {
         eventCounts.set(pid, (eventCounts.get(pid) ?? 0) + 1);
         if (ev.place_id) {
@@ -242,7 +246,8 @@ function reconcileEventCounts(state: PatchWorkingState): void {
 
   for (const pid of state.affectedEventCountPersonIds) {
     const pIdx = idxById.get(pid);
-    if (pIdx === undefined) {
+    const prev = pIdx !== undefined ? state.people[pIdx] : undefined;
+    if (pIdx === undefined || !prev) {
       continue;
     }
     const pCounts = placeCountsByPerson.get(pid);
@@ -256,7 +261,6 @@ function reconcileEventCounts(state: PatchWorkingState): void {
         }
       }
     }
-    const prev = state.people[pIdx];
     const nextCount = eventCounts.get(pid) ?? 0;
     if (prev.event_count !== nextCount || prev.primary_place_id !== primaryPlaceId) {
       state.people[pIdx] = {
@@ -291,10 +295,10 @@ function reconcilePersonMediaStats(state: PatchWorkingState): void {
 
   for (const pid of state.affectedMediaPersonIds) {
     const pIdx = idxById.get(pid);
-    if (pIdx === undefined) {
+    const prev = pIdx !== undefined ? state.people[pIdx] : undefined;
+    if (pIdx === undefined || !prev) {
       continue;
     }
-    const prev = state.people[pIdx];
     if (prev.is_living && state.stripLivingPortraits) {
       if (prev.portrait_url !== null || prev.media_count !== 0 || prev.thumb_url !== null) {
         state.people[pIdx] = { ...prev, portrait_url: null, thumb_url: null, media_count: 0 };
@@ -345,10 +349,10 @@ function reconcileEventHeroPhotos(state: PatchWorkingState): void {
 
   for (const evId of state.affectedMediaEventIds) {
     const eIdx = evIdxMap.get(evId);
-    if (eIdx === undefined) {
+    const prev = eIdx !== undefined ? state.events[eIdx] : undefined;
+    if (eIdx === undefined || !prev) {
       continue;
     }
-    const prev = state.events[eIdx];
     const hasLiving = prev.participants.some((pt) => living.has(pt.person_id));
     const deletedHeroUrls = state.deletedHeroPhotoByEvent.get(evId);
     if (hasLiving && state.stripLivingPortraits) {
@@ -433,11 +437,11 @@ export function reconcileResidenceSpans(state: PatchWorkingState): void {
   const recomputedSpansByPerson = new Map<string, ResidenceSpan[]>();
   for (const pid of state.affectedSpanPersonIds) {
     const pIdx = idxById.get(pid);
-    if (pIdx === undefined) {
+    const person = pIdx !== undefined ? state.people[pIdx] : undefined;
+    if (!person) {
       recomputedSpansByPerson.set(pid, []);
       continue;
     }
-    const person = state.people[pIdx];
     if (!state.includeLivingSpans && person.is_living) {
       recomputedSpansByPerson.set(pid, []);
       continue;

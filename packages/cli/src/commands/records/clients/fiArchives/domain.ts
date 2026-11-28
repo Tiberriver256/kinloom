@@ -153,11 +153,11 @@ export interface ArchivesSearchCachePayload {
 }
 
 export function getCacheDir(ctx: RecordCommandContext): string {
-  const specific = ctx.env.KINLOOM_FI_ARCHIVES_CACHE_DIR;
+  const specific = ctx.env['KINLOOM_FI_ARCHIVES_CACHE_DIR'];
   if (specific && specific.trim().length > 0) {
     return path.resolve(expandHomePath(specific, ctx.env));
   }
-  const shared = ctx.env.KINLOOM_CACHE_DIR;
+  const shared = ctx.env['KINLOOM_CACHE_DIR'];
   if (shared && shared.trim().length > 0) {
     return path.resolve(expandHomePath(shared, ctx.env), 'fi-archives');
   }
@@ -236,23 +236,23 @@ export function encodeIso88591Form(formData: Readonly<Record<string, string>>): 
 }
 
 export function isParishesCachePayload(value: unknown): value is ParishesCachePayload {
-  return isPlainRecord(value) && Array.isArray(value.parishes);
+  return isPlainRecord(value) && Array.isArray(value['parishes']);
 }
 
 export function isHiskiSearchResult(value: unknown): value is HiskiSearchResult {
-  return isPlainRecord(value) && Array.isArray(value.records);
+  return isPlainRecord(value) && Array.isArray(value['records']);
 }
 
 export function isHiskiEventDetail(value: unknown): value is HiskiEventDetail {
-  return isPlainRecord(value) && isPlainRecord(value.fields);
+  return isPlainRecord(value) && isPlainRecord(value['fields']);
 }
 
 export function isArchivesSearchCachePayload(value: unknown): value is ArchivesSearchCachePayload {
-  return isPlainRecord(value) && Array.isArray(value.archives);
+  return isPlainRecord(value) && Array.isArray(value['archives']);
 }
 
 export function isDigihakemistoArchiveDetail(value: unknown): value is DigihakemistoArchiveDetail {
-  return isPlainRecord(value) && Array.isArray(value.children);
+  return isPlainRecord(value) && Array.isArray(value['children']);
 }
 
 export function validateYears(

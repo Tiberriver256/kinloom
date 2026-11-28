@@ -126,7 +126,7 @@ function parseProbeCommandArgs(
   });
 
   const targetUrl =
-    values.url?.trim() || pluginOptions.targetUrl?.trim() || process.env.KINLOOM_PROBE_URL?.trim() || '';
+    values.url?.trim() || pluginOptions.targetUrl?.trim() || process.env['KINLOOM_PROBE_URL']?.trim() || '';
   if (!targetUrl) {
     throw new CliValidationError(
       'Missing target URL. Pass `--url <baseUrl>`, configure `targetUrl`, or set KINLOOM_PROBE_URL.'
@@ -230,7 +230,7 @@ function createSyntheticProbeVerifyCheck(pluginOptions: SyntheticProbePluginOpti
     id: SYNTHETIC_PROBE_VERIFY_CHECK_ID,
     name: 'Synthetic performance probe',
     async run(): Promise<KinloomCheckResult> {
-      const targetUrl = pluginOptions.targetUrl?.trim() || process.env.KINLOOM_PROBE_URL?.trim() || '';
+      const targetUrl = pluginOptions.targetUrl?.trim() || process.env['KINLOOM_PROBE_URL']?.trim() || '';
       if (!targetUrl) {
         return {
           errors: [

@@ -82,12 +82,12 @@ async function readOptionalUtf8(filePath: string): Promise<string> {
 
 function countZeroCoordPlaces(patch: LooseRecord): string[] {
   const bad: string[] = [];
-  for (const rawPl of Array.isArray(patch.places) ? patch.places : []) {
+  for (const rawPl of Array.isArray(patch['places']) ? patch['places'] : []) {
     const pl = isPlainRecord(rawPl) ? rawPl : {};
-    const lat = Number(pl.lat);
-    const lng = Number(pl.lng ?? pl.lon);
+    const lat = Number(pl['lat']);
+    const lng = Number(pl['lng'] ?? pl['lon']);
     if (!Number.isFinite(lat) || !Number.isFinite(lng) || (Math.abs(lat) < 1e-9 && Math.abs(lng) < 1e-9)) {
-      bad.push(typeof pl.id === 'string' ? pl.id : 'unknown');
+      bad.push(typeof pl['id'] === 'string' ? pl['id'] : 'unknown');
     }
   }
   return bad;
@@ -209,14 +209,14 @@ export async function runAuditCommand(options: AuditCommandOptions): Promise<Aud
 
   const referenceYear = privacyConfig.referenceYear ?? getCurrentReferenceYear();
   const isEffectiveLivingPerson = (person: LooseRecord): boolean => {
-    if (person.is_living === true || person.living === true) {
+    if (person['is_living'] === true || person['living'] === true) {
       return true;
     }
     return resolveEffectiveLiving(
       {
         is_living: false,
-        birth_edtf: asString(person.birth_edtf).trim(),
-        death_edtf: asString(person.death_edtf).trim(),
+        birth_edtf: asString(person['birth_edtf']).trim(),
+        death_edtf: asString(person['death_edtf']).trim(),
       },
       privacyConfig,
       referenceYear
@@ -224,23 +224,23 @@ export async function runAuditCommand(options: AuditCommandOptions): Promise<Aud
   };
 
   const stagedPeopleById = new Map<string, LooseRecord>();
-  for (const rawPerson of Array.isArray(patch.people) ? patch.people : []) {
-    if (!isPlainRecord(rawPerson) || typeof rawPerson.id !== 'string' || !rawPerson.id.trim()) {
+  for (const rawPerson of Array.isArray(patch['people']) ? patch['people'] : []) {
+    if (!isPlainRecord(rawPerson) || typeof rawPerson['id'] !== 'string' || !rawPerson['id'].trim()) {
       continue;
     }
-    stagedPeopleById.set(rawPerson.id.trim(), rawPerson);
+    stagedPeopleById.set(rawPerson['id'].trim(), rawPerson);
   }
 
-  const personUpdates = isPlainRecord(patch.person_updates) ? patch.person_updates : null;
+  const personUpdates = isPlainRecord(patch['person_updates']) ? patch['person_updates'] : null;
   let targetDeathUpdate: string | null = null;
   if (personUpdates) {
     const hasConflict =
-      personUpdates.death_edtf !== undefined &&
-      personUpdates.death_date !== undefined &&
-      String(personUpdates.death_edtf) !== String(personUpdates.death_date);
+      personUpdates['death_edtf'] !== undefined &&
+      personUpdates['death_date'] !== undefined &&
+      String(personUpdates['death_edtf']) !== String(personUpdates['death_date']);
     if (!hasConflict) {
       const rawDeath =
-        personUpdates.death_edtf !== undefined ? personUpdates.death_edtf : personUpdates.death_date;
+        personUpdates['death_edtf'] !== undefined ? personUpdates['death_edtf'] : personUpdates['death_date'];
       targetDeathUpdate = parseValidDeathEdtf(rawDeath);
     }
   }
@@ -253,7 +253,7 @@ export async function runAuditCommand(options: AuditCommandOptions): Promise<Aud
 
   for (let i = 0; i < parsedPeople.length; i += 1) {
     const person = parsedPeople[i];
-    const id = typeof person.id === 'string' ? person.id : '';
+    const id = typeof person['id'] === 'string' ? person['id'] : '';
     if (id) {
       seenAuditPersonIds.add(id);
     }
@@ -262,7 +262,7 @@ export async function runAuditCommand(options: AuditCommandOptions): Promise<Aud
       livingPeople.push(person);
     }
 
-    const explicitlyLiving = person.is_living === true || person.living === true;
+    const explicitlyLiving = person['is_living'] === true || person['living'] === true;
     let effectivePerson: LooseRecord = person;
     let effectiveIsLiving = origIsLiving;
     if (id === personId && !explicitlyLiving && targetDeathUpdate !== null) {
@@ -299,13 +299,13 @@ export async function runAuditCommand(options: AuditCommandOptions): Promise<Aud
   const existingPersonEvents: LooseRecord[] = [];
   for (let i = 0; i < allLiveEvents.length; i += 1) {
     const ev = allLiveEvents[i];
-    const pts = ev.participants;
+    const pts = ev['participants'];
     if (!Array.isArray(pts)) {
       continue;
     }
     for (let p = 0; p < pts.length; p += 1) {
       const pt = pts[p];
-      if (isPlainRecord(pt) && pt.person_id === personId) {
+      if (isPlainRecord(pt) && pt['person_id'] === personId) {
         existingPersonEvents.push(ev);
         break;
       }
@@ -383,7 +383,7 @@ export async function runAuditCommand(options: AuditCommandOptions): Promise<Aud
     ...pronunciationCheck.errors.map((e) => `pronunciation: ${e}`),
     ...pluginChecks.flatMap((pc) => pc.errors.map((e) => `plugin(${pc.id}): ${e}`)),
   ];
-  const stagedMediaRefs = readStagedMediaRefs(patch.media);
+  const stagedMediaRefs = readStagedMediaRefs(patch['media']);
   const liveMediaFileCollisions =
     stagedMediaRefs.length === 0
       ? []

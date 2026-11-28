@@ -179,11 +179,11 @@ export interface DownloadResult {
 }
 
 export function getCacheDir(ctx: RecordCommandContext): string {
-  const specific = ctx.env.KINLOOM_SE_ARCHIVES_CACHE_DIR;
+  const specific = ctx.env['KINLOOM_SE_ARCHIVES_CACHE_DIR'];
   if (specific && specific.trim().length > 0) {
     return path.resolve(expandHomePath(specific, ctx.env));
   }
-  const shared = ctx.env.KINLOOM_CACHE_DIR;
+  const shared = ctx.env['KINLOOM_CACHE_DIR'];
   if (shared && shared.trim().length > 0) {
     return path.resolve(expandHomePath(shared, ctx.env), 'se-archives');
   }
@@ -486,17 +486,17 @@ export function buildIiifImageUrl(
 }
 
 export function isSearchEndpointResult(value: unknown): value is SearchEndpointResult {
-  return isPlainRecord(value) && Array.isArray(value.results);
+  return isPlainRecord(value) && Array.isArray(value['results']);
 }
 
 export function isRegisterDetailResult(value: unknown): value is RegisterDetailResult {
-  return isPlainRecord(value) && isPlainRecord(value.record);
+  return isPlainRecord(value) && isPlainRecord(value['record']);
 }
 
 export function isIiifCollectionResult(value: unknown): value is IiifCollectionResult {
-  return isPlainRecord(value) && Array.isArray(value.items);
+  return isPlainRecord(value) && Array.isArray(value['items']);
 }
 
 export function isIiifManifestResult(value: unknown): value is IiifManifestResult {
-  return isPlainRecord(value) && Array.isArray(value.canvases);
+  return isPlainRecord(value) && Array.isArray(value['canvases']);
 }

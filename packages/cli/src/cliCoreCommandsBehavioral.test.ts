@@ -374,9 +374,9 @@ async function installStubWrangler(repoDir: string, scriptBody: string): Promise
 }
 
 afterEach(async () => {
-  delete process.env.KINLOOM_TELEMETRY_FILE;
-  delete process.env.KINLOOM_PRONOUNCE_CACHE_DIR;
-  delete process.env.FORVO_API_KEY;
+  delete process.env['KINLOOM_TELEMETRY_FILE'];
+  delete process.env['KINLOOM_PRONOUNCE_CACHE_DIR'];
+  delete process.env['FORVO_API_KEY'];
   while (openServers.length > 0) {
     const srv = openServers.pop();
     if (srv) {
@@ -394,7 +394,7 @@ afterEach(async () => {
 describe('liveAndUtilityCommands: sync, migrate, dates, pronounce, telemetry', () => {
   it('validates all sync flag parsing edge cases and executes sync dry-run and live verification', async () => {
     const repoDir = await makeTempDir('kinloom-sync-cli-');
-    process.env.KINLOOM_TELEMETRY_FILE = path.join(repoDir, 'telemetry.jsonl');
+    process.env['KINLOOM_TELEMETRY_FILE'] = path.join(repoDir, 'telemetry.jsonl');
 
     const { john, place } = makeRichArchiveFixtures();
     await writeArchiveRepo(repoDir, { people: [john], places: [place] });
@@ -553,7 +553,7 @@ if (sql.includes('DELETE FROM agent_tokens')) {
 
   it('dispatches migrate --local --dry-run, rejects conflicting flags, and exits 1 when verification fails', async () => {
     const repoDir = await makeTempDir('kinloom-migrate-cli-');
-    process.env.KINLOOM_TELEMETRY_FILE = path.join(repoDir, 'telemetry.jsonl');
+    process.env['KINLOOM_TELEMETRY_FILE'] = path.join(repoDir, 'telemetry.jsonl');
 
     const migrationsDir = path.join(repoDir, 'migrations');
     await mkdir(migrationsDir, { recursive: true });
@@ -628,7 +628,7 @@ process.stdout.write(JSON.stringify([{ success: true, results: [] }]));
 
   it('validates dates subcommand errors and argument constraints', async () => {
     const tmp = await makeTempDir('kinloom-dates-err-');
-    process.env.KINLOOM_TELEMETRY_FILE = path.join(tmp, 'telemetry.jsonl');
+    process.env['KINLOOM_TELEMETRY_FILE'] = path.join(tmp, 'telemetry.jsonl');
 
     const cases: Array<[string[], string]> = [
       [['dates'], 'Missing dates subcommand.'],
@@ -657,8 +657,8 @@ process.stdout.write(JSON.stringify([{ success: true, results: [] }]));
 
   it('dispatches pronounce lookup, deduplicate, audit, and telemetry shorthand flags', async () => {
     const repoDir = await makeTempDir('kinloom-pronounce-cli-');
-    process.env.KINLOOM_TELEMETRY_FILE = path.join(repoDir, 'telemetry.jsonl');
-    process.env.KINLOOM_PRONOUNCE_CACHE_DIR = path.join(repoDir, 'pronounce-cache');
+    process.env['KINLOOM_TELEMETRY_FILE'] = path.join(repoDir, 'telemetry.jsonl');
+    process.env['KINLOOM_PRONOUNCE_CACHE_DIR'] = path.join(repoDir, 'pronounce-cache');
 
     const { john, place } = makeRichArchiveFixtures();
     await writeArchiveRepo(repoDir, {

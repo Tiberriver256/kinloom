@@ -287,7 +287,7 @@ export function parseDetailFields(html: string): Record<string, string> {
     }
   }
   if (notes.length > 0) {
-    fields.notes = notes.join('; ');
+    fields['notes'] = notes.join('; ');
   }
   return fields;
 }

@@ -309,7 +309,7 @@ export function buildBatchRevertPayloads(
     const summary = options?.summaryPrefix
       ? `${options.summaryPrefix}: revert r${rev.revision_id}`
       : undefined;
-    const payload = buildRevertPayload(current, rev, { summary });
+    const payload = buildRevertPayload(current, rev, summary !== undefined ? { summary } : undefined);
     payloads.push(payload);
     workingState.set(key, payload.after_json ? structuredClone(payload.after_json) : null);
   }

@@ -5,11 +5,11 @@ export function formatPersonContextMarkdown(ctx: PersonContextPayload): string {
   const lines: string[] = [];
   const p = ctx.person;
 
-  lines.push(`# Person Context: ${asNonEmptyString(p.full_name)} (\`${asNonEmptyString(p.id)}\`)`);
+  lines.push(`# Person Context: ${asNonEmptyString(p['full_name'])} (\`${asNonEmptyString(p['id'])}\`)`);
   lines.push('');
   lines.push(`- Repo: \`${ctx.repoDir}\``);
   lines.push(
-    `- Slug: \`${asNonEmptyString(p.slug)}\` | GEDCOM xref: \`${asNonEmptyString(p.gedcom_xref) || 'none'}\` | Lifespan: \`${formatLifespan(p)}\``
+    `- Slug: \`${asNonEmptyString(p['slug'])}\` | GEDCOM xref: \`${asNonEmptyString(p['gedcom_xref']) || 'none'}\` | Lifespan: \`${formatLifespan(p)}\``
   );
   lines.push('');
 
@@ -98,17 +98,17 @@ export function formatPersonContextMarkdown(ctx: PersonContextPayload): string {
     lines.push('- None');
   } else {
     for (const nar of ctx.narratives) {
-      const narId = asNonEmptyString(nar.id);
-      const narKind = asNonEmptyString(nar.kind) || 'narrative';
-      const narTitle = asNonEmptyString(nar.title);
-      const narSources = Array.isArray(nar.source_ids) ? nar.source_ids.length : 0;
-      const bodyMd = typeof nar.body_md === 'string' ? nar.body_md : '';
+      const narId = asNonEmptyString(nar['id']);
+      const narKind = asNonEmptyString(nar['kind']) || 'narrative';
+      const narTitle = asNonEmptyString(nar['title']);
+      const narSources = Array.isArray(nar['source_ids']) ? nar['source_ids'].length : 0;
+      const bodyMd = typeof nar['body_md'] === 'string' ? nar['body_md'] : '';
       lines.push(`### \`${narId}\` (${narKind}): ${narTitle}`);
       lines.push(
-        `- slug: \`${asNonEmptyString(nar.slug)}\` | subject_person_id: \`${asNonEmptyString(nar.subject_person_id)}\` | sources: ${narSources} | body_chars: ${bodyMd.length}`
+        `- slug: \`${asNonEmptyString(nar['slug'])}\` | subject_person_id: \`${asNonEmptyString(nar['subject_person_id'])}\` | sources: ${narSources} | body_chars: ${bodyMd.length}`
       );
-      if (typeof nar.summary === 'string' && nar.summary) {
-        lines.push(`- summary: ${nar.summary}`);
+      if (typeof nar['summary'] === 'string' && nar['summary']) {
+        lines.push(`- summary: ${nar['summary']}`);
       }
       if (bodyMd) {
         lines.push('');

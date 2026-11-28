@@ -136,9 +136,9 @@ describe('Cloudflare Worker D1PluginSettingsStore & /api/admin/plugin-settings (
     expect(initialGet.status).toBe(200);
     const initialList = AdminPluginSettingsListResponseSchema.parse(await initialGet.json());
     const obsSnapshot = initialList.plugins.find((p) => p.plugin_id === WORKERS_OBSERVABILITY_PLUGIN_ID);
-    expect(obsSnapshot?.readonly_values.runtime_platform).toBe('cloudflare-workers');
-    expect(String(obsSnapshot?.readonly_values.storage_bindings)).toContain('repository=d1');
-    expect(String(obsSnapshot?.readonly_values.storage_bindings)).toContain('media_store=r2');
+    expect(obsSnapshot?.readonly_values['runtime_platform']).toBe('cloudflare-workers');
+    expect(String(obsSnapshot?.readonly_values['storage_bindings'])).toContain('repository=d1');
+    expect(String(obsSnapshot?.readonly_values['storage_bindings'])).toContain('media_store=r2');
 
     // 2. PUT writes non-secret settings and write-only API key into separate D1 tables.
     const d1GeminiKey = 'AIzaSyD1IsolatedSecret_1234567890';
@@ -167,7 +167,7 @@ describe('Cloudflare Worker D1PluginSettingsStore & /api/admin/plugin-settings (
     const putText = await putRes.text();
     expect(putText).not.toContain(d1GeminiKey);
     const putParsed = AdminPluginSettingsUpdateResponseSchema.parse(JSON.parse(putText));
-    expect(putParsed.plugin.secrets.gemini_api_key).toEqual({
+    expect(putParsed.plugin.secrets['gemini_api_key']).toEqual({
       configured: true,
       updated_at: '2026-11-27T12:00:00.000Z',
     });
@@ -216,7 +216,7 @@ describe('Cloudflare Worker D1PluginSettingsStore & /api/admin/plugin-settings (
     );
     expect(clearRes.status).toBe(200);
     const cleared = AdminPluginSettingsUpdateResponseSchema.parse(await clearRes.json());
-    expect(cleared.plugin.secrets.gemini_api_key).toEqual({ configured: false, updated_at: null });
+    expect(cleared.plugin.secrets['gemini_api_key']).toEqual({ configured: false, updated_at: null });
     expect(await store.getSecretValue(PRONUNCIATION_PLUGIN_ID, 'gemini_api_key')).toBeNull();
   });
 });

@@ -65,9 +65,9 @@ export function redactSingleEvent(
   let hasAnyParticipant = false;
   let hasLivingParticipant = false;
   let allParticipantsLiving = true;
-  for (let i = 0; i < event.participants.length; i += 1) {
+  for (const pt of event.participants) {
     hasAnyParticipant = true;
-    if (livingIds.has(event.participants[i].person_id)) {
+    if (livingIds.has(pt.person_id)) {
       hasLivingParticipant = true;
     } else {
       allParticipantsLiving = false;
@@ -172,8 +172,7 @@ function applyPrivacyFilterCore<TPerson extends RawPerson>(
 
   const livingIds = new Set<string>();
   const effectiveLivingPeople: Pick<RawPerson, 'is_living' | 'full_name' | 'alt_names'>[] = [];
-  for (let i = 0; i < people.length; i += 1) {
-    const p = people[i];
+  for (const p of people) {
     if (resolveEffectiveLiving(p, privacy, referenceYear)) {
       livingIds.add(p.id);
       effectiveLivingPeople.push({
@@ -196,20 +195,16 @@ function applyPrivacyFilterCore<TPerson extends RawPerson>(
         : compileLivingNamePattern(reviewLivingNames);
   const reviewFlags: string[] = [];
 
-  const outPeople = new Array<TPerson>(people.length);
-  for (let i = 0; i < people.length; i += 1) {
-    outPeople[i] = redactPerson(people[i], mode, redactOpts);
-  }
+  const outPeople: TPerson[] = people.map((p) => redactPerson(p, mode, redactOpts));
 
   const hasLivingSet = livingIds.size > 0;
   const outEvents: ArchiveEvent[] = [];
 
-  for (let i = 0; i < events.length; i += 1) {
-    const ev = events[i];
+  for (const ev of events) {
     let hasLivingParticipant = false;
     if (hasLivingSet) {
-      for (let j = 0; j < ev.participants.length; j += 1) {
-        if (livingIds.has(ev.participants[j].person_id)) {
+      for (const pt of ev.participants) {
+        if (livingIds.has(pt.person_id)) {
           hasLivingParticipant = true;
           break;
         }
@@ -288,12 +283,11 @@ export function filterMediaForPrivacy(
   const cloneInputs = options?.cloneInputs ?? true;
   const stripLivingPortraits = options?.stripLivingPortraits ?? true;
   const result: MediaItem[] = [];
-  for (let i = 0; i < media.length; i += 1) {
-    const item = media[i];
+  for (const item of media) {
     const linkedPersonIds = getMediaPersonIds(item);
     let blocked = false;
-    for (let j = 0; j < linkedPersonIds.length; j += 1) {
-      const person = peopleById.get(linkedPersonIds[j]);
+    for (const pid of linkedPersonIds) {
+      const person = peopleById.get(pid);
       if (!person || (stripLivingPortraits && person.is_living)) {
         blocked = true;
         break;
@@ -337,7 +331,7 @@ export function filterMediaForPrivacy(
 }
 
 export interface RedactNarrativeOptions {
-  clone?: boolean;
+  clone?: boolean | undefined;
 }
 
 export function redactSingleNarrative(
@@ -376,12 +370,8 @@ export function filterNarrativesForPrivacy(
   livingIds: ReadonlySet<string>,
   livingPattern: RegExp | null,
   mode: BuildMode,
-  options?: { cloneInputs?: boolean }
+  options?: { cloneInputs?: boolean | undefined }
 ): Narrative[] {
   const clone = options?.cloneInputs ?? true;
-  const out = new Array<Narrative>(narratives.length);
-  for (let i = 0; i < narratives.length; i += 1) {
-    out[i] = redactSingleNarrative(narratives[i], livingIds, livingPattern, mode, { clone });
-  }
-  return out;
+  return narratives.map((n) => redactSingleNarrative(n, livingIds, livingPattern, mode, { clone }));
 }

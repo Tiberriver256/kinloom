@@ -1116,7 +1116,7 @@ describe('nj-archives behavioral coverage', () => {
     );
     expect(synthHeaders).toEqual(['col1', 'col2']);
     expect(synthRows).toHaveLength(1);
-    expect(synthRows[0].col1).toBe('Carter, Samuel');
+    expect(synthRows[0]['col1']).toBe('Carter, Samuel');
 
     // validateCriteria: bad select option, bad role, valid role
     const landFormHtml = `<select name="ctl00$ContentPlaceHolder1$ddlCounty">
@@ -1125,13 +1125,13 @@ describe('nj-archives behavioral coverage', () => {
     </select>`;
     expect(matchOptionValue('Riverbend', ['Oakville'])).toBeNull();
     expect(() =>
-      validateCriteria({ surname: 'Carter', county: 'Riverbend' }, NJ_DATABASES.land, landFormHtml)
+      validateCriteria({ surname: 'Carter', county: 'Riverbend' }, NJ_DATABASES['land'], landFormHtml)
     ).toThrow('is not a valid choice for Early Land Records');
     expect(() =>
-      validateCriteria({ surname: 'Carter', role: 'Witness' }, NJ_DATABASES.land, landFormHtml)
+      validateCriteria({ surname: 'Carter', role: 'Witness' }, NJ_DATABASES['land'], landFormHtml)
     ).toThrow("--role 'Witness' is not valid here");
     expect(
-      validateCriteria({ surname: 'Carter', role: 'grantor' }, NJ_DATABASES.land, landFormHtml).role
+      validateCriteria({ surname: 'Carter', role: 'grantor' }, NJ_DATABASES['land'], landFormHtml)['role']
     ).toBe('Grantor');
   });
 

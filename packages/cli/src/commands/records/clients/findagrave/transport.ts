@@ -53,8 +53,8 @@ function readFreshEnvelope(filePath: string, ttlHours: number, nowMs: () => numb
   if (!envelope) {
     return undefined;
   }
-  const cachedAt = envelope.cached_at;
-  const data = envelope.data;
+  const cachedAt = envelope['cached_at'];
+  const data = envelope['data'];
   if (typeof cachedAt !== 'number' || !Number.isFinite(cachedAt) || !isPlainRecord(data)) {
     return undefined;
   }
@@ -261,15 +261,15 @@ export async function runGraphqlQuery(
       throw new RecordRuntimeError(`Unexpected GraphQL payload from ${GRAPHQL_URL}`);
     }
 
-    if (Array.isArray(parsedBody.errors) && parsedBody.errors.length > 0) {
-      const messages = parsedBody.errors.map((item) => {
-        const msg = isPlainRecord(item) ? String(item.message ?? '') : String(item);
+    if (Array.isArray(parsedBody['errors']) && parsedBody['errors'].length > 0) {
+      const messages = parsedBody['errors'].map((item) => {
+        const msg = isPlainRecord(item) ? String(item['message'] ?? '') : String(item);
         return `GraphQL error: ${msg}`;
       });
       throw new RecordRuntimeError(messages.join('\n'));
     }
 
-    return isPlainRecord(parsedBody.data) ? parsedBody.data : {};
+    return isPlainRecord(parsedBody['data']) ? parsedBody['data'] : {};
   }
 
   throw new RecordRuntimeError(`Request failed for ${GRAPHQL_URL}`);
@@ -447,13 +447,13 @@ export async function loadOrFetchMemorialsWithHits(
   if (missingIds.length > 0) {
     fetched = true;
     const data = await runGraphqlQuery(ctx, GET_QUERY, { ids: missingIds });
-    const rawList = Array.isArray(data.memorialsById) ? data.memorialsById : [];
+    const rawList = Array.isArray(data['memorialsById']) ? data['memorialsById'] : [];
     for (const rawMem of rawList) {
       if (!isPlainRecord(rawMem)) {
         continue;
       }
       const mem = enrichMemorial(rawMem);
-      const fetchedId = String(mem.id ?? '').trim();
+      const fetchedId = String(mem['id'] ?? '').trim();
       if (!fetchedId || !SAFE_ID_RE.test(fetchedId)) {
         continue;
       }
@@ -519,8 +519,8 @@ export async function loadOrFetchCemeteryById(
         }
       }
       const data = await runGraphqlQuery(ctx, CEMETERY_BY_ID_QUERY, { ids: [cleanId] });
-      const rawResult = isPlainRecord(data.cemeteries) ? data.cemeteries : {};
-      const rawCems = Array.isArray(rawResult.cemeteries) ? rawResult.cemeteries : [];
+      const rawResult = isPlainRecord(data['cemeteries']) ? data['cemeteries'] : {};
+      const rawCems = Array.isArray(rawResult['cemeteries']) ? rawResult['cemeteries'] : [];
       const cemeteriesList = rawCems.map((c) => enrichCemetery(c));
       const result: JsonRecord = { ...rawResult, cemeteries: cemeteriesList };
       if (cemeteriesList.length > 0) {

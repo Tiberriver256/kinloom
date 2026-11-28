@@ -104,17 +104,17 @@ export async function runChancerySearch(
       LOC: locality,
     };
     if (surname2) {
-      form.surname2 = surname2;
-      form.sn2select = matchMode;
+      form['surname2'] = surname2;
+      form['sn2select'] = matchMode;
     }
     if (enslaved) {
-      form.chkEnslaved = 'on';
+      form['chkEnslaved'] = 'on';
     }
     if (free) {
-      form.chkFree = 'on';
+      form['chkFree'] = 'on';
     }
     if (plats) {
-      form.chkPlat = 'on';
+      form['chkPlat'] = 'on';
     }
 
     const firstHtml = await fetchText(state, CHANCERY_SEARCH, {

@@ -158,7 +158,7 @@ describe('gnis native client', () => {
     expect(downloadUrls).toHaveLength(1);
     expect(stateTableReads).toBe(1);
     const p2 = JSON.parse(r2.stdout) as Record<string, unknown>;
-    expect(p2.cache_hit).toBe(true);
+    expect(p2['cache_hit']).toBe(true);
     expect(r2.cacheHit).toBe(true);
     const { cache_hit: _h1, ...rest1 } = p1;
     const { cache_hit: _h2, ...rest2 } = p2;

@@ -176,11 +176,11 @@ export function getCacheDir(ctx: RecordCommandContext): string {
 }
 
 export function isArticlesPayload(value: unknown): value is PersiArticlesPayload {
-  return isPlainRecord(value) && Array.isArray(value.articles);
+  return isPlainRecord(value) && Array.isArray(value['articles']);
 }
 
 export function isCategoriesPayload(value: unknown): value is PersiCategoriesPayload {
-  return isPlainRecord(value) && Array.isArray(value.categories);
+  return isPlainRecord(value) && Array.isArray(value['categories']);
 }
 
 export function formatPersiItemsText(

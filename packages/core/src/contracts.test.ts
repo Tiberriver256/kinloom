@@ -169,9 +169,9 @@ describe('Extension & plugin seam schemas and contracts', () => {
           sizeBytes: slice.byteLength,
           sha256: ZERO_SHA,
           body,
-          range: options?.range
-            ? { start: offset, end: offset + slice.byteLength - 1, total: payload.byteLength }
-            : undefined,
+          ...(options?.range
+            ? { range: { start: offset, end: offset + slice.byteLength - 1, total: payload.byteLength } }
+            : {}),
         };
       },
     };

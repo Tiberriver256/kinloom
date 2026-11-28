@@ -250,15 +250,15 @@ export interface PeopleQueryParams {
 }
 
 export function getCacheDir(ctx: RecordCommandContext): string {
-  const specific = ctx.env.KINLOOM_MN_ARCHIVES_CACHE_DIR;
+  const specific = ctx.env['KINLOOM_MN_ARCHIVES_CACHE_DIR'];
   if (specific && specific.trim().length > 0) {
     return path.resolve(expandHomePath(specific, ctx.env));
   }
-  const shared = ctx.env.KINLOOM_CACHE_DIR;
+  const shared = ctx.env['KINLOOM_CACHE_DIR'];
   if (shared && shared.trim().length > 0) {
     return path.resolve(expandHomePath(shared, ctx.env), 'mn-archives');
   }
-  const home = ctx.env.HOME || os.homedir();
+  const home = ctx.env['HOME'] || os.homedir();
   return path.join(home, '.cache', 'kinloom', 'mn-archives');
 }
 

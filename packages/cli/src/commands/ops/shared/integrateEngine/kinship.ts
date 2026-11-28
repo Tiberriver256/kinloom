@@ -45,48 +45,48 @@ export function parseRemoveKinshipEntries(raw: unknown, label: string): RemoveKi
       }
     }
     if (
-      typeof item.from !== 'string' ||
-      item.from.length === 0 ||
-      item.from !== item.from.trim() ||
-      !SAFE_PERSON_ID_RE.test(item.from)
+      typeof item['from'] !== 'string' ||
+      item['from'].length === 0 ||
+      item['from'] !== item['from'].trim() ||
+      !SAFE_PERSON_ID_RE.test(item['from'])
     ) {
       throw new CliValidationError(
-        `${itemLabel}.from has invalid person_id '${String(item.from)}'. Only ASCII letters, digits, _, and - are allowed.`
+        `${itemLabel}.from has invalid person_id '${String(item['from'])}'. Only ASCII letters, digits, _, and - are allowed.`
       );
     }
     if (
-      typeof item.to !== 'string' ||
-      item.to.length === 0 ||
-      item.to !== item.to.trim() ||
-      !SAFE_PERSON_ID_RE.test(item.to)
+      typeof item['to'] !== 'string' ||
+      item['to'].length === 0 ||
+      item['to'] !== item['to'].trim() ||
+      !SAFE_PERSON_ID_RE.test(item['to'])
     ) {
       throw new CliValidationError(
-        `${itemLabel}.to has invalid person_id '${String(item.to)}'. Only ASCII letters, digits, _, and - are allowed.`
+        `${itemLabel}.to has invalid person_id '${String(item['to'])}'. Only ASCII letters, digits, _, and - are allowed.`
       );
     }
-    if (!isKinshipRelationValue(item.relation)) {
+    if (!isKinshipRelationValue(item['relation'])) {
       throw new CliValidationError(
-        `${itemLabel}.relation must be 'parent', 'child', or 'spouse', got '${String(item.relation)}'.`
+        `${itemLabel}.relation must be 'parent', 'child', or 'spouse', got '${String(item['relation'])}'.`
       );
     }
     let familyXref: string | undefined;
-    if (item.family_xref !== undefined) {
-      if (typeof item.family_xref !== 'string' || item.family_xref.trim().length === 0) {
+    if (item['family_xref'] !== undefined) {
+      if (typeof item['family_xref'] !== 'string' || item['family_xref'].trim().length === 0) {
         throw new CliValidationError(`${itemLabel}.family_xref must be a non-empty string when provided.`);
       }
-      familyXref = item.family_xref.trim();
+      familyXref = item['family_xref'].trim();
     }
     let symmetric = true;
-    if (item.symmetric !== undefined) {
-      if (typeof item.symmetric !== 'boolean') {
+    if (item['symmetric'] !== undefined) {
+      if (typeof item['symmetric'] !== 'boolean') {
         throw new CliValidationError(`${itemLabel}.symmetric must be a boolean when provided.`);
       }
-      symmetric = item.symmetric;
+      symmetric = item['symmetric'];
     }
     entries.push({
-      from: item.from,
-      to: item.to,
-      relation: item.relation,
+      from: item['from'],
+      to: item['to'],
+      relation: item['relation'],
       ...(familyXref !== undefined ? { family_xref: familyXref } : {}),
       symmetric,
     });

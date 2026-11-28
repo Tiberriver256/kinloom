@@ -10,8 +10,8 @@ import { KINLOOM_SERVER_VERSION } from '../version.js';
 
 export interface ChangelogServiceDeps {
   readonly plugins: readonly KinloomServerPlugin[];
-  readonly workerVersion?: string | null;
-  readonly now?: () => Date;
+  readonly workerVersion?: string | null | undefined;
+  readonly now?: (() => Date) | undefined;
 }
 
 export class ChangelogService {

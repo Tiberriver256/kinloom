@@ -125,8 +125,7 @@ export class D1EntityReadStore implements EntityReadStore, RevisionLogStore {
   ): void {
     const entityPairs: Array<[NonKinshipEntityType, string]> = [];
     const kinshipIds: string[] = [];
-    for (let i = 0; i < keys.length; i += 1) {
-      const key = keys[i];
+    for (const key of keys) {
       const composite = entityLookupCompositeKey(key.entityType, key.entityId);
       if (result.has(composite)) {
         continue;
@@ -207,8 +206,7 @@ export class D1EntityReadStore implements EntityReadStore, RevisionLogStore {
     ) {
       return;
     }
-    for (let i = 0; i < operations.length; i += 1) {
-      const op = operations[i];
+    for (const op of operations) {
       if (op.entity_type !== 'person') {
         continue;
       }
@@ -218,9 +216,9 @@ export class D1EntityReadStore implements EntityReadStore, RevisionLogStore {
       }
       const isLiving = resolveEffectiveLiving(
         {
-          is_living: Boolean(op.after_json.is_living),
-          birth_edtf: op.after_json.birth_edtf == null ? '' : String(op.after_json.birth_edtf),
-          death_edtf: op.after_json.death_edtf == null ? '' : String(op.after_json.death_edtf),
+          is_living: Boolean(op.after_json['is_living']),
+          birth_edtf: op.after_json['birth_edtf'] == null ? '' : String(op.after_json['birth_edtf']),
+          death_edtf: op.after_json['death_edtf'] == null ? '' : String(op.after_json['death_edtf']),
         },
         this.privacyConfig,
         referenceYear
@@ -433,7 +431,7 @@ export class D1EntityReadStore implements EntityReadStore, RevisionLogStore {
     ]);
 
     const living = new Set<string>();
-    for (const rawRow of peopleRes.results) {
+    for (const rawRow of peopleRes?.results ?? []) {
       const row = parseDbLivingPersonProjectionRow(rawRow);
       if (
         resolveEffectiveLiving(
@@ -450,7 +448,7 @@ export class D1EntityReadStore implements EntityReadStore, RevisionLogStore {
       }
     }
 
-    const headRaw = headRes.results[0];
+    const headRaw = headRes?.results[0];
     const headRev = headRaw !== undefined ? parseDbHeadRevisionRow(headRaw).head_revision_id : 0;
     if (headRev > 0) {
       livingPeopleCaches.set(this.db, {
@@ -484,11 +482,11 @@ export class D1EntityReadStore implements EntityReadStore, RevisionLogStore {
       prepareD1Statement(this.db, HEAD_REV_SQL),
     ]);
 
-    const entities = entitiesRes.results.map((rawRow) => mapEntityRow(parseDbEntityRow(rawRow)));
-    const kinship = kinshipRes.results
+    const entities = (entitiesRes?.results ?? []).map((rawRow) => mapEntityRow(parseDbEntityRow(rawRow)));
+    const kinship = (kinshipRes?.results ?? [])
       .map((rawRow) => mapKinshipRow(parseDbKinshipRow(rawRow)))
       .toSorted((a, b) => fastLocaleCompare(a.edge_id, b.edge_id));
-    const headRaw = headRes.results[0];
+    const headRaw = headRes?.results[0];
     const headRow = headRaw !== undefined ? parseDbHeadRevisionRow(headRaw) : undefined;
 
     return {

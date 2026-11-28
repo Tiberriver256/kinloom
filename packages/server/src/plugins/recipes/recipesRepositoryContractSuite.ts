@@ -216,7 +216,7 @@ export function runRecipesRepositoryContractSuite(
         expect(newest.items.map((i) => i.recipe.id)).toEqual(['rec_c', 'rec_b', 'rec_a']);
         expect(newest.items.map((i) => i.viewer_has_starred)).toEqual([true, false, true]);
         // Reclassified living person is redacted to null on read
-        expect(newest.items[1].recipe.attributed_person_id).toBeNull();
+        expect(newest.items[1]!.recipe.attributed_person_id).toBeNull();
         expect(newest.facets).toEqual({
           courses: ['bread', 'dessert', 'soup_salad'],
           tags: ['autumn', 'baking', 'pie', 'winter'],

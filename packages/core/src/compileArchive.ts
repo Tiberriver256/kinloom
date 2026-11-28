@@ -127,23 +127,21 @@ function buildPreparedBaseArchiveFresh(
   sources: readonly SourceRecord[]
 ): PreparedBaseArchive {
   const placesById = new Map<string, Place>();
-  for (let i = 0; i < places.length; i += 1) {
-    const pl = places[i];
+  for (const pl of places) {
     placesById.set(pl.id, pl);
   }
   const placeAncestors = buildPlaceAncestors(placesById);
 
   const sourcesById = new Map<string, SourceRecord>();
-  for (let i = 0; i < sources.length; i += 1) {
-    const s = cloneSource(sources[i]);
+  for (const src of sources) {
+    const s = cloneSource(src);
     sourcesById.set(s.id, s);
   }
   const cleanedSources = [...sourcesById.values()];
 
-  const timedEvents = new Array<ArchiveEvent>(events.length);
-  for (let i = 0; i < events.length; i += 1) {
-    timedEvents[i] = populateTimedEventInPlace(cloneEvent(events[i]), placeAncestors);
-  }
+  const timedEvents: ArchiveEvent[] = events.map((ev) =>
+    populateTimedEventInPlace(cloneEvent(ev), placeAncestors)
+  );
   applyCitationCleanings(timedEvents, cleanedSources);
   timedEvents.sort(compareArchiveEvents);
 
@@ -202,8 +200,8 @@ interface DualSharedPreparedContext {
   readonly preResolvedPeople: readonly RawPerson[];
   readonly preResolvedBirthYears: readonly (number | null)[];
   readonly preResolvedDeathYears: readonly (number | null)[];
-  readonly sharedResidenceSpans?: readonly ResidenceSpan[];
-  onComputedPrivateSpans?: (spans: readonly ResidenceSpan[], canShareWithPublic: boolean) => void;
+  readonly sharedResidenceSpans?: readonly ResidenceSpan[] | undefined;
+  onComputedPrivateSpans?: ((spans: readonly ResidenceSpan[], canShareWithPublic: boolean) => void) | undefined;
 }
 
 function compileArchiveInternal(
@@ -235,33 +233,25 @@ function compileArchiveInternal(
 
   // Stage 1: Clone inputs once at entry and assign branches from siteConfig.
   const pronunciationLexicon = siteConfig.pronunciations;
-  const rawPeople = new Array<RawPerson>(input.people.length);
-  if (dualCtx) {
-    for (let i = 0; i < dualCtx.preResolvedPeople.length; i += 1) {
-      rawPeople[i] = clonePerson(dualCtx.preResolvedPeople[i]);
-    }
-  } else {
-    for (let i = 0; i < input.people.length; i += 1) {
-      const clone = clonePerson(input.people[i]);
-      clone.branch = resolvePersonBranch(clone, siteConfig);
-      if (resolveEffectiveLiving(clone, privacy, effectiveReferenceYear)) {
-        clone.is_living = true;
-      }
-      rawPeople[i] = clone;
-    }
-  }
+  const rawPeople: RawPerson[] = dualCtx
+    ? dualCtx.preResolvedPeople.map(clonePerson)
+    : input.people.map((person) => {
+        const clone = clonePerson(person);
+        clone.branch = resolvePersonBranch(clone, siteConfig);
+        if (resolveEffectiveLiving(clone, privacy, effectiveReferenceYear)) {
+          clone.is_living = true;
+        }
+        return clone;
+      });
 
-  const places = new Array<Place>(input.places.length);
+  const places: Place[] = [];
   const placesById = new Map<string, Place>();
-  for (let i = 0; i < input.places.length; i += 1) {
-    const pl = clonePlace(input.places[i]);
-    places[i] = pl;
+  for (const place of input.places) {
+    const pl = clonePlace(place);
+    places.push(pl);
     placesById.set(pl.id, pl);
   }
-  const kinship = new Array<KinshipEdge>(input.kinship.length);
-  for (let i = 0; i < input.kinship.length; i += 1) {
-    kinship[i] = cloneKinship(input.kinship[i]);
-  }
+  const kinship: KinshipEdge[] = input.kinship.map(cloneKinship);
 
   const canUsePreparedBase =
     (!input.enrichments || input.enrichments.length === 0) &&
@@ -287,14 +277,8 @@ function compileArchiveInternal(
         clonedAncestors[pid] = chain.slice();
       }
       placeAncestors = clonedAncestors;
-      uniqueSources = new Array<SourceRecord>(prepared.cleanedSources.length);
-      for (let i = 0; i < prepared.cleanedSources.length; i += 1) {
-        uniqueSources[i] = cloneSource(prepared.cleanedSources[i]);
-      }
-      timedEvents = new Array<ArchiveEvent>(prepared.preSortedTimedEvents.length);
-      for (let i = 0; i < prepared.preSortedTimedEvents.length; i += 1) {
-        timedEvents[i] = clonePreparedArchiveEvent(prepared.preSortedTimedEvents[i]);
-      }
+      uniqueSources = prepared.cleanedSources.map(cloneSource);
+      timedEvents = prepared.preSortedTimedEvents.map(clonePreparedArchiveEvent);
     }
   } else if (canUsePreparedBase) {
     const prepared = getOrBuildPreparedBaseArchive(input.events, input.places, input.sources);
@@ -303,42 +287,33 @@ function compileArchiveInternal(
       clonedAncestors[pid] = chain.slice();
     }
     placeAncestors = clonedAncestors;
-    uniqueSources = new Array<SourceRecord>(prepared.cleanedSources.length);
-    for (let i = 0; i < prepared.cleanedSources.length; i += 1) {
-      uniqueSources[i] = cloneSource(prepared.cleanedSources[i]);
-    }
-    timedEvents = new Array<ArchiveEvent>(prepared.preSortedTimedEvents.length);
-    for (let i = 0; i < prepared.preSortedTimedEvents.length; i += 1) {
-      timedEvents[i] = clonePreparedArchiveEvent(prepared.preSortedTimedEvents[i]);
-    }
+    uniqueSources = prepared.cleanedSources.map(cloneSource);
+    timedEvents = prepared.preSortedTimedEvents.map(clonePreparedArchiveEvent);
   } else {
-    const rawEvents = new Array<RawEvent>(input.events.length);
-    for (let i = 0; i < input.events.length; i += 1) {
-      rawEvents[i] = cloneEvent(input.events[i]);
-    }
+    const rawEvents: RawEvent[] = input.events.map(cloneEvent);
     const sourcesById = new Map<string, SourceRecord>();
-    for (let i = 0; i < input.sources.length; i += 1) {
-      const s = cloneSource(input.sources[i]);
+    for (const src of input.sources) {
+      const s = cloneSource(src);
       sourcesById.set(s.id, s);
     }
     if (input.contextSources) {
-      for (let i = 0; i < input.contextSources.length; i += 1) {
-        const s = cloneSource(input.contextSources[i]);
+      for (const src of input.contextSources) {
+        const s = cloneSource(src);
         sourcesById.set(s.id, s);
       }
     }
     applyNarrativeEnrichments(rawEvents, input.enrichments);
     enrichedHouseholdCount = enrichHouseholdDescriptions(rawEvents, rawPeople, input.ancestryPeople);
     if (input.contextEvents) {
-      for (let i = 0; i < input.contextEvents.length; i += 1) {
-        rawEvents.push(cloneEvent(input.contextEvents[i]));
+      for (const ev of input.contextEvents) {
+        rawEvents.push(cloneEvent(ev));
       }
     }
     uniqueSources = [...sourcesById.values()];
     placeAncestors = buildPlaceAncestors(placesById);
     timedEvents = rawEvents as ArchiveEvent[];
-    for (let i = 0; i < rawEvents.length; i += 1) {
-      populateTimedEventInPlace(rawEvents[i], placeAncestors);
+    for (const ev of rawEvents) {
+      populateTimedEventInPlace(ev, placeAncestors);
     }
     applyCitationCleanings(timedEvents, uniqueSources, legacyContainerSourceIds);
     timedEvents.sort(compareArchiveEvents);
@@ -361,11 +336,13 @@ function compileArchiveInternal(
   });
 
   let sortedEvents = redactedEvents;
-  for (let i = 1; i < sortedEvents.length; i += 1) {
-    if (compareArchiveEvents(sortedEvents[i - 1], sortedEvents[i]) > 0) {
+  let prevSortedEv: ArchiveEvent | undefined;
+  for (const curEv of sortedEvents) {
+    if (prevSortedEv && compareArchiveEvents(prevSortedEv, curEv) > 0) {
       sortedEvents = sortedEvents.toSorted(compareArchiveEvents);
       break;
     }
+    prevSortedEv = curEv;
   }
 
   // Stage 4: Single integer-indexed pass over people & sortedEvents.
@@ -375,8 +352,11 @@ function compileArchiveInternal(
   const personIdxById = new Map<string, number>();
   const livingIds = new Set<string>();
 
-  for (let i = 0; i < numPeople; i += 1) {
+  for (let i = 0; i < compiledPeople.length; i += 1) {
     const p = compiledPeople[i];
+    if (!p) {
+      continue;
+    }
     peopleById.set(p.id, p);
     personIdxById.set(p.id, i);
     if (p.is_living) {
@@ -388,8 +368,8 @@ function compileArchiveInternal(
   if (input.compiledMediaOverlay) {
     referencedMediaEventIds = null;
   } else if (stripLivingPortraits && input.media && input.media.length > 0) {
-    for (let i = 0; i < input.media.length; i += 1) {
-      const eid = input.media[i].event_id;
+    for (const item of input.media) {
+      const eid = item.event_id;
       if (eid) {
         if (!referencedMediaEventIds) {
           referencedMediaEventIds = new Set<string>();
@@ -413,7 +393,8 @@ function compileArchiveInternal(
     } else {
       evList.push(ev);
     }
-    if (anchorsByPersonIdx && isAnchor && (!compiledPeople[pIdx].is_living || includeLivingSpans)) {
+    const person = compiledPeople[pIdx];
+    if (anchorsByPersonIdx && isAnchor && person && (!person.is_living || includeLivingSpans)) {
       const anchor = ev as ResidenceAnchor;
       const aList = anchorsByPersonIdx[pIdx];
       if (!aList) {
@@ -424,14 +405,13 @@ function compileArchiveInternal(
     }
   };
 
-  for (let i = 0; i < sortedEvents.length; i += 1) {
-    const ev = sortedEvents[i];
+  for (const ev of sortedEvents) {
     if (buildFullEventsById || referencedMediaEventIds?.has(ev.id)) {
       eventsById.set(ev.id, ev);
     }
     const pts = ev.participants;
-    const pLen = pts.length;
-    if (pLen === 0) {
+    const [pt0, pt1] = pts;
+    if (!pt0) {
       continue;
     }
     const isAnchor =
@@ -441,8 +421,8 @@ function compileArchiveInternal(
       ev.time_max !== null &&
       Boolean(ev.place_id);
 
-    if (pLen === 1) {
-      const idx0 = personIdxById.get(pts[0].person_id);
+    if (!pt1) {
+      const idx0 = personIdxById.get(pt0.person_id);
       if (idx0 !== undefined) {
         pushPersonEventAndAnchor(idx0, ev, isAnchor);
       }
@@ -452,8 +432,8 @@ function compileArchiveInternal(
     if (isAnchor && !hasMixedDeceasedLivingAnchor && livingIds.size > 0) {
       let sawDeceased = false;
       let sawLiving = false;
-      for (let j = 0; j < pLen; j += 1) {
-        if (livingIds.has(pts[j].person_id)) {
+      for (const pt of pts) {
+        if (livingIds.has(pt.person_id)) {
           sawLiving = true;
         } else {
           sawDeceased = true;
@@ -464,9 +444,9 @@ function compileArchiveInternal(
       }
     }
 
-    if (pLen === 2) {
-      const id0 = pts[0].person_id;
-      const id1 = pts[1].person_id;
+    if (pts.length === 2) {
+      const id0 = pt0.person_id;
+      const id1 = pt1.person_id;
       const idx0 = personIdxById.get(id0);
       if (idx0 !== undefined) {
         pushPersonEventAndAnchor(idx0, ev, isAnchor);
@@ -480,8 +460,8 @@ function compileArchiveInternal(
       continue;
     }
     const seenInEvent = new Set<string>();
-    for (let j = 0; j < pLen; j += 1) {
-      const pid = pts[j].person_id;
+    for (const pt of pts) {
+      const pid = pt.person_id;
       if (seenInEvent.has(pid)) {
         continue;
       }
@@ -495,19 +475,17 @@ function compileArchiveInternal(
 
   let residenceSpans: ResidenceSpan[];
   if (dualCtx?.sharedResidenceSpans) {
-    residenceSpans = new Array<ResidenceSpan>(dualCtx.sharedResidenceSpans.length);
-    for (let i = 0; i < dualCtx.sharedResidenceSpans.length; i += 1) {
-      residenceSpans[i] = { ...dualCtx.sharedResidenceSpans[i] };
-    }
+    residenceSpans = dualCtx.sharedResidenceSpans.map((span) => ({ ...span }));
   } else {
     const pairCache = getProximityPairCache(placesById, input.places);
     residenceSpans = [];
     if (anchorsByPersonIdx) {
-      for (let i = 0; i < numPeople; i += 1) {
+      for (let i = 0; i < compiledPeople.length; i += 1) {
+        const person = compiledPeople[i];
         const anchors = anchorsByPersonIdx[i];
-        if (anchors && anchors.length >= 2) {
+        if (person && anchors && anchors.length >= 2) {
           appendResidenceSpansForPerson(
-            compiledPeople[i].id,
+            person.id,
             anchors,
             placesById,
             pairCache,
@@ -523,22 +501,26 @@ function compileArchiveInternal(
   }
 
   const placeCounts = new Map<string, number>();
-  for (let i = 0; i < numPeople; i += 1) {
+  for (let i = 0; i < compiledPeople.length; i += 1) {
     const p = compiledPeople[i];
+    if (!p) {
+      continue;
+    }
     const pEvts = eventsByPersonIdx[i];
     let primaryPlaceId: string | null = null;
     let eventCount = 0;
     if (pEvts && pEvts.length > 0) {
       eventCount = pEvts.length;
-      if (eventCount === 1) {
-        primaryPlaceId = pEvts[0].place_id ?? null;
-      } else if (eventCount === 2) {
-        primaryPlaceId = pEvts[0].place_id || pEvts[1].place_id || null;
+      const [ev0, ev1] = pEvts;
+      if (ev0 && !ev1) {
+        primaryPlaceId = ev0.place_id ?? null;
+      } else if (ev0 && ev1 && eventCount === 2) {
+        primaryPlaceId = ev0.place_id || ev1.place_id || null;
       } else {
         placeCounts.clear();
         let bestCount = -1;
-        for (let j = 0; j < eventCount; j += 1) {
-          const pid = pEvts[j].place_id;
+        for (const pev of pEvts) {
+          const pid = pev.place_id;
           if (pid) {
             const nextCount = (placeCounts.get(pid) ?? 0) + 1;
             placeCounts.set(pid, nextCount);
@@ -551,8 +533,8 @@ function compileArchiveInternal(
       }
     }
 
-    p.birth_year = dualCtx && !p.is_living ? dualCtx.preResolvedBirthYears[i] : edtfYear(p.birth_edtf);
-    p.death_year = dualCtx && !p.is_living ? dualCtx.preResolvedDeathYears[i] : edtfYear(p.death_edtf);
+    p.birth_year = dualCtx && !p.is_living ? (dualCtx.preResolvedBirthYears[i] ?? null) : edtfYear(p.birth_edtf);
+    p.death_year = dualCtx && !p.is_living ? (dualCtx.preResolvedDeathYears[i] ?? null) : edtfYear(p.death_edtf);
     p.event_count = eventCount;
     p.media_count = 0;
     p.primary_place_id = primaryPlaceId;
@@ -579,8 +561,7 @@ function compileArchiveInternal(
     : undefined;
 
   if (narratives) {
-    for (let i = 0; i < narratives.length; i += 1) {
-      const n = narratives[i];
+    for (const n of narratives) {
       if (n.subject_person_id && !peopleById.has(n.subject_person_id)) {
         reviewFlags.push(`[${n.id}] references unknown subject_person_id '${n.subject_person_id}'.`);
       }
@@ -679,19 +660,18 @@ export function compileArchiveDual(baseInput: Omit<CompileArchiveInput, 'mode'>)
     referenceYear: effectiveReferenceYear,
   };
 
-  const numPeople = baseInput.people.length;
-  const preResolvedPeople = new Array<RawPerson>(numPeople);
-  const preResolvedBirthYears = new Array<number | null>(numPeople);
-  const preResolvedDeathYears = new Array<number | null>(numPeople);
-  for (let i = 0; i < numPeople; i += 1) {
-    const clone = clonePerson(baseInput.people[i]);
+  const preResolvedPeople: RawPerson[] = [];
+  const preResolvedBirthYears: (number | null)[] = [];
+  const preResolvedDeathYears: (number | null)[] = [];
+  for (const person of baseInput.people) {
+    const clone = clonePerson(person);
     clone.branch = resolvePersonBranch(clone, baseInput.siteConfig);
     if (resolveEffectiveLiving(clone, privacy, effectiveReferenceYear)) {
       clone.is_living = true;
     }
-    preResolvedPeople[i] = clone;
-    preResolvedBirthYears[i] = clone.is_living ? null : edtfYear(clone.birth_edtf);
-    preResolvedDeathYears[i] = clone.is_living ? null : edtfYear(clone.death_edtf);
+    preResolvedPeople.push(clone);
+    preResolvedBirthYears.push(clone.is_living ? null : edtfYear(clone.birth_edtf));
+    preResolvedDeathYears.push(clone.is_living ? null : edtfYear(clone.death_edtf));
   }
 
   const cachedPrepared = preparedBaseCache

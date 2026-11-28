@@ -5,16 +5,16 @@ const TEXT_DECODER = new TextDecoder();
 
 export function toHex(bytes: Uint8Array): string {
   let out = '';
-  for (let i = 0; i < bytes.length; i += 1) {
-    out += bytes[i].toString(16).padStart(2, '0');
+  for (const byte of bytes) {
+    out += byte.toString(16).padStart(2, '0');
   }
   return out;
 }
 
 export function base64UrlEncodeBytes(bytes: Uint8Array): string {
   let binary = '';
-  for (let i = 0; i < bytes.length; i += 1) {
-    binary += String.fromCharCode(bytes[i]);
+  for (const byte of bytes) {
+    binary += String.fromCharCode(byte);
   }
   return btoa(binary).replaceAll('+', '-').replaceAll('/', '_').replaceAll('=', '');
 }

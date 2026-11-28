@@ -43,16 +43,16 @@ export function isEffectiveLivingRecord(
   personEvents: readonly { edtf_date?: unknown }[],
   privacy: Partial<PrivacyConfig>
 ): boolean {
-  if (person.is_living === true || person.living === true) {
+  if (person['is_living'] === true || person['living'] === true) {
     return true;
   }
-  const birthEdtf = asNonEmptyString(person.birth_edtf);
-  const deathEdtf = asNonEmptyString(person.death_edtf);
+  const birthEdtf = asNonEmptyString(person['birth_edtf']);
+  const deathEdtf = asNonEmptyString(person['death_edtf']);
   const refYear = privacy.referenceYear ?? getCurrentReferenceYear();
   if (
     resolveEffectiveLiving(
       {
-        is_living: Boolean(person.is_living),
+        is_living: Boolean(person['is_living']),
         birth_edtf: birthEdtf,
         death_edtf: deathEdtf,
       },
@@ -89,14 +89,14 @@ export function isConfirmedDeceasedRelative(
   livingIds: ReadonlySet<string>,
   privacy: Partial<PrivacyConfig>
 ): person is LooseYamlRecord {
-  if (!person || typeof person.id !== 'string' || livingIds.has(person.id)) {
+  if (!person || typeof person['id'] !== 'string' || livingIds.has(person['id'])) {
     return false;
   }
-  if (person.is_living === true || person.living === true) {
+  if (person['is_living'] === true || person['living'] === true) {
     return false;
   }
-  const birthEdtf = asNonEmptyString(person.birth_edtf);
-  const deathEdtf = asNonEmptyString(person.death_edtf);
+  const birthEdtf = asNonEmptyString(person['birth_edtf']);
+  const deathEdtf = asNonEmptyString(person['death_edtf']);
   const refYear = privacy.referenceYear ?? getCurrentReferenceYear();
   return !isPersonLivingPublic({
     explicitLiving: false,
@@ -139,24 +139,24 @@ export function buildLivingPrivacyState(params: {
   const livingPeopleForNames: Array<{ is_living: boolean; full_name: string; alt_names: string[] }> = [];
 
   for (const person of params.parsedPeople) {
-    if (typeof person.id !== 'string') {
+    if (typeof person['id'] !== 'string') {
       continue;
     }
     const personEvents =
-      person.id === params.personId
+      person['id'] === params.personId
         ? params.rawPersonEvents
-        : (params.unknownYearEventsByPerson.get(person.id) ?? []);
+        : (params.unknownYearEventsByPerson.get(person['id']) ?? []);
     if (isEffectiveLivingRecord(person, personEvents, params.privacy)) {
-      livingIds.add(person.id);
-      const numericId = extractNumericXref(person.gedcom_xref);
+      livingIds.add(person['id']);
+      const numericId = extractNumericXref(person['gedcom_xref']);
       if (numericId) {
         livingAncestryPids.add(numericId);
       }
       livingPeopleForNames.push({
         is_living: true,
-        full_name: asNonEmptyString(person.full_name),
-        alt_names: Array.isArray(person.alt_names)
-          ? person.alt_names.filter((n): n is string => typeof n === 'string')
+        full_name: asNonEmptyString(person['full_name']),
+        alt_names: Array.isArray(person['alt_names'])
+          ? person['alt_names'].filter((n): n is string => typeof n === 'string')
           : [],
       });
     }

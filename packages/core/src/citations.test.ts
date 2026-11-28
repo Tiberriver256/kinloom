@@ -234,8 +234,8 @@ describe('resolveCitationMedia', () => {
   });
 
   it('excludes non-image and living-redacted media and returns null when no image exists', () => {
-    expect(isPreviewableCitationImage(DEMO_MEDIA[4])).toBe(false);
-    expect(isPreviewableCitationImage(DEMO_MEDIA[5])).toBe(false);
+    expect(isPreviewableCitationImage(DEMO_MEDIA[4]!)).toBe(false);
+    expect(isPreviewableCitationImage(DEMO_MEDIA[5]!)).toBe(false);
 
     expect(resolveCitationMedia('src_demo_audio', null, DEMO_MEDIA, 'per_subject', DEMO_EVENTS)).toBeNull();
     expect(

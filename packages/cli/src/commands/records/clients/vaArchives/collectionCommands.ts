@@ -94,21 +94,21 @@ export async function runCatalog(
     throw new RecordRuntimeError(`Invalid Primo PNXS JSON: ${message}`);
   }
   const obj = isPlainRecord(data) ? data : {};
-  const info = isPlainRecord(obj.info) ? obj.info : {};
-  const docs = Array.isArray(obj.docs) ? obj.docs : [];
+  const info = isPlainRecord(obj['info']) ? obj['info'] : {};
+  const docs = Array.isArray(obj['docs']) ? obj['docs'] : [];
   const records = docs.map((d) => mapPnxsRecord(d));
 
   if (asJson) {
     return emitTrackedJson(state, {
-      total: info.total ?? null,
-      first: info.first ?? null,
-      last: info.last ?? null,
+      total: info['total'] ?? null,
+      first: info['first'] ?? null,
+      last: info['last'] ?? null,
       records,
     });
   }
 
   const lines: string[] = [
-    `${String(info.total ?? 0)} result(s); showing ${String(info.first ?? 0)}-${String(info.last ?? 0)}:`,
+    `${String(info['total'] ?? 0)} result(s); showing ${String(info['first'] ?? 0)}-${String(info['last'] ?? 0)}:`,
   ];
   for (const rec of records) {
     lines.push(rec.title || '(no title)');
@@ -210,8 +210,8 @@ export async function runGrantTif(
 
   if (outPath) {
     const mode = await saveImage(cachedPath, outPath);
-    result.out = outPath;
-    result.mode = mode;
+    result['out'] = outPath;
+    result['mode'] = mode;
   }
 
   if (asJson) {
@@ -219,8 +219,8 @@ export async function runGrantTif(
   }
 
   const text = outPath
-    ? `saved ${String(result.out)} (${String(result.mode)}) from ${url}`
-    : `cached ${url} -> ${cachedPath} (${String(result.bytes)} bytes); pass --out FILE to save it`;
+    ? `saved ${String(result['out'])} (${String(result['mode'])}) from ${url}`
+    : `cached ${url} -> ${cachedPath} (${String(result['bytes'])} bytes); pass --out FILE to save it`;
   return {
     exitCode: 0,
     bytesOut: emitStdout(ctx.io, text),
@@ -287,8 +287,8 @@ export async function runDunmore(
   if (outPath) {
     const cachedPath = await fetchFile(state, chosen.url, [LVA_IMAGE_HOST]);
     const mode = await saveImage(cachedPath, outPath);
-    result.out = outPath;
-    result.mode = mode;
+    result['out'] = outPath;
+    result['mode'] = mode;
   }
 
   if (asJson) {
@@ -303,7 +303,7 @@ export async function runDunmore(
     lines.push(` ${mark} page ${String(im.page ?? '?')}: ${im.url}`);
   }
   if (outPath) {
-    lines.push(`saved ${String(result.out)} (${String(result.mode)})`);
+    lines.push(`saved ${String(result['out'])} (${String(result['mode'])})`);
   }
   return {
     exitCode: 0,

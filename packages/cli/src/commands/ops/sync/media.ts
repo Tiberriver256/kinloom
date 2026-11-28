@@ -59,10 +59,10 @@ function collectPronunciationEntryAudioUrls(entry: Pronunciation | null | undefi
 }
 
 function extractEntityPronunciation(data: unknown): Pronunciation | null {
-  if (!isPlainRecord(data) || !isPlainRecord(data.pronunciation)) {
+  if (!isPlainRecord(data) || !isPlainRecord(data['pronunciation'])) {
     return null;
   }
-  return data.pronunciation as Pronunciation;
+  return data['pronunciation'] as Pronunciation;
 }
 
 function resolvePronunciationLocalPath(
@@ -147,7 +147,7 @@ export async function findMissingRemoteMedia(
   const candidates: Array<MediaUploadTarget & { url: string }> = [];
   const seenKeys = new Set<string>();
   for (const entry of mediaEntries) {
-    const fileUrl = typeof entry.data.file === 'string' ? entry.data.file.trim() : '';
+    const fileUrl = typeof entry.data['file'] === 'string' ? entry.data['file'].trim() : '';
     if (!fileUrl.startsWith('/media/')) {
       continue;
     }
@@ -161,8 +161,8 @@ export async function findMissingRemoteMedia(
       continue;
     }
     const mime =
-      typeof entry.data.mime_type === 'string' && entry.data.mime_type.trim()
-        ? entry.data.mime_type.trim()
+      typeof entry.data['mime_type'] === 'string' && entry.data['mime_type'].trim()
+        ? entry.data['mime_type'].trim()
         : guessMimeType(localPath);
     candidates.push({
       localPath,
@@ -181,7 +181,7 @@ export async function findMissingRemoteMedia(
       if (personEntry.isLiving) {
         continue;
       }
-      if (isPlainRecord(personEntry.data) && personEntry.data.full_name === 'Living') {
+      if (isPlainRecord(personEntry.data) && personEntry.data['full_name'] === 'Living') {
         continue;
       }
       collectPronunciationEntryAudioUrls(extractEntityPronunciation(personEntry.data), rawAudioUrls);

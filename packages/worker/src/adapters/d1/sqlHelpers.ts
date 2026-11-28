@@ -140,8 +140,8 @@ export function resolveSlugForOp(op: AtomicMutationOp): { updateSlug: boolean; v
   if (op.slug !== undefined) {
     return { updateSlug: true, value: op.slug };
   }
-  if (op.after_json && typeof op.after_json.slug === 'string') {
-    return { updateSlug: true, value: op.after_json.slug };
+  if (op.after_json && typeof op.after_json['slug'] === 'string') {
+    return { updateSlug: true, value: op.after_json['slug'] };
   }
   return { updateSlug: false, value: null };
 }

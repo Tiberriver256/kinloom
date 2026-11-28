@@ -280,7 +280,7 @@ export function splitParagraphIntoSentences(paragraph: string): string[] {
 }
 
 export function runUncitedSentenceCheck(patch: LooseRecord): CitationsCheckResult {
-  const narratives = Array.isArray(patch.narratives) ? patch.narratives : [];
+  const narratives = Array.isArray(patch['narratives']) ? patch['narratives'] : [];
   let totalSentences = 0;
   let citedSentences = 0;
   const uncitedSentences: UncitedSentenceItem[] = [];
@@ -289,11 +289,11 @@ export function runUncitedSentenceCheck(patch: LooseRecord): CitationsCheckResul
     if (!isPlainRecord(rawNar)) {
       continue;
     }
-    const body = typeof rawNar.body_md === 'string' ? rawNar.body_md : '';
+    const body = typeof rawNar['body_md'] === 'string' ? rawNar['body_md'] : '';
     if (!body) {
       continue;
     }
-    const narId = typeof rawNar.id === 'string' ? rawNar.id : 'unknown';
+    const narId = typeof rawNar['id'] === 'string' ? rawNar['id'] : 'unknown';
 
     const withoutCode = body.replaceAll(/```[\s\S]*?```/g, '\n');
     const lines = withoutCode.replaceAll('\r\n', '\n').split('\n');

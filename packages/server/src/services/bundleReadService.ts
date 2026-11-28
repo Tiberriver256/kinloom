@@ -113,7 +113,7 @@ export class BundleReadService {
 
   async getBundle(params: {
     ifNoneMatch: string | null;
-    telemetry?: BundleReadTelemetry;
+    telemetry?: BundleReadTelemetry | undefined;
   }): Promise<GetBundleResult> {
     const { telemetry } = params;
     const [headRev, cached] = await Promise.all([
@@ -199,7 +199,7 @@ export class BundleReadService {
 
   async exportYaml(params: {
     ifNoneMatch: string | null;
-    telemetry?: BundleReadTelemetry;
+    telemetry?: BundleReadTelemetry | undefined;
   }): Promise<ExportYamlResult> {
     const { telemetry } = params;
     const headRev = await timeServiceSpan(telemetry, 'd1', () => this.repository.getHeadRevisionId());
@@ -238,7 +238,7 @@ export class BundleReadService {
 
   async exportSnapshot(params: {
     ifNoneMatch: string | null;
-    telemetry?: BundleReadTelemetry;
+    telemetry?: BundleReadTelemetry | undefined;
   }): Promise<ExportSnapshotResult> {
     const { telemetry } = params;
     const headRev = await timeServiceSpan(telemetry, 'd1', () => this.repository.getHeadRevisionId());

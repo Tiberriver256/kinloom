@@ -97,7 +97,7 @@ export interface ServerSecurityEventBase {
   readonly route: string;
   readonly request: Request;
   readonly metadata: Map<string, unknown>;
-  readonly waitUntil?: (promise: Promise<unknown>) => void;
+  readonly waitUntil?: ((promise: Promise<unknown>) => void) | undefined;
   readonly reportError?: (error: unknown) => void;
 }
 

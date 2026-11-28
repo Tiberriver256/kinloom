@@ -146,7 +146,7 @@ describe('archive-org native client: cached grep and page', () => {
     expect(idx.access_leaf_count).toBe(5);
     expect(idx.printed_to_bookreader['1']).toBe(3);
     expect(idx.printed_to_bookreader['2']).toBe(4);
-    expect(idx.printed_to_bookreader_ci.iv).toBe(2);
+    expect(idx.printed_to_bookreader_ci['iv']).toBe(2);
     expect(idx.bookreader_to_printed['3']).toBe('1');
     expect(idx.scandata_to_bookreader['4']).toBe(3);
     expect(idx.bookreader_to_scandata['3']).toBe(4);
@@ -885,7 +885,7 @@ describe('archive-org native client: cached grep and page', () => {
     // Stale cache entry older than TTL triggers fresh fetch.
     const ftCacheFile = path.join(ftDir, ftFiles[0]);
     const envelope = JSON.parse(fs.readFileSync(ftCacheFile, 'utf8')) as Record<string, unknown>;
-    envelope.cached_at = Date.now() / 1000 - 200 * 3600;
+    envelope['cached_at'] = Date.now() / 1000 - 200 * 3600;
     fs.writeFileSync(ftCacheFile, JSON.stringify(envelope), 'utf8');
 
     ftVersion.total = 11;

@@ -40,10 +40,10 @@ export function indexPrefetchedEvents(prefetchedRows: ReadonlyMap<string, Stored
     const eventId = key.slice('event:'.length);
     prefetchedEventIds.add(eventId);
     if (row && !('edge' in row) && row.deleted_at === null) {
-      if (typeof row.data.id === 'string' && Array.isArray(row.data.participants)) {
-        workingEvents.set(row.data.id, {
-          id: row.data.id,
-          participants: row.data.participants as RawEvent['participants'],
+      if (typeof row.data['id'] === 'string' && Array.isArray(row.data['participants'])) {
+        workingEvents.set(row.data['id'], {
+          id: row.data['id'],
+          participants: row.data['participants'] as RawEvent['participants'],
         });
       } else {
         const parsedEv = parseEntityPayload('event', row.data);

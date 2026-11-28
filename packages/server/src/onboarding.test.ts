@@ -49,7 +49,7 @@ describe('@kinloom/server onboarding endpoints and first-login capture (#54)', (
     );
     expect(reqRes.status).toBe(202);
     expect(ports.emailSender.sentMessages).toHaveLength(1);
-    const verifyUrl = ports.emailSender.sentMessages[0].magicLinkUrl;
+    const verifyUrl = ports.emailSender.sentMessages[0]!.magicLinkUrl;
 
     // Complete magic-link verify (touches last_login_at AND records first_login_pending = true)
     const verifyRes = await server.fetch(new Request(verifyUrl, { method: 'GET' }));
@@ -107,7 +107,7 @@ describe('@kinloom/server onboarding endpoints and first-login capture (#54)', (
       })
     );
     expect(req2.status).toBe(202);
-    const verify2 = await server.fetch(new Request(ports.emailSender.sentMessages[1].magicLinkUrl));
+    const verify2 = await server.fetch(new Request(ports.emailSender.sentMessages[1]!.magicLinkUrl));
     expect(verify2.status).toBe(302);
     const cookie2 = (verify2.headers.get('set-cookie') ?? '').split(';')[0];
 

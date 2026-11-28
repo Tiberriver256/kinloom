@@ -5,7 +5,7 @@ export type MigrateTarget = 'remote' | 'local';
 export interface D1DatabaseBinding {
   readonly configPath: string;
   readonly dbName: string;
-  readonly migrationsDirHint?: string;
+  readonly migrationsDirHint?: string | undefined;
 }
 
 export interface MigrationColumnRequirement {

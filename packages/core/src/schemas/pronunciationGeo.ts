@@ -201,7 +201,11 @@ export function splitPlaceSegments(text: string): string[] {
 
 export function inferCountryCodeFromSegments(segments: readonly string[]): string | null {
   for (let i = segments.length - 1; i >= 0; i -= 1) {
-    const seg = segments[i].toLowerCase();
+    const rawSeg = segments[i];
+    if (!rawSeg) {
+      continue;
+    }
+    const seg = rawSeg.toLowerCase();
     for (const entry of COUNTRY_TOKEN_PATTERNS) {
       if (entry.tokens.includes(seg)) {
         return entry.code;
@@ -228,8 +232,8 @@ export function inferCountryCodeFromSegments(segments: readonly string[]): strin
 }
 
 export function getPlaceQualifierSegments(place: {
-  readonly name?: string;
-  readonly full_name?: string;
+  readonly name?: string | undefined;
+  readonly full_name?: string | undefined;
 }): string[] {
   const fullName = place.full_name?.trim();
   if (!fullName) {
@@ -237,7 +241,8 @@ export function getPlaceQualifierSegments(place: {
   }
   const segments = splitPlaceSegments(fullName);
   const nameLower = place.name?.trim().toLowerCase();
-  if (segments.length > 1 && nameLower && segments[0].toLowerCase() === nameLower) {
+  const firstSeg = segments[0];
+  if (segments.length > 1 && nameLower && firstSeg && firstSeg.toLowerCase() === nameLower) {
     return segments.slice(1);
   }
   return segments;
@@ -249,7 +254,7 @@ function languageCompatibleCountries(language: string): ReadonlySet<string> | nu
     return null;
   }
   const parts = normalized.split(/[-_]/);
-  const primary = parts[0];
+  const primary = parts[0] ?? '';
   const subtag = parts[1]?.toUpperCase();
   if (subtag && /^[A-Z]{2}$/.test(subtag)) {
     return new Set([subtag]);
@@ -259,7 +264,7 @@ function languageCompatibleCountries(language: string): ReadonlySet<string> | nu
 
 export function isBareLexiconEntryCompatibleWithPlace(
   entry: Pronunciation,
-  place: { readonly name?: string; readonly full_name?: string }
+  place: { readonly name?: string | undefined; readonly full_name?: string | undefined }
 ): boolean {
   const fullName = place.full_name?.trim() ?? '';
   const fullNameLower = fullName.toLowerCase();

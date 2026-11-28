@@ -22,9 +22,9 @@ import { CliValidationError, KinloomApiError } from './errors.js';
 
 export interface KinloomApiClientOptions {
   baseUrl: string;
-  token?: string;
-  fetchImpl?: typeof fetch;
-  userAgent?: string;
+  token?: string | undefined;
+  fetchImpl?: typeof fetch | undefined;
+  userAgent?: string | undefined;
 }
 
 const SubmitBatchResponseSchema = z.object({
@@ -414,7 +414,7 @@ export class KinloomApiClient {
 }
 
 export function resolveAuthToken(explicitToken?: string): string | undefined {
-  const candidate = explicitToken ?? process.env.KINLOOM_TOKEN;
+  const candidate = explicitToken ?? process.env['KINLOOM_TOKEN'];
   const trimmed = candidate?.trim();
   return trimmed ? trimmed : undefined;
 }

@@ -128,7 +128,7 @@ export async function runCdm(
     `${data.totalResults} result(s) for '${query}' in KHS Digital Collections${marker}`,
   ];
   for (const it of data.items) {
-    const dateVal = typeof it.fields.date === 'string' ? it.fields.date : '';
+    const dateVal = typeof it.fields['date'] === 'string' ? it.fields['date'] : '';
     const dateSuffix = dateVal ? ` (${dateVal})` : '';
     lines.push(
       `- [${String(it.collectionAlias ?? '')}:${String(it.itemId ?? '')}] ${String(it.title ?? '')}${dateSuffix}`
@@ -160,7 +160,7 @@ export async function runCdmItem(
     schema: CACHE_SCHEMA,
     fetch: () => fetchCdmItem(ctx, alias, itemId),
     cacheable: (r) =>
-      (Array.isArray(r.fields) && r.fields.length > 0) || Boolean(r.title) || Boolean(r.contentType),
+      (Array.isArray(r['fields']) && r['fields'].length > 0) || Boolean(r['title']) || Boolean(r['contentType']),
     validateCached: isPlainRecord,
     nowMs: ctx.nowMs,
     sleepFn: ctx.sleepFn,
@@ -176,17 +176,17 @@ export async function runCdmItem(
 
   const marker = cacheHit ? ' [cache]' : '';
   const lines: string[] = [`${CDM_BASE}/digital/singleitem/collection/${alias}/id/${itemId}${marker}`];
-  if (Array.isArray(data.fields)) {
-    for (const rawField of data.fields) {
+  if (Array.isArray(data['fields'])) {
+    for (const rawField of data['fields']) {
       if (!isPlainRecord(rawField)) {
         continue;
       }
-      const label = String(rawField.label ?? rawField.key ?? '');
-      lines.push(`${label}: ${String(rawField.value ?? '')}`);
+      const label = String(rawField['label'] ?? rawField['key'] ?? '');
+      lines.push(`${label}: ${String(rawField['value'] ?? '')}`);
     }
   }
-  if (data.contentType) {
-    lines.push(`Content-Type: ${String(data.contentType)}`);
+  if (data['contentType']) {
+    lines.push(`Content-Type: ${String(data['contentType'])}`);
   }
   return { exitCode: 0, bytesOut: emitStdout(ctx.io, lines.join('\n')), cacheHit };
 }
@@ -211,14 +211,14 @@ export async function runCollections(
     refresh,
     schema: CACHE_SCHEMA,
     fetch: () => fetchCollections(ctx),
-    cacheable: (r) => Array.isArray(r.cards) && r.cards.length > 0,
+    cacheable: (r) => Array.isArray(r['cards']) && r['cards'].length > 0,
     validateCached: isPlainRecord,
     nowMs: ctx.nowMs,
     sleepFn: ctx.sleepFn,
   });
 
-  const cards = Array.isArray(data.cards) ? data.cards : [];
-  const totalCollections = typeof data.totalCollections === 'number' ? data.totalCollections : cards.length;
+  const cards = Array.isArray(data['cards']) ? data['cards'] : [];
+  const totalCollections = typeof data['totalCollections'] === 'number' ? data['totalCollections'] : cards.length;
 
   if (asJson) {
     return {
@@ -236,7 +236,7 @@ export async function runCollections(
   const lines: string[] = [`${totalCollections} collections${marker}`];
   for (const card of cards) {
     if (isPlainRecord(card)) {
-      lines.push(`- ${String(card.alias ?? '')}: ${String(card.title ?? '')}`);
+      lines.push(`- ${String(card['alias'] ?? '')}: ${String(card['title'] ?? '')}`);
     }
   }
   return { exitCode: 0, bytesOut: emitStdout(ctx.io, lines.join('\n')), cacheHit };

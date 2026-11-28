@@ -629,11 +629,11 @@ describe('Find a Grave CLI commands, help outputs, and photo command edge cases'
         ctx
       );
       expect(res.exitCode).toBe(0);
-      expect(capturedSearchVars.birthYearFilter).toBe('exact');
-      expect(capturedSearchVars.bio).toBe('pioneer');
-      expect(capturedSearchVars.fullText).toBe('homestead');
-      expect(capturedSearchVars.linkedToName).toBe('John Doe');
-      expect(capturedSearchVars.exactName).toBe(true);
+      expect(capturedSearchVars['birthYearFilter']).toBe('exact');
+      expect(capturedSearchVars['bio']).toBe('pioneer');
+      expect(capturedSearchVars['fullText']).toBe('homestead');
+      expect(capturedSearchVars['linkedToName']).toBe('John Doe');
+      expect(capturedSearchVars['exactName']).toBe(true);
       expect(stdout.join('\n')).toContain('3001 | Jane Doe | b. 1840 | d. 1912 | Oakville Cemetery');
     }
 

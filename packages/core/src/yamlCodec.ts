@@ -7,7 +7,7 @@ const rankMapCache = new WeakMap<readonly string[], ReadonlyMap<string, number>>
 const INDENTS: string[] = Array.from({ length: 32 }, (_, i) => '  '.repeat(i));
 
 function getIndent(depth: number): string {
-  return depth < INDENTS.length ? INDENTS[depth] : '  '.repeat(depth);
+  return INDENTS[depth] ?? '  '.repeat(depth);
 }
 
 export function getRankMap(order?: readonly string[]): ReadonlyMap<string, number> | undefined {
@@ -17,9 +17,9 @@ export function getRankMap(order?: readonly string[]): ReadonlyMap<string, numbe
   let cached = rankMapCache.get(order);
   if (!cached) {
     const map = new Map<string, number>();
-    for (let i = 0; i < order.length; i += 1) {
-      map.set(order[i], i);
-    }
+    order.forEach((key, i) => {
+      map.set(key, i);
+    });
     cached = map;
     rankMapCache.set(order, cached);
   }
@@ -153,10 +153,8 @@ function formatYamlScalar(val: string | number | boolean | null, maxPlainLen: nu
 }
 
 function getSortedDefinedKeys(obj: Record<string, unknown>, rankMap?: ReadonlyMap<string, number>): string[] {
-  const rawKeys = Object.keys(obj);
   const keys: string[] = [];
-  for (let i = 0; i < rawKeys.length; i += 1) {
-    const k = rawKeys[i];
+  for (const k of Object.keys(obj)) {
     if (obj[k] !== undefined) {
       keys.push(k);
     }
@@ -200,10 +198,11 @@ function emitMappingLines(
   }
 
   const baseIndent = getIndent(depth);
-  for (let i = 0; i < keys.length; i += 1) {
-    const k = keys[i];
+  let isFirst = true;
+  for (const k of keys) {
     const v = obj[k];
-    const prefix = i === 0 && firstLinePrefix !== null ? firstLinePrefix : baseIndent;
+    const prefix = isFirst && firstLinePrefix !== null ? firstLinePrefix : baseIndent;
+    isFirst = false;
     const formattedKey = formatYamlKey(k);
 
     if (v === null || typeof v === 'string' || typeof v === 'number' || typeof v === 'boolean') {
@@ -252,8 +251,7 @@ function emitSequenceLines(
   const indent = getIndent(depth);
   const itemPrefix = `${indent}- `;
 
-  for (let i = 0; i < arr.length; i += 1) {
-    const item = arr[i];
+  for (const item of arr) {
     if (item === null || typeof item === 'string' || typeof item === 'number' || typeof item === 'boolean') {
       const scalar = formatYamlScalar(item, maxPlainLen);
       if (scalar === null) {
@@ -289,8 +287,7 @@ function canonicalizeFallback(value: unknown, rankMap?: ReadonlyMap<string, numb
   }
   const keys = getSortedDefinedKeys(value, rankMap);
   const out: Record<string, unknown> = {};
-  for (let i = 0; i < keys.length; i += 1) {
-    const k = keys[i];
+  for (const k of keys) {
     out[k] = canonicalizeFallback(value[k]);
   }
   return out;
@@ -298,7 +295,7 @@ function canonicalizeFallback(value: unknown, rankMap?: ReadonlyMap<string, numb
 
 export function emitCanonicalYaml(
   value: unknown,
-  options?: { preferredKeyOrder?: readonly string[]; lineWidth?: number }
+  options?: { preferredKeyOrder?: readonly string[] | undefined; lineWidth?: number | undefined }
 ): string {
   const lineWidth = options?.lineWidth ?? 110;
   const maxPlainLen = Math.max(40, lineWidth - 16);

@@ -44,10 +44,10 @@ export interface PayloadPolicyDeps {
   readonly repository: EntityReadStore;
   readonly clock: Clock;
   readonly siteConfig: KinloomSiteConfig;
-  readonly mediaStore?: MediaStore;
-  readonly pronunciationGenerator?: PronunciationAudioGenerator;
-  readonly pronunciationEnv?: PronunciationEnvDefaults;
-  readonly pluginSettingsStore?: PluginSettingsStore;
+  readonly mediaStore?: MediaStore | undefined;
+  readonly pronunciationGenerator?: PronunciationAudioGenerator | undefined;
+  readonly pronunciationEnv?: PronunciationEnvDefaults | undefined;
+  readonly pluginSettingsStore?: PluginSettingsStore | undefined;
 }
 
 export function rowToPayload(row: StoredEntityRecord): EntityPayload {
@@ -93,14 +93,14 @@ export function extractSlug(entityType: EntityType, payload: EntityPayload | nul
   if (!payload || entityType === 'kinship_edge') {
     return null;
   }
-  return typeof payload.slug === 'string' && payload.slug.trim().length > 0 ? payload.slug.trim() : null;
+  return typeof payload['slug'] === 'string' && payload['slug'].trim().length > 0 ? payload['slug'].trim() : null;
 }
 
 export function extractMediaEventId(payload: unknown): string | null {
   if (!payload || typeof payload !== 'object' || Array.isArray(payload)) {
     return null;
   }
-  const eventId = (payload as Record<string, unknown>).event_id;
+  const eventId = (payload as Record<string, unknown>)['event_id'];
   return typeof eventId === 'string' && eventId.trim().length > 0 ? eventId.trim() : null;
 }
 
@@ -132,8 +132,7 @@ export async function prefetchEntitiesByKey(
   }
   const rows = await Promise.all(unique.map((key) => repository.getEntity(key.entityType, key.entityId)));
   const result = new Map<string, StoredEntityRecord | null>();
-  for (let i = 0; i < unique.length; i += 1) {
-    const key = unique[i];
+  for (const [i, key] of unique.entries()) {
     result.set(entityLookupCompositeKey(key.entityType, key.entityId), rows[i] ?? null);
   }
   return result;
@@ -151,9 +150,9 @@ export function updateWorkingPrivacyContext(
   if (entityType === 'person') {
     const isLiving = resolveEffectiveLiving(
       {
-        is_living: Boolean(sanitized.is_living),
-        birth_edtf: typeof sanitized.birth_edtf === 'string' ? sanitized.birth_edtf : '',
-        death_edtf: typeof sanitized.death_edtf === 'string' ? sanitized.death_edtf : '',
+        is_living: Boolean(sanitized['is_living']),
+        birth_edtf: typeof sanitized['birth_edtf'] === 'string' ? sanitized['birth_edtf'] : '',
+        death_edtf: typeof sanitized['death_edtf'] === 'string' ? sanitized['death_edtf'] : '',
       },
       siteConfig.privacy,
       referenceYear
@@ -164,11 +163,11 @@ export function updateWorkingPrivacyContext(
       livingIds.delete(entityId);
     }
   } else if (entityType === 'event') {
-    const participants = Array.isArray(sanitized.participants)
-      ? (sanitized.participants as RawEvent['participants'])
+    const participants = Array.isArray(sanitized['participants'])
+      ? (sanitized['participants'] as RawEvent['participants'])
       : parseEntityPayload('event', sanitized).participants;
     workingEvents.set(entityId, {
-      id: typeof sanitized.id === 'string' ? sanitized.id : entityId,
+      id: typeof sanitized['id'] === 'string' ? sanitized['id'] : entityId,
       participants,
     });
   }
@@ -177,9 +176,9 @@ export function updateWorkingPrivacyContext(
 interface NonKinshipSanitizerContext {
   readonly deps: Pick<PayloadPolicyDeps, 'repository' | 'clock' | 'siteConfig'>;
   readonly candidate: Record<string, unknown>;
-  readonly livingPersonIdsOverride?: ReadonlySet<string>;
-  readonly extraEventsById?: ReadonlyMap<string, Pick<RawEvent, 'id' | 'participants'>>;
-  readonly prefetchedEventIds?: ReadonlySet<string>;
+  readonly livingPersonIdsOverride?: ReadonlySet<string> | undefined;
+  readonly extraEventsById?: ReadonlyMap<string, Pick<RawEvent, 'id' | 'participants'>> | undefined;
+  readonly prefetchedEventIds?: ReadonlySet<string> | undefined;
 }
 
 type NonKinshipEntityType = Exclude<EntityType, 'kinship_edge'>;
@@ -233,7 +232,7 @@ export async function validateAndSanitizeEntityPayload(
   deps: Pick<PayloadPolicyDeps, 'repository' | 'clock' | 'siteConfig'>,
   params: {
     entityType: EntityType;
-    requestedEntityId?: string;
+    requestedEntityId?: string | undefined;
     rawPayload: EntityPayload;
     hasPrimarySource: boolean;
     requireIdMatch?: boolean;
@@ -243,8 +242,8 @@ export async function validateAndSanitizeEntityPayload(
   }
 ): Promise<{ entityId: string; sanitized: EntityPayload }> {
   const candidate: Record<string, unknown> = { ...params.rawPayload };
-  if (candidate.extensions !== undefined) {
-    candidate.extensions = structuredClone(candidate.extensions);
+  if (candidate['extensions'] !== undefined) {
+    candidate['extensions'] = structuredClone(candidate['extensions']);
   }
 
   if (params.entityType === 'kinship_edge') {
@@ -264,7 +263,7 @@ export async function validateAndSanitizeEntityPayload(
   }
 
   const bodyId =
-    typeof candidate.id === 'string' && candidate.id.trim().length > 0 ? candidate.id.trim() : undefined;
+    typeof candidate['id'] === 'string' && candidate['id'].trim().length > 0 ? candidate['id'].trim() : undefined;
 
   if (params.requireIdMatch && params.requestedEntityId && bodyId && bodyId !== params.requestedEntityId) {
     throw new KinloomHttpError(
@@ -276,8 +275,8 @@ export async function validateAndSanitizeEntityPayload(
 
   const entityId =
     params.requestedEntityId ?? bodyId ?? buildEntityId(params.entityType, toHex(randomBytes(8)));
-  candidate.id = entityId;
-  candidate.has_primary_source = params.hasPrimarySource;
+  candidate['id'] = entityId;
+  candidate['has_primary_source'] = params.hasPrimarySource;
 
   const sanitized = await NON_KINSHIP_SANITIZERS[params.entityType]({
     deps,
@@ -316,7 +315,7 @@ export async function maybeGenerateEntityPronunciationAudio(
     return params.sanitized;
   }
 
-  const nextPron = params.sanitized.pronunciation as Pronunciation | null | undefined;
+  const nextPron = params.sanitized['pronunciation'] as Pronunciation | null | undefined;
   if (!nextPron || typeof nextPron !== 'object') {
     return params.sanitized;
   }
@@ -325,9 +324,9 @@ export async function maybeGenerateEntityPronunciationAudio(
     if (
       resolveEffectiveLiving(
         {
-          is_living: Boolean(params.sanitized.is_living),
-          birth_edtf: typeof params.sanitized.birth_edtf === 'string' ? params.sanitized.birth_edtf : '',
-          death_edtf: typeof params.sanitized.death_edtf === 'string' ? params.sanitized.death_edtf : '',
+          is_living: Boolean(params.sanitized['is_living']),
+          birth_edtf: typeof params.sanitized['birth_edtf'] === 'string' ? params.sanitized['birth_edtf'] : '',
+          death_edtf: typeof params.sanitized['death_edtf'] === 'string' ? params.sanitized['death_edtf'] : '',
         },
         deps.siteConfig.privacy,
         deps.clock.currentYear()
@@ -339,9 +338,9 @@ export async function maybeGenerateEntityPronunciationAudio(
 
   const prevPron =
     params.previousPayload &&
-    typeof params.previousPayload.pronunciation === 'object' &&
-    params.previousPayload.pronunciation !== null
-      ? (params.previousPayload.pronunciation as Pronunciation)
+    typeof params.previousPayload['pronunciation'] === 'object' &&
+    params.previousPayload['pronunciation'] !== null
+      ? (params.previousPayload['pronunciation'] as Pronunciation)
       : null;
 
   let shouldGenerate = !nextPron.audio_url;
@@ -351,9 +350,9 @@ export async function maybeGenerateEntityPronunciationAudio(
     const languageChanged = (prevPron?.language ?? '') !== (nextPron.language ?? '');
     const nameChanged =
       params.entityType === 'person'
-        ? (params.previousPayload.full_name ?? '') !== (params.sanitized.full_name ?? '')
-        : (params.previousPayload.name ?? '') !== (params.sanitized.name ?? '') ||
-          (params.previousPayload.full_name ?? '') !== (params.sanitized.full_name ?? '');
+        ? (params.previousPayload['full_name'] ?? '') !== (params.sanitized['full_name'] ?? '')
+        : (params.previousPayload['name'] ?? '') !== (params.sanitized['name'] ?? '') ||
+          (params.previousPayload['full_name'] ?? '') !== (params.sanitized['full_name'] ?? '');
     shouldGenerate = phoneticChanged || ipaChanged || languageChanged || nameChanged;
   }
 
@@ -363,13 +362,13 @@ export async function maybeGenerateEntityPronunciationAudio(
 
   const entityText =
     params.entityType === 'person'
-      ? typeof params.sanitized.full_name === 'string'
-        ? params.sanitized.full_name.trim()
+      ? typeof params.sanitized['full_name'] === 'string'
+        ? params.sanitized['full_name'].trim()
         : ''
-      : typeof params.sanitized.name === 'string' && params.sanitized.name.trim()
-        ? params.sanitized.name.trim()
-        : typeof params.sanitized.full_name === 'string'
-          ? params.sanitized.full_name.trim()
+      : typeof params.sanitized['name'] === 'string' && params.sanitized['name'].trim()
+        ? params.sanitized['name'].trim()
+        : typeof params.sanitized['full_name'] === 'string'
+          ? params.sanitized['full_name'].trim()
           : '';
 
   const text = entityText || nextPron.phonetic?.trim() || nextPron.ipa?.trim() || '';

@@ -338,29 +338,29 @@ export function isSourceCacheable(entry: CaSourceEntry): boolean {
 export function isCaSourceEntry(value: unknown): value is CaSourceEntry {
   return (
     isPlainRecord(value) &&
-    typeof value.source === 'string' &&
-    typeof value.url === 'string' &&
-    Array.isArray(value.results)
+    typeof value['source'] === 'string' &&
+    typeof value['url'] === 'string' &&
+    Array.isArray(value['results'])
   );
 }
 
 export function isCaPortalItem(value: unknown): value is CaPortalItem {
   return (
     isPlainRecord(value) &&
-    value.source === 'portal' &&
-    typeof value.id === 'string' &&
-    typeof value.title === 'string' &&
-    typeof value.url === 'string'
+    value['source'] === 'portal' &&
+    typeof value['id'] === 'string' &&
+    typeof value['title'] === 'string' &&
+    typeof value['url'] === 'string'
   );
 }
 
 export function isCaExhibitsItem(value: unknown): value is CaExhibitsItem {
   return (
     isPlainRecord(value) &&
-    value.source === 'exhibits' &&
-    typeof value.id === 'string' &&
-    typeof value.title === 'string' &&
-    typeof value.url === 'string'
+    value['source'] === 'exhibits' &&
+    typeof value['id'] === 'string' &&
+    typeof value['title'] === 'string' &&
+    typeof value['url'] === 'string'
   );
 }
 

@@ -27,11 +27,11 @@ function trimEdgeSlashes(value: string): string {
  */
 export async function computePronunciationPromptHash(params: {
   text: string;
-  phonetic?: string;
-  ipa?: string;
-  language?: string;
-  voice?: string;
-  phonemeMode?: PronunciationPhonemeMode;
+  phonetic?: string | undefined;
+  ipa?: string | undefined;
+  language?: string | undefined;
+  voice?: string | undefined;
+  phonemeMode?: PronunciationPhonemeMode | undefined;
 }): Promise<string> {
   const text = params.text.trim().toLowerCase();
   const phonetic = (params.phonetic ?? '').trim().toLowerCase();
@@ -50,12 +50,12 @@ export async function generateAndStorePronunciationAudio(params: {
   mediaStore: MediaStore;
   entityType: 'person' | 'place';
   text: string;
-  phonetic?: string;
-  ipa?: string;
-  language?: string;
-  voice?: string;
-  phonemeMode?: PronunciationPhonemeMode;
-  force?: boolean;
+  phonetic?: string | undefined;
+  ipa?: string | undefined;
+  language?: string | undefined;
+  voice?: string | undefined;
+  phonemeMode?: PronunciationPhonemeMode | undefined;
+  force?: boolean | undefined;
 }): Promise<StoredPronunciationAudio> {
   const promptHash = await computePronunciationPromptHash(params);
 
@@ -78,10 +78,10 @@ export async function generateAndStorePronunciationAudio(params: {
 
   const result = await params.generator.generate({
     text: params.text,
-    phonetic: params.phonetic,
-    ipa: params.ipa,
-    language: params.language,
-    voice: params.voice,
+    ...(params.phonetic !== undefined ? { phonetic: params.phonetic } : {}),
+    ...(params.ipa !== undefined ? { ipa: params.ipa } : {}),
+    ...(params.language !== undefined ? { language: params.language } : {}),
+    ...(params.voice !== undefined ? { voice: params.voice } : {}),
     ...(params.phonemeMode !== undefined ? { phonemeMode: params.phonemeMode } : {}),
   });
 

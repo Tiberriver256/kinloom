@@ -41,7 +41,7 @@ function createMemoryR2Bucket(): {
         size: e.bytes.byteLength,
         etag: e.etag,
         uploaded: e.uploaded,
-        customMetadata: e.customMetadata,
+        ...(e.customMetadata !== undefined ? { customMetadata: e.customMetadata } : {}),
       };
     },
     async get(key: string): Promise<R2ObjectBody | null> {
@@ -55,7 +55,7 @@ function createMemoryR2Bucket(): {
         size: bytes.byteLength,
         etag: e.etag,
         uploaded: e.uploaded,
-        customMetadata: e.customMetadata,
+        ...(e.customMetadata !== undefined ? { customMetadata: e.customMetadata } : {}),
         body: new ReadableStream<Uint8Array>({
           start(controller) {
             controller.enqueue(bytes);
@@ -93,7 +93,7 @@ function createMemoryR2Bucket(): {
         bytes,
         etag: `mem-etag-${etagCounter}`,
         uploaded: new Date('2026-11-27T12:00:00.000Z'),
-        customMetadata: options?.customMetadata,
+        ...(options?.customMetadata !== undefined ? { customMetadata: options.customMetadata } : {}),
       };
       entries.set(key, entry);
       return {
@@ -101,7 +101,7 @@ function createMemoryR2Bucket(): {
         size: bytes.byteLength,
         etag: entry.etag,
         uploaded: entry.uploaded,
-        customMetadata: entry.customMetadata,
+        ...(entry.customMetadata !== undefined ? { customMetadata: entry.customMetadata } : {}),
       };
     },
     async delete(keys: string | string[]) {

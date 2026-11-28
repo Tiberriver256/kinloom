@@ -237,7 +237,7 @@ describe('chronam CLI & HTTP retry behavior', () => {
     });
 
     expect(attempts).toBe(2);
-    expect((data.search as { hits: number }).hits).toBe(5);
+    expect((data['search'] as { hits: number }).hits).toBe(5);
   });
 
   it('5. multi-attempt 429 and 503 recover with Retry-After', async () => {
@@ -268,7 +268,7 @@ describe('chronam CLI & HTTP retry behavior', () => {
 
     expect(attempts).toBe(3);
     expect(sleepsMs).toEqual([2000, 3000]);
-    expect((data.search as { hits: number }).hits).toBe(7);
+    expect((data['search'] as { hits: number }).hits).toBe(7);
   });
 
   it('6. remote protocol / transport error recovers on retry', async () => {
@@ -290,7 +290,7 @@ describe('chronam CLI & HTTP retry behavior', () => {
     });
 
     expect(attempts).toBe(2);
-    expect((data.search as { hits: number }).hits).toBe(2);
+    expect((data['search'] as { hits: number }).hits).toBe(2);
   });
 
   it('7. 429 honors Retry-After then succeeds', async () => {
@@ -318,7 +318,7 @@ describe('chronam CLI & HTTP retry behavior', () => {
 
     expect(attempts).toBe(2);
     expect(sleepsMs).toEqual([3000]);
-    expect((data.search as { hits: number }).hits).toBe(1);
+    expect((data['search'] as { hits: number }).hits).toBe(1);
   });
 
   it('8. default timeout covers measured loc.gov latency (>= 90s)', () => {
@@ -611,9 +611,9 @@ describe('chronam get, page, and download cache', () => {
     const workDir = await makeTempDir('kinloom-chronam-work-');
     const outDir = path.join(workDir, 'out');
     const item = makeEveningStarItem();
-    const itemMeta = item.item as Record<string, unknown>;
-    itemMeta.date = '../../outside';
-    itemMeta.number_lccn = ['../sn83045462'];
+    const itemMeta = item['item'] as Record<string, unknown>;
+    itemMeta['date'] = '../../outside';
+    itemMeta['number_lccn'] = ['../sn83045462'];
 
     const fetchImpl: typeof fetch = async (input) => {
       const url = String(input);
@@ -674,7 +674,7 @@ describe('chronam get, page, and download cache', () => {
     const workDir = await makeTempDir('kinloom-chronam-work-');
     const outDir = path.join(workDir, 'papers');
     const item = makeEveningStarItem();
-    item.page = [
+    item['page'] = [
       {
         mimetype: 'image/jp2',
         url: 'https://tile.loc.gov/storage-services/service/ndnp/sn83045462/0004.jp2',

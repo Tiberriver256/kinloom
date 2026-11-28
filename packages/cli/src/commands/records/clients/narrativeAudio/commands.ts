@@ -134,7 +134,7 @@ export async function runSynth(
 
   const rawBackend = (
     getStringOption(parsed, 'backend') ??
-    ctx.env.NARRATIVE_AUDIO_BACKEND ??
+    ctx.env['NARRATIVE_AUDIO_BACKEND'] ??
     DEFAULT_BACKEND
   )
     .trim()
@@ -148,7 +148,7 @@ export async function runSynth(
 
   const languageCode = (
     getStringOption(parsed, 'languageCode') ??
-    ctx.env.NARRATIVE_AUDIO_LANGUAGE ??
+    ctx.env['NARRATIVE_AUDIO_LANGUAGE'] ??
     DEFAULT_LANGUAGE
   ).trim();
   const gcpProject = getStringOption(parsed, 'gcpProject');
@@ -159,11 +159,11 @@ export async function runSynth(
       : DEFAULT_TTS_MODEL;
   const endpointRaw = (
     getStringOption(parsed, 'endpoint') ??
-    ctx.env.KINLOOM_TTS_ENDPOINT ??
-    ctx.env.NARRATIVE_AUDIO_ENDPOINT ??
+    ctx.env['KINLOOM_TTS_ENDPOINT'] ??
+    ctx.env['NARRATIVE_AUDIO_ENDPOINT'] ??
     ''
   ).trim();
-  const apiKey = getStringOption(parsed, 'apiKey') ?? ctx.env.OPENAI_SPEECH_API_KEY;
+  const apiKey = getStringOption(parsed, 'apiKey') ?? ctx.env['OPENAI_SPEECH_API_KEY'];
   const rawPhonemeMode = getStringOption(parsed, 'phonemeMode');
   const phonemeMode =
     rawPhonemeMode !== undefined

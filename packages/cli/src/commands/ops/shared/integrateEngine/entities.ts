@@ -21,19 +21,19 @@ function assertValidPlaceCoordinates(place: unknown, label: string): Record<stri
   if (!isPlainObject(place)) {
     throw new Error(`${label} must be an object.`);
   }
-  const placeIdLabel = typeof place.id === 'string' ? place.id : 'unknown';
-  const hasLng = place.lng !== undefined && place.lng !== null;
-  const hasLon = place.lon !== undefined && place.lon !== null;
+  const placeIdLabel = typeof place['id'] === 'string' ? place['id'] : 'unknown';
+  const hasLng = place['lng'] !== undefined && place['lng'] !== null;
+  const hasLon = place['lon'] !== undefined && place['lon'] !== null;
   if (!hasLng && !hasLon) {
     throw new Error(`${label} (${placeIdLabel}) is missing coordinates (lat/lng).`);
   }
-  if (hasLng && hasLon && Number(place.lng) !== Number(place.lon)) {
+  if (hasLng && hasLon && Number(place['lng']) !== Number(place['lon'])) {
     throw new Error(
-      `${label} (${placeIdLabel}) specifies conflicting lng (${String(place.lng)}) and lon (${String(place.lon)}).`
+      `${label} (${placeIdLabel}) specifies conflicting lng (${String(place['lng'])}) and lon (${String(place['lon'])}).`
     );
   }
-  const lat = Number(place.lat);
-  const lng = Number(hasLng ? place.lng : place.lon);
+  const lat = Number(place['lat']);
+  const lng = Number(hasLng ? place['lng'] : place['lon']);
   if (!Number.isFinite(lat) || !Number.isFinite(lng)) {
     throw new Error(`${label} (${placeIdLabel}) has non-finite coordinates.`);
   }
@@ -44,7 +44,7 @@ function assertValidPlaceCoordinates(place: unknown, label: string): Record<stri
     throw new Error(`${label} (${placeIdLabel}) has forbidden (0, 0) coordinates.`);
   }
   const copy: Record<string, unknown> = { ...place, lat, lng };
-  delete copy.lon;
+  delete copy['lon'];
   return copy;
 }
 
@@ -85,18 +85,18 @@ export function mergePlacesPatch(
         incoming.pronunciation === undefined &&
         prev.pronunciation !== undefined
       ) {
-        merged.pronunciation = structuredClone(prev.pronunciation);
+        merged['pronunciation'] = structuredClone(prev.pronunciation);
       }
       const hasPrimary = mergedPrimarySourceFlag(prev.has_primary_source, incoming.has_primary_source);
       if (hasPrimary !== undefined) {
-        merged.has_primary_source = hasPrimary;
+        merged['has_primary_source'] = hasPrimary;
       }
       if (incoming.sources === undefined && prev.sources !== undefined) {
-        merged.sources = structuredClone(prev.sources);
+        merged['sources'] = structuredClone(prev.sources);
       }
       const mergedExt = mergeRecordExtensions(prev.extensions, incoming.extensions);
       if (mergedExt !== undefined) {
-        merged.extensions = mergedExt;
+        merged['extensions'] = mergedExt;
       }
       return merged;
     }
@@ -126,22 +126,22 @@ export function mergeSourcesPatch(
       const merged: Record<string, unknown> = { ...incoming };
       const hasPrimary = mergedPrimarySourceFlag(prev.has_primary_source, incoming.has_primary_source);
       if (hasPrimary !== undefined) {
-        merged.has_primary_source = hasPrimary;
+        merged['has_primary_source'] = hasPrimary;
       }
       if (incoming.author === undefined && prev.author !== undefined) {
-        merged.author = prev.author;
+        merged['author'] = prev.author;
       }
       if (incoming.publisher === undefined && prev.publisher !== undefined) {
-        merged.publisher = prev.publisher;
+        merged['publisher'] = prev.publisher;
       }
       if (incoming.repository === undefined && prev.repository !== undefined) {
-        merged.repository = prev.repository;
+        merged['repository'] = prev.repository;
       }
       if (incoming.url === undefined && prev.url !== undefined) {
-        merged.url = prev.url;
+        merged['url'] = prev.url;
       }
       if (incoming.gedcom_xref === undefined && prev.gedcom_xref !== undefined) {
-        merged.gedcom_xref = prev.gedcom_xref;
+        merged['gedcom_xref'] = prev.gedcom_xref;
       }
       return merged;
     }
@@ -190,7 +190,7 @@ export function mergeMediaPatch(
       const merged: Record<string, unknown> = { ...incoming };
       const hasPrimary = mergedPrimarySourceFlag(prev.has_primary_source, incoming.has_primary_source);
       if (hasPrimary !== undefined) {
-        merged.has_primary_source = hasPrimary;
+        merged['has_primary_source'] = hasPrimary;
       }
       const optionalKeys = [
         'thumb_file',
@@ -209,7 +209,7 @@ export function mergeMediaPatch(
       }
       const mergedExt = mergeRecordExtensions(prev.extensions, incoming.extensions);
       if (mergedExt !== undefined) {
-        merged.extensions = mergedExt;
+        merged['extensions'] = mergedExt;
       }
       return merged;
     }
@@ -258,27 +258,27 @@ export function mergeNarrativesPatch(
       return rawNar;
     }
     const copy: Record<string, unknown> = { ...rawNar };
-    if (copy.kind === undefined) {
-      copy.kind = 'biography';
+    if (copy['kind'] === undefined) {
+      copy['kind'] = 'biography';
     }
-    if (copy.kind === 'biography' && copy.subject_person_id === undefined) {
-      copy.subject_person_id = personId;
+    if (copy['kind'] === 'biography' && copy['subject_person_id'] === undefined) {
+      copy['subject_person_id'] = personId;
     }
-    if (typeof copy.body_md === 'string') {
+    if (typeof copy['body_md'] === 'string') {
       const citationErrors = validateNarrativeCitations(
-        [{ id: typeof copy.id === 'string' ? copy.id : 'unknown', body_md: copy.body_md }],
+        [{ id: typeof copy['id'] === 'string' ? copy['id'] : 'unknown', body_md: copy['body_md'] }],
         sourceIds,
         mediaIds
       );
       if (citationErrors.length > 0) {
         throw new Error(citationErrors[0]);
       }
-      const extracted = extractNarrativeCitations(copy.body_md);
+      const extracted = extractNarrativeCitations(copy['body_md']);
       if (extracted.references.length > 0) {
         const citedSourceIds = extracted.references.map((ref) => ref.sourceId);
-        copy.source_ids = dedupeStrings(
-          Array.isArray(copy.source_ids)
-            ? copy.source_ids.filter((id): id is string => typeof id === 'string')
+        copy['source_ids'] = dedupeStrings(
+          Array.isArray(copy['source_ids'])
+            ? copy['source_ids'].filter((id): id is string => typeof id === 'string')
             : [],
           citedSourceIds
         );
@@ -296,17 +296,17 @@ export function mergeNarrativesPatch(
       const merged: Record<string, unknown> = { ...incoming };
       const hasPrimary = mergedPrimarySourceFlag(prev.has_primary_source, incoming.has_primary_source);
       if (hasPrimary !== undefined) {
-        merged.has_primary_source = hasPrimary;
+        merged['has_primary_source'] = hasPrimary;
       }
       if (incoming.updated_at === undefined && prev.updated_at !== undefined) {
-        merged.updated_at = prev.updated_at;
+        merged['updated_at'] = prev.updated_at;
       }
       if (incoming.summary === undefined && prev.summary !== undefined) {
-        merged.summary = prev.summary;
+        merged['summary'] = prev.summary;
       }
       const mergedExt = mergeRecordExtensions(prev.extensions, incoming.extensions);
       if (mergedExt !== undefined) {
-        merged.extensions = mergedExt;
+        merged['extensions'] = mergedExt;
       }
       return merged;
     }

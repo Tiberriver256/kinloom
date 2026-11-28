@@ -107,7 +107,7 @@ export function getCacheDir(ctx: RecordCommandContext): string {
 }
 
 export function resolveQueryTtlHours(cliTtl: number | undefined, ctx: RecordCommandContext): number {
-  if (cliTtl !== undefined || ctx.env.KINLOOM_GNIS_QUERY_TTL_HOURS?.trim()) {
+  if (cliTtl !== undefined || ctx.env['KINLOOM_GNIS_QUERY_TTL_HOURS']?.trim()) {
     return resolveEnvCacheTtlHours(cliTtl, ctx.env, 'KINLOOM_GNIS_QUERY_TTL_HOURS', DEFAULT_QUERY_TTL_HOURS);
   }
   return resolveEnvCacheTtlHours(undefined, ctx.env, 'KINLOOM_GNIS_CACHE_TTL_HOURS', DEFAULT_QUERY_TTL_HOURS);
@@ -165,16 +165,16 @@ export function loadGnisRows(filePath: string): GnisRow[] {
 
 export function compactFeature(row: GnisRow): GnisCompactFeature {
   return {
-    feature_id: row.feature_id ?? null,
-    feature_name: row.feature_name ?? null,
-    feature_class: row.feature_class ?? null,
-    state: row.state_name ?? null,
-    county: row.county_name ?? null,
-    map_name: row.map_name ?? null,
-    latitude: row.prim_lat_dec ?? null,
-    longitude: row.prim_long_dec ?? null,
-    date_created: row.date_created ?? null,
-    date_edited: row.date_edited ?? null,
+    feature_id: row['feature_id'] ?? null,
+    feature_name: row['feature_name'] ?? null,
+    feature_class: row['feature_class'] ?? null,
+    state: row['state_name'] ?? null,
+    county: row['county_name'] ?? null,
+    map_name: row['map_name'] ?? null,
+    latitude: row['prim_lat_dec'] ?? null,
+    longitude: row['prim_long_dec'] ?? null,
+    date_created: row['date_created'] ?? null,
+    date_edited: row['date_edited'] ?? null,
   };
 }
 
@@ -190,7 +190,7 @@ export function matchRows(
   const countyLower = county?.toLowerCase();
   const out: GnisRow[] = [];
   for (const row of rows) {
-    const fname = (row.feature_name ?? '').toLowerCase();
+    const fname = (row['feature_name'] ?? '').toLowerCase();
     if (exact) {
       if (fname !== needle) {
         continue;
@@ -198,10 +198,10 @@ export function matchRows(
     } else if (!fname.includes(needle)) {
       continue;
     }
-    if (classLower && (row.feature_class ?? '').toLowerCase() !== classLower) {
+    if (classLower && (row['feature_class'] ?? '').toLowerCase() !== classLower) {
       continue;
     }
-    if (countyLower && !(row.county_name ?? '').toLowerCase().includes(countyLower)) {
+    if (countyLower && !(row['county_name'] ?? '').toLowerCase().includes(countyLower)) {
       continue;
     }
     out.push(row);

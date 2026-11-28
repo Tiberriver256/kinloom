@@ -160,7 +160,7 @@ export async function runPronounceLookupCommand(
   }
 
   const cacheDir = getPronounceCacheDir(options.cacheDir);
-  const forvoApiKey = (options.forvoApiKey ?? process.env.FORVO_API_KEY)?.trim() || null;
+  const forvoApiKey = (options.forvoApiKey ?? process.env['FORVO_API_KEY'])?.trim() || null;
   const normalizedRegion = options.region?.trim().toLowerCase() || null;
   const cachePath = buildLookupCachePath({
     cacheDir,

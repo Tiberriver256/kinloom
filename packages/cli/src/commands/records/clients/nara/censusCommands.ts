@@ -77,20 +77,20 @@ function emitCensus1950(
     if (!isPlainRecord(row)) {
       continue;
     }
-    const image = row.image;
+    const image = row['image'];
     const rowParts = [
-      String(row.abbr || row.state || ''),
-      String(row.county || ''),
-      row.ed ? `ED ${String(row.ed)}` : '',
-      row.scheduleId ? `schedule ${String(row.scheduleId)}` : '',
+      String(row['abbr'] || row['state'] || ''),
+      String(row['county'] || ''),
+      row['ed'] ? `ED ${String(row['ed'])}` : '',
+      row['scheduleId'] ? `schedule ${String(row['scheduleId'])}` : '',
       typeof image === 'string' && image ? `image ${image}` : '',
     ].filter((part) => part.length > 0);
     lines.push(rowParts.join(' '));
-    const names = Array.isArray(row.names) ? row.names : [];
+    const names = Array.isArray(row['names']) ? row['names'] : [];
     for (const person of names) {
-      if (isPlainRecord(person) && person.name) {
-        const prefix = person.row ? `${String(person.row)}: ` : '';
-        lines.push(`  ${prefix}${String(person.name)}`);
+      if (isPlainRecord(person) && person['name']) {
+        const prefix = person['row'] ? `${String(person['row'])}: ` : '';
+        lines.push(`  ${prefix}${String(person['name'])}`);
       }
     }
   }

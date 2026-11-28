@@ -100,7 +100,7 @@ export async function runSearch(
 
   const queries: readonly (string | null)[] = parsed.positionals.length > 0 ? parsed.positionals : [null];
   const filters = extractCommonSearchOptions(parsed);
-  const apiKey = getStringOption(parsed, 'apiKey') ?? ctx.env.NARA_API_KEY;
+  const apiKey = getStringOption(parsed, 'apiKey') ?? ctx.env['NARA_API_KEY'];
   const forceBrowser = getBooleanOption(parsed, 'forceBrowser');
   const refresh = getBooleanOption(parsed, 'refresh');
   const cliTtl = getNumberOption(parsed, 'cacheTtlHours');
@@ -256,7 +256,7 @@ export async function runGet(
   }
 
   const naids = parsed.positionals;
-  const apiKey = getStringOption(parsed, 'apiKey') ?? ctx.env.NARA_API_KEY;
+  const apiKey = getStringOption(parsed, 'apiKey') ?? ctx.env['NARA_API_KEY'];
   const forceBrowser = getBooleanOption(parsed, 'forceBrowser');
   const objects = getBooleanOption(parsed, 'objects');
   const pages = getStringOption(parsed, 'pages') ?? 'all';
@@ -322,7 +322,7 @@ export async function runDownload(
   const refresh = getBooleanOption(parsed, 'refresh');
   const timeoutSec = getNumberOption(parsed, 'timeout') ?? DEFAULT_DOWNLOAD_TIMEOUT;
   const cliTtl = getNumberOption(parsed, 'cacheTtlHours');
-  const apiKey = getStringOption(parsed, 'apiKey') ?? ctx.env.NARA_API_KEY;
+  const apiKey = getStringOption(parsed, 'apiKey') ?? ctx.env['NARA_API_KEY'];
   const forceBrowser = getBooleanOption(parsed, 'forceBrowser');
   const asJson = getBooleanOption(parsed, 'asJson');
 

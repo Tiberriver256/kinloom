@@ -33,14 +33,14 @@ const EmailSchema = z.string().trim().email('Please provide a valid email addres
 export interface AuthServiceDeps {
   repository: AccessControlStore;
   emailSender: EmailSender;
-  authProvider?: AuthProvider;
+  authProvider?: AuthProvider | undefined;
   clock: Clock;
   siteConfig: KinloomSiteConfig;
-  bootstrapAdminEmail?: string;
-  magicLinkTtlMinutes?: number;
-  magicLinkMaxPerWindow?: number;
-  magicLinkWindowMs?: number;
-  userOnboardingStore?: UserOnboardingStore;
+  bootstrapAdminEmail?: string | undefined;
+  magicLinkTtlMinutes?: number | undefined;
+  magicLinkMaxPerWindow?: number | undefined;
+  magicLinkWindowMs?: number | undefined;
+  userOnboardingStore?: UserOnboardingStore | undefined;
 }
 
 const STRIPPED_NEXT_PARAMS = [
@@ -92,14 +92,14 @@ function defaultDisplayNameForEmail(email: string): string {
 export class AuthService {
   private readonly repository: AccessControlStore;
   private readonly emailSender: EmailSender;
-  private readonly authProvider?: AuthProvider;
+  private readonly authProvider?: AuthProvider | undefined;
   private readonly clock: Clock;
   private readonly siteConfig: KinloomSiteConfig;
   private readonly bootstrapAdminEmail: string | null;
   private readonly magicLinkTtlMinutes: number;
   private readonly magicLinkMaxPerWindow: number;
   private readonly magicLinkWindowMs: number;
-  private readonly userOnboardingStore?: UserOnboardingStore;
+  private readonly userOnboardingStore?: UserOnboardingStore | undefined;
 
   constructor(deps: AuthServiceDeps) {
     this.repository = deps.repository;
@@ -202,7 +202,7 @@ export class AuthService {
   async startGoogleAuth(params: {
     redirectUri: string;
     inviteToken: string | null;
-    nextPath?: string | null;
+    nextPath?: string | null | undefined;
     selectAccount?: boolean;
   }): Promise<{
     authorizationUrl: string;
@@ -275,7 +275,7 @@ export class AuthService {
     email: string;
     inviteToken: string | null;
     verifyBaseUrl: string;
-    nextPath?: string | null;
+    nextPath?: string | null | undefined;
   }): Promise<{ sent: true }> {
     const parsedEmail = EmailSchema.parse(params.email).toLowerCase();
     const nowMs = this.clock.now().getTime();

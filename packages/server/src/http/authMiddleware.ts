@@ -19,7 +19,7 @@ export interface ResolvedAuthContext {
   principal: CallerPrincipal;
   authMethod: AuthMethod;
   inviteToken: string | null;
-  bearerRejected?: boolean;
+  bearerRejected?: boolean | undefined;
 }
 
 type SecurityEventQueueTarget = Pick<ServerRequestTelemetryTracker, 'queueSecurityEvent'>;
@@ -32,7 +32,7 @@ export async function resolveCallerPrincipal(params: {
   sessionSecret: string;
   repository: Pick<AccessControlStore, 'findActiveAgentTokenByHash' | 'getUser' | 'getInvite'>;
   clock: Clock;
-  telemetry?: Pick<ServerRequestTelemetryTracker, 'now' | 'recordSpan'> & Partial<SecurityEventQueueTarget>;
+  telemetry?: (Pick<ServerRequestTelemetryTracker, 'now' | 'recordSpan'> & Partial<SecurityEventQueueTarget>) | undefined;
 }): Promise<ResolvedAuthContext> {
   const authHeader = params.request.headers.get('authorization');
   const trimmedAuth = authHeader?.trim() ?? '';
@@ -184,11 +184,11 @@ export function requireMinRole(
   principal: CallerPrincipal,
   minRole: PluginRouteMinRole,
   options?: {
-    mode?: 'private' | 'public';
-    allowAgentScopes?: readonly AgentTokenScope[];
-    adminForbiddenCode?: 'ADMIN_REQUIRED' | 'FORBIDDEN';
-    telemetry?: Partial<SecurityEventQueueTarget>;
-    bearerRejected?: boolean;
+    mode?: 'private' | 'public' | undefined;
+    allowAgentScopes?: readonly AgentTokenScope[] | undefined;
+    adminForbiddenCode?: 'ADMIN_REQUIRED' | 'FORBIDDEN' | undefined;
+    telemetry?: Partial<SecurityEventQueueTarget> | undefined;
+    bearerRejected?: boolean | undefined;
   }
 ): void {
   const effectiveMinRole: Exclude<PluginRouteMinRole, 'archive_read'> =

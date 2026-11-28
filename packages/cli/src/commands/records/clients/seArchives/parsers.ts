@@ -77,8 +77,8 @@ function extractCaptionList(items: unknown): string[] {
   }
   const out: string[] = [];
   for (const entry of items) {
-    if (isPlainRecord(entry) && typeof entry.caption === 'string' && entry.caption.trim()) {
-      out.push(entry.caption.trim());
+    if (isPlainRecord(entry) && typeof entry['caption'] === 'string' && entry['caption'].trim()) {
+      out.push(entry['caption'].trim());
     }
   }
   return out;
@@ -93,27 +93,27 @@ function optionalTrimmed(value: unknown): string | undefined {
 }
 
 export function normalizeSearchItem(raw: Record<string, unknown>): NormalizedSearchItem {
-  const itemId = typeof raw.id === 'string' ? raw.id.trim() : '';
-  const objType = typeof raw.objectType === 'string' ? raw.objectType.trim() : '';
-  const recType = typeof raw.type === 'string' ? raw.type.trim() : '';
-  const meta = isPlainRecord(raw.metadata) ? raw.metadata : {};
-  const links = isPlainRecord(raw._links) ? raw._links : {};
+  const itemId = typeof raw['id'] === 'string' ? raw['id'].trim() : '';
+  const objType = typeof raw['objectType'] === 'string' ? raw['objectType'].trim() : '';
+  const recType = typeof raw['type'] === 'string' ? raw['type'].trim() : '';
+  const meta = isPlainRecord(raw['metadata']) ? raw['metadata'] : {};
+  const links = isPlainRecord(raw['_links']) ? raw['_links'] : {};
 
-  const hierarchy = extractCaptionList(meta.hierarchy);
-  const institutions = extractCaptionList(meta.archivalInstitution);
-  let caption = typeof raw.caption === 'string' ? raw.caption.trim() : '';
+  const hierarchy = extractCaptionList(meta['hierarchy']);
+  const institutions = extractCaptionList(meta['archivalInstitution']);
+  let caption = typeof raw['caption'] === 'string' ? raw['caption'].trim() : '';
   if (!caption) {
     if (hierarchy.length > 0) {
       caption = hierarchy.join(' / ');
-    } else if (meta.parish && meta.fathersName) {
-      caption = `${String(meta.fathersName)} (${String(meta.parish)})`;
-    } else if (meta.referenceCode) {
-      caption = String(meta.referenceCode);
+    } else if (meta['parish'] && meta['fathersName']) {
+      caption = `${String(meta['fathersName'])} (${String(meta['parish'])})`;
+    } else if (meta['referenceCode']) {
+      caption = String(meta['referenceCode']);
     }
   }
 
   const iiifManifests: string[] = [];
-  const rawImages = links.image;
+  const rawImages = links['image'];
   if (Array.isArray(rawImages)) {
     for (const img of rawImages) {
       if (typeof img === 'string' && img.startsWith('https://lbiiif.riksarkivet.se/')) {
@@ -125,20 +125,20 @@ export function normalizeSearchItem(raw: Record<string, unknown>): NormalizedSea
   }
 
   const snippets: SearchSnippet[] = [];
-  const transcribed = raw.transcribedText;
-  if (isPlainRecord(transcribed) && Array.isArray(transcribed.snippets)) {
-    for (const snip of transcribed.snippets.slice(0, 5)) {
+  const transcribed = raw['transcribedText'];
+  if (isPlainRecord(transcribed) && Array.isArray(transcribed['snippets'])) {
+    for (const snip of transcribed['snippets'].slice(0, 5)) {
       if (!isPlainRecord(snip)) {
         continue;
       }
-      const text = String(snip.text ?? '')
+      const text = String(snip['text'] ?? '')
         .replace(EM_TAG_RE, '')
         .trim();
       const pages: string[] = [];
-      if (Array.isArray(snip.pages)) {
-        for (const pg of snip.pages) {
-          if (isPlainRecord(pg) && pg.id) {
-            pages.push(stripLeadingUnderscores(String(pg.id)));
+      if (Array.isArray(snip['pages'])) {
+        for (const pg of snip['pages']) {
+          if (isPlainRecord(pg) && pg['id']) {
+            pages.push(stripLeadingUnderscores(String(pg['id'])));
           }
         }
       }
@@ -153,16 +153,16 @@ export function normalizeSearchItem(raw: Record<string, unknown>): NormalizedSea
     }
   }
 
-  const note = optionalTrimmed(meta.note);
-  const childName = optionalTrimmed(meta.childsName);
-  const father = optionalTrimmed(meta.fathersName);
-  const mother = optionalTrimmed(meta.mothersName);
-  const groom = optionalTrimmed(meta.groomsName);
-  const bride = optionalTrimmed(meta.bridesName);
-  const propertyName = optionalTrimmed(meta.propertyName);
-  const taxUnit = optionalTrimmed(meta.taxUnit);
-  const courtSession = optionalTrimmed(meta.districtCourtSessions);
-  const selfUrl = typeof links.self === 'string' ? normalizeHttps(links.self) : undefined;
+  const note = optionalTrimmed(meta['note']);
+  const childName = optionalTrimmed(meta['childsName']);
+  const father = optionalTrimmed(meta['fathersName']);
+  const mother = optionalTrimmed(meta['mothersName']);
+  const groom = optionalTrimmed(meta['groomsName']);
+  const bride = optionalTrimmed(meta['bridesName']);
+  const propertyName = optionalTrimmed(meta['propertyName']);
+  const taxUnit = optionalTrimmed(meta['taxUnit']);
+  const courtSession = optionalTrimmed(meta['districtCourtSessions']);
+  const selfUrl = typeof links['self'] === 'string' ? normalizeHttps(links['self']) : undefined;
   const iiifCollectionUrl =
     (objType === 'Record' || objType === 'RecordSet') && itemId
       ? `${IIIF_COLLECTION_BASE}/${itemId}`
@@ -173,11 +173,11 @@ export function normalizeSearchItem(raw: Record<string, unknown>): NormalizedSea
     object_type: objType,
     type: recType,
     caption,
-    reference_code: typeof meta.referenceCode === 'string' ? meta.referenceCode.trim() : '',
-    date: String(meta.date ?? meta.year ?? '').trim(),
-    parish: typeof meta.parish === 'string' ? meta.parish.trim() : '',
+    reference_code: typeof meta['referenceCode'] === 'string' ? meta['referenceCode'].trim() : '',
+    date: String(meta['date'] ?? meta['year'] ?? '').trim(),
+    parish: typeof meta['parish'] === 'string' ? meta['parish'].trim() : '',
     institution: institutions[0] ?? '',
-    digitized: Boolean(meta.onlyDigitisedMaterials) || iiifManifests.length > 0,
+    digitized: Boolean(meta['onlyDigitisedMaterials']) || iiifManifests.length > 0,
     ...(hierarchy.length > 0 ? { hierarchy } : {}),
     ...(note !== undefined ? { note } : {}),
     ...(childName !== undefined ? { child_name: childName } : {}),
@@ -196,11 +196,11 @@ export function normalizeSearchItem(raw: Record<string, unknown>): NormalizedSea
 }
 
 export function parseIiifCollectionBody(body: unknown, cleanId: string, url: string): IiifCollectionResult {
-  if (!isPlainRecord(body) || body.type !== 'Collection') {
+  if (!isPlainRecord(body) || body['type'] !== 'Collection') {
     throw new RecordRuntimeError(`Unexpected IIIF Collection payload for ${cleanId}`);
   }
 
-  const summaryLines = allLangTexts(body.summary);
+  const summaryLines = allLangTexts(body['summary']);
   let referenceCode = '';
   let institution = '';
   let dateText = '';
@@ -215,14 +215,14 @@ export function parseIiifCollectionBody(body: unknown, cleanId: string, url: str
   }
 
   const parsedItems: CollectionItem[] = [];
-  const rawItems = Array.isArray(body.items) ? body.items : [];
+  const rawItems = Array.isArray(body['items']) ? body['items'] : [];
   for (const entry of rawItems) {
     if (!isPlainRecord(entry)) {
       continue;
     }
-    const itemUrl = typeof entry.id === 'string' ? entry.id.trim() : '';
-    const itemType = typeof entry.type === 'string' ? entry.type.trim() : '';
-    const itemLabel = firstLangText(entry.label);
+    const itemUrl = typeof entry['id'] === 'string' ? entry['id'].trim() : '';
+    const itemType = typeof entry['type'] === 'string' ? entry['type'].trim() : '';
+    const itemLabel = firstLangText(entry['label']);
     let archiveId: string | undefined;
     let bildid: string | undefined;
     if (itemUrl) {
@@ -253,7 +253,7 @@ export function parseIiifCollectionBody(body: unknown, cleanId: string, url: str
   return {
     archive_id: cleanId,
     url,
-    label: firstLangText(body.label),
+    label: firstLangText(body['label']),
     reference_code: referenceCode,
     institution,
     date: dateText,
@@ -264,7 +264,7 @@ export function parseIiifCollectionBody(body: unknown, cleanId: string, url: str
 }
 
 export function extractCanvasInfo(index: number, canvas: Record<string, unknown>): CanvasInfo {
-  const canvasId = typeof canvas.id === 'string' ? canvas.id.trim() : '';
+  const canvasId = typeof canvas['id'] === 'string' ? canvas['id'].trim() : '';
   let pageId = '';
   if (canvasId) {
     try {
@@ -279,13 +279,13 @@ export function extractCanvasInfo(index: number, canvas: Record<string, unknown>
 
   let bildvisningUrl = pageId ? `${BILDVISNING_BASE}/${pageId}` : '';
   let sourceRef = '';
-  const metaList = Array.isArray(canvas.metadata) ? canvas.metadata : [];
+  const metaList = Array.isArray(canvas['metadata']) ? canvas['metadata'] : [];
   for (const meta of metaList) {
     if (!isPlainRecord(meta)) {
       continue;
     }
-    const label = firstLangText(meta.label).toLowerCase();
-    const val = firstLangText(meta.value);
+    const label = firstLangText(meta['label']).toLowerCase();
+    const val = firstLangText(meta['value']);
     if ((label === 'bildid' || label === 'image id') && val) {
       pageId = stripLeadingUnderscores(val);
     } else if ((label === 'länk' || label === 'link') && val.startsWith('https://')) {
@@ -300,9 +300,9 @@ export function extractCanvasInfo(index: number, canvas: Record<string, unknown>
   return {
     index,
     page_id: pageId,
-    label: firstLangText(canvas.label) || `Image ${index}`,
-    width: Number(canvas.width ?? 0),
-    height: Number(canvas.height ?? 0),
+    label: firstLangText(canvas['label']) || `Image ${index}`,
+    width: Number(canvas['width'] ?? 0),
+    height: Number(canvas['height'] ?? 0),
     bildvisning_url: bildvisningUrl,
     source_reference: sourceRef,
     iiif_image_base: imageBase,
@@ -311,24 +311,24 @@ export function extractCanvasInfo(index: number, canvas: Record<string, unknown>
 }
 
 export function parseIiifManifestBody(body: unknown, volumeId: string, url: string): IiifManifestResult {
-  if (!isPlainRecord(body) || body.type !== 'Manifest') {
+  if (!isPlainRecord(body) || body['type'] !== 'Manifest') {
     throw new RecordRuntimeError(`Unexpected IIIF Manifest payload from ${url}`);
   }
 
   const metadata: Record<string, string> = {};
-  const rawMeta = Array.isArray(body.metadata) ? body.metadata : [];
+  const rawMeta = Array.isArray(body['metadata']) ? body['metadata'] : [];
   for (const entry of rawMeta) {
     if (!isPlainRecord(entry)) {
       continue;
     }
-    const k = firstLangText(entry.label);
-    const v = firstLangText(entry.value);
+    const k = firstLangText(entry['label']);
+    const v = firstLangText(entry['value']);
     if (k && v) {
       metadata[k] = v;
     }
   }
 
-  const rawCanvases = Array.isArray(body.items) ? body.items : [];
+  const rawCanvases = Array.isArray(body['items']) ? body['items'] : [];
   const canvases: CanvasInfo[] = [];
   rawCanvases.forEach((canvas, idx) => {
     if (isPlainRecord(canvas)) {
@@ -340,7 +340,7 @@ export function parseIiifManifestBody(body: unknown, volumeId: string, url: stri
     bildid: volumeId,
     manifest_url: url,
     bildvisning_url: `${BILDVISNING_BASE}/${volumeId}`,
-    label: firstLangText(body.label),
+    label: firstLangText(body['label']),
     metadata,
     canvas_count: canvases.length,
     canvases,

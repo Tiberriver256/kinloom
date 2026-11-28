@@ -140,7 +140,7 @@ export interface RecipesServerPluginOptions {
    * When false, returns a completely inert plugin with zero routes, zero settingsSchema,
    * zero database namespace, and zero runtime footprint. Defaults to true when invoked.
    */
-  readonly enabled?: boolean;
+  readonly enabled?: boolean | undefined;
   /** Optional custom plugin ID override. Defaults to 'kinloom-recipes'. */
   readonly id?: string;
   /**
@@ -282,13 +282,13 @@ function mergeRecipesSettings(
   if (!values) {
     return base;
   }
-  const createEdit = values.create_edit_min_role;
-  const uploadMin = values.upload_min_role;
-  const starMin = values.star_min_role;
-  const commentMin = values.comment_min_role;
-  const maxPhotoMb = values.max_photo_mb;
-  const maxPhotos = values.max_photos_per_recipe;
-  const showHomeWidget = values.show_home_widget;
+  const createEdit = values['create_edit_min_role'];
+  const uploadMin = values['upload_min_role'];
+  const starMin = values['star_min_role'];
+  const commentMin = values['comment_min_role'];
+  const maxPhotoMb = values['max_photo_mb'];
+  const maxPhotos = values['max_photos_per_recipe'];
+  const showHomeWidget = values['show_home_widget'];
 
   return {
     create_edit_min_role:

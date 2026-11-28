@@ -45,7 +45,7 @@ async function postSearch(
   const token = extractFormToken(pageHtml);
   const payload: Record<string, string> = { ...data };
   if (token) {
-    payload.__ncforminfo = token;
+    payload['__ncforminfo'] = token;
   }
   const postRes = await httpRequest(postUrl, {
     method: 'POST',

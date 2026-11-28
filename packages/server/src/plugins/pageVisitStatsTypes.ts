@@ -122,11 +122,11 @@ export interface PageVisitStatsStore {
     readonly untilDayUtc: string;
   }): Promise<readonly DailyVisitPoint[]>;
   getTopPages(params: {
-    readonly sinceDayUtc?: string;
+    readonly sinceDayUtc?: string | undefined;
     readonly entityKinds?: readonly PageVisitEntityKind[];
     readonly limit: number;
   }): Promise<readonly PageVisitTopRow[]>;
-  getTotalViews(params?: { readonly sinceDayUtc?: string }): Promise<number>;
+  getTotalViews(params?: { readonly sinceDayUtc?: string | undefined }): Promise<number>;
   getPageTotalViews(routeKey: string): Promise<number>;
-  getCacheTotals?(params?: { readonly sinceDayUtc?: string }): Promise<ObservabilityCacheTotals>;
+  getCacheTotals?(params?: { readonly sinceDayUtc?: string | undefined }): Promise<ObservabilityCacheTotals>;
 }

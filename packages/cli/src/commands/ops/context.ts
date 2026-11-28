@@ -70,7 +70,7 @@ export async function runContextCommand(options: ContextCommandOptions): Promise
     throw new CliValidationError(`Archive data/people.yaml not found under ${repoDir}.`);
   }
 
-  const rawAncestryDir = options.ancestryDir?.trim() || process.env.KINLOOM_ANCESTRY_FACTS_DIR?.trim() || '';
+  const rawAncestryDir = options.ancestryDir?.trim() || process.env['KINLOOM_ANCESTRY_FACTS_DIR']?.trim() || '';
   const ancestryDir = rawAncestryDir ? path.resolve(rawAncestryDir) : null;
   const includeFamily = options.includeFamily === true || options.full === true;
 
@@ -89,8 +89,8 @@ export async function runContextCommand(options: ContextCommandOptions): Promise
   const parsedPeople = parseMatchingYamlBlocks(peopleBlocksToParse);
   const peopleById = new Map<string, LooseYamlRecord>();
   for (const person of parsedPeople) {
-    if (typeof person.id === 'string') {
-      peopleById.set(person.id, person);
+    if (typeof person['id'] === 'string') {
+      peopleById.set(person['id'], person);
     }
   }
 
@@ -166,19 +166,19 @@ export async function runContextCommand(options: ContextCommandOptions): Promise
 
   const resolvedPronunciation = resolvePersonPronunciation(
     {
-      full_name: asNonEmptyString(sanitizedTargetPerson.full_name),
-      given_name: asNonEmptyString(sanitizedTargetPerson.given_name),
-      surname: asNonEmptyString(sanitizedTargetPerson.surname),
+      full_name: asNonEmptyString(sanitizedTargetPerson['full_name']),
+      given_name: asNonEmptyString(sanitizedTargetPerson['given_name']),
+      surname: asNonEmptyString(sanitizedTargetPerson['surname']),
       is_living: false,
-      ...(isPlainRecord(sanitizedTargetPerson.pronunciation)
-        ? { pronunciation: sanitizedTargetPerson.pronunciation as never }
+      ...(isPlainRecord(sanitizedTargetPerson['pronunciation'])
+        ? { pronunciation: sanitizedTargetPerson['pronunciation'] as never }
         : {}),
     },
     pronunciationLexicon
   );
 
   const ownMediaIds = new Set(
-    personMedia.map((item) => (typeof item.id === 'string' ? item.id : '')).filter((id) => id.length > 0)
+    personMedia.map((item) => (typeof item['id'] === 'string' ? item['id'] : '')).filter((id) => id.length > 0)
   );
   const relativeArchiveMedia = collectRelativeArchiveMedia({
     includeFamily,

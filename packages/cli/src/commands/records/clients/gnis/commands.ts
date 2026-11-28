@@ -204,7 +204,7 @@ export async function runGet(
   }
 
   for (const row of rows) {
-    if ((row.feature_id ?? '') === featureId) {
+    if ((row['feature_id'] ?? '') === featureId) {
       if (asJson) {
         return {
           exitCode: 0,

@@ -39,22 +39,22 @@ export interface WikiWriteServiceDeps {
   bundleCache: BundleCache;
   clock: Clock;
   siteConfig: KinloomSiteConfig;
-  mediaStore?: MediaStore;
-  pronunciationGenerator?: PronunciationAudioGenerator;
-  pronunciationEnv?: PronunciationEnvDefaults;
-  pluginSettingsStore?: PluginSettingsStore;
-  plugins?: readonly KinloomServerPlugin[];
-  onPluginError?: (pluginId: string, error: unknown) => void;
+  mediaStore?: MediaStore | undefined;
+  pronunciationGenerator?: PronunciationAudioGenerator | undefined;
+  pronunciationEnv?: PronunciationEnvDefaults | undefined;
+  pluginSettingsStore?: PluginSettingsStore | undefined;
+  plugins?: readonly KinloomServerPlugin[] | undefined;
+  onPluginError?: ((pluginId: string, error: unknown) => void) | undefined;
 }
 
 export class WikiWriteService {
   private readonly repository: EntityReadStore & AtomicMutationStore & RevisionLogStore;
   private readonly clock: Clock;
   private readonly siteConfig: KinloomSiteConfig;
-  private readonly mediaStore?: MediaStore;
-  private readonly pronunciationGenerator?: PronunciationAudioGenerator;
-  private readonly pronunciationEnv?: PronunciationEnvDefaults;
-  private readonly pluginSettingsStore?: PluginSettingsStore;
+  private readonly mediaStore?: MediaStore | undefined;
+  private readonly pronunciationGenerator?: PronunciationAudioGenerator | undefined;
+  private readonly pronunciationEnv?: PronunciationEnvDefaults | undefined;
+  private readonly pluginSettingsStore?: PluginSettingsStore | undefined;
   private readonly commitPipeline: WikiCommitPipeline;
 
   constructor(deps: WikiWriteServiceDeps) {
@@ -74,9 +74,18 @@ export class WikiWriteService {
     });
   }
 
+
+  private requireSingleRevision(revisions: readonly RevisionRecord[]): RevisionRecord {
+    const [rev] = revisions;
+    if (!rev) {
+      throw new KinloomHttpError(500, 'INTERNAL_ERROR', 'Expected committed revision.');
+    }
+    return rev;
+  }
+
   async createEntity(params: {
     entityType: EntityType;
-    entityId?: string;
+    entityId?: string | undefined;
     data: EntityPayload;
     summary: string;
     hasPrimarySource: boolean;
@@ -141,7 +150,7 @@ export class WikiWriteService {
 
     return {
       entity: sanitized,
-      revision: committed.revisions[0],
+      revision: this.requireSingleRevision(committed.revisions),
       etag: committed.etag,
     };
   }
@@ -151,7 +160,7 @@ export class WikiWriteService {
     entityId: string;
     expectedParentRevisionId: RevisionId;
     data: EntityPayload;
-    merge?: boolean;
+    merge?: boolean | undefined;
     summary: string;
     hasPrimarySource: boolean;
     author: RevisionAuthor;
@@ -229,7 +238,7 @@ export class WikiWriteService {
 
     return {
       entity: sanitized,
-      revision: committed.revisions[0],
+      revision: this.requireSingleRevision(committed.revisions),
       etag: committed.etag,
     };
   }
@@ -283,7 +292,7 @@ export class WikiWriteService {
     });
 
     return {
-      revision: committed.revisions[0],
+      revision: this.requireSingleRevision(committed.revisions),
       etag: committed.etag,
     };
   }
@@ -292,7 +301,7 @@ export class WikiWriteService {
     entityType: EntityType;
     entityId: string;
     expectedParentRevisionId: RevisionId;
-    data?: EntityPayload;
+    data?: EntityPayload | undefined;
     summary: string;
     author: RevisionAuthor;
   }): Promise<{ entity: EntityPayload; revision: RevisionRecord; etag: string }> {
@@ -355,14 +364,14 @@ export class WikiWriteService {
 
     return {
       entity: sanitized,
-      revision: committed.revisions[0],
+      revision: this.requireSingleRevision(committed.revisions),
       etag: committed.etag,
     };
   }
 
   async revertRevision(params: {
     revisionId: RevisionId;
-    summary?: string;
+    summary?: string | undefined;
     author: RevisionAuthor;
   }): Promise<{ revision: RevisionRecord; etag: string }> {
     const targetRev = await this.repository.getRevisionById(params.revisionId);
@@ -381,7 +390,7 @@ export class WikiWriteService {
       {
         type: 'revert',
         targetRevision: targetRev,
-        summary: params.summary,
+        ...(params.summary !== undefined ? { summary: params.summary } : {}),
         nowIso: this.clock.nowIso(),
       },
       headRev + 1
@@ -431,7 +440,7 @@ export class WikiWriteService {
     });
 
     return {
-      revision: committed.revisions[0],
+      revision: this.requireSingleRevision(committed.revisions),
       etag: committed.etag,
     };
   }
@@ -466,7 +475,7 @@ export class WikiWriteService {
     };
   }
 
-  async revertBatch(params: { batchId: BatchId; summary?: string; author: RevisionAuthor }): Promise<{
+  async revertBatch(params: { batchId: BatchId; summary?: string | undefined; author: RevisionAuthor }): Promise<{
     reverted_batch_id: BatchId;
     revisions: readonly RevisionRecord[];
     head_revision_id: RevisionId;
@@ -478,7 +487,7 @@ export class WikiWriteService {
         clock: this.clock,
         siteConfig: this.siteConfig,
       },
-      { batchId: params.batchId, summary: params.summary }
+      { batchId: params.batchId, ...(params.summary !== undefined ? { summary: params.summary } : {}) }
     );
 
     const committed = await this.commitPipeline.commitAndPropagate({

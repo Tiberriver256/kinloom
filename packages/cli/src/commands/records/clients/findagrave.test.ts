@@ -186,7 +186,7 @@ describe('findagrave native client', () => {
     const fetchImpl: typeof fetch = async (_input, init) => {
       const { variables } = parseGqlBody(init);
       gqlCalls.push(variables);
-      const ids = Array.isArray(variables.ids) ? (variables.ids as string[]) : [];
+      const ids = Array.isArray(variables['ids']) ? (variables['ids'] as string[]) : [];
       const items: Record<string, unknown>[] = [];
       for (const mid of ids) {
         if (mid === '627') {
@@ -550,8 +550,8 @@ describe('findagrave native client', () => {
     const fetchImpl: typeof fetch = async (_input, init) => {
       const { variables } = parseGqlBody(init);
       seenVars.push(variables);
-      if (Array.isArray(variables.ids)) {
-        const ids = variables.ids as string[];
+      if (Array.isArray(variables['ids'])) {
+        const ids = variables['ids'] as string[];
         if (ids.length === 1 && ids[0] === '107259') {
           return gqlJsonResponse({
             cemeteries: {
@@ -568,7 +568,7 @@ describe('findagrave native client', () => {
         }
         return gqlJsonResponse({ memorialsById: ids.map((mid) => sampleMemorial(mid)) });
       }
-      const s = (variables.s ?? {}) as Record<string, unknown>;
+      const s = (variables['s'] ?? {}) as Record<string, unknown>;
       if ('firstName' in s || 'lastName' in s) {
         return gqlJsonResponse({
           memorialSearch: { total: 1, memorials: [sampleMemorial('627')] },
@@ -608,15 +608,15 @@ describe('findagrave native client', () => {
     );
     expect(r1.exitCode, r1.stderr).toBe(0);
     expect((JSON.parse(r1.stdout) as { cache_hit: boolean }).cache_hit).toBe(false);
-    const sent = seenVars[seenVars.length - 1].s as Record<string, unknown>;
-    expect(sent.firstName).toBe('Abraham');
-    expect(sent.lastName).toBe('Lincoln');
-    expect(sent.size).toBe(5);
-    expect(sent.from).toBe(5);
-    expect(sent.deathYearRange).toBe(2);
-    expect(sent.deathYearFilter).toBe('exact');
-    expect(sent.cemeteryIds).toEqual(['107259']);
-    expect(sent.locationId).toBe('city_1');
+    const sent = seenVars[seenVars.length - 1]['s'] as Record<string, unknown>;
+    expect(sent['firstName']).toBe('Abraham');
+    expect(sent['lastName']).toBe('Lincoln');
+    expect(sent['size']).toBe(5);
+    expect(sent['from']).toBe(5);
+    expect(sent['deathYearRange']).toBe(2);
+    expect(sent['deathYearFilter']).toBe('exact');
+    expect(sent['cemeteryIds']).toEqual(['107259']);
+    expect(sent['locationId']).toBe('city_1');
 
     // Equivalent call using --first-name / --last-name / --rows / --offset hits cache.
     const r2 = await invokeFindagrave(
@@ -723,7 +723,7 @@ describe('findagrave native client', () => {
     });
     const data = await runGraphqlQuery(ctx1, 'query {}', {});
     expect(attempts).toBe(3);
-    expect((data.memorialSearch as { total: number }).total).toBe(1);
+    expect((data['memorialSearch'] as { total: number }).total).toBe(1);
     // 1 initial rate-limit sleep + 2 retry sleeps.
     expect(sleeps).toHaveLength(3);
 
@@ -845,8 +845,8 @@ describe('findagrave native client', () => {
     const fetchImpl: typeof fetch = async (_input, init) => {
       const { variables } = parseGqlBody(init);
       seenVars.push(variables);
-      if (Array.isArray(variables.ids)) {
-        const ids = variables.ids as string[];
+      if (Array.isArray(variables['ids'])) {
+        const ids = variables['ids'] as string[];
         return gqlJsonResponse({ memorialsById: ids.map((mid) => sampleMemorial(mid)) });
       }
       return gqlJsonResponse({
@@ -873,13 +873,13 @@ describe('findagrave native client', () => {
     );
     expect(rSearch.exitCode, rSearch.stderr).toBe(0);
     expect((JSON.parse(rSearch.stdout) as { cache_hit: boolean }).cache_hit).toBe(false);
-    const sent = seenVars[seenVars.length - 1].s as Record<string, unknown>;
-    expect(sent.firstName).toBe('Abraham');
-    expect(sent.lastName).toBe('Lincoln');
-    expect(sent.birthYear).toBe(1809);
-    expect(sent.deathYear).toBe(1865);
-    expect(sent.birthYearRange).toBe(2);
-    expect(sent.deathYearRange).toBe(2);
+    const sent = seenVars[seenVars.length - 1]['s'] as Record<string, unknown>;
+    expect(sent['firstName']).toBe('Abraham');
+    expect(sent['lastName']).toBe('Lincoln');
+    expect(sent['birthYear']).toBe(1809);
+    expect(sent['deathYear']).toBe(1865);
+    expect(sent['birthYearRange']).toBe(2);
+    expect(sent['deathYearRange']).toBe(2);
 
     // --name splits into the identical query and hits disk cache with zero new GraphQL calls.
     const rName = await invokeFindagrave(

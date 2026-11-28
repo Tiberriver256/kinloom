@@ -608,9 +608,9 @@ describe('archiveOrg branch coverage', () => {
         'utf8'
       )
     );
-    expect(dupPages.printed_to_scandata.iv).toBe(0);
-    expect(dupPages.printed_to_bookreader.iv).toBe(0);
-    expect(dupPages.printed_to_bookreader_ci.iv).toBe(0);
+    expect(dupPages.printed_to_scandata['iv']).toBe(0);
+    expect(dupPages.printed_to_bookreader['iv']).toBe(0);
+    expect(dupPages.printed_to_bookreader_ci['iv']).toBe(0);
 
     const badIdxPath = path.join(tmp, 'bad_index.json');
     fs.writeFileSync(badIdxPath, JSON.stringify({ leaf_count: 'nope' }), 'utf8');
@@ -794,7 +794,7 @@ describe('archiveOrg branch coverage', () => {
       }),
       { cacheRoot: cacheDir }
     );
-    expect(okData.response).toBeDefined();
+    expect(okData['response']).toBeDefined();
     const cacheFiles = fs.readdirSync(queriesDir).filter((f) => f.endsWith('.json'));
     const targetCacheFile = path.join(queriesDir, cacheFiles[0]);
     fs.writeFileSync(targetCacheFile, JSON.stringify({ cached_at: 'bad', data: {} }), 'utf8');
@@ -1793,7 +1793,7 @@ describe('gnis branch coverage', () => {
     fs.writeFileSync(filePath, bomTxt, 'utf8');
     const rows = loadGnisRows(filePath);
     expect(rows).toHaveLength(1);
-    expect(rows[0].county_name).toBe('');
+    expect(rows[0]['county_name']).toBe('');
 
     const compactEmpty = compactFeature({});
     expect(compactEmpty).toEqual({
@@ -2622,7 +2622,7 @@ describe('deep archive client branch coverage pass', () => {
       'https://archive.org/advancedsearch.php?q=birch',
       makeCtx({ env, fetchImpl: async () => jsonResponse({ ok: true }) })
     );
-    expect(otherKindData.ok).toBe(true);
+    expect(otherKindData['ok']).toBe(true);
   });
 
   it('covers fiArchives empty-date records, chronam httpFetch/transport retries, and openarchieven scans/cache', async () => {
@@ -2667,7 +2667,7 @@ describe('deep archive client branch coverage pass', () => {
       ],
       { timeout: 10, refresh: true, ttlHours: 24 }
     );
-    expect(cg.data.ok).toBe(1);
+    expect(cg.data['ok']).toBe(1);
 
     // 2. ConnectTimeoutError retrying and succeeding
     let ctCalls = 0;
@@ -2687,7 +2687,7 @@ describe('deep archive client branch coverage pass', () => {
       'https://www.loc.gov/collections/chronicling-america/',
       { timeout: 30 }
     );
-    expect(ctRes.recovered).toBe(true);
+    expect(ctRes['recovered']).toBe(true);
 
     // 3. HTTP 429 failing without budget -> rate limited; non-Error thrown; non-JSON & non-record with no content-type
     await expect(

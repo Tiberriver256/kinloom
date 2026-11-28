@@ -323,7 +323,7 @@ describe('openarchieven cache', () => {
       queries.push(entry.query);
       expect('cache_hit' in entry.result).toBe(false);
     }
-    expect(queries.map((q) => Number(q.start)).toSorted((a, b) => a - b)).toEqual([0, 10]);
+    expect(queries.map((q) => Number(q['start'])).toSorted((a, b) => a - b)).toEqual([0, 10]);
     expect(queries.every((q) => !('page' in q))).toBe(true);
   });
 });

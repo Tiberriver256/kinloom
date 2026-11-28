@@ -21,7 +21,7 @@ export function resolveExecutable(name: string, env: NodeJS.ProcessEnv): string 
       return null;
     }
   }
-  const pathVar = env.PATH ?? process.env.PATH ?? '';
+  const pathVar = env['PATH'] ?? process.env['PATH'] ?? '';
   for (const dir of pathVar.split(path.delimiter).filter(Boolean)) {
     const candidate = path.join(dir, name);
     try {
@@ -126,15 +126,15 @@ export async function runSubprocessWithTimeout(params: {
         throw err;
       }
       if (isPlainRecord(err)) {
-        const signal = typeof err.signal === 'string' ? err.signal : undefined;
-        if (err.killed === true || signal === 'SIGKILL' || signal === 'SIGTERM' || err.code === 'ETIMEDOUT') {
+        const signal = typeof err['signal'] === 'string' ? err['signal'] : undefined;
+        if (err['killed'] === true || signal === 'SIGKILL' || signal === 'SIGTERM' || err['code'] === 'ETIMEDOUT') {
           throw makeSubprocessTimeoutError(timeoutLabel, timeoutSeconds, fileForError);
         }
-        if (typeof err.code === 'number') {
+        if (typeof err['code'] === 'number') {
           return {
-            exitCode: err.code,
-            stdout: decodeExecStream(err.stdout),
-            stderr: decodeExecStream(err.stderr, err instanceof Error ? err.message : ''),
+            exitCode: err['code'],
+            stdout: decodeExecStream(err['stdout']),
+            stderr: decodeExecStream(err['stderr'], err instanceof Error ? err.message : ''),
           };
         }
       }

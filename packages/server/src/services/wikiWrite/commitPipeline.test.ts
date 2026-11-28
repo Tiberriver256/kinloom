@@ -90,9 +90,9 @@ describe('wikiWrite commitPipeline seam', () => {
       'person:per_a',
       'place:plc_b',
     ]);
-    expect(snapshot.entities[0].slug).toBe('clara-alder');
+    expect(snapshot.entities[0]!.slug).toBe('clara-alder');
     expect(snapshot.kinship.map((k) => k.edge_id)).toEqual(['per_a|parent|per_b']);
-    expect(snapshot.kinship[0].edge.from).toBe('per_a');
+    expect(snapshot.kinship[0]!.edge.from).toBe('per_a');
   });
 
   it('falls back cleanly to loadActiveSnapshot + rebuildAndStore when cached R2 JSON is truncated or schema-invalid', async () => {
