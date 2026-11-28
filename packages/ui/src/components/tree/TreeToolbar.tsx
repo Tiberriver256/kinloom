@@ -146,6 +146,17 @@ export const TreeToolbar: React.FC<TreeToolbarProps> = ({
             >
               {KINLOOM_VOCABULARY.tree.chartViewShort}
             </button>
+            <button
+              type="button"
+              className={cx(controlStyles, `pill-btn tree-seg-btn${surface === 'loom' ? ' active' : ''}`)}
+              aria-pressed={surface === 'loom'}
+              onClick={() => {
+                setMobileFiltersOpen(false);
+                onSurfaceChange('loom');
+              }}
+            >
+              {KINLOOM_VOCABULARY.tree.loomViewShort}
+            </button>
           </div>
 
           {showDirectToggle && (

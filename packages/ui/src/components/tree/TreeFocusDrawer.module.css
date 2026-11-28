@@ -12,7 +12,8 @@ aside.tree-focus-drawer {
   overscroll-behavior: contain;
 }
 
-aside.tree-focus-drawer.tree-focus-drawer-diagram {
+aside.tree-focus-drawer.tree-focus-drawer-diagram,
+aside.tree-focus-drawer.tree-focus-drawer-loom {
   top: calc(var(--shell-chrome-offset, var(--topbar-height)) + 68px);
   right: calc(74px + env(safe-area-inset-right, 0px));
   bottom: auto;
@@ -278,7 +279,8 @@ aside.tree-focus-drawer.tree-focus-drawer-diagram {
 
 @media (max-width: 768px) {
   aside.tree-focus-drawer,
-  aside.tree-focus-drawer.tree-focus-drawer-diagram {
+  aside.tree-focus-drawer.tree-focus-drawer-diagram,
+  aside.tree-focus-drawer.tree-focus-drawer-loom {
     position: fixed;
     top: auto;
     left: calc(10px + env(safe-area-inset-left, 0px));

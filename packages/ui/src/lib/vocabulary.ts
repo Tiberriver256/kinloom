@@ -68,6 +68,7 @@ export const KINLOOM_VOCABULARY = {
     layoutGroupAria: 'Tree layout',
     listViewShort: 'List',
     chartViewShort: 'Chart',
+    loomViewShort: 'Loom',
     listRegionSuffix: 'generation list',
     chartCanvasSuffix: 'family tree chart',
     addPerson: '+ Add Person',

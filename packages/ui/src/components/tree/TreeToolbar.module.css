@@ -19,6 +19,17 @@
   max-width: calc(100% - 20px);
 }
 
+:global(.tree-page-loom) .tree-toolbar-shell {
+  position: relative;
+  top: auto;
+  left: auto;
+  right: auto;
+  flex: 0 0 auto;
+  margin: 10px 16px 8px;
+  width: fit-content;
+  max-width: calc(100% - 32px);
+}
+
 .tree-toolbar {
   position: relative;
   display: flex;
@@ -510,6 +521,16 @@
     max-width: 100%;
   }
 
+  :global(.tree-page-loom) .tree-toolbar-shell {
+    position: relative;
+    top: auto;
+    left: auto;
+    right: auto;
+    margin: 0;
+    width: 100%;
+    max-width: 100%;
+  }
+
   .tree-toolbar {
     display: flex;
     flex-direction: row;
@@ -626,7 +647,7 @@
     flex-wrap: nowrap;
     align-items: center;
     justify-content: space-between;
-    gap: 6px;
+    gap: 4px;
     width: 100%;
     min-width: 0;
   }
@@ -646,7 +667,7 @@
     min-width: var(--control-height-touch);
     min-height: var(--control-height-touch);
     height: var(--control-height-touch);
-    padding: 0 7px;
+    padding: 0 6px;
     font-size: var(--text-2xs);
     border: none;
     box-sizing: border-box;

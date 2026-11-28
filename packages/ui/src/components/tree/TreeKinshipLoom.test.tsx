@@ -8,7 +8,11 @@ import { MemoryRouter } from 'react-router-dom';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { ArchiveProvider } from '../../context/ArchiveProvider.js';
 import { buildArchivalTreeModel } from '../../lib/archivalTreeModel.js';
-import { computeKinshipLoomLayout, computeKinshipLoomSpotlight } from '../../lib/tree/kinshipLoomModel.js';
+import {
+  computeKinshipLoomLabelPlacements,
+  computeKinshipLoomLayout,
+  computeKinshipLoomSpotlight,
+} from '../../lib/tree/kinshipLoomModel.js';
 import { TreePage } from '../../pages/TreePage.js';
 import { TreeKinshipLoom } from './TreeKinshipLoom.js';
 
@@ -137,7 +141,7 @@ afterEach(() => {
   }
 });
 
-describe('kinshipLoomModel pure layout & spotlight (#72)', () => {
+describe('kinshipLoomModel pure layout, label collision avoidance & spotlight (#72, #123)', () => {
   it('handles empty model cleanly', () => {
     const emptyModel = buildArchivalTreeModel({ people: [], kinship: [], mode: 'full' });
     const layout = computeKinshipLoomLayout({ model: emptyModel });
@@ -146,6 +150,14 @@ describe('kinshipLoomModel pure layout & spotlight (#72)', () => {
     expect(layout.decadeTicks).toEqual([]);
     expect(computeKinshipLoomSpotlight(emptyModel, null)).toBeNull();
     expect(computeKinshipLoomSpotlight(emptyModel, 'missing')).toBeNull();
+    expect(
+      computeKinshipLoomLabelPlacements({
+        nodes: [],
+        visiblePersonIds: new Set(),
+        width: 960,
+        height: 640,
+      }).size
+    ).toBe(0);
   });
 
   it('positions ancestors monotonically along birth-year river with cross-branch weaving threads and spotlight', () => {
@@ -176,14 +188,99 @@ describe('kinshipLoomModel pure layout & spotlight (#72)', () => {
     expect(spotlight?.highlightedPersonIds.has('per_alder_grandchild')).toBe(true);
     expect(spotlight?.highlightedPersonIds.has('per_unrelated_vance')).toBe(false);
   });
+
+  it('avoids label collisions for closely clustered spouses and siblings (#123)', () => {
+    const clusteredPeople: Person[] = [
+      makePerson({
+        id: 'p_sam',
+        slug: 'samuel-lincoln',
+        full_name: 'Samuel Lincoln',
+        surname: 'Lincoln',
+        branch: 'lincoln',
+        birth_year: 1622,
+        birth_edtf: '1622',
+      }),
+      makePerson({
+        id: 'p_martha',
+        slug: 'martha-lyford',
+        full_name: 'Martha Lyford',
+        surname: 'Lyford',
+        branch: 'lincoln',
+        birth_year: 1622,
+        birth_edtf: '1622',
+      }),
+      makePerson({
+        id: 'p_robert',
+        slug: 'robert-todd-lincoln',
+        full_name: 'Robert Todd Lincoln',
+        surname: 'Lincoln',
+        branch: 'lincoln',
+        birth_year: 1843,
+        birth_edtf: '1843',
+      }),
+      makePerson({
+        id: 'p_eddie',
+        slug: 'edward-baker-lincoln',
+        full_name: 'Edward Baker Lincoln',
+        surname: 'Lincoln',
+        branch: 'lincoln',
+        birth_year: 1846,
+        birth_edtf: '1846',
+      }),
+      makePerson({
+        id: 'p_willie',
+        slug: 'william-wallace-lincoln',
+        full_name: 'William Wallace Lincoln',
+        surname: 'Lincoln',
+        branch: 'lincoln',
+        birth_year: 1850,
+        birth_edtf: '1850',
+      }),
+      makePerson({
+        id: 'p_tad',
+        slug: 'thomas-tad-lincoln',
+        full_name: 'Thomas Tad Lincoln',
+        surname: 'Lincoln',
+        branch: 'lincoln',
+        birth_year: 1853,
+        birth_edtf: '1853',
+      }),
+    ];
+
+    const model = buildArchivalTreeModel({ people: clusteredPeople, kinship: [], mode: 'full' });
+    const layout = computeKinshipLoomLayout({ model, width: 960, height: 640 });
+    const placements = [
+      ...computeKinshipLoomLabelPlacements({
+        nodes: layout.nodes,
+        visiblePersonIds: new Set(clusteredPeople.map((p) => p.id)),
+        width: layout.width,
+        height: layout.height,
+      }).values(),
+    ];
+
+    expect(placements).toHaveLength(6);
+    for (let i = 0; i < placements.length; i += 1) {
+      const a = placements[i];
+      if (!a) {
+        continue;
+      }
+      for (let j = i + 1; j < placements.length; j += 1) {
+        const b = placements[j];
+        if (!b) {
+          continue;
+        }
+        const overlapsX = a.boxX < b.boxX + b.width && a.boxX + a.width > b.boxX;
+        const overlapsY = a.boxY < b.boxY + b.height && a.boxY + a.height > b.boxY;
+        expect(overlapsX && overlapsY, `Labels ${a.personId} and ${b.personId} overlapped`).toBe(false);
+      }
+    }
+  });
 });
 
-describe('TreeKinshipLoom component & TreePage integration (#72)', () => {
-  it('supports hover/focus Trace My Thread spotlight, keyboard traversal, and 1-click return controls', () => {
+describe('TreeKinshipLoom component & TreePage integration (#72, #123)', () => {
+  it('supports Trace My Thread spotlight, r=14 touch targets, zoom controls, and touch-friendly hint without redundant bar buttons', () => {
     const { model } = buildMultiBranchModel();
     const onSelectPerson = vi.fn();
-    const onReturnToChart = vi.fn();
-    const onSwitchToRoll = vi.fn();
 
     const container = mountEl(
       <TreeKinshipLoom
@@ -191,13 +288,68 @@ describe('TreeKinshipLoom component & TreePage integration (#72)', () => {
         selectedPersonId={null}
         familyLabel="Alder"
         onSelectPerson={onSelectPerson}
-        onReturnToChart={onReturnToChart}
-        onSwitchToRoll={onSwitchToRoll}
       />
     );
 
     expect(container.textContent).toContain('Kinship Loom');
     expect(container.textContent).toContain('1790–1830');
+    expect(container.textContent).toContain('Tap or hover any person to trace their thread');
+
+    // Redundant Detail Chart / Reading Roll buttons removed from bar
+    const barButtons = [...container.querySelectorAll<HTMLButtonElement>('button')].map((b) =>
+      b.textContent?.trim()
+    );
+    expect(barButtons).not.toContain('Detail Chart');
+    expect(barButtons).not.toContain('Reading Roll');
+
+    // Every ancestor node includes a transparent r=14 (>= 28x28px) touch hit circle
+    const nodeGroups = [...container.querySelectorAll<SVGGElement>('[data-person-id]')];
+    expect(nodeGroups).toHaveLength(5);
+    for (const group of nodeGroups) {
+      const hitCircle = group.querySelector<SVGCircleElement>('circle[r="14"]');
+      expect(hitCircle).not.toBeNull();
+    }
+
+    // Zoom controls (+, −, Fit)
+    const section = container.querySelector<HTMLElement>('section[aria-label*="Kinship Loom"]');
+    const svg = container.querySelector<SVGSVGElement>('svg');
+    expect(section?.getAttribute('data-zoom-mode')).toBe('auto');
+    expect(section?.getAttribute('data-zoom-scale')).toBe('1');
+    expect(svg?.style.width).toBe('960px');
+
+    const zoomInBtn = container.querySelector<HTMLButtonElement>('button[aria-label="Zoom in Kinship Loom"]');
+    const zoomOutBtn = container.querySelector<HTMLButtonElement>(
+      'button[aria-label="Zoom out Kinship Loom"]'
+    );
+    const fitBtn = [...container.querySelectorAll<HTMLButtonElement>('button')].find(
+      (b) => b.textContent?.trim() === 'Fit'
+    );
+    expect(zoomInBtn).not.toBeNull();
+    expect(zoomOutBtn).not.toBeNull();
+    expect(fitBtn).toBeDefined();
+
+    act(() => {
+      zoomInBtn?.click();
+    });
+    expect(section?.getAttribute('data-zoom-mode')).toBe('custom');
+    expect(Number(section?.getAttribute('data-zoom-scale'))).toBeGreaterThan(1);
+
+    act(() => {
+      zoomOutBtn?.click();
+    });
+    expect(Number(section?.getAttribute('data-zoom-scale'))).toBe(1);
+
+    act(() => {
+      fitBtn?.click();
+    });
+    expect(section?.getAttribute('data-zoom-mode')).toBe('fit');
+    expect(fitBtn?.getAttribute('aria-pressed')).toBe('true');
+
+    act(() => {
+      fitBtn?.click();
+    });
+    expect(section?.getAttribute('data-zoom-mode')).toBe('auto');
+    expect(fitBtn?.getAttribute('aria-pressed')).toBe('false');
 
     const thomasNode = container.querySelector<SVGGElement>('[data-person-id="per_alder_child"]');
     const vanceNode = container.querySelector<SVGGElement>('[data-person-id="per_unrelated_vance"]');
@@ -221,23 +373,9 @@ describe('TreeKinshipLoom component & TreePage integration (#72)', () => {
       thomasNode?.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
     });
     expect(onSelectPerson).toHaveBeenCalledTimes(1);
-
-    // 1-click return buttons
-    const chartBtn = [...container.querySelectorAll<HTMLButtonElement>('button')].find(
-      (b) => b.textContent === 'Detail Chart'
-    );
-    const rollBtn = [...container.querySelectorAll<HTMLButtonElement>('button')].find(
-      (b) => b.textContent === 'Reading Roll'
-    );
-    act(() => {
-      chartBtn?.click();
-      rollBtn?.click();
-    });
-    expect(onReturnToChart).toHaveBeenCalledTimes(1);
-    expect(onSwitchToRoll).toHaveBeenCalledTimes(1);
   });
 
-  it('opens Kinship Loom via ?surface=loom in TreePage and transitions back to Chart and Roll in 1 click', () => {
+  it('promotes Loom to a first-class 3rd segment in TreeToolbar and switches cleanly between List, Chart, and Loom (#123)', () => {
     const siteConfig = parseKinloomConfig({
       site: {
         title: 'Alder Archive',
@@ -279,34 +417,43 @@ describe('TreeKinshipLoom component & TreePage integration (#72)', () => {
       </MemoryRouter>
     );
 
+    const layoutGroup = container.querySelector<HTMLElement>('[role="group"][aria-label="Tree layout"]');
+    expect(layoutGroup).not.toBeNull();
+    const layoutButtons = [...(layoutGroup?.querySelectorAll<HTMLButtonElement>('button') ?? [])];
+    expect(layoutButtons.map((b) => b.textContent?.trim())).toEqual(['List', 'Chart', 'Loom']);
+
+    const [listBtn, chartBtn, loomBtn] = layoutButtons;
+    expect(listBtn?.getAttribute('aria-pressed')).toBe('false');
+    expect(chartBtn?.getAttribute('aria-pressed')).toBe('false');
+    expect(loomBtn?.getAttribute('aria-pressed')).toBe('true');
+
+    const main = container.querySelector<HTMLElement>('main#main-content');
+    expect(main?.getAttribute('data-surface')).toBe('loom');
     expect(container.querySelector('section[aria-label*="Kinship Loom"]')).not.toBeNull();
 
-    // 1-click transition to Detail Chart
-    const chartBtn = [...container.querySelectorAll<HTMLButtonElement>('button')].find(
-      (b) => b.textContent === 'Detail Chart'
-    );
+    // Switch to Chart via primary toolbar segmented control
     act(() => {
       chartBtn?.click();
     });
+    expect(chartBtn?.getAttribute('aria-pressed')).toBe('true');
+    expect(loomBtn?.getAttribute('aria-pressed')).toBe('false');
+    expect(main?.getAttribute('data-surface')).toBe('diagram');
     expect(container.querySelector('svg.tree-canvas')).not.toBeNull();
 
-    // Toggle Loom back on via TreeZoomControls Loom button
-    const loomToggleBtn = [...container.querySelectorAll<HTMLButtonElement>('button')].find(
-      (b) => b.textContent === 'Loom'
-    );
-    expect(loomToggleBtn).toBeDefined();
+    // Switch back to Loom via primary toolbar segmented control
     act(() => {
-      loomToggleBtn?.click();
+      loomBtn?.click();
     });
+    expect(loomBtn?.getAttribute('aria-pressed')).toBe('true');
+    expect(main?.getAttribute('data-surface')).toBe('loom');
     expect(container.querySelector('section[aria-label*="Kinship Loom"]')).not.toBeNull();
 
-    // 1-click transition to Reading Roll
-    const rollBtn = [...container.querySelectorAll<HTMLButtonElement>('button')].find(
-      (b) => b.textContent === 'Reading Roll'
-    );
+    // Switch to List via primary toolbar segmented control
     act(() => {
-      rollBtn?.click();
+      listBtn?.click();
     });
+    expect(listBtn?.getAttribute('aria-pressed')).toBe('true');
+    expect(main?.getAttribute('data-surface')).toBe('roll');
     expect(container.querySelector('section[aria-label*="Kinship Loom"]')).toBeNull();
   });
 });

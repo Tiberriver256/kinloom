@@ -14,7 +14,8 @@ html:global(.tree-viewport-lock) body {
   min-height: 0;
 }
 
-.tree-shell-diagram {
+.tree-shell-diagram,
+.tree-shell-loom {
   overflow: hidden;
 }
 
@@ -23,7 +24,8 @@ html:global(.tree-viewport-lock) body {
   overflow: visible;
 }
 
-.tree-shell-diagram :global(.topbar) {
+.tree-shell-diagram :global(.topbar),
+.tree-shell-loom :global(.topbar) {
   position: relative;
   flex: 0 0 auto;
 }
@@ -54,6 +56,24 @@ html:global(.tree-viewport-lock) body {
   overflow: visible;
   touch-action: pan-y;
   cursor: auto;
+}
+
+.tree-page-loom {
+  height: calc(100vh - var(--shell-chrome-offset, var(--topbar-height)));
+  /* biome-ignore lint/suspicious/noDuplicateProperties: 100vh fallback before 100dvh */
+  height: calc(100dvh - var(--shell-chrome-offset, var(--topbar-height)));
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  overscroll-behavior: none;
+  cursor: auto;
+}
+
+.tree-shell-loom :global(.tree-page),
+.tree-shell-loom .tree-page-loom {
+  flex: 1 1 0%;
+  min-height: 0;
+  height: auto;
 }
 
 :global(.tree-page.is-dragging) {
@@ -396,7 +416,8 @@ html:global(.tree-viewport-lock) body {
   }
 
   .tree-page-diagram[data-has-selection="true"] :global(.tree-controls),
-  .tree-page-diagram[data-has-selection="true"] .tree-minimap {
+  .tree-page-diagram[data-has-selection="true"] .tree-minimap,
+  .tree-page-loom[data-has-selection="true"] :global(.kinship-loom-zoom-controls) {
     opacity: 0;
     pointer-events: none;
     visibility: hidden;
