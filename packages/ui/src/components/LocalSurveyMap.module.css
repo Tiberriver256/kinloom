@@ -43,10 +43,12 @@
     background-color 0.14s ease;
 }
 
-.local-survey-nearby-link:hover {
-  border-color: var(--radar-copresence);
-  color: var(--radar-copresence);
-  background: var(--surface-linen);
+@media (hover: hover) and (pointer: fine) {
+  .local-survey-nearby-link:hover {
+    border-color: var(--radar-copresence);
+    color: var(--radar-copresence);
+    background: var(--surface-linen);
+  }
 }
 
 @media (max-width: 768px) {

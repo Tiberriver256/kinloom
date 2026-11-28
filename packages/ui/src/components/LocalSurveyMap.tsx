@@ -1,9 +1,15 @@
 import type { Place } from '@kinloom/core';
-import { projectNearbyPlaces } from '@kinloom/core';
 import type React from 'react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { cx as cls } from '../lib/cx.js';
+import {
+  computeCenterLabelPlacement,
+  computeEdgeBadgeLayouts,
+  computeSurveyLabelLayout,
+  projectAdaptiveSurveyPlaces,
+  type SurveyBox,
+} from '../lib/surveyMapLayout.js';
 import surveyMapStyles from './LocalSurveyMap.module.css';
 
 export interface LocalSurveyMapProps {
@@ -54,171 +60,151 @@ export const LocalSurveyMap: React.FC<LocalSurveyMapProps> = ({
 
   const width = compact ? 280 : isNarrow ? 360 : 720;
   const height = compact ? 116 : isNarrow ? 190 : 200;
-  let maxRadiusMiles = 42;
+  let nominalMaxRadiusMiles = 42;
   if (scopeMode === 'county') {
-    maxRadiusMiles = 65;
+    nominalMaxRadiusMiles = 65;
   } else if (scopeMode === 'exact') {
-    maxRadiusMiles = 28;
+    nominalMaxRadiusMiles = 28;
   }
   const highlightRadiusMiles = scopeMode === 'county' ? 35 : 15;
 
-  const markers = useMemo(
+  const projection = useMemo(
     () =>
-      projectNearbyPlaces({
+      projectAdaptiveSurveyPlaces({
         center,
         allPlaces,
         width,
         height,
-        maxRadiusMiles,
+        maxRadiusMiles: nominalMaxRadiusMiles,
         highlightRadiusMiles,
         limit: compact ? 6 : 12,
+        maxEdgeIndicators: compact ? 2 : 4,
         excludeIds,
       }),
-    [center, allPlaces, width, height, maxRadiusMiles, highlightRadiusMiles, compact, excludeIds]
+    [center, allPlaces, width, height, nominalMaxRadiusMiles, highlightRadiusMiles, compact, excludeIds]
   );
+
+  const markers = projection.inBoundsMarkers;
+  const edgeIndicators = projection.edgeIndicators;
+  const effectiveMaxRadiusMiles = projection.effectiveMaxRadiusMiles;
 
   const cx = width / 2;
   const cy = height / 2;
   const usableH = height - 20;
-  const radiusPx = Math.min(usableH * 0.44, (highlightRadiusMiles / maxRadiusMiles) * (usableH / 2));
+  const radiusPx = Math.min(
+    usableH * 0.44,
+    (highlightRadiusMiles / Math.max(1, effectiveMaxRadiusMiles)) * (usableH / 2)
+  );
 
-  const centerPlacement = useMemo<{
-    x: number;
-    titleY: number;
-    anchor: 'start' | 'end' | 'middle';
-    box: { x1: number; x2: number; y1: number; y2: number };
-  }>(() => {
-    const pad = compact ? 8 : 11;
-    const candidates: {
-      x: number;
-      titleY: number;
-      anchor: 'start' | 'end' | 'middle';
-      box: { x1: number; x2: number; y1: number; y2: number };
-    }[] = [
-      {
-        x: cx + pad,
-        titleY: cy + (compact ? 4 : 4),
-        anchor: 'start',
-        box: { x1: cx + 4, x2: cx + 175, y1: cy - 14, y2: cy + 12 },
-      },
-      {
-        x: cx - pad,
-        titleY: cy + (compact ? 4 : 4),
-        anchor: 'end',
-        box: { x1: cx - 175, x2: cx - 4, y1: cy - 14, y2: cy + 12 },
-      },
-      {
-        x: cx,
-        titleY: cy - (compact ? 14 : Math.max(18, Math.round(radiusPx) + 12)),
-        anchor: 'middle',
-        box: {
-          x1: cx - 90,
-          x2: cx + 90,
-          y1: cy - (compact ? 32 : Math.max(32, Math.round(radiusPx) + 26)),
-          y2: cy - (compact ? 8 : Math.max(8, Math.round(radiusPx) + 2)),
-        },
-      },
-      {
-        x: cx,
-        titleY: cy + (compact ? 18 : Math.max(24, Math.round(radiusPx) + 18)),
-        anchor: 'middle',
-        box: {
-          x1: cx - 90,
-          x2: cx + 90,
-          y1: cy + (compact ? 8 : Math.max(8, Math.round(radiusPx) + 4)),
-          y2: cy + (compact ? 32 : Math.max(32, Math.round(radiusPx) + 28)),
-        },
-      },
-    ];
+  const compassBox = useMemo<SurveyBox>(() => ({ x1: width - 34, x2: width - 2, y1: 2, y2: 34 }), [width]);
 
-    for (const c of candidates) {
-      const clearOfRing = compact || !isNarrow || scopeMode !== 'radius15' || c.anchor === 'middle';
-      if (!clearOfRing) {
-        continue;
-      }
-      const blocked = markers.some(
-        (m) => m.x >= c.box.x1 - 7 && m.x <= c.box.x2 + 7 && m.y >= c.box.y1 - 7 && m.y <= c.box.y2 + 7
-      );
-      if (!blocked) {
-        return c;
-      }
-    }
-    return candidates[2];
-  }, [markers, cx, cy, compact, radiusPx, isNarrow, scopeMode]);
+  const edgeBadgeFontSize = compact ? 9.5 : isNarrow ? 10.5 : 10.5;
+  const edgeBadgeLayouts = useMemo(
+    () =>
+      computeEdgeBadgeLayouts({
+        edgeIndicators,
+        width,
+        height,
+        fontSize: edgeBadgeFontSize,
+        compassBox,
+      }),
+    [edgeIndicators, width, height, edgeBadgeFontSize, compassBox]
+  );
 
-  const labelPlacement = useMemo(() => {
-    const map = new Map<string, { lx: number; ly: number; anchor: 'start' | 'end'; extraCount: number }>();
-    if (compact) {
-      return map;
-    }
+  const edgeBadgeBoxes = useMemo(() => edgeBadgeLayouts.map((b) => b.box), [edgeBadgeLayouts]);
 
-    const placed: { x1: number; x2: number; y1: number; y2: number }[] = [
-      {
-        x1: centerPlacement.box.x1 - 10,
-        x2: centerPlacement.box.x2 + 12,
-        y1: centerPlacement.box.y1 - 4,
-        y2: centerPlacement.box.y2 + 4,
-      },
-    ];
+  const centerPlacement = useMemo(
+    () =>
+      computeCenterLabelPlacement({
+        centerName: center.name,
+        markers,
+        edgeBadgeBoxes,
+        compassBox,
+        cx,
+        cy,
+        width,
+        height,
+        compact,
+        isNarrow,
+        scopeMode,
+        radiusPx,
+      }),
+    [
+      center.name,
+      markers,
+      edgeBadgeBoxes,
+      compassBox,
+      cx,
+      cy,
+      width,
+      height,
+      compact,
+      isNarrow,
+      scopeMode,
+      radiusPx,
+    ]
+  );
 
-    const clusterCounts = new Map<string, number>();
-    const skippedIds = new Set<string>();
-    for (let i = 0; i < markers.length; i += 1) {
-      if (skippedIds.has(markers[i].place.id)) {
-        continue;
-      }
-      let extras = 0;
-      for (let j = i + 1; j < markers.length; j += 1) {
-        if (Math.hypot(markers[i].x - markers[j].x, markers[i].y - markers[j].y) < 7) {
-          skippedIds.add(markers[j].place.id);
-          extras += 1;
-        }
-      }
-      clusterCounts.set(markers[i].place.id, extras);
-    }
+  const labelPlacement = useMemo(
+    () =>
+      computeSurveyLabelLayout({
+        markers,
+        centerPlacement,
+        edgeBadgeBoxes,
+        compassBox,
+        cx,
+        cy,
+        width,
+        height,
+        compact,
+        isNarrow,
+        scopeMode,
+        radiusPx,
+      }),
+    [
+      markers,
+      centerPlacement,
+      edgeBadgeBoxes,
+      compassBox,
+      cx,
+      cy,
+      width,
+      height,
+      compact,
+      isNarrow,
+      scopeMode,
+      radiusPx,
+    ]
+  );
 
-    const charW = isNarrow ? 8.6 : 7.4;
-    for (const m of markers) {
-      if (skippedIds.has(m.place.id)) {
-        continue;
-      }
-      const extras = clusterCounts.get(m.place.id) || 0;
-      const labelText = `${m.place.name} (${m.distanceMiles} mi${extras > 0 ? ` +${extras}` : ''})`;
-      const textLen = labelText.length * charW + 8;
+  const insideCount = markers.filter((m) => m.inRadius).length;
+  const totalNeighborCount = markers.length + edgeIndicators.length;
+  const scaleSuffix = projection.didAutoScale ? ` · scaled to ${effectiveMaxRadiusMiles} mi` : '';
 
-      const preferredRight = m.x >= cx;
-      const candidates: { anchor: 'start' | 'end'; lx: number; ly: number }[] = [
-        { anchor: preferredRight ? 'start' : 'end', lx: m.x + (preferredRight ? 8 : -8), ly: m.y + 4 },
-        { anchor: preferredRight ? 'end' : 'start', lx: m.x + (preferredRight ? -8 : 8), ly: m.y + 4 },
-        { anchor: preferredRight ? 'start' : 'end', lx: m.x + (preferredRight ? 8 : -8), ly: m.y - 12 },
-        { anchor: preferredRight ? 'start' : 'end', lx: m.x + (preferredRight ? 8 : -8), ly: m.y + 17 },
-      ];
-
-      for (const c of candidates) {
-        const x1 = c.anchor === 'start' ? c.lx : c.lx - textLen;
-        const x2 = c.anchor === 'start' ? c.lx + textLen : c.lx;
-        const y1 = c.ly - 13;
-        const y2 = c.ly + 4;
-        if (x1 < 8 || x2 > width - 28 || y1 < 6 || y2 > height - 4) {
-          continue;
-        }
-        const overlaps = placed.some((b) => !(x2 < b.x1 || x1 > b.x2 || y2 < b.y1 || y1 > b.y2));
-        if (!overlaps) {
-          placed.push({ x1, x2, y1, y2 });
-          map.set(m.place.id, { lx: c.lx, ly: c.ly, anchor: c.anchor, extraCount: extras });
-          break;
-        }
-      }
-    }
-    return map;
-  }, [markers, compact, isNarrow, centerPlacement, cx, width, height]);
-
-  let scopeLabel = `15-mi radius · ${markers.filter((m) => m.inRadius).length} inside`;
+  let scopeLabel = `15-mi radius · ${insideCount} inside${scaleSuffix}`;
   if (scopeMode === 'exact') {
-    scopeLabel = 'Exact parcel/town';
+    scopeLabel = `Exact parcel/town${scaleSuffix}`;
   } else if (scopeMode === 'county') {
-    scopeLabel = `County corridor · ${markers.length} neighbors`;
+    scopeLabel = `County corridor · ${totalNeighborCount} neighbors${scaleSuffix}`;
   }
+
+  const nearbyLinks = useMemo(() => {
+    const items: { readonly place: Place; readonly distanceMiles: number }[] = [];
+    const seen = new Set<string>();
+    for (const m of markers) {
+      if (!seen.has(m.place.id)) {
+        seen.add(m.place.id);
+        items.push({ place: m.place, distanceMiles: m.distanceMiles });
+      }
+    }
+    for (const ind of edgeIndicators) {
+      if (!seen.has(ind.place.id)) {
+        seen.add(ind.place.id);
+        items.push({ place: ind.place, distanceMiles: ind.distanceMiles });
+      }
+    }
+    return items.slice(0, 6);
+  }, [markers, edgeIndicators]);
 
   return (
     <div ref={wrapRef} className={cls(surveyMapStyles, 'local-survey-wrap')}>
@@ -233,7 +219,7 @@ export const LocalSurveyMap: React.FC<LocalSurveyMapProps> = ({
           borderRadius: 'var(--radius-sm)',
         }}
         role="group"
-        aria-label={`Geographic survey map centered on ${center.full_name} with ${markers.length} nearby archived places`}
+        aria-label={`Geographic survey map centered on ${center.full_name} with ${totalNeighborCount} nearby archived places`}
       >
         {Array.from({ length: compact || isNarrow ? 3 : 5 }).map((_, i) => {
           const x = ((i + 1) / (compact || isNarrow ? 4 : 6)) * width;
@@ -322,6 +308,18 @@ export const LocalSurveyMap: React.FC<LocalSurveyMapProps> = ({
                 strokeDasharray="2 3"
                 opacity={0.7}
               />
+              {!compact && lbl?.leader && (
+                <line
+                  className={'survey-label-leader'}
+                  x1={lbl.leader.x1}
+                  y1={lbl.leader.y1}
+                  x2={lbl.leader.x2}
+                  y2={lbl.leader.y2}
+                  stroke="var(--border-control)"
+                  strokeWidth="0.8"
+                  opacity={0.85}
+                />
+              )}
               <circle
                 cx={m.x}
                 cy={m.y}
@@ -332,10 +330,11 @@ export const LocalSurveyMap: React.FC<LocalSurveyMapProps> = ({
               />
               {!compact && lbl && (
                 <text
+                  className={'survey-neighbor-label'}
                   x={lbl.lx}
                   y={lbl.ly}
                   textAnchor={lbl.anchor}
-                  fontSize={isNarrow ? '13.5' : '11.5'}
+                  fontSize={isNarrow ? '12.5' : '11.5'}
                   fontFamily="var(--font-mono)"
                   fill={m.inRadius ? 'var(--surface-header)' : 'var(--text-secondary)'}
                   paintOrder="stroke"
@@ -343,12 +342,53 @@ export const LocalSurveyMap: React.FC<LocalSurveyMapProps> = ({
                   strokeWidth="4"
                   strokeLinejoin="round"
                 >
-                  {m.place.name} ({m.distanceMiles} mi{lbl.extraCount > 0 ? ` +${lbl.extraCount}` : ''})
+                  {lbl.text}
                 </text>
               )}
             </g>
           );
         })}
+
+        {edgeBadgeLayouts.map((badge) => (
+          <g
+            key={`edge-${badge.indicator.place.id}`}
+            role="button"
+            className={'survey-edge-badge'}
+            tabIndex={0}
+            aria-label={`${badge.indicator.place.full_name}, ${badge.indicator.distanceMiles} miles ${badge.indicator.cardinal}`}
+            style={{ cursor: 'pointer' }}
+            onClick={() => {
+              void navigate(`/place/${badge.indicator.place.slug}`);
+            }}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault();
+                void navigate(`/place/${badge.indicator.place.slug}`);
+              }
+            }}
+          >
+            <title>{`${badge.indicator.place.full_name} (${badge.indicator.distanceMiles} mi ${badge.indicator.cardinal}) — Open Place Profile`}</title>
+            <rect
+              x={badge.rectX}
+              y={badge.rectY}
+              width={badge.rectW}
+              height={badge.rectH}
+              rx={3}
+              fill="var(--surface-card)"
+              stroke="var(--border-control)"
+              strokeWidth="1"
+            />
+            <text
+              x={badge.textX}
+              y={badge.textY}
+              fontSize={edgeBadgeFontSize}
+              fontFamily="var(--font-mono)"
+              fill="var(--surface-header)"
+            >
+              {badge.text}
+            </text>
+          </g>
+        ))}
 
         <circle
           cx={cx}
@@ -394,13 +434,13 @@ export const LocalSurveyMap: React.FC<LocalSurveyMapProps> = ({
 
       <div className={cls(surveyMapStyles, 'local-survey-caption')}>{scopeLabel}</div>
 
-      {!compact && markers.length > 0 && (
+      {!compact && nearbyLinks.length > 0 && (
         <nav
           className={cls(surveyMapStyles, 'local-survey-nearby-strip')}
           aria-label={`Nearby places around ${center.name}`}
         >
           <span className={cls(surveyMapStyles, 'local-survey-nearby-label')}>Nearby:</span>
-          {markers.slice(0, 6).map((m) => (
+          {nearbyLinks.map((m) => (
             <Link
               key={m.place.id}
               to={`/place/${m.place.slug}`}

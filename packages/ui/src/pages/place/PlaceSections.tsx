@@ -10,6 +10,7 @@ import controlStyles from '../../styles/Controls.module.css';
 import layoutStyles from '../../styles/Layout.module.css';
 import placeStyles from '../PlacePage.module.css';
 import type { PlaceOccupancySummary } from './placeViewModel.js';
+import { computeOccupancyDecadeTicks } from './placeViewModel.js';
 
 export const PlaceHistoricalProfileSection: React.FC<{
   readonly place: Place;
@@ -75,6 +76,7 @@ export const PlaceOccupancySection: React.FC<{
   readonly baseUrl?: string;
 }> = ({ occupancyRows, personThumbMap, baseUrl }) => {
   const spanYears = Math.max(1, occupancyRows.maxYear - occupancyRows.minYear);
+  const decadeTicks = computeOccupancyDecadeTicks(occupancyRows.minYear, occupancyRows.maxYear);
   return (
     <section className={cx(layoutStyles, 'place-map-box')}>
       <div
@@ -95,7 +97,7 @@ export const PlaceOccupancySection: React.FC<{
             color: 'var(--text-secondary)',
           }}
         >
-          {occupancyRows.minYear} — {occupancyRows.maxYear}
+          {occupancyRows.minYear}–{occupancyRows.maxYear}
         </span>
       </div>
 
@@ -105,6 +107,27 @@ export const PlaceOccupancySection: React.FC<{
         </p>
       ) : (
         <div>
+          {decadeTicks.length > 0 && (
+            <div className={cx(placeStyles, 'occupancy-axis-row')} aria-hidden="true">
+              <span />
+              <div className={cx(placeStyles, 'occupancy-axis-track')}>
+                {decadeTicks.map((decade) => {
+                  const pct = ((decade - occupancyRows.minYear) / spanYears) * 100;
+                  let alignClass = 'occupancy-axis-tick';
+                  if (pct <= 4) {
+                    alignClass = 'occupancy-axis-tick tick-start';
+                  } else if (pct >= 96) {
+                    alignClass = 'occupancy-axis-tick tick-end';
+                  }
+                  return (
+                    <span key={decade} className={cx(placeStyles, alignClass)} style={{ left: `${pct}%` }}>
+                      {decade}
+                    </span>
+                  );
+                })}
+              </div>
+            </div>
+          )}
           {occupancyRows.rows.map((row) => {
             const rawLeftPct = ((row.startYear - occupancyRows.minYear) / spanYears) * 100;
             const widthPct = Math.max(4, (Math.max(1, row.endYear - row.startYear) / spanYears) * 100);
@@ -133,6 +156,16 @@ export const PlaceOccupancySection: React.FC<{
                   <span className={cx(placeStyles, 'occupancy-year-label')}>{yearLabel}</span>
                 </span>
                 <span className={cx(placeStyles, 'occupancy-track')} aria-hidden="true">
+                  {decadeTicks.map((decade) => {
+                    const pct = ((decade - occupancyRows.minYear) / spanYears) * 100;
+                    return (
+                      <span
+                        key={decade}
+                        className={cx(placeStyles, 'occupancy-decade-hairline')}
+                        style={{ left: `${pct}%` }}
+                      />
+                    );
+                  })}
                   <span
                     className={cx(placeStyles, `occupancy-bar ${row.tier.toLowerCase()}`)}
                     style={{ left: `${leftPct}%`, width: `${Math.min(100 - leftPct, widthPct)}%` }}
@@ -149,88 +182,101 @@ export const PlaceOccupancySection: React.FC<{
 
 export const PlaceLocalHistorySection: React.FC<{
   readonly localRecords: readonly ArchiveEvent[];
+  readonly totalScopeRecordCount?: number;
   readonly recordDecades: readonly number[];
   readonly effectiveDecadeFilter: string;
   readonly sourcesById: Map<string, SourceRecord>;
   readonly onSelectDecade: (decade: string) => void;
-}> = ({ localRecords, recordDecades, effectiveDecadeFilter, sourcesById, onSelectDecade }) => (
-  <section className={cx(layoutStyles, 'place-map-box')}>
-    <div
-      style={{
-        display: 'flex',
-        justifyContent: 'space-between',
-        flexWrap: 'wrap',
-        gap: 10,
-        marginBottom: 12,
-      }}
-    >
-      <h2 style={{ fontFamily: 'var(--font-serif)', margin: 0 }}>
-        {KINLOOM_VOCABULARY.place.localHistoryHeading}
-      </h2>
-      <div className={cx(controlStyles, 'filter-bar place-decade-bar print-hide')} style={{ margin: 0 }}>
-        <button
-          type="button"
-          className={cx(controlStyles, `pill-btn ${effectiveDecadeFilter === 'all' ? 'active' : ''}`)}
-          aria-pressed={effectiveDecadeFilter === 'all'}
-          onClick={() => {
-            onSelectDecade('all');
-          }}
-        >
-          All Decades
-        </button>
-        {recordDecades.map((d) => (
+}> = ({
+  localRecords,
+  totalScopeRecordCount,
+  recordDecades,
+  effectiveDecadeFilter,
+  sourcesById,
+  onSelectDecade,
+}) => {
+  if (totalScopeRecordCount === 0) {
+    return null;
+  }
+  return (
+    <section className={cx(layoutStyles, 'place-map-box')}>
+      <div
+        style={{
+          display: 'flex',
+          justifyContent: 'space-between',
+          flexWrap: 'wrap',
+          gap: 10,
+          marginBottom: 12,
+        }}
+      >
+        <h2 style={{ fontFamily: 'var(--font-serif)', margin: 0 }}>
+          {KINLOOM_VOCABULARY.place.localHistoryHeading}
+        </h2>
+        <div className={cx(controlStyles, 'filter-bar place-decade-bar print-hide')} style={{ margin: 0 }}>
           <button
-            key={d}
             type="button"
-            className={cx(controlStyles, `pill-btn ${effectiveDecadeFilter === String(d) ? 'active' : ''}`)}
-            aria-pressed={effectiveDecadeFilter === String(d)}
+            className={cx(controlStyles, `pill-btn ${effectiveDecadeFilter === 'all' ? 'active' : ''}`)}
+            aria-pressed={effectiveDecadeFilter === 'all'}
             onClick={() => {
-              onSelectDecade(String(d));
+              onSelectDecade('all');
             }}
           >
-            {d}s
+            All Decades
           </button>
-        ))}
+          {recordDecades.map((d) => (
+            <button
+              key={d}
+              type="button"
+              className={cx(controlStyles, `pill-btn ${effectiveDecadeFilter === String(d) ? 'active' : ''}`)}
+              aria-pressed={effectiveDecadeFilter === String(d)}
+              onClick={() => {
+                onSelectDecade(String(d));
+              }}
+            >
+              {d}s
+            </button>
+          ))}
+        </div>
       </div>
-    </div>
 
-    {localRecords.length === 0 ? (
-      <p className={cx(controlStyles, 'empty-ring-note')}>{KINLOOM_VOCABULARY.place.localHistoryEmpty}</p>
-    ) : (
-      <div style={{ display: 'grid', gap: 12 }}>
-        {localRecords.map((ev) => (
-          <article key={ev.id} className={cx(milestoneStyles, 'story-card')} style={{ padding: 14 }}>
-            <div className={cx(milestoneStyles, 'story-card-top')}>
-              <DateStamp displayDate={ev.display_date} edtf={ev.edtf_date} />
-            </div>
-            <h3 style={{ fontFamily: 'var(--font-serif)', margin: '0 0 6px', fontSize: '1.02rem' }}>
-              {ev.title}
-            </h3>
-            <p style={{ margin: 0, fontSize: '0.9rem' }}>{ev.summary}</p>
-            {ev.source_url && (
-              <div className={'print-hide'} style={{ marginTop: 8 }}>
-                <a
-                  href={ev.source_url}
-                  target="_blank"
-                  rel="noreferrer"
-                  className={cx(controlStyles, 'pill-btn')}
-                  style={{ textDecoration: 'none' }}
-                >
-                  View External Record ↗
-                </a>
+      {localRecords.length === 0 ? (
+        <p className={cx(controlStyles, 'empty-ring-note')}>{KINLOOM_VOCABULARY.place.localHistoryEmpty}</p>
+      ) : (
+        <div style={{ display: 'grid', gap: 12 }}>
+          {localRecords.map((ev) => (
+            <article key={ev.id} className={cx(milestoneStyles, 'story-card')} style={{ padding: 14 }}>
+              <div className={cx(milestoneStyles, 'story-card-top')}>
+                <DateStamp displayDate={ev.display_date} edtf={ev.edtf_date} />
               </div>
-            )}
-            <SourceCitationTag
-              sources={ev.sources}
-              alternateDates={ev.alternate_dates}
-              alternatePlaces={ev.alternate_places}
-              factConflicts={ev.fact_conflicts}
-              sourcesById={sourcesById}
-              eventId={ev.id}
-            />
-          </article>
-        ))}
-      </div>
-    )}
-  </section>
-);
+              <h3 style={{ fontFamily: 'var(--font-serif)', margin: '0 0 6px', fontSize: '1.02rem' }}>
+                {ev.title}
+              </h3>
+              <p style={{ margin: 0, fontSize: '0.9rem' }}>{ev.summary}</p>
+              {ev.source_url && (
+                <div className={'print-hide'} style={{ marginTop: 8 }}>
+                  <a
+                    href={ev.source_url}
+                    target="_blank"
+                    rel="noreferrer"
+                    className={cx(controlStyles, 'pill-btn')}
+                    style={{ textDecoration: 'none' }}
+                  >
+                    View External Record ↗
+                  </a>
+                </div>
+              )}
+              <SourceCitationTag
+                sources={ev.sources}
+                alternateDates={ev.alternate_dates}
+                alternatePlaces={ev.alternate_places}
+                factConflicts={ev.fact_conflicts}
+                sourcesById={sourcesById}
+                eventId={ev.id}
+              />
+            </article>
+          ))}
+        </div>
+      )}
+    </section>
+  );
+};

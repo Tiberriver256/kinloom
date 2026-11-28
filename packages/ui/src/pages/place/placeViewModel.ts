@@ -199,6 +199,25 @@ export function buildPlaceEditInitialData(place: Place): EntityPayload {
   };
 }
 
+export function computeOccupancyDecadeTicks(minYear: number, maxYear: number): number[] {
+  if (!Number.isFinite(minYear) || !Number.isFinite(maxYear) || maxYear <= minYear) {
+    return [];
+  }
+  const spanYears = maxYear - minYear;
+  let step = 50;
+  if (spanYears <= 120) {
+    step = 10;
+  } else if (spanYears <= 240) {
+    step = 20;
+  }
+  const firstTick = Math.ceil(minYear / step) * step;
+  const ticks: number[] = [];
+  for (let year = firstTick; year <= maxYear; year += step) {
+    ticks.push(year);
+  }
+  return ticks;
+}
+
 export function buildPlacePhotoMedia(place: Place): MediaItem | null {
   if (!place.photo_url) {
     return null;

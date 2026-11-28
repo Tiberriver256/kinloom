@@ -14,6 +14,7 @@ import { RevisionHistoryPanel } from '../components/wiki/RevisionHistoryPanel.js
 import { TalkPanel } from '../components/wiki/TalkPanel.js';
 import { WikiActionBar, type WikiEntityTab } from '../components/wiki/WikiActionBar.js';
 import { useArchiveData } from '../context/ArchiveDataContext.js';
+import { useArchiveUi } from '../context/ArchiveUiContext.js';
 import { cx } from '../lib/cx.js';
 import { formatReaderLoadError, KINLOOM_VOCABULARY } from '../lib/vocabulary.js';
 import { PluginSlot } from '../plugins/PluginContext.js';
@@ -51,6 +52,7 @@ export const PlacePage: React.FC = () => {
     error,
     reloadArchive,
   } = useArchiveData();
+  const { openSearch } = useArchiveUi();
 
   const [scopeMode, setScopeMode] = useState<PlaceScopeMode>('radius15');
   const [decadeFilter, setDecadeFilter] = useState<string>('all');
@@ -144,6 +146,16 @@ export const PlacePage: React.FC = () => {
             <Link to="/places" className={cx(controlStyles, 'pill-btn')}>
               {KINLOOM_VOCABULARY.place.returnToPlaces}
             </Link>
+            <button
+              type="button"
+              className={cx(controlStyles, 'pill-btn')}
+              aria-label="Search archive"
+              onClick={() => {
+                openSearch();
+              }}
+            >
+              Search archive <kbd className={cx(placeStyles, 'place-kbd')}>/</kbd>
+            </button>
           </div>
         </main>
         <KinloomFooter />
@@ -174,7 +186,20 @@ export const PlacePage: React.FC = () => {
         <section className={cx(layoutStyles, 'place-map-box')}>
           <div style={{ display: 'flex', justifyContent: 'space-between', flexWrap: 'wrap', gap: 12 }}>
             <div>
+              <nav className={cx(placeStyles, 'place-breadcrumb print-hide')} aria-label="Breadcrumb">
+                <Link to="/places">Places</Link>
+                <span aria-hidden="true">/</span>
+                <span aria-current="page">{place.name}</span>
+              </nav>
               <h1 className={cx(placeStyles, 'place-dossier-title')}>{place.full_name}</h1>
+              {occupancyRows.rows.length > 0 && (
+                <p className={cx(placeStyles, 'place-front-door-summary')}>
+                  {occupancyRows.rows.length} {occupancyRows.rows.length === 1 ? 'relative' : 'relatives'} ·{' '}
+                  {occupancyRows.minYear === occupancyRows.maxYear
+                    ? occupancyRows.minYear
+                    : `${occupancyRows.minYear}–${occupancyRows.maxYear}`}
+                </p>
+              )}
               {(effectivePronunciation || capabilities.canEdit) && (
                 <div className={'place-pronunciation-row'}>
                   {effectivePronunciation ? (
@@ -290,6 +315,7 @@ export const PlacePage: React.FC = () => {
             />
             <PlaceLocalHistorySection
               localRecords={localRecords}
+              totalScopeRecordCount={scopeLocalRecords.length}
               recordDecades={recordDecades}
               effectiveDecadeFilter={effectiveDecadeFilter}
               sourcesById={sourcesById}

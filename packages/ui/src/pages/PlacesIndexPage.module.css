@@ -7,6 +7,24 @@
   padding: 20px 26px 56px;
 }
 
+.places-era-mobile-select-wrap {
+  display: none;
+}
+
+.places-era-filter-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+}
+
+@supports (flex-wrap: balance) {
+  .places-era-filter-bar {
+    flex-wrap: balance;
+  }
+}
+
 .places-ledger {
   display: flex;
   flex-direction: column;
@@ -19,11 +37,14 @@
 }
 
 .place-ledger-top {
-  display: flex;
-  justify-content: space-between;
-  align-items: flex-end;
-  flex-wrap: wrap;
-  gap: 10px 18px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: end;
+  gap: 10px 24px;
+}
+
+.place-ledger-identity {
+  min-width: 0;
 }
 
 .place-ledger-name {
@@ -40,22 +61,21 @@
   border-bottom: 1.5px solid transparent;
 }
 
-.place-ledger-name a:hover {
-  color: var(--radar-copresence);
-  border-bottom-color: var(--radar-copresence);
-}
-
 .place-ledger-full {
   font-family: var(--font-mono);
   font-size: 0.76rem;
   color: var(--text-secondary);
   margin-top: 2px;
+  overflow-wrap: break-word;
 }
 
 .place-ledger-stats {
   display: flex;
   align-items: baseline;
-  flex-wrap: wrap;
+  justify-content: flex-end;
+  flex-wrap: nowrap;
+  flex-shrink: 0;
+  white-space: nowrap;
   gap: 10px 16px;
 }
 
@@ -109,11 +129,6 @@
   color: var(--text-secondary);
 }
 
-.place-resident-link:hover {
-  color: var(--radar-copresence);
-  border-bottom-color: var(--radar-copresence);
-}
-
 .place-resident-more {
   font-family: var(--font-mono);
   font-size: 0.76rem;
@@ -121,11 +136,63 @@
   text-decoration: none;
 }
 
+@media (hover: hover) and (pointer: fine) {
+  .place-ledger-name a:hover {
+    color: var(--radar-copresence);
+    border-bottom-color: var(--radar-copresence);
+  }
+
+  .place-resident-link:hover {
+    color: var(--radar-copresence);
+    border-bottom-color: var(--radar-copresence);
+  }
+}
+
 /* Responsive overrides */
 
 @media (max-width: 768px) {
+  .places-era-filter-bar {
+    flex-wrap: wrap;
+    overflow-x: visible;
+    mask-image: none;
+    -webkit-mask-image: none;
+    padding-right: 0;
+    gap: 6px;
+  }
+
+  .places-era-filter-bar :global(.pill-btn) {
+    min-height: 44px;
+    white-space: normal;
+  }
+
+  .places-era-filter-bar:global(.has-many-eras) {
+    display: none;
+  }
+
+  .places-era-mobile-select-wrap {
+    display: block;
+    width: 100%;
+  }
+
+  .places-era-mobile-select {
+    width: 100%;
+    min-height: 44px;
+    font-size: 1rem;
+  }
+
   .place-ledger-row {
     padding: 11px 2px;
+  }
+
+  .place-ledger-top {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 6px;
+  }
+
+  .place-ledger-stats {
+    justify-content: flex-start;
+    flex-wrap: wrap;
+    white-space: normal;
   }
 
   .place-ledger-name {

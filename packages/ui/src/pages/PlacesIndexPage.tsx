@@ -19,8 +19,7 @@ const PlaceLedgerEntry: React.FC<{
 }> = ({ entry, stageLabel }) => {
   let yearSpan = 'Undated';
   if (entry.minYear && entry.maxYear) {
-    yearSpan =
-      entry.minYear === entry.maxYear ? String(entry.minYear) : `${entry.minYear} – ${entry.maxYear}`;
+    yearSpan = entry.minYear === entry.maxYear ? String(entry.minYear) : `${entry.minYear}–${entry.maxYear}`;
   }
   const previewPeople = entry.people.slice(0, 8);
   const extraCount = Math.max(0, entry.people.length - previewPeople.length);
@@ -28,7 +27,7 @@ const PlaceLedgerEntry: React.FC<{
     <article className={cx(placesIndexStyles, 'place-ledger-row')}>
       <div className={'place-ledger-main'}>
         <div className={cx(placesIndexStyles, 'place-ledger-top')}>
-          <div>
+          <div className={cx(placesIndexStyles, 'place-ledger-identity')}>
             <h2 className={cx(placesIndexStyles, 'place-ledger-name')}>
               <Link to={`/place/${entry.place.slug}`}>{entry.place.name}</Link>
             </h2>
@@ -191,8 +190,36 @@ export const PlacesIndexPage: React.FC = () => {
         {bundle && (
           <>
             <div className={cx(atomStyles, 'places-filter-stack')}>
+              {stageFilters.length > 6 && (
+                <div className={cx(placesIndexStyles, 'places-era-mobile-select-wrap')}>
+                  <select
+                    className={joinClasses(
+                      cx(controlStyles, 'pill-btn'),
+                      cx(placesIndexStyles, 'places-era-mobile-select')
+                    )}
+                    aria-label="Filter places by migration region"
+                    value={stage}
+                    onChange={(e) => {
+                      setStage(e.target.value);
+                    }}
+                  >
+                    {stageFilters.map((f) => (
+                      <option key={f.id} value={f.id}>
+                        {f.label} ({stageCounts[f.id] ?? 0})
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
+
               <div
-                className={joinClasses(cx(controlStyles, 'filter-bar'), cx(atomStyles, 'ink-filter-bar'))}
+                className={joinClasses(
+                  cx(controlStyles, 'filter-bar'),
+                  cx(
+                    placesIndexStyles,
+                    `places-era-filter-bar ${stageFilters.length > 6 ? 'has-many-eras' : ''}`
+                  )
+                )}
                 role="group"
                 aria-label="Filter places by migration region"
               >
