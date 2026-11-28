@@ -133,9 +133,9 @@ button.archival-tag-pill:hover {
 }
 
 button.archival-tag-pill[aria-pressed="true"] {
-  background: var(--surface-header);
-  border-color: var(--surface-header);
-  color: var(--text-inverse);
+  background: var(--surface-action-primary);
+  border-color: var(--border-action-primary);
+  color: var(--text-on-action-primary);
 }
 
 button.archival-tag-pill:focus-visible,

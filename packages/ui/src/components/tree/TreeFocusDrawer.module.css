@@ -238,17 +238,17 @@ aside.tree-focus-drawer.tree-focus-drawer-diagram {
   min-height: 36px;
   padding: 0 14px;
   border-radius: var(--radius-sm);
-  border: 1px solid var(--surface-header);
-  background: var(--surface-header);
-  color: var(--text-inverse);
+  border: var(--border-width-thin) solid var(--border-action-primary);
+  background: var(--surface-action-primary);
+  color: var(--text-on-action-primary);
   font-weight: 600;
 }
 
 .tree-focus-timeline-link:hover,
 .tree-focus-timeline-link:global(.pill-btn):global(.active):hover {
-  background: var(--accent-primary);
+  background: var(--surface-action-primary-hover);
   border-color: var(--accent-primary);
-  color: var(--text-inverse);
+  color: var(--text-on-action-primary);
 }
 
 .tree-focus-clear-btn {
@@ -271,8 +271,9 @@ aside.tree-focus-drawer.tree-focus-drawer-diagram {
 }
 
 .tree-focus-anchor-btn:hover {
-  background: var(--accent-primary);
-  color: var(--text-inverse);
+  background: var(--surface-action-primary);
+  border-color: var(--border-action-primary);
+  color: var(--text-on-action-primary);
 }
 
 @media (max-width: 768px) {
