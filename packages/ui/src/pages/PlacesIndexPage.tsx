@@ -5,6 +5,7 @@ import { useCallback, useMemo, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { EmptyStateNotice } from '../components/Atoms.js';
 import atomStyles from '../components/Atoms.module.css';
+import { DirectoryJumpStrip } from '../components/atoms/DirectoryJumpStrip.js';
 import { ExplorerTopBar } from '../components/ExplorerTopBar.js';
 import { KinloomFooter } from '../components/KinloomFooter.js';
 import { useArchiveData } from '../context/ArchiveDataContext.js';
@@ -14,7 +15,6 @@ import {
   buildPlacesDirectorySections,
   computeStageCounts,
   filterPlacesDirectory,
-  PLACES_JUMP_STRIP_THRESHOLD,
   type PlacesDirectoryView,
   parsePlacesDirectorySearchParams,
   slicePlacesSection,
@@ -185,7 +185,7 @@ export const PlacesIndexPage: React.FC = () => {
   const sections = useMemo(() => buildPlacesDirectorySections({ entries: filtered, view }), [filtered, view]);
 
   const showStageSelector = stageFilters.length > 2;
-  const showJumpStrip = filtered.length > PLACES_JUMP_STRIP_THRESHOLD && sections.length > 1;
+  const showJumpStrip = sections.length > 1;
   const hasActiveFilters = stage !== 'all' || query.trim().length > 0;
 
   return (
@@ -325,35 +325,21 @@ export const PlacesIndexPage: React.FC = () => {
             </div>
 
             {showJumpStrip && (
-              <div className={cx(placesIndexStyles, 'places-jump-strip-wrap')}>
-                <nav
-                  className={cx(
-                    placesIndexStyles,
-                    view === 'az' ? 'places-jump-strip is-az' : 'places-jump-strip'
-                  )}
-                  aria-label="Jump to places section"
-                >
-                  {sections.map((section) => (
-                    <a
-                      key={section.id}
-                      href={`#${section.id}`}
-                      className={cx(placesIndexStyles, 'places-jump-link')}
-                      aria-label={
-                        view === 'az'
-                          ? `Jump to letter ${section.heading} (${section.entries.length})`
-                          : undefined
-                      }
-                    >
-                      <span>{section.shortLabel}</span>
-                      {view !== 'az' && (
-                        <span className={cx(placesIndexStyles, 'places-jump-count')}>
-                          ({section.entries.length})
-                        </span>
-                      )}
-                    </a>
-                  ))}
-                </nav>
-              </div>
+              <DirectoryJumpStrip
+                ariaLabel="Jump to places section"
+                compact={view === 'az'}
+                showCounts={view !== 'az'}
+                items={sections.map((section) => ({
+                  id: section.id,
+                  label: section.shortLabel,
+                  count: section.entries.length,
+                  title: `${section.heading} (${section.entries.length})`,
+                  ariaLabel:
+                    view === 'az'
+                      ? `Jump to letter ${section.heading} (${section.entries.length})`
+                      : undefined,
+                }))}
+              />
             )}
 
             {filtered.length === 0 ? (

@@ -1,20 +1,17 @@
 import type { Person, Place } from '@kinloom/core';
 import { buildFilteredGedcom7, buildGedcomExportFilename, buildPersonThumbMap } from '@kinloom/core';
 import type React from 'react';
-import { lazy, Suspense, useEffect, useId, useMemo, useRef, useState } from 'react';
+import { lazy, Suspense, useId, useMemo, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { ArchivalImage, EmptyStateNotice, PersonPortrait } from '../components/Atoms.js';
 import atomStyles from '../components/Atoms.module.css';
+import { DirectoryJumpStrip } from '../components/atoms/DirectoryJumpStrip.js';
 import { ExplorerTopBar } from '../components/ExplorerTopBar.js';
 import { KinloomFooter } from '../components/KinloomFooter.js';
 import wikiChromeStyles from '../components/wiki/WikiChrome.module.css';
 import { useArchiveData } from '../context/ArchiveDataContext.js';
 import { cx, joinClasses } from '../lib/cx.js';
-import type {
-  DirectoryJumpItem,
-  PeopleDirectoryView,
-  ResolvedArchiveFrontispiece,
-} from '../lib/peopleDirectoryModel.js';
+import type { PeopleDirectoryView, ResolvedArchiveFrontispiece } from '../lib/peopleDirectoryModel.js';
 import {
   buildDirectoryJumpTargetId,
   buildDirectoryUrlParams,
@@ -92,91 +89,6 @@ const ArchiveFrontispiece: React.FC<ArchiveFrontispieceProps> = ({ frontispiece,
     )}
   </section>
 );
-
-interface IndexJumpStripProps {
-  readonly view: PeopleDirectoryView;
-  readonly items: readonly DirectoryJumpItem[];
-  readonly onSelectLiving: () => void;
-}
-
-const IndexJumpStrip: React.FC<IndexJumpStripProps> = ({ view, items, onSelectLiving }) => {
-  const navRef = useRef<HTMLElement | null>(null);
-  const firstItemId = items[0]?.id ?? null;
-  const lastItemId = items.at(-1)?.id ?? null;
-
-  useEffect(() => {
-    const scroller = navRef.current;
-    if (!scroller || !firstItemId || !lastItemId || typeof IntersectionObserver !== 'function') {
-      return;
-    }
-    const supportsScrollTimeline =
-      typeof CSS !== 'undefined' &&
-      typeof CSS.supports === 'function' &&
-      CSS.supports('animation-timeline', 'scroll()');
-    if (supportsScrollTimeline) {
-      return;
-    }
-
-    const first = scroller.firstElementChild;
-    const last = scroller.lastElementChild;
-    if (!first || !last) {
-      return;
-    }
-
-    const observer = new IntersectionObserver(
-      (entries) => {
-        for (const entry of entries) {
-          const hasOverflow = entry.intersectionRatio < 1;
-          if (entry.target === first) {
-            scroller.classList.toggle('is-scrollable-start', hasOverflow);
-          }
-          if (entry.target === last) {
-            scroller.classList.toggle('is-scrollable-end', hasOverflow);
-          }
-        }
-      },
-      { root: scroller, threshold: 1, rootMargin: '1px' }
-    );
-
-    observer.observe(first);
-    if (last !== first) {
-      observer.observe(last);
-    }
-
-    return () => {
-      observer.disconnect();
-      scroller.classList.remove('is-scrollable-start', 'is-scrollable-end');
-    };
-  }, [firstItemId, lastItemId]);
-
-  return (
-    <div className={cx(indexStyles, 'index-jump-strip-wrap')}>
-      <nav
-        ref={navRef}
-        aria-label={view === 'era' ? 'Jump to era' : 'Jump to surname letter'}
-        className={cx(indexStyles, view === 'az' ? 'index-jump-strip is-az' : 'index-jump-strip')}
-      >
-        {items.map((item) => (
-          <a
-            key={item.id}
-            href={`#${item.id}`}
-            className={cx(indexStyles, 'index-jump-link')}
-            title={`${item.label} (${item.count})`}
-            onClick={item.isLiving ? onSelectLiving : undefined}
-          >
-            <span>{item.label}</span>
-            {view === 'era' && (
-              <>
-                {' '}
-                <span className={cx(indexStyles, 'index-jump-count')}>({item.count})</span>
-              </>
-            )}
-          </a>
-        ))}
-      </nav>
-    </div>
-  );
-};
 
 interface LivingRelativesSectionProps {
   readonly people: readonly Person[];
@@ -614,12 +526,23 @@ export const IndexPage: React.FC = () => {
             ) : (
               <div className={cx(indexStyles, 'index-directory-shell')}>
                 {model.showJumpStrip && (
-                  <IndexJumpStrip
-                    view={view}
-                    items={model.jumpItems}
-                    onSelectLiving={() => {
-                      setLivingExpanded(true);
-                    }}
+                  <DirectoryJumpStrip
+                    ariaLabel={view === 'era' ? 'Jump to era' : 'Jump to surname letter'}
+                    compact={view === 'az'}
+                    showCounts={view === 'era'}
+                    items={model.jumpItems.map((item) => ({
+                      id: item.id,
+                      label: item.label,
+                      count: item.count,
+                      title: `${item.label} (${item.count})`,
+                      ...(item.isLiving
+                        ? {
+                            onSelect: () => {
+                              setLivingExpanded(true);
+                            },
+                          }
+                        : {}),
+                    }))}
                   />
                 )}
 

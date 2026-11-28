@@ -490,12 +490,10 @@ describe('IndexPage People Directory (#65)', () => {
     );
 
     // 2. Jump Strip counts formatted with parentheses: "Before 1700 (8)", "1850–99 (20)"
-    const jumpLinks = [
-      ...container.querySelectorAll<HTMLAnchorElement>('.index-jump-strip .index-jump-link'),
-    ];
+    const jumpLinks = [...container.querySelectorAll<HTMLAnchorElement>('nav[aria-label="Jump to era"] a')];
     expect(jumpLinks).toHaveLength(2);
-    expect(jumpLinks[0].querySelector('.index-jump-count')?.textContent).toBe('(8)');
-    expect(jumpLinks[1].querySelector('.index-jump-count')?.textContent).toBe('(20)');
+    expect(jumpLinks[0].querySelector('.jump-count')?.textContent).toBe('(8)');
+    expect(jumpLinks[1].querySelector('.jump-count')?.textContent).toBe('(20)');
     expect(jumpLinks[0].textContent).toBe('Before 1700 (8)');
     expect(jumpLinks[1].textContent).toBe('1850–99 (20)');
 
@@ -515,16 +513,17 @@ describe('IndexPage People Directory (#65)', () => {
       azBtn?.click();
     });
     expect(container.querySelector('.index-section-meta-sep')).toBeNull();
-    expect(container.querySelector('.index-jump-count')).toBeNull();
+    expect(container.querySelector('.jump-count')).toBeNull();
 
-    // 4. Verify IndexPage.module.css enforces mobile <= 640px grid, hidden scrollbar, and fade mask
+    // 4. Verify IndexPage.module.css enforces mobile <= 640px grid and shared DirectoryJumpStrip enforces hidden scrollbar + fade mask
     const here = dirname(fileURLToPath(import.meta.url));
     const css = readFileSync(resolve(here, 'IndexPage.module.css'), 'utf8');
+    const jumpCss = readFileSync(resolve(here, '../components/atoms/DirectoryJumpStrip.module.css'), 'utf8');
     expect(css).toContain('@media (max-width: 640px)');
     expect(css).toContain('grid-template-columns: auto minmax(0, 1fr);');
-    expect(css).toContain('scrollbar-width: none;');
-    expect(css).toContain('.index-jump-strip::-webkit-scrollbar');
-    expect(css).toContain('@property --jump-fade-end');
-    expect(css).toContain('animation-timeline: scroll(self inline);');
+    expect(jumpCss).toContain('scrollbar-width: none;');
+    expect(jumpCss).toContain('.jump-strip::-webkit-scrollbar');
+    expect(jumpCss).toContain('@property --jump-fade-end');
+    expect(jumpCss).toContain('animation-timeline: scroll(self inline);');
   });
 });

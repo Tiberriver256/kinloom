@@ -1,0 +1,161 @@
+/* ==========================================================================
+   Shared Sticky DirectoryJumpStrip (#85)
+   ========================================================================== */
+.jump-strip-wrap {
+  position: sticky;
+  top: var(--topbar-height);
+  z-index: 20;
+  container-type: scroll-state;
+  container-name: directory-jump-strip;
+  margin: 0 -4px 8px;
+  padding: 0 4px;
+  background: var(--surface-canvas);
+}
+
+@property --jump-fade-start {
+  syntax: "<length>";
+  inherits: false;
+  initial-value: 0px;
+}
+
+@property --jump-fade-end {
+  syntax: "<length>";
+  inherits: false;
+  initial-value: 0px;
+}
+
+.jump-strip {
+  --jump-fade-size: 2.25rem;
+  display: flex;
+  align-items: center;
+  flex-wrap: nowrap;
+  gap: 6px;
+  overflow-x: auto;
+  scrollbar-width: none;
+  scroll-padding-inline: var(--jump-fade-size);
+  padding: 7px 0;
+  border-top: 1px solid var(--border-decorative);
+  border-bottom: 1px solid var(--border-decorative);
+  background: var(--surface-canvas);
+  transition:
+    box-shadow 0.16s ease,
+    border-color 0.16s ease;
+}
+
+.jump-strip::-webkit-scrollbar {
+  display: none;
+}
+
+@supports (animation-timeline: scroll()) {
+  .jump-strip {
+    mask:
+      linear-gradient(black, black) no-clip subtract,
+      linear-gradient(to right, black, transparent) 0 0 / var(--jump-fade-start) 100% no-repeat no-clip,
+      linear-gradient(to right, transparent, black) 100% 0 / var(--jump-fade-end) 100% no-repeat no-clip;
+    animation:
+      jump-fade-start linear both,
+      jump-fade-end linear both;
+    animation-timeline: scroll(self inline);
+    animation-range:
+      0 var(--jump-fade-size),
+      calc(100% - var(--jump-fade-size)) 100%;
+  }
+}
+
+@supports not (animation-timeline: scroll()) {
+  .jump-strip:global(.is-scrollable-end) {
+    mask-image: linear-gradient(to right, black calc(100% - var(--jump-fade-size)), transparent 100%);
+    -webkit-mask-image: linear-gradient(to right, black calc(100% - var(--jump-fade-size)), transparent 100%);
+  }
+
+  .jump-strip:global(.is-scrollable-start) {
+    mask-image: linear-gradient(to right, transparent 0, black var(--jump-fade-size));
+    -webkit-mask-image: linear-gradient(to right, transparent 0, black var(--jump-fade-size));
+  }
+
+  .jump-strip:global(.is-scrollable-start):global(.is-scrollable-end) {
+    mask-image: linear-gradient(
+      to right,
+      transparent 0,
+      black var(--jump-fade-size),
+      black calc(100% - var(--jump-fade-size)),
+      transparent 100%
+    );
+    -webkit-mask-image: linear-gradient(
+      to right,
+      transparent 0,
+      black var(--jump-fade-size),
+      black calc(100% - var(--jump-fade-size)),
+      transparent 100%
+    );
+  }
+}
+
+@keyframes jump-fade-start {
+  to {
+    --jump-fade-start: var(--jump-fade-size);
+  }
+}
+
+@keyframes jump-fade-end {
+  from {
+    --jump-fade-end: var(--jump-fade-size);
+  }
+}
+
+@container directory-jump-strip scroll-state(stuck: top) {
+  .jump-strip {
+    box-shadow: var(--shadow-card);
+    border-bottom-color: var(--border-control);
+  }
+}
+
+.jump-strip:global(.is-az) {
+  gap: 2px;
+}
+
+.jump-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 0;
+  padding: 3px 8px;
+  border-radius: var(--radius-sm);
+  font-family: var(--font-mono);
+  font-size: 0.76rem;
+  font-weight: 500;
+  color: var(--text-secondary);
+  text-decoration: none;
+  white-space: nowrap;
+  transition:
+    background-color 0.14s ease,
+    color 0.14s ease;
+}
+
+.jump-strip:global(.is-az) .jump-link {
+  padding: 3px 6px;
+  min-width: 24px;
+  justify-content: center;
+}
+
+.jump-link:hover,
+.jump-link:focus-visible {
+  background: var(--surface-linen);
+  color: var(--radar-copresence);
+}
+
+.jump-link:global(.is-active) {
+  background: var(--surface-linen);
+  color: var(--accent-primary);
+  font-weight: 600;
+}
+
+.jump-count {
+  font-variant-numeric: tabular-nums;
+  font-size: 0.72rem;
+  color: var(--text-secondary);
+}
+
+.jump-link:global(.is-active) .jump-count {
+  color: var(--accent-primary);
+}
