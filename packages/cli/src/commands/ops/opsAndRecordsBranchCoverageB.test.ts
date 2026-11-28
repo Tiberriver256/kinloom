@@ -1475,10 +1475,14 @@ describe('ops reports and treeHygiene (verify/report, sync/report, integrateBatc
         },
       },
       pronunciation: pronCheck,
+      externalMedia: { ok: true, checkedCount: 0, hits: [] },
+      trackedMedia: { ok: true, isGitRepo: false, trackedCount: 0, files: [] },
       pluginDiscoveryWarnings: ['disc warn'],
       pluginChecks,
       strictHygiene: true,
       strictPronunciation: true,
+      strictExternalMedia: true,
+      strictTrackedMedia: true,
     });
     expect(diag.errors.length).toBeGreaterThan(30);
     expect(diag.warnings.length).toBeGreaterThan(60);
@@ -1489,6 +1493,8 @@ describe('ops reports and treeHygiene (verify/report, sync/report, integrateBatc
       duration_ms: 12,
       strictHygiene: true,
       strictPronunciation: true,
+      strictExternalMedia: true,
+      strictTrackedMedia: true,
       checks: {
         citations: { ok: false, narrativesChecked: 1, errors: ['bad cite'] },
         places: { ok: false, placesChecked: 1, invalidPlaces: [] },
@@ -1524,6 +1530,8 @@ describe('ops reports and treeHygiene (verify/report, sync/report, integrateBatc
         media: { ok: true, mediaLayout: 'media', checkedCount: 0, missingFiles: [], duplicateFiles: [] },
         livingNames: { ok: false, hits: [] },
         pronunciation: pronCheck,
+        externalMedia: { ok: true, checkedCount: 0, hits: [] },
+        trackedMedia: { ok: true, isGitRepo: false, trackedCount: 0, files: [] },
       },
       pluginChecks,
       hygiene: {

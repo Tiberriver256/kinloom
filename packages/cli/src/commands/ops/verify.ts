@@ -18,6 +18,11 @@ import {
   type TreeHygieneWarning,
 } from './tree-hygiene.js';
 import {
+  extractExternalAssetHost,
+  scanExternalMediaUrls,
+  scanTrackedBinaryMedia,
+} from './verify/assetChecks.js';
+import {
   findDuplicateResidenceSpans,
   runDualCompileCheck,
   runDualCompileCheckWithArtifacts,
@@ -37,6 +42,8 @@ export type {
   VerifyCommandResult,
   VerifyCompileResult,
   VerifyDuplicateMediaFile,
+  VerifyExternalMediaHit,
+  VerifyExternalMediaResult,
   VerifyInvalidPlace,
   VerifyLivingNamesResult,
   VerifyMediaResult,
@@ -44,16 +51,22 @@ export type {
   VerifyPlacesResult,
   VerifySsnHit,
   VerifySsnResult,
+  VerifyTrackedBinaryExtension,
+  VerifyTrackedMediaFile,
+  VerifyTrackedMediaResult,
 } from './verify/types.js';
 export {
   analyzeTreeHygiene,
   diffTreeHygieneWarnings,
+  extractExternalAssetHost,
   findDuplicateNormalizedMediaFiles,
   findDuplicateResidenceSpans,
   formatAuditHygieneWarningMessage,
   formatVerifyTextReport,
   runDualCompileCheck,
+  scanExternalMediaUrls,
   scanPublicLivingNames,
+  scanTrackedBinaryMedia,
   scanYamlFilesForSsns,
   TREE_HYGIENE_CATEGORIES,
   type TreeHygieneCategory,
@@ -119,6 +132,8 @@ export async function runVerifyCommand(options: VerifyCommandOptions = {}): Prom
   // 7. Non-breaking tree-hygiene diagnostics (fail only when --strict-hygiene is enabled).
   const strictHygiene = Boolean(options.strictHygiene);
   const strictPronunciation = Boolean(options.strictPronunciation);
+  const strictExternalMedia = Boolean(options.strictExternalMedia);
+  const strictTrackedMedia = Boolean(options.strictTrackedMedia);
   const hygiene = analyzeTreeHygiene({ people, events, kinship });
 
   // 8. Built-in pronunciation check + site plugin verifyChecks.
@@ -142,6 +157,12 @@ export async function runVerifyCommand(options: VerifyCommandOptions = {}): Prom
     verifyCheckCtx
   );
 
+  // 9. External media/audio URL CSP check (warnings by default; fail with --strict-external-media or --strict).
+  const externalMedia = scanExternalMediaUrls(archive);
+
+  // 10. Tracked Git binary audio/video check (warnings by default; fail with --strict-tracked-media or --strict).
+  const trackedMedia = scanTrackedBinaryMedia(repoDir);
+
   let pluginDiscoveryWarnings: string[] = [];
   let resolvedPluginVerifyChecks = resolvePluginCommands(options.plugins ?? []);
   if (options.plugins === undefined) {
@@ -163,10 +184,14 @@ export async function runVerifyCommand(options: VerifyCommandOptions = {}): Prom
     livingNames,
     hygiene,
     pronunciation: pronunciationCheck,
+    externalMedia,
+    trackedMedia,
     pluginDiscoveryWarnings,
     pluginChecks,
     strictHygiene,
     strictPronunciation,
+    strictExternalMedia,
+    strictTrackedMedia,
   });
 
   const durationMs = Math.round(performance.now() - t0);
@@ -176,6 +201,8 @@ export async function runVerifyCommand(options: VerifyCommandOptions = {}): Prom
     duration_ms: durationMs,
     strictHygiene,
     strictPronunciation,
+    strictExternalMedia,
+    strictTrackedMedia,
     checks: {
       citations,
       places: placesCheck,
@@ -184,6 +211,8 @@ export async function runVerifyCommand(options: VerifyCommandOptions = {}): Prom
       media: mediaCheck,
       livingNames,
       pronunciation: pronunciationCheck,
+      externalMedia,
+      trackedMedia,
     },
     pluginChecks,
     hygiene,

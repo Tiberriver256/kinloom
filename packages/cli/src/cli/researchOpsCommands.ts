@@ -351,6 +351,8 @@ export async function runVerify(rest: readonly string[], ctx: CliDispatchContext
       repo: { type: 'string' },
       'strict-hygiene': { type: 'boolean', default: false },
       'strict-pronunciation': { type: 'boolean', default: false },
+      'strict-external-media': { type: 'boolean', default: false },
+      'strict-tracked-media': { type: 'boolean', default: false },
       strict: { type: 'boolean', default: false },
       json: { type: 'boolean', default: false },
     },
@@ -372,6 +374,8 @@ export async function runVerify(rest: readonly string[], ctx: CliDispatchContext
         repoDir: values.repo ?? ctx.cwd,
         strictHygiene: values['strict-hygiene'] || values.strict,
         strictPronunciation: values['strict-pronunciation'] || values.strict,
+        strictExternalMedia: values['strict-external-media'] || values.strict,
+        strictTrackedMedia: values['strict-tracked-media'] || values.strict,
         json: values.json,
         ...(ctx.plugins ? { plugins: ctx.plugins } : {}),
       })
