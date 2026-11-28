@@ -208,6 +208,7 @@ async function runPerElementOverflowAndCollisionAudit(page: Page): Promise<Overf
     const parentEscapes: string[] = [];
     const CONTAINER_SELECTORS = [
       '.index-filter-actions',
+      '.index-archive-utility-bar',
       '.tree-toolbar',
       '.tree-scope-segmented',
       '.wiki-action-bar',
@@ -242,6 +243,7 @@ async function runPerElementOverflowAndCollisionAudit(page: Page): Promise<Overf
       '.topbar',
       '.nav-links',
       '.index-filter-actions',
+      '.index-archive-utility-bar',
       '.tree-toolbar',
       '.wiki-action-bar',
       '.evidence-tabs',
@@ -345,14 +347,19 @@ test.describe('Wave 53B signed-in editor UX, per-element overflow/collision, and
       // IndexPage signed-in with 3-digit counts + multi-word plugin tab
       await navigateAndWaitReady(page, `${wiki.baseUrl}/`);
       await expect(page.locator('.index-filter-actions .index-add-person-btn')).toBeVisible();
+      await expect(page.locator('.index-archive-utility-bar .index-export-link')).toBeVisible();
       await page.evaluate(() => {
         const mediaBtn = document.querySelector('.index-media-filter-btn');
         if (mediaBtn) {
-          mediaBtn.textContent = 'Photos & Documents (108)';
+          mediaBtn.textContent = 'With photos (108)';
         }
-        const exportBtn = document.querySelector('.index-export-btn');
-        if (exportBtn) {
-          exportBtn.textContent = 'Export GEDCOM (128)';
+        const exportLink = document.querySelector('.index-archive-utility-bar .index-export-link');
+        if (exportLink) {
+          exportLink.textContent = 'Export GEDCOM (128)';
+        }
+        const summary = document.querySelector('.index-archive-utility-bar .index-archive-utility-summary');
+        if (summary) {
+          summary.textContent = 'Showing 128 of 128 people';
         }
         const nav = document.querySelector('.nav-links');
         if (
@@ -376,21 +383,30 @@ test.describe('Wave 53B signed-in editor UX, per-element overflow/collision, and
       expect(indexAudit.parentEscapes, `3-digit / @ ${vp.name} parentEscapes`).toEqual([]);
       expect(indexAudit.siblingCollisions, `3-digit / @ ${vp.name} siblingCollisions`).toEqual([]);
 
-      // Verify no orphan half-width cell on .index-filter-actions
+      // Verify #65 browse toolbar rows and demoted archive utility bar stay clean with zero overflow
       const rowMetrics = await page.evaluate(() => {
         const container = document.querySelector('.index-filter-actions')!.getBoundingClientRect();
         const toggles = document.querySelector('.index-filter-toggles')!.getBoundingClientRect();
         const add = document.querySelector('.index-add-person-btn')!.getBoundingClientRect();
+        const utilityBar = document.querySelector('.index-archive-utility-bar')!.getBoundingClientRect();
+        const exportLink = document
+          .querySelector('.index-archive-utility-bar .index-export-link')!
+          .getBoundingClientRect();
         return {
           containerWidth: Math.round(container.width),
           togglesWidth: Math.round(toggles.width),
           addWidth: Math.round(add.width),
           addBelowToggles: add.top >= toggles.bottom - 2,
+          exportInsideUtilityBar:
+            exportLink.left >= utilityBar.left - 1.5 && exportLink.right <= utilityBar.right + 1.5,
+          exportInFilterActions: Boolean(document.querySelector('.index-filter-actions .index-export-link')),
         };
       });
       expect(rowMetrics.togglesWidth).toBeGreaterThanOrEqual(rowMetrics.containerWidth - 4);
       expect(rowMetrics.addBelowToggles).toBe(true);
       expect(rowMetrics.addWidth).toBeGreaterThanOrEqual(rowMetrics.containerWidth - 4);
+      expect(rowMetrics.exportInsideUtilityBar).toBe(true);
+      expect(rowMetrics.exportInFilterActions).toBe(false);
 
       await maybeScreenshot(page, `index-signed-in-3digit-${vp.name}.png`);
 
