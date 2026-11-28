@@ -26,7 +26,7 @@ export const OpenFinanceSupportPage: React.FC = () => {
     if (loading && !summary) {
       return (
         <section className={cx(styles, 'of-section')} aria-live="polite" data-testid="open-finance-loading">
-          <p className={cx(styles, 'of-message')}>Loading open-finance ledger…</p>
+          <p className={cx(styles, 'of-message')}>Loading archive support details…</p>
         </section>
       );
     }
@@ -62,6 +62,9 @@ export const OpenFinanceSupportPage: React.FC = () => {
       .filter((entry): entry is NonNullable<typeof entry> => entry !== null);
 
     const { totals, currency, funding_goal: fundingGoal } = summary;
+    const hasCostItems = summary.cost_items.length > 0;
+    const hasPlatforms = safePlatforms.length > 0;
+    const showKpiGrid = hasCostItems || hasPlatforms;
     const progressMax = fundingGoal && fundingGoal.target_cents > 0 ? fundingGoal.target_cents : 1;
     const progressVal = fundingGoal ? Math.min(progressMax, fundingGoal.received_cents) : 0;
 
@@ -74,45 +77,56 @@ export const OpenFinanceSupportPage: React.FC = () => {
             <p className={cx(styles, 'of-message')}>{summary.supporter_message}</p>
           )}
           <p className={cx(styles, 'of-custody-note')}>
-            Zero payment custody: contributions open directly on the listed external HTTPS platforms. This
-            archive never collects payment cards or loads third-party payment scripts.
+            Contributions open directly on the external support platforms listed below. This family archive
+            never collects payment details or processes payments on this site.
           </p>
         </header>
 
-        <section className={cx(styles, 'of-kpi-grid')} aria-label="Operating cost totals">
-          <div className={cx(styles, 'of-kpi-card')}>
-            <span className={cx(styles, 'of-kpi-label')}>Monthly Operating Cost</span>
-            <span className={cx(styles, 'of-kpi-value')} data-testid="open-finance-monthly-total">
-              {formatUiCurrencyCents(totals.monthly_operating_cents, currency)}
-            </span>
-            <span className={cx(styles, 'of-kpi-meta')}>Amortized recurring cost / month</span>
-          </div>
-          <div className={cx(styles, 'of-kpi-card')}>
-            <span className={cx(styles, 'of-kpi-label')}>Annual Operating Cost</span>
-            <span className={cx(styles, 'of-kpi-value')} data-testid="open-finance-annual-total">
-              {formatUiCurrencyCents(totals.annual_operating_cents, currency)}
-            </span>
-            <span className={cx(styles, 'of-kpi-meta')}>
-              {totals.active_item_count} {totals.active_item_count === 1 ? 'line item' : 'line items'} tracked
-            </span>
-          </div>
-          {totals.one_time_cents > 0 && (
-            <div className={cx(styles, 'of-kpi-card')}>
-              <span className={cx(styles, 'of-kpi-label')}>One-Time Expenses</span>
-              <span className={cx(styles, 'of-kpi-value')} data-testid="open-finance-onetime-total">
-                {formatUiCurrencyCents(totals.one_time_cents, currency)}
-              </span>
-              <span className={cx(styles, 'of-kpi-meta')}>
-                First-year total {formatUiCurrencyCents(totals.first_year_total_cents, currency)}
-              </span>
-            </div>
-          )}
-          <div className={cx(styles, 'of-kpi-card')}>
-            <span className={cx(styles, 'of-kpi-label')}>Donation Platforms</span>
-            <span className={cx(styles, 'of-kpi-value')}>{safePlatforms.length}</span>
-            <span className={cx(styles, 'of-kpi-meta')}>Allowlisted HTTPS channels</span>
-          </div>
-        </section>
+        {showKpiGrid && (
+          <section className={cx(styles, 'of-kpi-grid')} aria-label="Operating cost totals">
+            {hasCostItems && (
+              <>
+                <div className={cx(styles, 'of-kpi-card')}>
+                  <span className={cx(styles, 'of-kpi-label')}>Monthly Operating Cost</span>
+                  <span className={cx(styles, 'of-kpi-value')} data-testid="open-finance-monthly-total">
+                    {formatUiCurrencyCents(totals.monthly_operating_cents, currency)}
+                  </span>
+                  <span className={cx(styles, 'of-kpi-meta')}>Average monthly recurring cost</span>
+                </div>
+                <div className={cx(styles, 'of-kpi-card')}>
+                  <span className={cx(styles, 'of-kpi-label')}>Annual Operating Cost</span>
+                  <span className={cx(styles, 'of-kpi-value')} data-testid="open-finance-annual-total">
+                    {formatUiCurrencyCents(totals.annual_operating_cents, currency)}
+                  </span>
+                  <span className={cx(styles, 'of-kpi-meta')}>
+                    {totals.active_item_count} {totals.active_item_count === 1 ? 'line item' : 'line items'}{' '}
+                    tracked
+                  </span>
+                </div>
+              </>
+            )}
+            {totals.one_time_cents > 0 && (
+              <div className={cx(styles, 'of-kpi-card')}>
+                <span className={cx(styles, 'of-kpi-label')}>One-Time Expenses</span>
+                <span className={cx(styles, 'of-kpi-value')} data-testid="open-finance-onetime-total">
+                  {formatUiCurrencyCents(totals.one_time_cents, currency)}
+                </span>
+                <span className={cx(styles, 'of-kpi-meta')}>
+                  First-year total {formatUiCurrencyCents(totals.first_year_total_cents, currency)}
+                </span>
+              </div>
+            )}
+            {hasPlatforms && (
+              <div className={cx(styles, 'of-kpi-card')}>
+                <span className={cx(styles, 'of-kpi-label')}>Ways to Give</span>
+                <span className={cx(styles, 'of-kpi-value')}>{safePlatforms.length}</span>
+                <span className={cx(styles, 'of-kpi-meta')}>
+                  {safePlatforms.length === 1 ? 'Verified external link' : 'Verified external links'}
+                </span>
+              </div>
+            )}
+          </section>
+        )}
 
         {fundingGoal && (
           <section
@@ -145,7 +159,7 @@ export const OpenFinanceSupportPage: React.FC = () => {
           </section>
         )}
 
-        {safePlatforms.length > 0 && (
+        {hasPlatforms && (
           <section
             className={cx(styles, 'of-section')}
             aria-labelledby={platformsHeadingId}
@@ -155,7 +169,7 @@ export const OpenFinanceSupportPage: React.FC = () => {
               <h2 id={platformsHeadingId} className={cx(styles, 'of-section-title')}>
                 Ways to Support the Archive
               </h2>
-              <span className={cx(styles, 'of-section-meta')}>External allowlisted HTTPS links</span>
+              <span className={cx(styles, 'of-section-meta')}>Opens on external support sites</span>
             </div>
             <div className={cx(styles, 'of-platform-grid')}>
               {safePlatforms.map((platform) => (

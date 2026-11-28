@@ -224,12 +224,45 @@ export interface AuthorPillProps {
 /**
  * Authorship pill distinguishing human editors, AI research agents, and initial archive seeds.
  */
+const CLI_SYNC_TOKEN_RE =
+  /^(?:kinloom[\s_.:/-]*)?(?:cli|api|github|ci)?[\s_.:/-]*sync(?:[\s_.:/-]*(?:token|bot|key|client|agent|runner))?(?:[\s_.:/-]*[a-f0-9]{4,})?$/i;
+
+export function formatAgentAuthorLabel(rawName: string): string {
+  const trimmed = rawName.trim();
+  if (!trimmed) {
+    return '';
+  }
+  if (CLI_SYNC_TOKEN_RE.test(trimmed)) {
+    return 'Archive sync';
+  }
+  const stripped = trimmed
+    .replace(/^(?:agent|token|sync|cli|bot)[\s_.:/-]+/i, '')
+    .replace(/[\s_.:/-]+(?:token|key|secret)(?:[\s_.:/-]*[a-f0-9]{4,})?$/i, '')
+    .replace(/[\s_.:/-]+[a-f0-9]{6,}$/i, '')
+    .trim();
+  const base = stripped || trimmed;
+  if (!/[_:/-]/.test(base)) {
+    return base;
+  }
+  return base
+    .split(/[\s_.:/-]+/)
+    .filter(Boolean)
+    .map((word) => {
+      if (/^(?:ai|cli|api|gedcom)$/i.test(word)) {
+        return word.toUpperCase();
+      }
+      return `${word[0]?.toUpperCase() ?? ''}${word.slice(1).toLowerCase()}`;
+    })
+    .join(' ');
+}
+
 export const AuthorPill: React.FC<AuthorPillProps> = ({ authorType, authorName, className }) => {
   let label = authorName;
   let typePrefix = 'Editor';
   if (authorType === 'agent') {
     typePrefix = 'Research agent';
-    label = authorName ? `Research agent · ${authorName}` : 'Research agent';
+    const cleanAgent = formatAgentAuthorLabel(authorName);
+    label = cleanAgent ? `Research agent · ${cleanAgent}` : 'Research agent';
   } else if (authorType === 'system_seed') {
     typePrefix = 'Initial seed';
     label = 'Initial seed';

@@ -366,6 +366,11 @@
   .place-ledger-people {
     margin-top: 8px;
   }
+
+  .place-resident-link {
+    border-bottom: none;
+    padding: 2px 0;
+  }
 }
 
 .places-header-top {

@@ -47,48 +47,75 @@ const KinshipOverlapSparklineSvg: React.FC<{
   const overlapW = sparkline.overlap ? Math.max(3, toX(sparkline.overlap.widthPct)) : 0;
 
   return (
-    <svg
-      className={cx(kinshipStyles, 'kinship-overlap-sparkline')}
-      viewBox={`0 0 ${viewW} ${viewH}`}
-      role="img"
-      aria-label={
-        sparkline.overlap
-          ? `Lifespan bars for ${personAName} (${sparkline.personA.startYear}–${sparkline.personA.endYear}) and ${personBName} (${sparkline.personB.startYear}–${sparkline.personB.endYear}), overlapping ${sparkline.overlap.startYear}–${sparkline.overlap.endYear}`
-          : `Lifespan bars for ${personAName} (${sparkline.personA.startYear}–${sparkline.personA.endYear}) and ${personBName} (${sparkline.personB.startYear}–${sparkline.personB.endYear}) with no overlap`
-      }
-    >
-      <line x1={0} y1={17} x2={viewW} y2={17} stroke="var(--border-decorative)" strokeWidth="1" />
-      {sparkline.overlap && (
-        <g>
-          <rect
-            x={overlapX}
-            y={2}
-            width={overlapW}
-            height={viewH - 4}
-            fill="var(--accent-primary)"
-            fillOpacity="0.28"
-          />
-          <line
-            x1={overlapX}
-            y1={2}
-            x2={overlapX}
-            y2={viewH - 2}
-            stroke="var(--accent-primary)"
-            strokeWidth="1.2"
-          />
-          <line
-            x1={overlapX + overlapW}
-            y1={2}
-            x2={overlapX + overlapW}
-            y2={viewH - 2}
-            stroke="var(--accent-primary)"
-            strokeWidth="1.2"
-          />
-        </g>
-      )}
-      <rect x={aX} y={6} width={aW} height={7} rx={2} fill="var(--surface-header)" fillOpacity="0.7" />
-      <rect x={bX} y={21} width={bW} height={7} rx={2} fill="var(--accent-secondary)" fillOpacity="0.7" />
-    </svg>
+    <div className={cx(kinshipStyles, 'kinship-overlap-timeline')}>
+      <div className={cx(kinshipStyles, 'kinship-overlap-legend')}>
+        <span className={cx(kinshipStyles, 'kinship-overlap-legend-item')}>
+          <span className={cx(kinshipStyles, 'kinship-overlap-swatch is-a')} aria-hidden="true" />
+          <span className={cx(kinshipStyles, 'kinship-overlap-legend-name')}>{personAName}</span>
+          <span className={cx(kinshipStyles, 'kinship-overlap-legend-years')}>
+            {sparkline.personA.startYear}–{sparkline.personA.endYear}
+          </span>
+        </span>
+        <span className={cx(kinshipStyles, 'kinship-overlap-legend-item')}>
+          <span className={cx(kinshipStyles, 'kinship-overlap-swatch is-b')} aria-hidden="true" />
+          <span className={cx(kinshipStyles, 'kinship-overlap-legend-name')}>{personBName}</span>
+          <span className={cx(kinshipStyles, 'kinship-overlap-legend-years')}>
+            {sparkline.personB.startYear}–{sparkline.personB.endYear}
+          </span>
+        </span>
+      </div>
+      <svg
+        className={cx(kinshipStyles, 'kinship-overlap-sparkline')}
+        viewBox={`0 0 ${viewW} ${viewH}`}
+        role="img"
+        aria-label={
+          sparkline.overlap
+            ? `Lifespan bars for ${personAName} (${sparkline.personA.startYear}–${sparkline.personA.endYear}) and ${personBName} (${sparkline.personB.startYear}–${sparkline.personB.endYear}), overlapping ${sparkline.overlap.startYear}–${sparkline.overlap.endYear}`
+            : `Lifespan bars for ${personAName} (${sparkline.personA.startYear}–${sparkline.personA.endYear}) and ${personBName} (${sparkline.personB.startYear}–${sparkline.personB.endYear}) with no overlap`
+        }
+      >
+        <line x1={0} y1={17} x2={viewW} y2={17} stroke="var(--border-decorative)" strokeWidth="1" />
+        {sparkline.overlap && (
+          <g>
+            <rect
+              x={overlapX}
+              y={2}
+              width={overlapW}
+              height={viewH - 4}
+              fill="var(--accent-primary)"
+              fillOpacity="0.28"
+            />
+            <line
+              x1={overlapX}
+              y1={2}
+              x2={overlapX}
+              y2={viewH - 2}
+              stroke="var(--accent-primary)"
+              strokeWidth="1.2"
+            />
+            <line
+              x1={overlapX + overlapW}
+              y1={2}
+              x2={overlapX + overlapW}
+              y2={viewH - 2}
+              stroke="var(--accent-primary)"
+              strokeWidth="1.2"
+            />
+          </g>
+        )}
+        <rect x={aX} y={6} width={aW} height={7} rx={2} fill="var(--surface-header)" fillOpacity="0.7" />
+        <rect x={bX} y={21} width={bW} height={7} rx={2} fill="var(--accent-secondary)" fillOpacity="0.7" />
+      </svg>
+      <div className={cx(kinshipStyles, 'kinship-overlap-axis')} aria-hidden="true">
+        <span>{sparkline.minYear}</span>
+        {sparkline.overlap && (
+          <span className={cx(kinshipStyles, 'kinship-overlap-axis-shared')}>
+            Overlap {sparkline.overlap.startYear}–{sparkline.overlap.endYear}
+          </span>
+        )}
+        <span>{sparkline.maxYear}</span>
+      </div>
+    </div>
   );
 };
 
@@ -118,7 +145,12 @@ export const KinshipPage: React.FC = () => {
       const pA = peopleById.get(pair.fromId) ?? peopleBySlug.get(pair.fromId);
       const pB = peopleById.get(pair.toId) ?? peopleBySlug.get(pair.toId);
       if (pA && pB) {
-        items.push({ label: pair.label, fromId: pA.id, toId: pB.id, note: pair.note });
+        items.push({
+          label: pair.label.replace(/\s*<->\s*/g, ' ↔ '),
+          fromId: pA.id,
+          toId: pB.id,
+          note: pair.note,
+        });
       }
     }
     return items;

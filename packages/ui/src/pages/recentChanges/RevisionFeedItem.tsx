@@ -1,5 +1,6 @@
 import type { Person, RevisionRecord, SourceRecord } from '@kinloom/core';
 import type React from 'react';
+import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { RevisionDiffView } from '../../components/wiki/RevisionDiffView.js';
 import { AuthorPill, CitationBadge, StewardReviewBadge } from '../../components/wiki/WikiBadges.js';
@@ -16,36 +17,62 @@ import type { PendingRevertConfirm, ResolvedEntityLink } from './recentChangesVi
 export const DuplicateEventWarningList: React.FC<{
   readonly warnings: readonly DuplicateEventWarning[];
 }> = ({ warnings }) => {
+  const [expanded, setExpanded] = useState(false);
+
   if (warnings.length === 0) {
     return null;
   }
+
+  const renderWarningCard = (w: DuplicateEventWarning): React.ReactNode => (
+    <div key={w.key} className={cx(wikiPanelStyles, 'wiki-status-banner is-warning')} role="status">
+      <p>
+        <strong>Possible duplicate event detected:</strong> Two <strong>{w.year}</strong> records share{' '}
+        <strong>{w.personName}</strong> (<em>&ldquo;{w.firstTitle}&rdquo;</em> and{' '}
+        <em>&ldquo;{w.secondTitle}&rdquo;</em>).
+      </p>
+      {w.personSlug && (
+        <div className={cx(wikiPanelStyles, 'wiki-inline-actions')}>
+          <Link
+            to={`/person/${w.personSlug}?event=${w.firstEventId}`}
+            className={cx(wikiPanelStyles, 'wiki-entity-link')}
+          >
+            Inspect first record →
+          </Link>
+          <Link
+            to={`/person/${w.personSlug}?event=${w.secondEventId}`}
+            className={cx(wikiPanelStyles, 'wiki-entity-link')}
+          >
+            Inspect second record →
+          </Link>
+        </div>
+      )}
+    </div>
+  );
+
+  if (warnings.length === 1) {
+    return (
+      <div className={cx(wikiPanelStyles, 'wiki-duplicate-warnings')}>{renderWarningCard(warnings[0])}</div>
+    );
+  }
+
   return (
     <div className={cx(wikiPanelStyles, 'wiki-duplicate-warnings')}>
-      {warnings.map((w) => (
-        <div key={w.key} className={cx(wikiPanelStyles, 'wiki-status-banner is-warning')} role="status">
-          <p>
-            <strong>Possible duplicate event detected:</strong> Two <strong>{w.year}</strong> records share{' '}
-            <strong>{w.personName}</strong> (<em>&ldquo;{w.firstTitle}&rdquo;</em> and{' '}
-            <em>&ldquo;{w.secondTitle}&rdquo;</em>).
-          </p>
-          {w.personSlug && (
-            <div className={cx(wikiPanelStyles, 'wiki-inline-actions')}>
-              <Link
-                to={`/person/${w.personSlug}?event=${w.firstEventId}`}
-                className={cx(wikiPanelStyles, 'wiki-entity-link')}
-              >
-                Inspect first record →
-              </Link>
-              <Link
-                to={`/person/${w.personSlug}?event=${w.secondEventId}`}
-                className={cx(wikiPanelStyles, 'wiki-entity-link')}
-              >
-                Inspect second record →
-              </Link>
-            </div>
-          )}
+      <button
+        type="button"
+        className={cx(wikiPanelStyles, 'wiki-duplicate-toggle')}
+        aria-expanded={expanded}
+        onClick={() => {
+          setExpanded((prev) => !prev);
+        }}
+      >
+        <span aria-hidden="true">{expanded ? '▾' : '▸'}</span>
+        <span>{warnings.length} possible duplicate events to inspect</span>
+      </button>
+      {expanded && (
+        <div className={cx(wikiPanelStyles, 'wiki-duplicate-list')}>
+          {warnings.map((w) => renderWarningCard(w))}
         </div>
-      ))}
+      )}
     </div>
   );
 };

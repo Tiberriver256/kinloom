@@ -115,6 +115,10 @@ const KNOWN_COUNTRIES = new Set([
   'sweden',
   'norway',
   'denmark',
+  'finland',
+  'iceland',
+  'belgium',
+  'austria',
   'switzerland',
   'italy',
   'poland',
@@ -133,6 +137,14 @@ const PLACE_TYPE_ORDER: Readonly<Record<string, number>> = {
 
 function slugifySectionKey(raw: string): string {
   const cleaned = raw
+    .normalize('NFD')
+    .replaceAll(/\p{Diacritic}/gu, '')
+    .replaceAll(/[øØ]/g, 'o')
+    .replaceAll(/[æÆ]/g, 'ae')
+    .replaceAll(/[åÅ]/g, 'a')
+    .replaceAll(/[ðÐ]/g, 'd')
+    .replaceAll(/[þÞ]/g, 'th')
+    .replaceAll(/ß/g, 'ss')
     .toLowerCase()
     .replaceAll(/[^a-z0-9]+/g, '-')
     .replaceAll(/^-+|-+$/g, '');

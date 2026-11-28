@@ -13,6 +13,7 @@ import {
 import { ArchivalImage } from '../../components/Atoms.js';
 import { ExplorerTopBar } from '../../components/ExplorerTopBar.js';
 import { KinloomFooter } from '../../components/KinloomFooter.js';
+import { SignInModal } from '../../components/wiki/SignInModal.js';
 import { useOptionalArchiveData } from '../../context/ArchiveDataContext.js';
 import { cx } from '../../lib/cx.js';
 import {
@@ -81,6 +82,7 @@ export const RecipeCatalogPage: React.FC<RecipeCatalogPageProps> = ({ initialTab
   const [starError, setStarError] = useState<string | null>(null);
   const [pendingStarIds, setPendingStarIds] = useState<ReadonlySet<string>>(() => new Set());
   const [disabledOnServer, setDisabledOnServer] = useState<boolean>(false);
+  const [signInOpen, setSignInOpen] = useState<boolean>(false);
 
   useEffect(() => {
     if (initialTab === 'favorites') {
@@ -249,6 +251,15 @@ export const RecipeCatalogPage: React.FC<RecipeCatalogPageProps> = ({ initialTab
   const total = data?.total ?? 0;
   const canCreate = Boolean(data?.permissions?.can_create && client.createRecipe);
   const canStar = Boolean(data?.permissions?.can_star && client.starRecipe && client.unstarRecipe);
+  const showFilterBar = !disabledOnServer && (hasActiveFilters || recipes.length > 0);
+  const canPromptSignIn = Boolean(
+    !canCreate &&
+      archiveData &&
+      session?.principal_kind !== 'user' &&
+      (archiveData.authProviders.magicLink ||
+        archiveData.authProviders.google ||
+        session?.principal_kind === 'anonymous')
+  );
   const showFavoritesTab =
     data === null ||
     data.permissions === undefined ||
@@ -407,137 +418,139 @@ export const RecipeCatalogPage: React.FC<RecipeCatalogPageProps> = ({ initialTab
           />
         )}
 
-        <ArchivalFilterBar
-          actions={
-            hasActiveFilters ? (
-              <button
-                type="button"
-                className={cx(recipeStyles, 'recipe-clear-btn')}
-                onClick={handleClearFilters}
-              >
-                Clear filters
-              </button>
-            ) : undefined
-          }
-        >
-          <div className={cx(recipeStyles, 'recipe-filter-field recipe-filter-field-search')}>
-            <label htmlFor={searchInputId} className={cx(recipeStyles, 'recipe-filter-label')}>
-              Search
-            </label>
-            <input
-              id={searchInputId}
-              type="search"
-              className={cx(recipeStyles, 'recipe-filter-input')}
-              placeholder="Title, provenance, or tag…"
-              value={query}
-              onChange={(e) => {
-                const next = e.target.value;
-                setQuery(next);
-                setOffset(0);
-                syncCatalogParams({ q: next });
-              }}
-            />
-          </div>
-
-          <div className={cx(recipeStyles, 'recipe-filter-field')}>
-            <label htmlFor={courseSelectId} className={cx(recipeStyles, 'recipe-filter-label')}>
-              Course
-            </label>
-            <select
-              id={courseSelectId}
-              className={cx(recipeStyles, 'recipe-filter-select')}
-              value={course}
-              onChange={(e) => {
-                const raw = e.target.value;
-                const parsed = raw ? UiRecipeCourseSchema.safeParse(raw) : null;
-                const nextCourse = parsed?.success ? parsed.data : '';
-                setCourse(nextCourse);
-                setOffset(0);
-                syncCatalogParams({ course: nextCourse });
-              }}
-            >
-              <option value="">All courses</option>
-              {courseOptions.map((c) => (
-                <option key={c} value={c}>
-                  {formatRecipeCourseLabel(c)}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          {tagOptions.length > 0 && (
-            <div className={cx(recipeStyles, 'recipe-filter-field')}>
-              <label htmlFor={tagSelectId} className={cx(recipeStyles, 'recipe-filter-label')}>
-                Tag
+        {showFilterBar && (
+          <ArchivalFilterBar
+            actions={
+              hasActiveFilters ? (
+                <button
+                  type="button"
+                  className={cx(recipeStyles, 'recipe-clear-btn')}
+                  onClick={handleClearFilters}
+                >
+                  Clear filters
+                </button>
+              ) : undefined
+            }
+          >
+            <div className={cx(recipeStyles, 'recipe-filter-field recipe-filter-field-search')}>
+              <label htmlFor={searchInputId} className={cx(recipeStyles, 'recipe-filter-label')}>
+                Search
               </label>
-              <select
-                id={tagSelectId}
-                className={cx(recipeStyles, 'recipe-filter-select')}
-                value={tag}
+              <input
+                id={searchInputId}
+                type="search"
+                className={cx(recipeStyles, 'recipe-filter-input')}
+                placeholder="Title, provenance, or tag…"
+                value={query}
                 onChange={(e) => {
                   const next = e.target.value;
-                  setTag(next);
+                  setQuery(next);
                   setOffset(0);
-                  syncCatalogParams({ tag: next });
+                  syncCatalogParams({ q: next });
+                }}
+              />
+            </div>
+
+            <div className={cx(recipeStyles, 'recipe-filter-field')}>
+              <label htmlFor={courseSelectId} className={cx(recipeStyles, 'recipe-filter-label')}>
+                Course
+              </label>
+              <select
+                id={courseSelectId}
+                className={cx(recipeStyles, 'recipe-filter-select')}
+                value={course}
+                onChange={(e) => {
+                  const raw = e.target.value;
+                  const parsed = raw ? UiRecipeCourseSchema.safeParse(raw) : null;
+                  const nextCourse = parsed?.success ? parsed.data : '';
+                  setCourse(nextCourse);
+                  setOffset(0);
+                  syncCatalogParams({ course: nextCourse });
                 }}
               >
-                <option value="">All tags</option>
-                {tagOptions.map((t) => (
-                  <option key={t} value={t}>
-                    #{t}
+                <option value="">All courses</option>
+                {courseOptions.map((c) => (
+                  <option key={c} value={c}>
+                    {formatRecipeCourseLabel(c)}
                   </option>
                 ))}
               </select>
             </div>
-          )}
 
-          {deceasedPeople.length > 0 && (
+            {tagOptions.length > 0 && (
+              <div className={cx(recipeStyles, 'recipe-filter-field')}>
+                <label htmlFor={tagSelectId} className={cx(recipeStyles, 'recipe-filter-label')}>
+                  Tag
+                </label>
+                <select
+                  id={tagSelectId}
+                  className={cx(recipeStyles, 'recipe-filter-select')}
+                  value={tag}
+                  onChange={(e) => {
+                    const next = e.target.value;
+                    setTag(next);
+                    setOffset(0);
+                    syncCatalogParams({ tag: next });
+                  }}
+                >
+                  <option value="">All tags</option>
+                  {tagOptions.map((t) => (
+                    <option key={t} value={t}>
+                      #{t}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
+
+            {deceasedPeople.length > 0 && (
+              <div className={cx(recipeStyles, 'recipe-filter-field')}>
+                <label htmlFor={ancestorSelectId} className={cx(recipeStyles, 'recipe-filter-label')}>
+                  Ancestor
+                </label>
+                <select
+                  id={ancestorSelectId}
+                  className={cx(recipeStyles, 'recipe-filter-select')}
+                  value={ancestorId}
+                  onChange={(e) => {
+                    const next = e.target.value;
+                    setAncestorId(next);
+                    setOffset(0);
+                    syncCatalogParams({ ancestor: next });
+                  }}
+                >
+                  <option value="">All ancestors</option>
+                  {deceasedPeople.map((person) => (
+                    <option key={person.id} value={person.id}>
+                      {person.full_name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
+
             <div className={cx(recipeStyles, 'recipe-filter-field')}>
-              <label htmlFor={ancestorSelectId} className={cx(recipeStyles, 'recipe-filter-label')}>
-                Ancestor
+              <label htmlFor={sortSelectId} className={cx(recipeStyles, 'recipe-filter-label')}>
+                Sort by
               </label>
               <select
-                id={ancestorSelectId}
+                id={sortSelectId}
                 className={cx(recipeStyles, 'recipe-filter-select')}
-                value={ancestorId}
+                value={sort}
                 onChange={(e) => {
-                  const next = e.target.value;
-                  setAncestorId(next);
+                  const nextSort = normalizeCatalogSortMode(e.target.value);
+                  setSort(nextSort);
                   setOffset(0);
-                  syncCatalogParams({ ancestor: next });
+                  syncCatalogParams({ sort: nextSort });
                 }}
               >
-                <option value="">All ancestors</option>
-                {deceasedPeople.map((person) => (
-                  <option key={person.id} value={person.id}>
-                    {person.full_name}
-                  </option>
-                ))}
+                <option value="most_starred">Most Starred</option>
+                <option value="newest">Newest</option>
+                <option value="alpha">Alphabetical</option>
               </select>
             </div>
-          )}
-
-          <div className={cx(recipeStyles, 'recipe-filter-field')}>
-            <label htmlFor={sortSelectId} className={cx(recipeStyles, 'recipe-filter-label')}>
-              Sort by
-            </label>
-            <select
-              id={sortSelectId}
-              className={cx(recipeStyles, 'recipe-filter-select')}
-              value={sort}
-              onChange={(e) => {
-                const nextSort = normalizeCatalogSortMode(e.target.value);
-                setSort(nextSort);
-                setOffset(0);
-                syncCatalogParams({ sort: nextSort });
-              }}
-            >
-              <option value="most_starred">Most Starred</option>
-              <option value="newest">Newest</option>
-              <option value="alpha">Alphabetical</option>
-            </select>
-          </div>
-        </ArchivalFilterBar>
+          </ArchivalFilterBar>
+        )}
 
         {tag && (
           <div className={cx(recipeStyles, 'recipe-active-filters')}>
@@ -630,8 +643,18 @@ export const RecipeCatalogPage: React.FC<RecipeCatalogPageProps> = ({ initialTab
                 </button>
               ) : canCreate && activeTab === 'all' ? (
                 <Link to={`${basePath}/new`} className={cx(recipeStyles, 'recipe-primary-btn')}>
-                  + Add First Recipe
+                  + Add Recipe
                 </Link>
+              ) : canPromptSignIn && activeTab === 'all' ? (
+                <button
+                  type="button"
+                  className={cx(recipeStyles, 'recipe-primary-btn')}
+                  onClick={() => {
+                    setSignInOpen(true);
+                  }}
+                >
+                  Sign in to add a recipe
+                </button>
               ) : undefined
             }
           />
@@ -769,6 +792,14 @@ export const RecipeCatalogPage: React.FC<RecipeCatalogPageProps> = ({ initialTab
         )}
       </ArchivalPageShell>
       <KinloomFooter />
+      {archiveData && (
+        <SignInModal
+          open={signInOpen}
+          onClose={() => {
+            setSignInOpen(false);
+          }}
+        />
+      )}
     </div>
   );
 };
