@@ -379,19 +379,18 @@ test.describe('Wave 53B signed-in editor UX, per-element overflow/collision, and
       // Verify no orphan half-width cell on .index-filter-actions
       const rowMetrics = await page.evaluate(() => {
         const container = document.querySelector('.index-filter-actions')!.getBoundingClientRect();
-        const media = document.querySelector('.index-media-filter-btn')!.getBoundingClientRect();
+        const toggles = document.querySelector('.index-filter-toggles')!.getBoundingClientRect();
         const add = document.querySelector('.index-add-person-btn')!.getBoundingClientRect();
-        const exp = document.querySelector('.index-export-btn')!.getBoundingClientRect();
         return {
           containerWidth: Math.round(container.width),
-          mediaWidth: Math.round(media.width),
-          sameSecondRow: Math.abs(add.top - exp.top) < 4,
-          secondRowSpan: Math.round(exp.right - add.left),
+          togglesWidth: Math.round(toggles.width),
+          addWidth: Math.round(add.width),
+          addBelowToggles: add.top >= toggles.bottom - 2,
         };
       });
-      expect(rowMetrics.mediaWidth).toBeGreaterThanOrEqual(rowMetrics.containerWidth - 4);
-      expect(rowMetrics.sameSecondRow).toBe(true);
-      expect(rowMetrics.secondRowSpan).toBeGreaterThanOrEqual(rowMetrics.containerWidth - 4);
+      expect(rowMetrics.togglesWidth).toBeGreaterThanOrEqual(rowMetrics.containerWidth - 4);
+      expect(rowMetrics.addBelowToggles).toBe(true);
+      expect(rowMetrics.addWidth).toBeGreaterThanOrEqual(rowMetrics.containerWidth - 4);
 
       await maybeScreenshot(page, `index-signed-in-3digit-${vp.name}.png`);
 

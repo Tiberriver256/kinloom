@@ -708,7 +708,8 @@
   }
 
   .index-filter-actions :global(.index-add-person-btn) {
-    flex: 1 1 auto;
+    flex: 1 1 100%;
+    width: 100%;
     min-width: min(max-content, 100%);
     justify-content: center;
     white-space: normal;
