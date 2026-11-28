@@ -338,9 +338,9 @@ export function createKinloomServer(config: KinloomServerConfig): KinloomServer 
       sessionTtlSeconds,
       oauthCookieTtlSeconds,
     }),
-    createWikiRouteHandler({ bundleReadService, wikiWriteService }),
+    createWikiRouteHandler({ bundleReadService, wikiWriteService, mode }),
     createPronunciationRouteHandler({ pronunciationService, mode }),
-    createMediaAndTalkRouteHandler({ mediaService, talkService }),
+    createMediaAndTalkRouteHandler({ mediaService, talkService, mode }),
     createAdminRouteHandler(
       adminService,
       systemDiagnosticsService,

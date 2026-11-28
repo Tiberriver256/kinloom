@@ -1,5 +1,6 @@
 import { performance } from 'node:perf_hooks';
 import {
+  discoverFirstDeceasedPersonSlugFromBundle,
   discoverFirstMediaPathFromBundle,
   emptyServerTiming,
   evaluateSecurityHeaders,
@@ -9,6 +10,7 @@ import {
   resolveProbeBudgets,
   roundDurationMs,
 } from './syntheticProbeParsing.js';
+import { runPluginHealthProbes } from './syntheticProbePlugins.js';
 import {
   type BundleColdProbeResult,
   type BundleProbeResult,
@@ -18,6 +20,7 @@ import {
   type HtmlProbeResult,
   type MediaRangeProbeResult,
   type MediaRangeSource,
+  type PluginProbesReport,
   type RunSyntheticProbeInput,
   type SyntheticProbeBudgets,
   type SyntheticProbeClock,
@@ -67,7 +70,9 @@ async function fetchWithTimeout(
   }
 }
 
-async function runHtmlProbe(transport: ProbeTransport): Promise<HtmlProbeResult> {
+async function runHtmlProbe(
+  transport: ProbeTransport
+): Promise<{ readonly result: HtmlProbeResult; readonly bodyText: string }> {
   const url = buildProbeEndpointUrl(transport.baseUrl, '/');
   const isHttps = transport.baseUrl.protocol === 'https:';
   const startedAt = transport.clock.now();
@@ -100,29 +105,35 @@ async function runHtmlProbe(transport: ProbeTransport): Promise<HtmlProbeResult>
     }
 
     return {
-      status: violations.length === 0 ? 'pass' : 'fail',
-      url,
-      httpStatus: response.status,
-      ttfbMs,
-      totalMs,
-      bytes: body.byteLength,
-      securityHeaders,
-      violations,
+      bodyText: new TextDecoder().decode(body),
+      result: {
+        status: violations.length === 0 ? 'pass' : 'fail',
+        url,
+        httpStatus: response.status,
+        ttfbMs,
+        totalMs,
+        bytes: body.byteLength,
+        securityHeaders,
+        violations,
+      },
     };
   } catch (err: unknown) {
     const totalMs = roundDurationMs(transport.clock.now() - startedAt);
     const message = err instanceof Error ? err.message : String(err);
     violations.push(`HTML root probe failed: ${message}`);
     return {
-      status: 'fail',
-      url,
-      httpStatus: null,
-      ttfbMs: totalMs,
-      totalMs,
-      bytes: 0,
-      securityHeaders: evaluateSecurityHeaders(new Headers(), isHttps),
-      violations,
-      error: message,
+      bodyText: '',
+      result: {
+        status: 'fail',
+        url,
+        httpStatus: null,
+        ttfbMs: totalMs,
+        totalMs,
+        bytes: 0,
+        securityHeaders: evaluateSecurityHeaders(new Headers(), isHttps),
+        violations,
+        error: message,
+      },
     };
   }
 }
@@ -214,12 +225,15 @@ async function runBundleWarmProbe(
   }
 }
 
-async function runBundleProbe(
-  transport: ProbeTransport
-): Promise<{ readonly result: BundleProbeResult; readonly discoveredMediaPath: string | null }> {
+async function runBundleProbe(transport: ProbeTransport): Promise<{
+  readonly result: BundleProbeResult;
+  readonly discoveredMediaPath: string | null;
+  readonly discoveredPersonSlug: string | null;
+}> {
   const url = buildProbeEndpointUrl(transport.baseUrl, '/api/bundle');
   const violations: string[] = [];
   let discoveredMediaPath: string | null = null;
+  let discoveredPersonSlug: string | null = null;
   let cold: BundleColdProbeResult;
 
   const coldStart = transport.clock.now();
@@ -241,6 +255,7 @@ async function runBundleProbe(
       bytes: bodyBytes.byteLength,
       etag: response.headers.get('etag'),
       cacheControl: response.headers.get('cache-control'),
+      xRequestId: response.headers.get('x-request-id'),
       serverTiming: parseServerTimingHeader(response.headers.get('server-timing')),
     };
 
@@ -250,8 +265,9 @@ async function runBundleProbe(
       try {
         const parsed: unknown = JSON.parse(new TextDecoder().decode(bodyBytes));
         discoveredMediaPath = discoverFirstMediaPathFromBundle(parsed);
+        discoveredPersonSlug = discoverFirstDeceasedPersonSlugFromBundle(parsed);
       } catch {
-        // Non-JSON payload still records latency; media discovery stays null.
+        // Non-JSON payload still records latency; media and person discovery stay null.
       }
     }
 
@@ -269,6 +285,7 @@ async function runBundleProbe(
       bytes: 0,
       etag: null,
       cacheControl: null,
+      xRequestId: null,
       serverTiming: emptyServerTiming(),
       error: message,
     };
@@ -278,6 +295,7 @@ async function runBundleProbe(
   const warm = await runBundleWarmProbe(transport, url, cold.etag, violations);
   return {
     discoveredMediaPath,
+    discoveredPersonSlug,
     result: {
       status: violations.length === 0 ? 'pass' : 'fail',
       url,
@@ -407,7 +425,7 @@ export async function runSyntheticProbe(input: RunSyntheticProbeInput): Promise<
   const startedAt = clock.now();
   const timestamp = clock.nowIso();
 
-  const html = await runHtmlProbe(transport);
+  const htmlRun = await runHtmlProbe(transport);
   const bundleRun = await runBundleProbe(transport);
 
   const chosenMediaPath = input.mediaPath?.trim() ? input.mediaPath.trim() : bundleRun.discoveredMediaPath;
@@ -424,7 +442,24 @@ export async function runSyntheticProbe(input: RunSyntheticProbeInput): Promise<
     input.mediaRangeBytes ?? DEFAULT_MEDIA_RANGE_BYTES
   );
 
-  const violations = [...html.violations, ...bundleRun.result.violations, ...mediaRange.violations];
+  const expectPlugins = input.expectPlugins ?? [];
+  let pluginsReport: PluginProbesReport | undefined;
+  if (input.checkPlugins || expectPlugins.length > 0) {
+    pluginsReport = await runPluginHealthProbes({
+      transport,
+      htmlBody: htmlRun.bodyText,
+      bundleCold: bundleRun.result.cold,
+      discoveredPersonSlug: bundleRun.discoveredPersonSlug,
+      expectPlugins,
+    });
+  }
+
+  const violations = [
+    ...htmlRun.result.violations,
+    ...bundleRun.result.violations,
+    ...mediaRange.violations,
+    ...(pluginsReport ? pluginsReport.violations : []),
+  ];
   const durationMs = roundDurationMs(clock.now() - startedAt);
 
   return {
@@ -433,9 +468,10 @@ export async function runSyntheticProbe(input: RunSyntheticProbeInput): Promise<
     timestamp,
     durationMs,
     budgets,
-    html,
+    html: htmlRun.result,
     bundle: bundleRun.result,
     mediaRange,
+    ...(pluginsReport ? { plugins: pluginsReport } : {}),
     violations,
   };
 }

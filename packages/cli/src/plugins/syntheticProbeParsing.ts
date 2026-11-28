@@ -161,6 +161,77 @@ export function discoverFirstMediaPathFromBundle(bundleJson: unknown): string | 
   return null;
 }
 
+/**
+ * Discovers the first deceased person slug from a parsed `/api/bundle` payload.
+ */
+export function discoverFirstDeceasedPersonSlugFromBundle(bundleJson: unknown): string | null {
+  if (typeof bundleJson !== 'object' || bundleJson === null) {
+    return null;
+  }
+  const peopleField: unknown = Reflect.get(bundleJson, 'people');
+  if (!Array.isArray(peopleField)) {
+    return null;
+  }
+  for (const item of peopleField) {
+    if (typeof item !== 'object' || item === null) {
+      continue;
+    }
+    const isLiving: unknown = Reflect.get(item, 'is_living');
+    if (isLiving === true) {
+      continue;
+    }
+    const slug: unknown = Reflect.get(item, 'slug');
+    if (typeof slug === 'string' && slug.trim().length > 0) {
+      return slug.trim();
+    }
+  }
+  return null;
+}
+
+/**
+ * Parses a comma-separated list of expected server plugin IDs into a deduplicated array.
+ */
+export function parseExpectedPluginsCsv(raw?: string): readonly string[] {
+  if (!raw?.trim()) {
+    return [];
+  }
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const part of raw.split(',')) {
+    const trimmed = part.trim();
+    if (trimmed && !seen.has(trimmed)) {
+      seen.add(trimmed);
+      out.push(trimmed);
+    }
+  }
+  return out;
+}
+
+/**
+ * Resolves the bearer token for synthetic probes in canonical precedence order:
+ * explicit CLI `--token` -> plugin option `token` -> `KINLOOM_PROBE_TOKEN` -> `KINLOOM_TOKEN` -> `KINLOOM_AGENT_TOKEN`.
+ */
+export function resolveProbeToken(
+  explicitToken?: string,
+  optionToken?: string,
+  env: NodeJS.ProcessEnv = process.env
+): string | undefined {
+  const candidates = [
+    explicitToken,
+    optionToken,
+    env.KINLOOM_PROBE_TOKEN,
+    env.KINLOOM_TOKEN,
+    env.KINLOOM_AGENT_TOKEN,
+  ];
+  for (const candidate of candidates) {
+    const trimmed = candidate?.trim();
+    if (trimmed) {
+      return trimmed;
+    }
+  }
+  return undefined;
+}
+
 export function resolveProbeBudgets(overrides?: Partial<SyntheticProbeBudgets>): SyntheticProbeBudgets {
   return {
     maxHtmlTtfbMs: overrides?.maxHtmlTtfbMs ?? DEFAULT_SYNTHETIC_PROBE_BUDGETS.maxHtmlTtfbMs,
@@ -207,6 +278,21 @@ export function formatSyntheticProbeReport(report: SyntheticProbeReport): string
     lines.push(
       `  4. Media range (${report.mediaRange.rangeHeader}): ${report.mediaRange.status.toUpperCase()} | status=${report.mediaRange.httpStatus ?? 'ERR'} latency=${report.mediaRange.durationMs}ms (budget<=${report.budgets.maxMediaRangeMs}ms) bytes=${report.mediaRange.bytes} content-range=${report.mediaRange.contentRange ?? 'none'} accept-ranges=${report.mediaRange.acceptRanges ?? 'none'}`
     );
+  }
+
+  if (report.plugins) {
+    const leakLabel =
+      report.plugins.leakGuardPassed === null ? 'n/a' : report.plugins.leakGuardPassed ? 'pass' : 'fail';
+    const diagLabel = report.plugins.diagnosticsChecked ? 'checked' : 'skipped';
+    lines.push(
+      `  5. Plugins: ${report.plugins.status.toUpperCase()} | checks=${report.plugins.checks.length} leak-guard=${leakLabel} diagnostics=${diagLabel}`
+    );
+    for (const check of report.plugins.checks) {
+      const httpLabel = check.httpStatus === null ? 'n/a' : String(check.httpStatus);
+      lines.push(
+        `     - ${check.pluginId}: ${check.status.toUpperCase()} | status=${httpLabel} latency=${check.durationMs}ms | ${check.detail}`
+      );
+    }
   }
 
   for (const violation of report.violations) {

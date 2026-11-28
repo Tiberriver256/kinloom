@@ -27,6 +27,18 @@
       "types": "./dist/adapters/httpWikiDataSource.d.ts",
       "import": "./dist/adapters/httpWikiDataSource.js"
     },
+    "./plugins/bookPublishingPlugin": {
+      "types": "./dist/plugins/bookPublishingPlugin.d.ts",
+      "import": "./dist/plugins/bookPublishingPlugin.js"
+    },
+    "./plugins/observabilityStatsPlugin": {
+      "types": "./dist/plugins/observabilityStatsPlugin.d.ts",
+      "import": "./dist/plugins/observabilityStatsPlugin.js"
+    },
+    "./plugins/openFinancePlugin": {
+      "types": "./dist/plugins/openFinancePlugin.d.ts",
+      "import": "./dist/plugins/openFinancePlugin.js"
+    },
     "./plugins/recipesPlugin": {
       "types": "./dist/plugins/recipesPlugin.d.ts",
       "import": "./dist/plugins/recipesPlugin.js"

@@ -44,10 +44,11 @@ export function sanitizeDownloadFilename(rawFilename: string | null, fallbackKey
 export interface MediaAndTalkRouteHandlerDeps {
   readonly mediaService: MediaService;
   readonly talkService: TalkService;
+  readonly mode?: 'private' | 'public';
 }
 
 export function createMediaAndTalkRouteHandler(deps: MediaAndTalkRouteHandlerDeps): HttpRouteHandler {
-  const { mediaService, talkService } = deps;
+  const { mediaService, talkService, mode = 'private' } = deps;
 
   return async (ctx) => {
     const { request, url, pathname, method, segments, auth, telemetry } = ctx;
@@ -140,11 +141,13 @@ export function createMediaAndTalkRouteHandler(deps: MediaAndTalkRouteHandlerDep
     }
 
     if (method === 'GET' && segments.length >= 2 && (segments[0] === 'media' || segments[0] === 'sources')) {
-      requireMinRole(auth.principal, 'viewer', {
-        allowAgentScopes: ['write_batch', 'read_backup'],
-        telemetry,
-        bearerRejected: auth.bearerRejected,
-      });
+      if (mode !== 'public') {
+        requireMinRole(auth.principal, 'viewer', {
+          allowAgentScopes: ['write_batch', 'read_backup'],
+          telemetry,
+          bearerRejected: auth.bearerRejected,
+        });
+      }
       const prefix = segments[0];
       const key = segments.slice(1).map(decodeSegment).join('/');
       const isDownload = prefix === 'media' && url.searchParams.get('download') === '1';

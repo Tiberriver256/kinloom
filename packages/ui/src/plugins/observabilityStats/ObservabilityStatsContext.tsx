@@ -44,12 +44,13 @@ export const ObservabilityStatsProvider: React.FC<ObservabilityStatsProviderProp
   const sessionAuthenticated = session?.authenticated ?? false;
   const sessionPrincipalKind = session?.principal_kind ?? null;
   const hasBundle = archiveData !== null ? archiveData.bundle !== null : true;
+  const isLoadingBundle = archiveData?.loading ?? false;
 
   useEffect(() => {
-    if (!hasBundle && sessionPrincipalKind === 'anonymous') {
+    if (!isLoadingBundle && !hasBundle && sessionPrincipalKind === 'anonymous') {
       setInitialLoadWasUnauthenticated(true);
     }
-  }, [hasBundle, sessionPrincipalKind]);
+  }, [isLoadingBundle, hasBundle, sessionPrincipalKind]);
 
   const shouldFetchConfig =
     !(hasSessionLoader && sessionPrincipalKind === null) &&

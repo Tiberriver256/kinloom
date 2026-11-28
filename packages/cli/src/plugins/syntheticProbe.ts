@@ -7,7 +7,12 @@ import type {
   KinloomCliPluginContext,
   KinloomVerifyCheck,
 } from '../pluginTypes.js';
-import { formatSyntheticProbeReport, resolveProbeBudgets } from './syntheticProbeParsing.js';
+import {
+  formatSyntheticProbeReport,
+  parseExpectedPluginsCsv,
+  resolveProbeBudgets,
+  resolveProbeToken,
+} from './syntheticProbeParsing.js';
 import { runSyntheticProbe } from './syntheticProbeRunner.js';
 import {
   DEFAULT_MEDIA_RANGE_BYTES,
@@ -21,13 +26,17 @@ import {
 } from './syntheticProbeTypes.js';
 
 export {
+  discoverFirstDeceasedPersonSlugFromBundle,
   discoverFirstMediaPathFromBundle,
   evaluateSecurityHeaders,
   formatSyntheticProbeReport,
   normalizeProbeBaseUrl,
+  parseExpectedPluginsCsv,
   parseServerTimingHeader,
   resolveProbeBudgets,
+  resolveProbeToken,
 } from './syntheticProbeParsing.js';
+export { runPluginHealthProbes } from './syntheticProbePlugins.js';
 export { runSyntheticProbe } from './syntheticProbeRunner.js';
 export {
   type BundleColdProbeResult,
@@ -40,9 +49,12 @@ export {
   type MediaRangeProbeResult,
   type MediaRangeSource,
   type ParsedServerTiming,
+  type PluginProbesReport,
   type RunSyntheticProbeInput,
   type SecurityHeaderCheckResult,
   type ServerTimingSpanName,
+  type SinglePluginProbeResult,
+  type SinglePluginProbeStatus,
   SYNTHETIC_PROBE_COMMAND_NAME,
   SYNTHETIC_PROBE_PLUGIN_ID,
   SYNTHETIC_PROBE_VERIFY_CHECK_ID,
@@ -55,13 +67,16 @@ export {
 export const SYNTHETIC_PROBE_HELP = `Usage: kinloom probe --url <baseUrl> [options]
 
 Measure HTML TTFB and security headers, /api/bundle cold vs conditional 304 latency,
-RFC Server-Timing spans, and R2 media HTTP 206 byte-range delivery against a live Kinloom archive.
+RFC Server-Timing spans, R2 media HTTP 206 byte-range delivery, and optional live plugin
+health checks against a Kinloom archive.
 
 Options:
   --url <baseUrl>                 Target archive base URL (or KINLOOM_PROBE_URL / plugin targetUrl)
   --media-path <path>             Explicit same-origin media path for the 206 Range probe
   --media-range-bytes <bytes>     Leading byte count for the Range probe (default: ${DEFAULT_MEDIA_RANGE_BYTES})
-  --token <secret>                Optional bearer token for private archive probes
+  --token <secret>                Bearer token (defaults to KINLOOM_PROBE_TOKEN, KINLOOM_TOKEN, or KINLOOM_AGENT_TOKEN)
+  --plugins                       Run live plugin health checks and private-archive leak guard
+  --expect-plugins <csv>          Comma-separated server plugin IDs required to be active (implies --plugins)
   --timeout-ms <ms>               Per-request timeout in ms (default: ${DEFAULT_PROBE_TIMEOUT_MS})
   --max-html-ttfb-ms <ms>         HTML root TTFB budget in ms (default: ${DEFAULT_SYNTHETIC_PROBE_BUDGETS.maxHtmlTtfbMs})
   --max-bundle-cold-ms <ms>       /api/bundle cold fetch budget in ms (default: ${DEFAULT_SYNTHETIC_PROBE_BUDGETS.maxBundleColdMs})
@@ -84,6 +99,8 @@ function parseProbeCommandArgs(
   readonly token?: string;
   readonly timeoutMs: number;
   readonly budgets: SyntheticProbeBudgets;
+  readonly checkPlugins: boolean;
+  readonly expectPlugins: readonly string[];
   readonly json: boolean;
 } {
   const { values } = safeParseArgs({
@@ -94,6 +111,8 @@ function parseProbeCommandArgs(
       'media-path': { type: 'string' },
       'media-range-bytes': { type: 'string' },
       token: { type: 'string' },
+      plugins: { type: 'boolean', default: false },
+      'expect-plugins': { type: 'string' },
       'timeout-ms': { type: 'string' },
       'max-html-ttfb-ms': { type: 'string' },
       'max-bundle-cold-ms': { type: 'string' },
@@ -154,7 +173,11 @@ function parseProbeCommandArgs(
     pluginOptions.timeoutMs ??
     DEFAULT_PROBE_TIMEOUT_MS;
 
-  const token = values.token?.trim() || pluginOptions.token?.trim() || undefined;
+  const token = resolveProbeToken(values.token, pluginOptions.token);
+  const cliExpectPlugins = parseExpectedPluginsCsv(values['expect-plugins']);
+  const expectPlugins = cliExpectPlugins.length > 0 ? cliExpectPlugins : (pluginOptions.expectPlugins ?? []);
+  const checkPlugins =
+    Boolean(values.plugins) || expectPlugins.length > 0 || Boolean(pluginOptions.checkPlugins);
 
   return {
     targetUrl,
@@ -164,6 +187,8 @@ function parseProbeCommandArgs(
     token,
     timeoutMs,
     budgets,
+    checkPlugins,
+    expectPlugins,
     json: Boolean(values.json),
   };
 }
@@ -171,7 +196,7 @@ function parseProbeCommandArgs(
 function createProbeCommand(pluginOptions: SyntheticProbePluginOptions): KinloomCliCommand {
   return {
     name: SYNTHETIC_PROBE_COMMAND_NAME,
-    summary: 'Run synthetic performance, caching, security-header, and media 206 probes',
+    summary: 'Run synthetic performance, caching, security-header, media 206, and plugin health probes',
     help: SYNTHETIC_PROBE_HELP,
     async run(args: readonly string[], ctx: KinloomCliPluginContext): Promise<CliExitCode> {
       const parsed = parseProbeCommandArgs(args, pluginOptions);
@@ -183,6 +208,8 @@ function createProbeCommand(pluginOptions: SyntheticProbePluginOptions): Kinloom
         token: parsed.token,
         budgets: parsed.budgets,
         timeoutMs: parsed.timeoutMs,
+        checkPlugins: parsed.checkPlugins,
+        expectPlugins: parsed.expectPlugins,
         fetchImpl: ctx.fetchImpl ?? pluginOptions.fetchImpl,
         clock: pluginOptions.clock,
       });
@@ -218,9 +245,11 @@ function createSyntheticProbeVerifyCheck(pluginOptions: SyntheticProbePluginOpti
         mediaPath: pluginOptions.mediaPath,
         mediaPathSource: pluginOptions.mediaPath ? 'option' : undefined,
         mediaRangeBytes: pluginOptions.mediaRangeBytes,
-        token: pluginOptions.token,
+        token: resolveProbeToken(undefined, pluginOptions.token),
         budgets: pluginOptions.budgets,
         timeoutMs: pluginOptions.timeoutMs,
+        checkPlugins: pluginOptions.checkPlugins,
+        expectPlugins: pluginOptions.expectPlugins,
         fetchImpl: pluginOptions.fetchImpl,
         clock: pluginOptions.clock,
       });

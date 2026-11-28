@@ -13,6 +13,7 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:e2e": "npm run build --workspace=@kinloom/demo && playwright test",
+    "test:e2e:plugins": "npm run build --workspace=@kinloom/worker && npm run build --workspace=@kinloom/cli && npm run build --workspace=@kinloom/demo && playwright test e2e/plugins-fullstack.spec.ts",
     "test:cwv": "npm run build --workspace=@kinloom/demo && KINLOOM_CWV_BUDGET=1 playwright test e2e/cwv-budget.spec.ts",
     "check:arch": "node scripts/check-architecture.mjs",
     "check:contrast": "node scripts/check-contrast.mjs",

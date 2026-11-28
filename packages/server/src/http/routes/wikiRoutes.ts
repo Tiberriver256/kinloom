@@ -31,6 +31,7 @@ const OptionalSummaryBodySchema = z.object({
 export interface WikiRouteHandlerDeps {
   readonly bundleReadService: BundleReadService;
   readonly wikiWriteService: WikiWriteService;
+  readonly mode?: 'private' | 'public';
 }
 
 function buildExportHeaders(etag: string, headRevisionId: number): Record<string, string> {
@@ -42,29 +43,32 @@ function buildExportHeaders(etag: string, headRevisionId: number): Record<string
 }
 
 export function createWikiRouteHandler(deps: WikiRouteHandlerDeps): HttpRouteHandler {
-  const { bundleReadService, wikiWriteService } = deps;
+  const { bundleReadService, wikiWriteService, mode = 'private' } = deps;
 
   return async (ctx) => {
     const { request, url, pathname, method, segments, auth, telemetry } = ctx;
 
     if (method === 'GET' && pathname === '/api/bundle') {
-      requireMinRole(auth.principal, 'viewer', {
-        allowAgentScopes: ['write_batch', 'read_backup'],
-        telemetry,
-        bearerRejected: auth.bearerRejected,
-      });
+      if (mode !== 'public') {
+        requireMinRole(auth.principal, 'viewer', {
+          allowAgentScopes: ['write_batch', 'read_backup'],
+          telemetry,
+          bearerRejected: auth.bearerRejected,
+        });
+      }
       const result = await timeSpan(telemetry, 'bundle', () =>
         bundleReadService.getBundle({
           ifNoneMatch: request.headers.get('if-none-match'),
           telemetry,
         })
       );
+      const bundleCacheControl = mode === 'public' ? 'no-cache' : 'private, no-cache';
       if (result.status === 'not_modified') {
         return new Response(null, {
           status: 304,
           headers: {
             etag: result.etag,
-            'cache-control': 'private, no-cache',
+            'cache-control': bundleCacheControl,
             vary: 'Cookie, Authorization',
           },
         });
@@ -74,7 +78,7 @@ export function createWikiRouteHandler(deps: WikiRouteHandlerDeps): HttpRouteHan
         headers: {
           'content-type': 'application/json; charset=utf-8',
           etag: result.object.etag,
-          'cache-control': 'private, no-cache',
+          'cache-control': bundleCacheControl,
           vary: 'Cookie, Authorization',
         },
       });

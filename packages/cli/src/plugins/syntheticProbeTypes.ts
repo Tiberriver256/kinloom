@@ -61,6 +61,10 @@ export interface SyntheticProbePluginOptions {
   readonly budgets?: Partial<SyntheticProbeBudgets>;
   /** Optional timeout in milliseconds per HTTP request (default: 15000). */
   readonly timeoutMs?: number;
+  /** Run live plugin health verification checks by default. */
+  readonly checkPlugins?: boolean;
+  /** Server plugin IDs required to be active when plugin health checks run. */
+  readonly expectPlugins?: readonly string[];
   /** Optional fetch implementation for deterministic tests. */
   readonly fetchImpl?: typeof fetch;
   /** Optional clock for deterministic latency and timestamp measurement. */
@@ -92,6 +96,7 @@ export interface BundleColdProbeResult {
   readonly bytes: number;
   readonly etag: string | null;
   readonly cacheControl: string | null;
+  readonly xRequestId?: string | null;
   readonly serverTiming: ParsedServerTiming;
   readonly error?: string;
 }
@@ -147,6 +152,25 @@ export type MediaRangeProbeResult =
       readonly error?: string;
     };
 
+export type SinglePluginProbeStatus = 'pass' | 'warn' | 'fail' | 'skipped';
+
+export interface SinglePluginProbeResult {
+  readonly pluginId: string;
+  readonly status: SinglePluginProbeStatus;
+  readonly httpStatus: number | null;
+  readonly durationMs: number;
+  readonly detail: string;
+  readonly violations: readonly string[];
+}
+
+export interface PluginProbesReport {
+  readonly status: 'pass' | 'fail';
+  readonly checks: readonly SinglePluginProbeResult[];
+  readonly leakGuardPassed: boolean | null;
+  readonly diagnosticsChecked: boolean;
+  readonly violations: readonly string[];
+}
+
 export interface SyntheticProbeReport {
   readonly ok: boolean;
   readonly targetUrl: string;
@@ -156,6 +180,7 @@ export interface SyntheticProbeReport {
   readonly html: HtmlProbeResult;
   readonly bundle: BundleProbeResult;
   readonly mediaRange: MediaRangeProbeResult;
+  readonly plugins?: PluginProbesReport;
   readonly violations: readonly string[];
 }
 
@@ -167,6 +192,8 @@ export interface RunSyntheticProbeInput {
   readonly token?: string;
   readonly budgets?: Partial<SyntheticProbeBudgets>;
   readonly timeoutMs?: number;
+  readonly checkPlugins?: boolean;
+  readonly expectPlugins?: readonly string[];
   readonly fetchImpl?: typeof fetch;
   readonly clock?: SyntheticProbeClock;
 }

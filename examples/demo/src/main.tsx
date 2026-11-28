@@ -51,6 +51,11 @@ function isRecipesPluginEnabled(): boolean {
   return meta?.content === 'true' || readEnvFlag('VITE_KINLOOM_RECIPES_PLUGIN') === 'true';
 }
 
+function isAllPluginsEnabled(): boolean {
+  const meta = document.querySelector<HTMLMetaElement>('meta[name="kinloom-all-plugins"]');
+  return meta?.content === 'true' || readEnvFlag('VITE_KINLOOM_ALL_PLUGINS') === 'true';
+}
+
 async function bootstrap(container: Element): Promise<void> {
   const narrativeAudioPlugin = createNarrativeAudioPlugin();
   const backendMode = resolveBackendMode();
@@ -70,7 +75,20 @@ async function bootstrap(container: Element): Promise<void> {
   if (isDemoPluginEnabled()) {
     plugins.push((await import('./demoStoryPlugin.js')).demoStoryPlugin);
   }
-  if (isRecipesPluginEnabled()) {
+  if (isAllPluginsEnabled()) {
+    const [obsMod, financeMod, recipesMod, bookMod] = await Promise.all([
+      import('@kinloom/ui/plugins/observabilityStatsPlugin'),
+      import('@kinloom/ui/plugins/openFinancePlugin'),
+      import('@kinloom/ui/plugins/recipesPlugin'),
+      import('@kinloom/ui/plugins/bookPublishingPlugin'),
+    ]);
+    plugins.push(
+      obsMod.createObservabilityStatsPlugin(),
+      financeMod.createOpenFinancePlugin(),
+      recipesMod.createRecipesUiPlugin(),
+      bookMod.createBookPublishingPlugin()
+    );
+  } else if (isRecipesPluginEnabled()) {
     plugins.push((await import('@kinloom/ui/plugins/recipesPlugin')).createRecipesUiPlugin());
   }
 
