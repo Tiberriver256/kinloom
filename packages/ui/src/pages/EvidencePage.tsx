@@ -64,7 +64,6 @@ export const EvidencePage: React.FC = () => {
   const [mediaChecklist, setMediaChecklist] = useState<MediaChecklistItem[]>([]);
   const uncitedHeadingRef = useRef<HTMLHeadingElement | null>(null);
   const evidenceTabsRef = useRef<HTMLDivElement | null>(null);
-  const pendingFocusUncitedRef = useRef(false);
   const tabRefs = useRef<Partial<Record<EvidenceTab, HTMLButtonElement | null>>>({});
 
   const syncEvidenceUrl = (nextTab: EvidenceTab): void => {
@@ -77,13 +76,6 @@ export const EvidencePage: React.FC = () => {
   const selectTab = (nextTab: EvidenceTab): void => {
     setTab(nextTab);
     syncEvidenceUrl(nextTab);
-  };
-
-  const openNeedsCitationTab = (): void => {
-    setTab('uncited');
-    setShowAllUnverified(false);
-    pendingFocusUncitedRef.current = true;
-    syncEvidenceUrl('uncited');
   };
 
   useHorizontalScrollFade(evidenceTabsRef, bundle ? 'evidence-tabs' : '');
@@ -108,20 +100,6 @@ export const EvidencePage: React.FC = () => {
         block: 'nearest',
         inline: 'nearest',
       });
-    }
-  }, [tab]);
-
-  useEffect(() => {
-    if (!pendingFocusUncitedRef.current || tab !== 'uncited') {
-      return;
-    }
-    pendingFocusUncitedRef.current = false;
-    const heading = uncitedHeadingRef.current;
-    if (heading) {
-      heading.focus({ preventScroll: true });
-      if (typeof heading.scrollIntoView === 'function') {
-        heading.scrollIntoView({ behavior: scrollBehaviorForMotion(), block: 'start' });
-      }
     }
   }, [tab]);
 
@@ -172,7 +150,20 @@ export const EvidencePage: React.FC = () => {
       <div>
         <ExplorerTopBar />
         <main id="main-content" className={cx(layoutStyles, 'index-page')}>
-          {KINLOOM_VOCABULARY.evidence.loading}
+          <div
+            className={cx(evidenceStyles, 'evidence-loading-skeleton')}
+            role="status"
+            aria-label={KINLOOM_VOCABULARY.evidence.loading}
+          >
+            <span className={cx(evidenceStyles, 'visually-hidden')}>
+              {KINLOOM_VOCABULARY.evidence.loading}
+            </span>
+            <div className={cx(evidenceStyles, 'evidence-skeleton-line evidence-skeleton-line-lg')} />
+            <div className={cx(evidenceStyles, 'evidence-skeleton-grid')}>
+              <div className={cx(evidenceStyles, 'evidence-skeleton-card')} />
+              <div className={cx(evidenceStyles, 'evidence-skeleton-card')} />
+            </div>
+          </div>
         </main>
       </div>
     );
@@ -202,9 +193,7 @@ export const EvidencePage: React.FC = () => {
           <div>
             <h1>{KINLOOM_VOCABULARY.evidence.heading}</h1>
             <p className={cx(evidenceStyles, 'evidence-banner-lead')}>
-              Provenance audit separating primary sources from uncited tree entries, preserving source
-              discrepancies, and cataloging portraits, family photos, headstones, record scans, and document
-              scans.
+              Primary records, preserved discrepancies, and archival scans
             </p>
           </div>
           <div
@@ -222,21 +211,10 @@ export const EvidencePage: React.FC = () => {
             </div>
             <div style={{ color: 'var(--radar-copresence)' }}>
               <strong>{allMedia.length}</strong> photos &amp; documents ·{' '}
-              {unverifiedEvents.length === 0 ? (
-                <span>
-                  <strong>0</strong> entries needing citation
-                </span>
-              ) : (
-                <button
-                  type="button"
-                  className={cx(evidenceStyles, 'evidence-gap-cta')}
-                  aria-pressed={tab === 'uncited'}
-                  onClick={openNeedsCitationTab}
-                >
-                  <strong>{unverifiedEvents.length}</strong>{' '}
-                  {unverifiedEvents.length === 1 ? 'entry' : 'entries'} needing citation →
-                </button>
-              )}
+              <span>
+                <strong>{unverifiedEvents.length}</strong>{' '}
+                {unverifiedEvents.length === 1 ? 'entry' : 'entries'} needing citation
+              </span>
             </div>
           </div>
         </section>

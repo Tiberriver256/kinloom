@@ -132,7 +132,16 @@ export const PlacePage: React.FC = () => {
       <div>
         <ExplorerTopBar />
         <main id="main-content" className={cx(layoutStyles, 'place-page')}>
-          Loading archive…
+          <div
+            className={cx(placeStyles, 'place-loading-skeleton')}
+            role="status"
+            aria-label="Loading archive"
+          >
+            <span className={cx(placeStyles, 'visually-hidden')}>Loading archive…</span>
+            <div className={cx(placeStyles, 'place-skeleton-line place-skeleton-line-sm')} />
+            <div className={cx(placeStyles, 'place-skeleton-line place-skeleton-line-lg')} />
+            <div className={cx(placeStyles, 'place-skeleton-map')} />
+          </div>
         </main>
       </div>
     );
@@ -197,27 +206,28 @@ export const PlacePage: React.FC = () => {
         id="main-content"
         className={joinClasses(cx(layoutStyles, 'place-page'), cx(placeStyles, 'place-folio-shell'))}
       >
-        {(occupancyRows.rows.length > 0 || hasPlaceMarginalia) && (
-          <div className={cx(placeStyles, 'place-utility-bar print-hide')}>
-            {occupancyRows.rows.length > 0 ? (
+        <div className={cx(placeStyles, 'place-utility-bar print-hide')}>
+          <nav className={cx(placeStyles, 'place-breadcrumb')} aria-label="Breadcrumb">
+            <Link to="/places">Places</Link>
+            <span aria-hidden="true">/</span>
+            <span aria-current="page">{place.name}</span>
+          </nav>
+          <div className={cx(placeStyles, 'place-utility-actions')}>
+            {occupancyRows.rows.length > 0 && (
               <Link to={`/time?year=${occupancyRows.minYear}`} className={cx(atomStyles, 'ink-link-btn')}>
                 See Family in {occupancyRows.minYear} →
               </Link>
-            ) : (
-              <span />
             )}
+            <Link to={`/map?place=${place.slug}`} className={cx(atomStyles, 'ink-link-btn')}>
+              Migration Map →
+            </Link>
             {hasPlaceMarginalia && <FolioMarginaliaToggle />}
           </div>
-        )}
+        </div>
 
         <section className={cx(layoutStyles, 'place-map-box')}>
           <div className={cx(placeStyles, 'place-header-top')}>
             <div>
-              <nav className={cx(placeStyles, 'place-breadcrumb print-hide')} aria-label="Breadcrumb">
-                <Link to="/places">Places</Link>
-                <span aria-hidden="true">/</span>
-                <span aria-current="page">{place.name}</span>
-              </nav>
               <h1 className={cx(placeStyles, 'place-dossier-title')}>{place.full_name}</h1>
               {occupancyRows.rows.length > 0 && (
                 <p className={cx(placeStyles, 'place-front-door-summary')}>
@@ -293,9 +303,6 @@ export const PlacePage: React.FC = () => {
                   </button>
                 ))}
               </div>
-              <Link to={`/map?place=${place.slug}`} className={cx(atomStyles, 'ink-link-btn')}>
-                Migration Map →
-              </Link>
             </div>
           </div>
 

@@ -1,6 +1,78 @@
 /* ==========================================================================
    Kinship & Life-Overlap Finder (/kinship)
    ========================================================================== */
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
+}
+
+.kinship-loading-skeleton {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 8px 0 32px;
+}
+
+.kinship-skeleton-line {
+  height: 14px;
+  border-radius: var(--radius-sm);
+  background: var(--surface-linen);
+  animation: kinship-skeleton-pulse 1.5s ease-in-out infinite;
+}
+
+.kinship-skeleton-line-lg {
+  width: min(320px, 70%);
+  height: 28px;
+}
+
+.kinship-skeleton-card {
+  width: 100%;
+  height: 76px;
+  border-radius: var(--radius-control);
+  background: var(--surface-subtle);
+  border: var(--border-width-thin) solid var(--border-decorative);
+  animation: kinship-skeleton-pulse 1.5s ease-in-out infinite;
+}
+
+.kinship-skeleton-card-tall {
+  height: 180px;
+}
+
+@keyframes kinship-skeleton-pulse {
+  0%,
+  100% {
+    opacity: 0.55;
+  }
+
+  50% {
+    opacity: 1;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .kinship-skeleton-line,
+  .kinship-skeleton-card {
+    animation: none;
+  }
+}
+
+.kinship-banner {
+  margin-bottom: 18px;
+}
+
+.kinship-banner-links {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
 .kinship-selector-card {
   background: transparent;
   border: none;
@@ -202,8 +274,8 @@
   gap: 8px;
   padding: 7px 11px;
   background: var(--surface-overlay-soft);
-  border: 1px solid var(--border-control);
-  border-radius: var(--radius-sm);
+  border: var(--border-width-thin) solid var(--border-decorative);
+  border-radius: var(--radius-control);
   color: var(--text-primary);
   text-decoration: none;
   font-size: var(--text-sm);
@@ -274,7 +346,12 @@
   gap: 14px;
 }
 
+.kinship-result-section {
+  order: 1;
+}
+
 .kinship-examples-bar {
+  order: 2;
   margin: 0;
 }
 
@@ -288,10 +365,10 @@
 .kinship-examples-bar :global(.pill-btn) {
   text-align: left;
   min-height: var(--control-height-sm);
-  border: var(--border-width-thin) solid var(--border-decorative);
+  border: none;
   border-radius: var(--radius-control);
   padding: 5px 10px;
-  background: var(--surface-subtle);
+  background: var(--surface-linen);
   font-family: var(--font-ui);
 }
 
@@ -313,16 +390,57 @@
   }
 
   .kinship-examples-bar :global(.pill-btn):hover {
-    border-color: var(--accent-primary);
-    background: var(--surface-linen);
+    background: var(--surface-muted);
+    color: var(--surface-header);
   }
 }
 
 /* Responsive overrides */
 
 @media (max-width: 768px) {
+  .kinship-banner {
+    padding-bottom: 10px;
+    margin-bottom: 10px;
+    gap: 6px;
+  }
+
+  .kinship-banner p,
+  .kinship-banner-links {
+    display: none;
+  }
+
+  .kinship-selector-card {
+    padding: 0 0 12px;
+    margin-bottom: 12px;
+  }
+
   .kinship-selector-grid {
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 8px 10px;
+    align-items: center;
+  }
+
+  .kinship-field-a {
+    grid-column: 1;
+    grid-row: 1;
+  }
+
+  .kinship-field-b {
+    grid-column: 1;
+    grid-row: 2;
+  }
+
+  .kinship-swap-btn {
+    grid-column: 2;
+    grid-row: 1 / span 2;
+    align-self: center;
+    min-width: var(--control-height-touch);
+    min-height: var(--control-height-touch);
+    padding: 0 10px;
+  }
+
+  .kinship-swap-text {
+    display: none;
   }
 
   .kinship-stats-row {
@@ -365,32 +483,22 @@
     padding: 2px 8px;
   }
 
-  .kinship-result-section {
-    order: 1;
-  }
-
   .kinship-examples-bar {
-    order: 2;
-    flex-wrap: nowrap;
-    overflow-x: auto;
-    scrollbar-width: none;
-    gap: 8px;
+    flex-wrap: wrap;
+    overflow-x: visible;
+    gap: 6px 8px;
     padding-bottom: 4px;
   }
 
-  .kinship-examples-bar::-webkit-scrollbar {
-    display: none;
-  }
-
   .kinship-examples-bar :global(.pill-btn) {
-    flex-shrink: 0;
-    white-space: nowrap;
+    flex-shrink: 1;
+    white-space: normal;
     text-align: left;
     min-height: var(--control-height-touch);
-    border: var(--border-width-thin) solid var(--border-decorative);
+    border: none;
     border-radius: var(--radius-control);
     padding: 6px 12px;
-    background: var(--surface-subtle);
+    background: var(--surface-linen);
     font-family: var(--font-ui);
   }
 

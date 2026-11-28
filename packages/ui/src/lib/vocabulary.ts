@@ -154,7 +154,7 @@ export const KINLOOM_VOCABULARY = {
     lead: 'Select any two people in the archive to trace their shortest documented kinship path, overlapping years alive, and shared places.',
     familyTreeCta: 'Family Tree →',
     migrationMapCta: 'Migration Map →',
-    shortestPathHint: 'SHORTEST LINEAGE CHAIN:',
+    shortestPathHint: 'Documented family line:',
     sharedPlacesHeading: 'SHARED PLACES:',
   },
   evidence: {

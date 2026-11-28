@@ -328,6 +328,11 @@ export const PersonPage: React.FC = () => {
 
       <div className={cx(personStyles, 'explorer-split')}>
         <main id="main-content" className={cx(personStyles, 'narrative-pane')}>
+          <nav className={cx(personStyles, 'person-breadcrumb print-hide')} aria-label="Breadcrumb">
+            <Link to="/">People</Link>
+            <span aria-hidden="true">/</span>
+            <span aria-current="page">{person.full_name}</span>
+          </nav>
           <PersonProfileHeader
             person={person}
             portraitUrl={resolvedPortraitUrl}

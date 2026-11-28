@@ -37,6 +37,28 @@ export function truncateAtWordBoundary(text: string, maxLength = 130): string {
   return `${stripped}…`;
 }
 
+const COMMON_ABBREVIATION_END_RE = /(?:^|[\s(])(?:U\.S|D\.C|St|Jr|Sr|Capt|Col|Rev|Dr|c)\.$/i;
+
+export function extractFirstSentence(text: string): string {
+  const trimmed = text.trim();
+  if (!trimmed) {
+    return '';
+  }
+  const boundaryRe = /([.!?])(?=\s+|$)/g;
+  for (const match of trimmed.matchAll(boundaryRe)) {
+    const idx = match.index;
+    if (idx === undefined) {
+      continue;
+    }
+    const candidate = trimmed.slice(0, idx + 1);
+    if (match[1] === '.' && COMMON_ABBREVIATION_END_RE.test(candidate)) {
+      continue;
+    }
+    return candidate;
+  }
+  return trimmed;
+}
+
 export function cleanTimeActivityNote(
   note: string,
   sourceEvent?: ArchiveEvent | null,
@@ -47,12 +69,32 @@ export function cleanTimeActivityNote(
     return '';
   }
 
-  // Re-derive cleanly at a word boundary when upstream clipped a long event summary mid-word.
-  if (trimmed.endsWith('…') && sourceEvent?.summary) {
+  // Re-derive cleanly when upstream clipped a long summary mid-word or split on a common abbreviation (e.g. "U.S.").
+  if (sourceEvent?.summary) {
     const rawSummary = sourceEvent.summary.trim();
-    const firstSentence = rawSummary.split(/(?<=[.!?])\s+/)[0] || rawSummary;
-    if (firstSentence.length > maxLength && firstSentence.startsWith(trimmed.slice(0, 24))) {
+    const firstSentence = extractFirstSentence(rawSummary);
+    if (
+      trimmed.endsWith('…') &&
+      firstSentence.length > maxLength &&
+      firstSentence.startsWith(trimmed.slice(0, 24))
+    ) {
       return truncateAtWordBoundary(firstSentence, maxLength);
+    }
+    if (COMMON_ABBREVIATION_END_RE.test(trimmed)) {
+      if (firstSentence.length > trimmed.length && firstSentence.startsWith(trimmed)) {
+        return firstSentence.length > maxLength
+          ? truncateAtWordBoundary(firstSentence, maxLength)
+          : firstSentence;
+      }
+      const colonIdx = trimmed.indexOf(': ');
+      if (colonIdx !== -1) {
+        const prefix = trimmed.slice(0, colonIdx + 2);
+        const body = trimmed.slice(colonIdx + 2);
+        if (body.length > 0 && firstSentence.length > body.length && firstSentence.startsWith(body)) {
+          const restored = `${prefix}${firstSentence}`;
+          return restored.length > maxLength ? truncateAtWordBoundary(restored, maxLength) : restored;
+        }
+      }
     }
   }
 

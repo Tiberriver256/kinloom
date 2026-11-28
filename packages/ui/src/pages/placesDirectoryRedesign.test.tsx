@@ -231,10 +231,10 @@ describe('placesDirectoryModel pure helpers (#78)', () => {
     expect(buildPlacesDirectorySections({ entries: [], view: 'region' })).toEqual([]);
 
     const regionSections = buildPlacesDirectorySections({ entries, view: 'region' });
-    expect(regionSections.map((s) => s.heading)).toEqual(['Norfolk, England', 'Michigan, United States']);
+    expect(regionSections.map((s) => s.heading)).toEqual(['Michigan, United States', 'Norfolk, England']);
     // Within Michigan, county precedes homestead
-    expect(regionSections[1]?.entries.map((e) => e.place.place_type)).toEqual(['county', 'homestead']);
-    expect(regionSections[1]?.scentLink?.to).toBe('/map?era=midwest');
+    expect(regionSections[0]?.entries.map((e) => e.place.place_type)).toEqual(['county', 'homestead']);
+    expect(regionSections[0]?.scentLink?.to).toBe('/map?era=midwest');
 
     // Undated-only region with empty stage falls back to /map
     const undatedOnlyRegion = buildPlacesDirectorySections({ entries: [entries[3]!], view: 'region' });

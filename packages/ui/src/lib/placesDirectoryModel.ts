@@ -313,32 +313,22 @@ export function buildPlacesDirectorySections(params: {
   }
 
   if (view === 'region') {
-    const groups = new Map<
-      string,
-      { region: ParsedPlaceRegion; items: PlaceDirectoryEntry[]; earliestYear: number }
-    >();
+    const groups = new Map<string, { region: ParsedPlaceRegion; items: PlaceDirectoryEntry[] }>();
     for (const entry of entries) {
       const region = parsePlaceRegion(entry.place);
       const existing = groups.get(region.key);
-      const entryYear = entry.minYear ?? Number.MAX_SAFE_INTEGER;
       if (existing) {
         existing.items.push(entry);
-        if (entryYear < existing.earliestYear) {
-          existing.earliestYear = entryYear;
-        }
       } else {
         groups.set(region.key, {
           region,
           items: [entry],
-          earliestYear: entryYear,
         });
       }
     }
 
     return [...groups.values()]
-      .toSorted(
-        (a, b) => a.earliestYear - b.earliestYear || fastLocaleCompare(a.region.heading, b.region.heading)
-      )
+      .toSorted((a, b) => fastLocaleCompare(a.region.heading, b.region.heading))
       .map((group) => {
         const sortedItems = group.items.toSorted(compareEntriesByHierarchyAndName);
         const dominantStage = resolveDominantStage(sortedItems);
