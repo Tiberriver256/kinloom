@@ -1,7 +1,7 @@
 import type { Person, Place } from '@kinloom/core';
 import React from 'react';
 import { Link } from 'react-router-dom';
-import type { ArchivalTreeModel, LineageSpotlight } from '../../lib/archivalTreeModel.js';
+import type { ArchivalTreeModel, LineageSpotlight, TreeViewSurface } from '../../lib/archivalTreeModel.js';
 import { formatCardLifespan } from '../../lib/archivalTreeModel.js';
 import { cx, joinClasses } from '../../lib/cx.js';
 import { formatLineageGroupLabel } from '../../lib/treeNodeDisplay.js';
@@ -18,6 +18,7 @@ export interface TreeFocusDrawerProps {
   readonly placesById: ReadonlyMap<string, Place>;
   readonly thumbUrl: string | null;
   readonly baseUrl: string;
+  readonly surface?: TreeViewSurface;
   readonly onSelectPerson: (person: Person) => void;
   readonly onClearFocus: () => void;
   readonly activeAnchorPersonId?: string | null;
@@ -36,6 +37,7 @@ export const TreeFocusDrawer: React.FC<TreeFocusDrawerProps> = ({
   placesById,
   thumbUrl,
   baseUrl,
+  surface = 'roll',
   onSelectPerson,
   onClearFocus,
   activeAnchorPersonId = null,
@@ -73,7 +75,10 @@ export const TreeFocusDrawer: React.FC<TreeFocusDrawerProps> = ({
 
   return (
     <aside
-      className={cx(canvasSurfaceStyles, 'tree-popover tree-focus-drawer')}
+      className={joinClasses(
+        cx(canvasSurfaceStyles, 'tree-popover'),
+        cx(treeFocusStyles, `tree-focus-drawer tree-focus-drawer-${surface}`)
+      )}
       aria-label={`Lineage focus for ${person.full_name}`}
     >
       <div className={cx(treeFocusStyles, 'tree-focus-header')}>
@@ -100,7 +105,10 @@ export const TreeFocusDrawer: React.FC<TreeFocusDrawerProps> = ({
           aria-label="Clear focus"
           onClick={onClearFocus}
         >
-          <kbd className="kl-kbd">Esc</kbd>
+          <kbd className={joinClasses('kl-kbd', cx(treeFocusStyles, 'tree-focus-close-kbd'))}>Esc</kbd>
+          <span className={cx(treeFocusStyles, 'tree-focus-close-glyph')} aria-hidden="true">
+            ×
+          </span>
         </button>
       </div>
 

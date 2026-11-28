@@ -27,7 +27,7 @@ import {
   resolveTreeFocusPlan,
   searchTreePeople,
 } from '../lib/archivalTreeModel.js';
-import { cx } from '../lib/cx.js';
+import { cx, joinClasses } from '../lib/cx.js';
 import { KINSHIP_LOOM_ZOOM_THRESHOLD } from '../lib/tree/kinshipLoomModel.js';
 import { KINLOOM_VOCABULARY } from '../lib/vocabulary.js';
 import controlStyles from '../styles/Controls.module.css';
@@ -490,9 +490,13 @@ export const TreePage: React.FC = () => {
       <main
         id="main-content"
         ref={containerRef}
-        className={cx(canvasSurfaceStyles, `tree-page tree-page-${surface}`)}
+        className={joinClasses(
+          cx(canvasSurfaceStyles, 'tree-page'),
+          cx(treePageStyles, `tree-page-${surface}`)
+        )}
         data-surface={surface}
         data-mode={model.effectiveMode}
+        data-has-selection={selectedPerson ? 'true' : undefined}
         onPointerDown={canvas.handlePointerDown}
         onClick={(e) => {
           if (surface !== 'diagram') {
@@ -733,6 +737,7 @@ export const TreePage: React.FC = () => {
             placesById={placesById}
             thumbUrl={personThumbMap.get(selectedPerson.id) || selectedPerson.portrait_url || null}
             baseUrl={baseUrl}
+            surface={surface}
             onSelectPerson={handleFocusAndCenterPerson}
             onClearFocus={handleClearFocus}
             activeAnchorPersonId={model.anchorPersonId}

@@ -5,7 +5,9 @@ import { act } from 'react';
 import { createRoot } from 'react-dom/client';
 import { MemoryRouter } from 'react-router-dom';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import canvasSurfaceStyles from '../components/CanvasSurfacePrimitives.module.css';
 import { TreeAnchorPicker } from '../components/tree/TreeAnchorPicker.js';
+import treeFocusStyles from '../components/tree/TreeFocusDrawer.module.css';
 import {
   DiagramNodeCard,
   EarlyLossStripLayer,
@@ -15,6 +17,7 @@ import { TreeToolbar } from '../components/tree/TreeToolbar.js';
 import { ArchiveProvider } from '../context/ArchiveProvider.js';
 import { buildSynthetic145PersonArchive } from '../lib/tree/largeMultiBranchTree.test.js';
 import { TreePage } from './TreePage.js';
+import treePageStyles from './TreePage.module.css';
 import { TreeZoomControls } from './tree/TreeZoomControls.js';
 
 declare global {
@@ -1187,5 +1190,83 @@ describe('TreePage', () => {
       });
       container.remove();
     }
+  });
+
+  it('wires CSS Module classes on TreePage main and TreeFocusDrawer across List and Chart surfaces (#104)', () => {
+    const { container } = mountTreeAtWidth(390, '/tree?surface=roll&mode=full');
+
+    const main = container.querySelector<HTMLElement>('main.tree-page');
+    expect(main).not.toBeNull();
+    expect(main?.classList.contains(canvasSurfaceStyles['tree-page'])).toBe(true);
+    expect(main?.classList.contains(treePageStyles['tree-page-roll'])).toBe(true);
+    expect(main?.getAttribute('data-has-selection')).toBeNull();
+
+    const arthurCard = container.querySelector<HTMLButtonElement>(
+      'button.tree-roll-card[data-person-id="p_arthur"]'
+    );
+    const thomasCard = container.querySelector<HTMLButtonElement>(
+      'button.tree-roll-card[data-person-id="p_thomas"]'
+    );
+    expect(arthurCard).not.toBeNull();
+    expect(thomasCard).not.toBeNull();
+
+    act(() => {
+      arthurCard?.click();
+    });
+
+    expect(main?.getAttribute('data-has-selection')).toBe('true');
+    const drawer = container.querySelector<HTMLElement>('aside[aria-label="Lineage focus for Arthur Hale"]');
+    expect(drawer).not.toBeNull();
+    expect(drawer?.classList.contains(canvasSurfaceStyles['tree-popover'])).toBe(true);
+    expect(drawer?.classList.contains(treeFocusStyles['tree-focus-drawer'])).toBe(true);
+    expect(drawer?.classList.contains(treeFocusStyles['tree-focus-drawer-roll'])).toBe(true);
+    expect(drawer?.querySelector('a[href="/person/arthur-hale"]')?.textContent).toBe('Open Profile →');
+    expect(drawer?.querySelector('.tree-focus-close-glyph')?.textContent).toBe('×');
+
+    act(() => {
+      thomasCard?.click();
+    });
+    expect(container.querySelector('aside[aria-label="Lineage focus for Thomas Hale"]')).not.toBeNull();
+
+    const closeBtn = container.querySelector<HTMLButtonElement>('button.tree-focus-close-btn');
+    expect(closeBtn).not.toBeNull();
+    act(() => {
+      closeBtn?.click();
+    });
+    expect(container.querySelector('.tree-focus-drawer')).toBeNull();
+    expect(main?.getAttribute('data-has-selection')).toBeNull();
+
+    act(() => {
+      arthurCard?.click();
+    });
+    const clearBtn = container.querySelector<HTMLButtonElement>('button.tree-focus-clear-btn');
+    expect(clearBtn).not.toBeNull();
+    act(() => {
+      clearBtn?.click();
+    });
+    expect(container.querySelector('.tree-focus-drawer')).toBeNull();
+
+    const chartBtn = [...container.querySelectorAll<HTMLButtonElement>('button')].find(
+      (b) => b.textContent?.trim() === 'Chart'
+    );
+    expect(chartBtn).not.toBeNull();
+    act(() => {
+      chartBtn?.click();
+    });
+    expect(main?.classList.contains(treePageStyles['tree-page-diagram'])).toBe(true);
+
+    const henryNode = container.querySelector<SVGGElement>(
+      '.tree-node-card[aria-label="Inspect Henry Hale"]'
+    );
+    expect(henryNode).not.toBeNull();
+    act(() => {
+      henryNode?.dispatchEvent(new window.KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+    });
+    const chartDrawer = container.querySelector<HTMLElement>(
+      'aside[aria-label="Lineage focus for Henry Hale"]'
+    );
+    expect(chartDrawer).not.toBeNull();
+    expect(chartDrawer?.classList.contains(treeFocusStyles['tree-focus-drawer'])).toBe(true);
+    expect(chartDrawer?.classList.contains(treeFocusStyles['tree-focus-drawer-diagram'])).toBe(true);
   });
 });

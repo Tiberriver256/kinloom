@@ -1,8 +1,8 @@
 /* ==========================================================================
    Page 5: 2D Pan-and-Zoom Tree Viewport Shell
    ========================================================================== */
-html.tree-viewport-lock,
-html.tree-viewport-lock body {
+html:global(.tree-viewport-lock),
+html:global(.tree-viewport-lock) body {
   overflow: hidden;
   overscroll-behavior: none;
 }
@@ -182,39 +182,29 @@ html.tree-viewport-lock body {
   vector-effect: non-scaling-stroke;
 }
 
-.tree-page-roll :global(.tree-focus-drawer) {
-  position: fixed;
-  top: auto;
-  right: 18px;
-  bottom: 18px;
-  z-index: 35;
-}
-
 @media (max-width: 768px) {
-  .tree-page-roll :global(.tree-focus-drawer),
-  .tree-page-diagram :global(.tree-focus-drawer) {
-    position: fixed;
-    top: auto;
-    left: 10px;
-    right: 10px;
-    bottom: 10px;
-    width: auto;
-    max-height: 48dvh;
-    overflow-y: auto;
-    overscroll-behavior: contain;
-    z-index: 35;
+  .tree-page-roll[data-has-selection="true"] {
+    padding-bottom: calc(220px + env(safe-area-inset-bottom, 0px));
+    scroll-padding-bottom: calc(260px + env(safe-area-inset-bottom, 0px));
   }
 
   .tree-page-diagram :global(.tree-controls) {
-    right: 10px;
-    bottom: 14px;
+    right: calc(10px + env(safe-area-inset-right, 0px));
+    bottom: calc(14px + env(safe-area-inset-bottom, 0px));
   }
 
   .tree-minimap {
-    left: 10px;
-    bottom: 14px;
+    left: calc(10px + env(safe-area-inset-left, 0px));
+    bottom: calc(14px + env(safe-area-inset-bottom, 0px));
     width: 164px;
     padding: 6px;
+  }
+
+  .tree-page-diagram[data-has-selection="true"] :global(.tree-controls),
+  .tree-page-diagram[data-has-selection="true"] .tree-minimap {
+    opacity: 0;
+    pointer-events: none;
+    visibility: hidden;
   }
 
   .tree-minimap :global(.tree-minimap-toggle) {
