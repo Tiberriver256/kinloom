@@ -475,7 +475,7 @@ describe('MapLibre and token dark-mode parity', () => {
     });
     const borderLayer = darkOhm.layers.find((l) => l.id === 'land_ohm_borders');
     expect(borderLayer && 'paint' in borderLayer ? borderLayer.paint : null).toEqual({
-      'line-color': '#BDB3A3',
+      'line-color': '#D7CEC0',
     });
     const placeLabelLayer = darkOhm.layers.find((l) => l.id === 'place_labels_ohm');
     expect(placeLabelLayer && 'paint' in placeLabelLayer ? placeLabelLayer.paint : null).toEqual({
@@ -686,8 +686,8 @@ describe('MapLibre and token dark-mode parity', () => {
     const apcaPasses = stdout.match(/^PASS \[apca-(?:light|dark)\]/gm) ?? [];
     expect(lightPasses).toHaveLength(34);
     expect(darkPasses).toHaveLength(34);
-    expect(apcaPasses).toHaveLength(19);
-    expect(stdout).toContain('All 68 Kinloom WCAG contrast checks (34 light + 34 dark), 19 APCA checks');
+    expect(apcaPasses).toHaveLength(21);
+    expect(stdout).toContain('All 68 Kinloom WCAG contrast checks (34 light + 34 dark), 21 APCA checks');
     expect(stdout).not.toContain('FAIL');
   });
 });

@@ -315,22 +315,19 @@ describe('Issue #69 stewardship flows: EvidenceLegend, uncited CTA, completeness
     await flushUi();
     await flushUi();
 
-    const gapBtn = Array.from(container.querySelectorAll('button')).find((b) =>
-      /1 entry needing citation/i.test(b.textContent || '')
-    );
-    expect(gapBtn).toBeDefined();
-    expect(gapBtn?.getAttribute('aria-pressed')).toBe('false');
+    expect(container.textContent).toMatch(/1 entry needing citation/i);
+    const needsCitationTab = Array.from(container.querySelectorAll('[role="tab"]')).find((t) =>
+      /needs citation/i.test(t.textContent || '')
+    ) as HTMLElement | undefined;
+    expect(needsCitationTab).toBeDefined();
+    expect(needsCitationTab?.getAttribute('aria-selected')).toBe('false');
 
     act(() => {
-      gapBtn?.click();
+      needsCitationTab?.click();
     });
     await flushUi();
 
     expect(container.querySelector('[data-testid="loc"]')?.textContent).toBe('/evidence?tab=uncited');
-    expect(gapBtn?.getAttribute('aria-pressed')).toBe('true');
-    const needsCitationTab = Array.from(container.querySelectorAll('[role="tab"]')).find((t) =>
-      /needs citation/i.test(t.textContent || '')
-    );
     expect(needsCitationTab?.getAttribute('aria-selected')).toBe('true');
     expect(container.textContent).toContain('Entries Needing Primary Citation (1)');
     expect(container.textContent).toContain('Uncited Oxford Farm Note');

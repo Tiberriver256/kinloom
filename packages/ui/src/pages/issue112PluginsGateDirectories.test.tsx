@@ -486,10 +486,19 @@ describe('Issue #112 — Sign-In Gate typography, Directories, Evidence, Kinship
         </ArchiveProvider>
       </MemoryRouter>
     );
-    expect(container.textContent).toContain('Clara Alder ↔ Henry Alder');
     expect(container.textContent).not.toContain('<->');
     expect(container.textContent).toContain('1840–1910');
     expect(container.textContent).toContain('1865–1938');
     expect(container.textContent).toContain('Overlap 1865–1910');
+
+    const altContainer = mountEl(
+      <MemoryRouter initialEntries={['/kinship?from=p_undated&to=p_clara']}>
+        <ArchiveProvider siteConfig={SITE_CONFIG} initialBundle={TEST_BUNDLE}>
+          <KinshipPage />
+        </ArchiveProvider>
+      </MemoryRouter>
+    );
+    expect(altContainer.textContent).toContain('Clara Alder ↔ Henry Alder');
+    expect(altContainer.textContent).not.toContain('<->');
   });
 });

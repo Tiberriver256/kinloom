@@ -47,9 +47,9 @@ export const OnboardingChecklistCard: React.FC<OnboardingChecklistCardProps> = (
   const isVisible = Boolean(
     onboarding &&
       (surface === 'admin'
-        ? onboarding.role === 'admin'
-        : onboarding.role === 'viewer' || onboarding.role === 'editor') &&
-      onboarding.state.checklist_visibility !== 'dismissed' &&
+        ? onboarding.role === 'admin' && onboarding.state.checklist_visibility !== 'dismissed'
+        : (onboarding.role === 'viewer' || onboarding.role === 'editor') &&
+          onboarding.state.checklist_visibility === 'open') &&
       onboarding.checklist.totalCount > 0
   );
 

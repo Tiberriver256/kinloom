@@ -398,15 +398,15 @@ describe('OnboardingChecklistCard, Guide menu, persistence, and contextual empty
       />
     );
 
-    const card = firstMount.container.querySelector('[data-testid="onboarding-checklist-card"]');
-    expect(card?.textContent).toContain('Reader guide');
-    expect(card?.textContent).toContain('0/6');
-    expect(card?.textContent).not.toContain('Explore this family archive');
-    const openStripBtn = findButtonByText(firstMount.container, 'Open');
-    expect(openStripBtn?.getAttribute('aria-expanded')).toBe('false');
+    // Collapsed inline banner is suppressed on / to preserve above-the-fold yield; open via topbar Guide menu
+    expect(firstMount.container.querySelector('[data-testid="onboarding-checklist-card"]')).toBeNull();
     await act(async () => {
-      openStripBtn?.click();
+      findButtonByText(firstMount.container, 'Guide')?.click();
     });
+    await act(async () => {
+      findButtonByText(firstMount.container, 'Getting Started Checklist')?.click();
+    });
+    const card = firstMount.container.querySelector('[data-testid="onboarding-checklist-card"]');
     expect(card?.textContent).toContain('Explore this family archive');
     expect(card?.textContent).toContain('0 of 6 steps completed');
 
@@ -431,23 +431,22 @@ describe('OnboardingChecklistCard, Guide menu, persistence, and contextual empty
     });
     expect(firstMount.container.textContent).toContain('1 of 6 steps completed');
 
-    // Collapse, dismiss directly from the compact strip, and verify persistence across remount
+    // Collapse hides inline card cleanly back to topbar Guide, and dismiss persists across remount
     await act(async () => {
       findButtonByText(firstMount.container, 'Collapse')?.click();
     });
-    expect(card?.textContent).toContain('1/6');
-    expect(findButtonByText(firstMount.container, 'Open')?.getAttribute('aria-expanded')).toBe('false');
+    expect(firstMount.container.querySelector('[data-testid="onboarding-checklist-card"]')).toBeNull();
     await act(async () => {
-      findButtonByText(firstMount.container, 'Open')?.click();
-    });
-    expect(card?.textContent).toContain('Explore this family archive');
-
-    // Dismiss from expanded card, reopen via collapse/dismiss path as well
-    await act(async () => {
-      findButtonByText(firstMount.container, 'Collapse')?.click();
+      findButtonByText(firstMount.container, 'Guide')?.click();
     });
     await act(async () => {
-      findButtonByText(firstMount.container, 'Dismiss')?.click();
+      findButtonByText(firstMount.container, 'Getting Started Checklist')?.click();
+    });
+    expect(
+      firstMount.container.querySelector('[data-testid="onboarding-checklist-card"]')?.textContent
+    ).toContain('Explore this family archive');
+    await act(async () => {
+      findButtonByText(firstMount.container, 'Dismiss checklist')?.click();
     });
     expect(firstMount.container.querySelector('[data-testid="onboarding-checklist-card"]')).toBeNull();
     await firstMount.unmount();
@@ -545,12 +544,18 @@ describe('OnboardingChecklistCard, Guide menu, persistence, and contextual empty
       findButtonByText(secondMount.container, 'Close')?.click();
     });
 
-    // Reset Tutorial & Onboarding Progress clears completed steps and restores the inline guide
+    // Reset Tutorial & Onboarding Progress clears completed steps and keeps / clean until reopened
     await act(async () => {
       findButtonByText(secondMount.container, 'Guide')?.click();
     });
     await act(async () => {
       findButtonByText(secondMount.container, 'Reset Tutorial & Onboarding Progress')?.click();
+    });
+    await act(async () => {
+      findButtonByText(secondMount.container, 'Guide')?.click();
+    });
+    await act(async () => {
+      findButtonByText(secondMount.container, 'Getting Started Checklist')?.click();
     });
     expect(
       secondMount.container.querySelector('[data-testid="onboarding-checklist-card"]')?.textContent
@@ -613,11 +618,12 @@ describe('OnboardingChecklistCard, Guide menu, persistence, and contextual empty
       </ArchiveProvider>
     );
 
-    expect(mounted.container.textContent).toContain('Contributor guide');
     expect(mounted.container.textContent).not.toContain('Make your first archival contribution');
-
     await act(async () => {
-      findButtonByText(mounted.container, 'Open')?.click();
+      findButtonByText(mounted.container, 'Guide')?.click();
+    });
+    await act(async () => {
+      findButtonByText(mounted.container, 'Getting Started Checklist')?.click();
       await Promise.resolve();
     });
     expect(mounted.container.textContent).toContain('Make your first archival contribution');
