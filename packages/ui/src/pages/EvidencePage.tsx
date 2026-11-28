@@ -10,7 +10,7 @@ import { useArchiveData } from '../context/ArchiveDataContext.js';
 import { useArchiveUi } from '../context/ArchiveUiContext.js';
 import { handleTablistKeyDown, scrollBehaviorForMotion } from '../hooks/keyboardNav.js';
 import { useHorizontalScrollFade } from '../hooks/useHorizontalScrollFade.js';
-import { cx } from '../lib/cx.js';
+import { cx, joinClasses } from '../lib/cx.js';
 import { KINLOOM_VOCABULARY } from '../lib/vocabulary.js';
 import { PluginSlot } from '../plugins/PluginContext.js';
 import controlStyles from '../styles/Controls.module.css';
@@ -196,16 +196,23 @@ export const EvidencePage: React.FC = () => {
     <div>
       <ExplorerTopBar />
       <main id="main-content" className={cx(layoutStyles, 'place-page')}>
-        <section className={cx(layoutStyles, 'wire-banner')} style={{ marginBottom: 18 }}>
+        <section
+          className={joinClasses(cx(layoutStyles, 'wire-banner'), cx(evidenceStyles, 'evidence-banner'))}
+        >
           <div>
             <h1>{KINLOOM_VOCABULARY.evidence.heading}</h1>
-            <p>
+            <p className={cx(evidenceStyles, 'evidence-banner-lead')}>
               Provenance audit separating primary sources from uncited tree entries, preserving source
               discrepancies, and cataloging portraits, family photos, headstones, record scans, and document
               scans.
             </p>
           </div>
-          <div className={cx(atomStyles, 'folio-metrics')}>
+          <div
+            className={joinClasses(
+              cx(atomStyles, 'folio-metrics'),
+              cx(evidenceStyles, 'evidence-banner-metrics')
+            )}
+          >
             <div>
               <strong>{bundle.sources.length}</strong> cataloged sources
             </div>

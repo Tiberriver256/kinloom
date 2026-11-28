@@ -57,7 +57,7 @@
 .axis-page-header .folio-lead {
   font-size: 0.94rem;
   line-height: 1.4;
-  max-width: none;
+  max-width: 66ch;
 }
 
 .axis-page-header-actions {

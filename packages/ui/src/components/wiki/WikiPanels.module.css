@@ -404,6 +404,58 @@
   margin-top: 10px;
 }
 
+.wiki-duplicate-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: var(--control-height-sm);
+  padding: 6px 12px;
+  border: var(--border-width-thin) solid var(--badge-memory-fg);
+  border-radius: var(--radius-control);
+  background: var(--badge-memory-bg);
+  color: var(--badge-memory-fg);
+  font-family: var(--font-ui);
+  font-size: 0.84rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.wiki-duplicate-toggle:hover {
+  background: var(--surface-linen);
+}
+
+.wiki-duplicate-toggle:focus-visible {
+  outline: var(--border-width-emphasis) solid var(--action-focus);
+  outline-offset: 2px;
+}
+
+.wiki-duplicate-list {
+  margin-top: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.wiki-revision-actions :global(.pill-btn) {
+  display: inline-flex;
+  align-items: center;
+  min-height: var(--control-height-sm);
+  padding: 5px 12px;
+  border: var(--border-width-thin) solid var(--border-control);
+  border-radius: var(--radius-control);
+  background: var(--surface-subtle);
+  color: var(--text-primary);
+  font-family: var(--font-ui);
+  font-size: 0.82rem;
+  font-weight: 500;
+}
+
+.wiki-revision-actions :global(.pill-btn):hover:not(:disabled) {
+  background: var(--surface-linen);
+  border-color: var(--surface-header);
+  color: var(--surface-header);
+}
+
 .wiki-ledger-ref {
   margin-top: 8px;
   font-family: var(--font-mono);

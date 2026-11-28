@@ -267,6 +267,7 @@ export function parseRevisionOnlyResponse(raw: unknown): {
 export function parseRevisionListResponse(raw: unknown): {
   items: readonly RevisionRecord[];
   next_cursor: RevisionId | null;
+  total?: number;
 } {
   const obj = expectRecord(raw, 'revision list response');
   const items = expectArray(obj.items, 'items').map((item, idx) => parseRevisionLike(item, `items[${idx}]`));
@@ -274,7 +275,8 @@ export function parseRevisionListResponse(raw: unknown): {
     obj.next_cursor === null || obj.next_cursor === undefined
       ? null
       : asRevisionId(expectNumber(obj.next_cursor, 'next_cursor'));
-  return { items, next_cursor: nextCursor };
+  const total = typeof obj.total === 'number' && Number.isFinite(obj.total) ? obj.total : undefined;
+  return total !== undefined ? { items, next_cursor: nextCursor, total } : { items, next_cursor: nextCursor };
 }
 
 export function parseBatchRevertResponse(raw: unknown): {

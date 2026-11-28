@@ -283,7 +283,7 @@ export const AuthSignInFlow: React.FC<AuthSignInFlowProps> = ({
         ) : (
           <form className={cx(wikiFormStyles, 'wiki-edit-form')} noValidate onSubmit={handleMagicLinkSubmit}>
             <div className={cx(wikiFormStyles, 'wiki-field')}>
-              <label htmlFor={emailInputId} className={cx(wikiFormStyles, 'wiki-field-label')}>
+              <label htmlFor={emailInputId} className={cx(wikiAuthStyles, 'wiki-auth-label')}>
                 Email address
               </label>
               <input
@@ -380,7 +380,7 @@ export const AuthSignInFlow: React.FC<AuthSignInFlowProps> = ({
               onSubmit={handleInviteSubmit}
             >
               <div className={cx(wikiFormStyles, 'wiki-field')}>
-                <label htmlFor={inviteInputId} className={cx(wikiFormStyles, 'wiki-field-label')}>
+                <label htmlFor={inviteInputId} className={cx(wikiAuthStyles, 'wiki-auth-label')}>
                   Family invite link or code
                 </label>
                 <span id={inviteHintId} className={cx(wikiAuthStyles, 'wiki-field-hint')}>

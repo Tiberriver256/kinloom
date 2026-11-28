@@ -1,4 +1,4 @@
-import type { RevisionRecord } from '@kinloom/core';
+import type { RevisionId, RevisionRecord } from '@kinloom/core';
 import { asBatchId, asRevisionId } from '@kinloom/core';
 import type React from 'react';
 import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
@@ -42,7 +42,10 @@ export const RecentChangesPage: React.FC<RecentChangesPageProps> = ({ initialRev
   const [authorFilter, setAuthorFilter] = useState<AuthorFilter>('all');
   const [onlyUnreviewed, setOnlyUnreviewed] = useState<boolean>(false);
   const [revisions, setRevisions] = useState<readonly RevisionRecord[]>(initialRevisions ?? []);
+  const [nextCursor, setNextCursor] = useState<RevisionId | null>(null);
+  const [totalCount, setTotalCount] = useState<number | null>(null);
   const [loading, setLoading] = useState<boolean>(initialRevisions === undefined);
+  const [loadingMore, setLoadingMore] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
   const [expandedId, setExpandedId] = useState<number | null>(null);
@@ -68,12 +71,43 @@ export const RecentChangesPage: React.FC<RecentChangesPageProps> = ({ initialRev
         limit: 100,
       });
       setRevisions(res.items);
+      setNextCursor(res.next_cursor ?? null);
+      const resTotal = 'total' in res && typeof res.total === 'number' ? res.total : null;
+      setTotalCount(resTotal);
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
     } finally {
       setLoading(false);
     }
   }, [dataSource, authorFilter]);
+
+  const handleLoadMore = useCallback(async (): Promise<void> => {
+    if (!dataSource.listRevisions || nextCursor === null || loadingMore) {
+      return;
+    }
+    setLoadingMore(true);
+    setError(null);
+    try {
+      const res = await dataSource.listRevisions({
+        author_type: authorFilter === 'all' ? undefined : authorFilter,
+        limit: 100,
+        cursor: nextCursor,
+      });
+      setRevisions((prev) => {
+        const seen = new Set(prev.map((item) => item.revision_id));
+        const appended = res.items.filter((item) => !seen.has(item.revision_id));
+        return [...prev, ...appended];
+      });
+      setNextCursor(res.next_cursor ?? null);
+      if ('total' in res && typeof res.total === 'number') {
+        setTotalCount(res.total);
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setLoadingMore(false);
+    }
+  }, [dataSource, authorFilter, nextCursor, loadingMore]);
 
   useEffect(() => {
     if (initialRevisions !== undefined) {
@@ -288,8 +322,22 @@ export const RecentChangesPage: React.FC<RecentChangesPageProps> = ({ initialRev
           </div>
           <div className={cx(atomStyles, 'folio-metrics')}>
             <div>
-              <strong>{filteredRevisions.length}</strong>{' '}
-              {filteredRevisions.length === 1 ? 'change' : 'changes'} shown
+              {totalCount !== null && totalCount > filteredRevisions.length ? (
+                <>
+                  Showing <strong>{filteredRevisions.length.toLocaleString()}</strong> of{' '}
+                  <strong>{totalCount.toLocaleString()}</strong> changes
+                </>
+              ) : nextCursor !== null ? (
+                <>
+                  Showing <strong>{filteredRevisions.length.toLocaleString()}</strong> of{' '}
+                  <strong>{filteredRevisions.length.toLocaleString()}+</strong> changes
+                </>
+              ) : (
+                <>
+                  <strong>{filteredRevisions.length.toLocaleString()}</strong>{' '}
+                  {filteredRevisions.length === 1 ? 'change' : 'changes'} shown
+                </>
+              )}
             </div>
             <div>
               <strong>{allGroupedFeed.filter((g) => g.batchId !== null).length}</strong> research{' '}
@@ -667,6 +715,26 @@ export const RecentChangesPage: React.FC<RecentChangesPageProps> = ({ initialRev
                   );
                 })}
               </div>
+
+              {!loading && nextCursor !== null && (
+                <div className={cx(changesStyles, 'changes-pagination')}>
+                  <span className={cx(changesStyles, 'changes-pagination-summary')}>
+                    {totalCount !== null
+                      ? `Showing ${filteredRevisions.length.toLocaleString()} of ${totalCount.toLocaleString()} total changes`
+                      : `Showing ${filteredRevisions.length.toLocaleString()} recent changes — older revisions available`}
+                  </span>
+                  <button
+                    type="button"
+                    className={cx(changesStyles, 'changes-load-more-btn')}
+                    disabled={loadingMore}
+                    onClick={() => {
+                      void handleLoadMore();
+                    }}
+                  >
+                    {loadingMore ? 'Loading older changes…' : 'Load older changes'}
+                  </button>
+                </div>
+              )}
             </>
           );
           return showFilterToolbar ? (
