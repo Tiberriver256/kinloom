@@ -8,6 +8,10 @@
   min-height: calc(100vh - var(--topbar-height));
 }
 
+.explorer-split:has(:global(.folio-marginalia-row)) {
+  max-width: 1240px;
+}
+
 .narrative-pane {
   padding: 20px 26px 72px 28px;
   position: relative;

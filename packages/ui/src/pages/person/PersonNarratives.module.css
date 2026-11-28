@@ -25,6 +25,12 @@
   color: var(--surface-header);
 }
 
+.person-biography-header-meta {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+}
+
 .person-biography-count {
   font-family: var(--font-mono);
   font-size: 0.76rem;
@@ -210,4 +216,20 @@
 
 .person-biography-more-wrap {
   margin-top: 14px;
+}
+
+@media (min-width: 1024px) {
+  .person-biography-entry:global(.has-marginalia) {
+    max-width: none;
+  }
+
+  .person-biography-entry:global(.has-marginalia) .person-biography-entry-head,
+  .person-biography-entry:global(.has-marginalia) .person-biography-summary {
+    max-width: 56ch;
+  }
+
+  .person-biography-entry:global(.has-marginalia) .person-biography-sources-toggle,
+  .person-biography-entry:global(.has-marginalia) .person-biography-sources {
+    display: none;
+  }
 }

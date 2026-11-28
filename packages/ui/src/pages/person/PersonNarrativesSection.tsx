@@ -3,6 +3,9 @@ import { formatPublicCitation, orderNarrativeSources } from '@kinloom/core';
 import type React from 'react';
 import { ArchivalMarkdown, formatNarrativeDateSpan } from '../../components/ArchivalMarkdown.js';
 import atomStyles from '../../components/Atoms.module.css';
+import { FolioMarginaliaToggle, useMarginaliaPreference } from '../../components/FolioMarginalia.js';
+import { useOptionalArchiveData } from '../../context/ArchiveDataContext.js';
+import { useArchiveUi } from '../../context/ArchiveUiContext.js';
 import { cx, joinClasses } from '../../lib/cx.js';
 import { PluginSlot } from '../../plugins/PluginContext.js';
 import controlStyles from '../../styles/Controls.module.css';
@@ -51,6 +54,9 @@ export const PersonNarrativesSection: React.FC<PersonNarrativesSectionProps> = (
   onOpenMedia,
   resolveMediaUrl,
 }) => {
+  const [marginaliaEnabled] = useMarginaliaPreference();
+  const archiveData = useOptionalArchiveData();
+  const { openSourceReader } = useArchiveUi();
   if (narratives.length === 0) {
     return null;
   }
@@ -70,11 +76,14 @@ export const PersonNarrativesSection: React.FC<PersonNarrativesSectionProps> = (
     >
       <div className={cx(narrativeStyles, 'person-biography-header')}>
         <h2>{heading}</h2>
-        {narratives.length > 1 && (
-          <span className={cx(narrativeStyles, 'person-biography-count')}>
-            {narratives.length} {isBiography ? 'biographies' : 'stories'}
-          </span>
-        )}
+        <div className={cx(narrativeStyles, 'person-biography-header-meta')}>
+          {narratives.length > 1 && (
+            <span className={cx(narrativeStyles, 'person-biography-count')}>
+              {narratives.length} {isBiography ? 'biographies' : 'stories'}
+            </span>
+          )}
+          {isBiography && <FolioMarginaliaToggle />}
+        </div>
       </div>
 
       <div className={cx(narrativeStyles, 'person-biography-list')}>
@@ -88,13 +97,14 @@ export const PersonNarrativesSection: React.FC<PersonNarrativesSectionProps> = (
             narrative.source_ids ?? [],
             sourcesById
           );
+          const hasMarginalia = marginaliaEnabled && orderedSources.length > 0;
 
           return (
             <article
               key={narrative.id}
               className={cx(
                 narrativeStyles,
-                isBiography ? 'person-biography-entry' : 'person-biography-entry person-family-story-entry'
+                `${isBiography ? 'person-biography-entry' : 'person-biography-entry person-family-story-entry'}${hasMarginalia ? ' has-marginalia' : ''}`
               )}
             >
               <div className={cx(narrativeStyles, 'person-biography-entry-head')}>
@@ -129,8 +139,14 @@ export const PersonNarrativesSection: React.FC<PersonNarrativesSectionProps> = (
                     placesById={placesById}
                     linkedPersonIds={narrative.person_ids}
                     linkedPlaceIds={narrative.place_ids}
+                    narrativeSourceIds={narrative.source_ids}
+                    readableSourceIds={archiveData?.readableSourceIds}
+                    marginaliaMode={hasMarginalia ? 'folio' : 'off'}
                     baseUrl={baseUrl}
                     onInspectSource={onInspectSource}
+                    onReadSource={(sourceId) => {
+                      openSourceReader({ sourceId });
+                    }}
                     onOpenMedia={onOpenMedia}
                     resolveMediaUrl={resolveMediaUrl}
                   />

@@ -6,6 +6,7 @@ import { recordRecentlyViewed } from '../browser/recentlyViewed.js';
 import { resolveAssetUrl } from '../components/Atoms.js';
 import atomStyles from '../components/Atoms.module.css';
 import { ExplorerTopBar } from '../components/ExplorerTopBar.js';
+import { FolioMarginaliaToggle } from '../components/FolioMarginalia.js';
 import { KinloomFooter } from '../components/KinloomFooter.js';
 import { LocalSurveyMap } from '../components/LocalSurveyMap.js';
 import { PronunciationBadge } from '../components/PronunciationBadge.js';
@@ -15,7 +16,7 @@ import { TalkPanel } from '../components/wiki/TalkPanel.js';
 import { WikiActionBar, type WikiEntityTab } from '../components/wiki/WikiActionBar.js';
 import { useArchiveData } from '../context/ArchiveDataContext.js';
 import { useArchiveUi } from '../context/ArchiveUiContext.js';
-import { cx } from '../lib/cx.js';
+import { cx, joinClasses } from '../lib/cx.js';
 import { formatReaderLoadError, KINLOOM_VOCABULARY } from '../lib/vocabulary.js';
 import { PluginSlot } from '../plugins/PluginContext.js';
 import controlStyles from '../styles/Controls.module.css';
@@ -167,19 +168,33 @@ export const PlacePage: React.FC = () => {
   const placePhotoMedia = buildPlacePhotoMedia(place);
   const effectivePronunciation = resolvePlacePronunciation(place, pronunciations);
   const isReadingProfile = wikiTab !== 'history' && wikiTab !== 'talk';
+  const hasPlaceMarginalia =
+    Boolean(place.sources && place.sources.length > 0) ||
+    scopeLocalRecords.some(
+      (ev) =>
+        ev.sources.length > 0 ||
+        (ev.alternate_dates?.length ?? 0) > 0 ||
+        (ev.alternate_places?.length ?? 0) > 0 ||
+        (ev.fact_conflicts?.length ?? 0) > 0
+    );
 
   return (
     <div>
       <ExplorerTopBar />
-      <main id="main-content" className={cx(layoutStyles, 'place-page')}>
-        {occupancyRows.rows.length > 0 && (
-          <div
-            className={'print-hide'}
-            style={{ marginBottom: 14, display: 'flex', gap: 16, flexWrap: 'wrap', alignItems: 'center' }}
-          >
-            <Link to={`/time?year=${occupancyRows.minYear}`} className={cx(atomStyles, 'ink-link-btn')}>
-              See Family in {occupancyRows.minYear} →
-            </Link>
+      <main
+        id="main-content"
+        className={joinClasses(cx(layoutStyles, 'place-page'), cx(placeStyles, 'place-folio-shell'))}
+      >
+        {(occupancyRows.rows.length > 0 || hasPlaceMarginalia) && (
+          <div className={cx(placeStyles, 'place-utility-bar print-hide')}>
+            {occupancyRows.rows.length > 0 ? (
+              <Link to={`/time?year=${occupancyRows.minYear}`} className={cx(atomStyles, 'ink-link-btn')}>
+                See Family in {occupancyRows.minYear} →
+              </Link>
+            ) : (
+              <span />
+            )}
+            {hasPlaceMarginalia && <FolioMarginaliaToggle />}
           </div>
         )}
 

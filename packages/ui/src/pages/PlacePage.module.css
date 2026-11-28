@@ -1,6 +1,19 @@
 /* ==========================================================================
    Page 4: Unboxed Place Dossier (/place/:slug)
    ========================================================================== */
+.place-folio-shell:has(:global(.folio-marginalia-row)) {
+  max-width: 1200px;
+}
+
+.place-utility-bar {
+  margin-bottom: 14px;
+  display: flex;
+  justify-content: space-between;
+  gap: 12px 16px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
 .place-breadcrumb {
   display: inline-flex;
   flex-wrap: wrap;
@@ -58,6 +71,19 @@
   grid-template-columns: minmax(0, 1.2fr) minmax(240px, 0.9fr);
   gap: 22px;
   align-items: start;
+}
+
+.place-history-aside {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  min-width: 0;
+}
+
+@media (min-width: 1024px) {
+  .place-history-grid:global(.has-marginalia) :global(.folio-marginalia-inline-fallback) {
+    display: none;
+  }
 }
 
 .place-history-summary {

@@ -27,7 +27,9 @@ export interface InlineCitationRenderContext {
   subjectPersonId?: string;
   resolveMediaUrl: (media: MediaItem) => string | null;
   activeKey: string | null;
+  highlightedSourceId?: string | null;
   popoverId: string;
+  onHoverSourceId?: (sourceId: string | null) => void;
   onTriggerHover: (payload: InlineCitationPayload, anchorEl: HTMLButtonElement) => void;
   onTriggerLeave: (occurrenceKey: string) => void;
   onTriggerFocus: (payload: InlineCitationPayload, anchorEl: HTMLButtonElement) => void;
@@ -165,30 +167,43 @@ export function renderInlineMarkdownNodes(
           mediaUrl,
         };
         const isActive = citationCtx.activeKey === key;
+        const isMarginaliaHighlighted =
+          citationCtx.highlightedSourceId !== null &&
+          citationCtx.highlightedSourceId !== undefined &&
+          citationCtx.highlightedSourceId === sourceId;
 
         nodes.push(
           <sup key={key} className={cx(markdownStyles, 'archival-footnote-sup')}>
             <button
               type="button"
-              className={cx(markdownStyles, `archival-footnote-ref${isActive ? ' is-active' : ''}`)}
+              data-citation-source-id={sourceId}
+              className={cx(
+                markdownStyles,
+                `archival-footnote-ref${isActive ? ' is-active' : ''}${isMarginaliaHighlighted ? ' is-marginalia-highlighted' : ''}`
+              )}
               aria-label={`Source citation ${footnoteNumber}: ${formatPublicCitation(source.citation)}`}
               aria-expanded={isActive}
               aria-controls={isActive ? citationCtx.popoverId : undefined}
               aria-haspopup="dialog"
               onMouseEnter={(e) => {
+                citationCtx.onHoverSourceId?.(sourceId);
                 citationCtx.onTriggerHover(payload, e.currentTarget);
               }}
               onMouseLeave={() => {
+                citationCtx.onHoverSourceId?.(null);
                 citationCtx.onTriggerLeave(key);
               }}
               onFocus={(e) => {
+                citationCtx.onHoverSourceId?.(sourceId);
                 citationCtx.onTriggerFocus(payload, e.currentTarget);
               }}
               onBlur={(e) => {
+                citationCtx.onHoverSourceId?.(null);
                 citationCtx.onTriggerBlur(e);
               }}
               onClick={(e) => {
                 e.stopPropagation();
+                citationCtx.onHoverSourceId?.(sourceId);
                 citationCtx.onTriggerClick(payload, e.currentTarget);
               }}
             >

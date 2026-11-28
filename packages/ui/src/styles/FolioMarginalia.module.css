@@ -1,0 +1,205 @@
+/* ==========================================================================
+   Shared Folio Marginalia Rail & Responsive Column Grid (#70)
+   ========================================================================== */
+.folio-marginalia-row {
+  display: grid;
+  grid-template-columns: minmax(0, 56ch) 252px;
+  column-gap: 36px;
+  align-items: start;
+}
+
+.folio-marginalia-main {
+  min-width: 0;
+}
+
+.folio-marginalia-rail {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-width: 0;
+}
+
+.folio-marginalia-rail-empty {
+  min-width: 0;
+}
+
+.folio-marginalia-item {
+  border-left: 1px solid var(--border-decorative);
+  padding: 2px 0 2px 11px;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+  transition:
+    background-color 0.14s ease,
+    border-left-color 0.14s ease;
+}
+
+.folio-marginalia-item:global(.is-discrepancy) {
+  border-left: 2px solid var(--status-conflict);
+}
+
+.folio-marginalia-item:global(.is-highlighted) {
+  background: var(--surface-tint-hover, var(--surface-linen));
+  border-left-color: var(--accent-primary);
+}
+
+.folio-marginalia-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 6px;
+  font-family: var(--font-mono);
+  font-size: 0.7rem;
+  line-height: 1.3;
+}
+
+.folio-marginalia-num {
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: var(--action-focus);
+  flex-shrink: 0;
+}
+
+.folio-marginalia-item:global(.is-discrepancy) .folio-marginalia-num {
+  color: var(--status-conflict);
+}
+
+.folio-marginalia-tier {
+  color: var(--text-secondary);
+  letter-spacing: 0.01em;
+}
+
+.folio-marginalia-title {
+  font-family: var(--font-serif);
+  font-size: 0.82rem;
+  font-weight: 500;
+  line-height: 1.36;
+  color: var(--surface-header);
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  overflow-wrap: anywhere;
+}
+
+.folio-marginalia-claim {
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: var(--status-conflict);
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+}
+
+.folio-marginalia-detail {
+  font-family: var(--font-mono);
+  font-size: 0.7rem;
+  line-height: 1.38;
+  color: var(--text-secondary);
+  overflow-wrap: anywhere;
+}
+
+.folio-marginalia-note {
+  font-family: var(--font-serif);
+  font-size: 0.79rem;
+  line-height: 1.38;
+  color: var(--text-primary);
+  overflow-wrap: anywhere;
+}
+
+.folio-marginalia-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 10px;
+  margin-top: 2px;
+}
+
+.folio-marginalia-action-btn {
+  border: none;
+  border-bottom: 1px solid var(--border-control);
+  background: transparent;
+  padding: 0 0 1px;
+  font-family: var(--font-mono);
+  font-size: 0.69rem;
+  font-weight: 600;
+  color: var(--text-secondary);
+  cursor: pointer;
+  text-align: left;
+  transition:
+    color 0.14s ease,
+    border-color 0.14s ease;
+}
+
+.folio-marginalia-action-btn:hover,
+.folio-marginalia-action-btn:focus-visible {
+  color: var(--accent-primary);
+  border-bottom-color: var(--accent-primary);
+}
+
+.folio-marginalia-inline-fallback {
+  min-width: 0;
+}
+
+.marginalia-toggle-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 9px;
+  border: 1px solid var(--border-control);
+  border-radius: var(--radius-sm);
+  background: var(--surface-card);
+  color: var(--text-secondary);
+  font-family: var(--font-mono);
+  font-size: 0.74rem;
+  font-weight: 500;
+  line-height: 1.3;
+  cursor: pointer;
+  white-space: nowrap;
+  transition:
+    background-color 0.14s ease,
+    border-color 0.14s ease,
+    color 0.14s ease;
+}
+
+.marginalia-toggle-btn:hover,
+.marginalia-toggle-btn:focus-visible {
+  background: var(--surface-linen);
+  border-color: var(--surface-header);
+  color: var(--surface-header);
+}
+
+.marginalia-toggle-btn[aria-pressed="true"] {
+  color: var(--surface-header);
+  border-color: var(--border-control);
+}
+
+@media (min-width: 1024px) {
+  .folio-marginalia-row .folio-marginalia-inline-fallback {
+    display: none;
+  }
+}
+
+@media (max-width: 1279px) and (min-width: 1024px) {
+  .folio-marginalia-row {
+    grid-template-columns: minmax(0, 1fr) 240px;
+    column-gap: 20px;
+  }
+}
+
+@media (max-width: 1023px) {
+  .folio-marginalia-row {
+    display: block;
+  }
+
+  .folio-marginalia-rail,
+  .folio-marginalia-rail-empty,
+  .marginalia-toggle-btn {
+    display: none;
+  }
+
+  .folio-marginalia-inline-fallback {
+    display: block;
+  }
+}

@@ -1,6 +1,34 @@
 /* ==========================================================================
-   Print-Friendly Archival Folio
+   Heirloom Archival Folio Print Stylesheet (#70)
    ========================================================================== */
+@page {
+  size: auto;
+  margin: 0.85in 0.75in 0.95in 0.75in;
+
+  @top-right {
+    /* biome-ignore lint/correctness/noUnknownFunction: CSS GCPM Level 3 running title progressive enhancement */
+    content: string(folio-running-title);
+    font-family: var(--font-mono);
+    font-size: 8pt;
+    color: #4e4a42;
+    letter-spacing: 0.04em;
+  }
+
+  @bottom-center {
+    content: "Page " counter(page) " of " counter(pages);
+    font-family: var(--font-mono);
+    font-size: 8.5pt;
+    font-variant-numeric: tabular-nums;
+    color: #4e4a42;
+  }
+}
+
+@page :first {
+  @top-right {
+    content: none;
+  }
+}
+
 @media print {
   :root {
     color-scheme: light;
@@ -11,10 +39,17 @@
     background: #ffffff;
     color: #000000;
     font-size: 10.5pt;
+    line-height: 1.52;
+    font-variant-numeric: oldstyle-nums;
   }
 
   /* Nest under :root so global print overrides outrank lazy-loaded CSS Module chunks without !important. */
   :root {
+    h1 {
+      /* biome-ignore lint/correctness/noUnknownFunction: CSS GCPM Level 3 running title progressive enhancement */
+      string-set: folio-running-title content(text);
+    }
+
     .topbar,
     .skip-to-content,
     .mobile-decade-strip,
@@ -48,7 +83,11 @@
     .kinship-selector-card,
     .kinship-examples-bar,
     .narrative-audio-margin-bar,
-    .narrative-audio-dock {
+    .narrative-audio-dock,
+    .evidence-legend-toggle,
+    .marginalia-toggle-btn,
+    .person-completeness-invite,
+    .folio-marginalia-actions {
       display: none;
     }
 
@@ -63,6 +102,12 @@
 
     .is-collapsed-screen {
       display: block;
+    }
+
+    .person-biography-entry.has-marginalia .person-biography-sources-toggle,
+    .person-biography-entry.has-marginalia .person-biography-sources,
+    .folio-marginalia-row .folio-marginalia-inline-fallback {
+      display: none;
     }
 
     .person-biography-source-btn {
@@ -100,9 +145,59 @@
       min-height: auto;
     }
 
-    .narrative-pane {
+    /* Default single-column book measure: 38em (~68ch at 10.5pt Newsreader) */
+    .narrative-pane,
+    .place-page {
       padding: 0;
-      max-width: 100%;
+      max-width: 38em;
+      margin: 0 auto;
+    }
+
+    /* When folio Marginalia is active, widen container to printable Letter/A4 width
+       (33em ~4.81in + 0.25in gap + 1.65in marginalia = 6.71in <= 6.77in A4 & 7.0in Letter) */
+    .narrative-pane:has(.folio-marginalia-row),
+    .place-page:has(.folio-marginalia-row) {
+      max-width: none;
+    }
+
+    .person-biography-entry.has-marginalia {
+      max-width: none;
+    }
+
+    .folio-marginalia-row {
+      display: grid;
+      grid-template-columns: minmax(0, 33em) 1.65in;
+      column-gap: 0.25in;
+      align-items: start;
+      break-inside: avoid;
+      page-break-inside: avoid;
+    }
+
+    .folio-marginalia-rail {
+      display: flex;
+      flex-direction: column;
+      gap: 6pt;
+      border-left: 0.5pt solid #827a6a;
+      padding-left: 8pt;
+      font-size: 8pt;
+      line-height: 1.38;
+      color: #23272e;
+    }
+
+    .folio-marginalia-item {
+      border-left: none;
+      padding: 0;
+    }
+
+    .folio-marginalia-item.is-discrepancy {
+      border-left: 1.5pt solid #8f2d24;
+      padding-left: 6pt;
+    }
+
+    .folio-marginalia-title {
+      display: block;
+      overflow: visible;
+      -webkit-line-clamp: unset;
     }
 
     .timeline-layout {
@@ -113,15 +208,31 @@
     h2,
     h3,
     h4,
-    .section-heading {
+    .section-heading,
+    .person-biography-entry-head {
       break-after: avoid;
       page-break-after: avoid;
+      hyphens: none;
       color: #000000;
     }
 
-    p {
+    p,
+    li,
+    blockquote {
+      hyphens: auto;
+      -webkit-hyphens: auto;
+      hyphenate-limit-chars: 6 3 2;
       orphans: 3;
       widows: 3;
+    }
+
+    /* Preserve tabular numerals on dates, metrics, marginalia numbers, and tables */
+    .date-stamp,
+    .person-header-dates,
+    .folio-metrics,
+    .folio-marginalia-num,
+    table {
+      font-variant-numeric: tabular-nums;
     }
 
     .person-header {
@@ -131,6 +242,8 @@
       margin-bottom: 10pt;
     }
 
+    figure,
+    .place-history-figure,
     .person-header-top,
     .person-family-row,
     .story-card,
@@ -139,7 +252,8 @@
     .place-map-box,
     .occupancy-row,
     .time-lane,
-    .evidence-source-row {
+    .evidence-source-row,
+    .folio-marginalia-item {
       background: #ffffff;
       box-shadow: none;
       break-inside: avoid;

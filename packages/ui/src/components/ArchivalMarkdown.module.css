@@ -79,10 +79,17 @@
 }
 
 .archival-footnote-ref:hover,
-.archival-footnote-ref:global(.is-active) {
+.archival-footnote-ref:global(.is-active),
+.archival-footnote-ref:global(.is-marginalia-highlighted) {
   background: var(--surface-linen);
   border-color: var(--border-control);
   color: var(--surface-header);
+}
+
+.archival-footnote-ref:global(.is-marginalia-highlighted) {
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  border-color: var(--accent-primary);
 }
 
 .citation-popover {
