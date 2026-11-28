@@ -382,7 +382,7 @@ describe('PersonPage, IndexPage, PlacePage, LocalSurveyMap, and TreePage behavio
     await flushUi();
     await flushUi();
 
-    expect(idx.textContent).toContain('Founding Ancestors');
+    expect(idx.textContent).toContain('1850–1899');
     expect(idx.textContent).toContain('Henry Alder');
 
     const searchInput = idx.querySelector(

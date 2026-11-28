@@ -387,16 +387,16 @@ describe('UI >=90% behavioral completion suite across pages, drawers, and machin
       </MemoryRouter>
     );
     await flushUi();
-    expect(indexContainer.textContent).toContain('Direct Line Ancestors');
-    expect(indexContainer.textContent).toContain('Other relatives');
+    expect(indexContainer.textContent).toContain('1850–1899');
+    expect(indexContainer.textContent).not.toContain('Other relatives');
 
     const searchInput = indexContainer.querySelector<HTMLInputElement>('input[type="search"]');
     if (searchInput) {
       setFieldValue(searchInput, 'Hendrik');
       expect(indexContainer.textContent).toContain('Henry Alder');
     }
-    const mediaFilterBtn = [...indexContainer.querySelectorAll<HTMLButtonElement>('button')].find(
-      (b) => b.getAttribute('aria-pressed') !== null
+    const mediaFilterBtn = [...indexContainer.querySelectorAll<HTMLButtonElement>('button')].find((b) =>
+      b.textContent?.includes('With photos')
     );
     act(() => {
       mediaFilterBtn?.click();
@@ -2037,7 +2037,9 @@ describe('UI >=90% behavioral completion suite across pages, drawers, and machin
         ?.click();
     });
     act(() => {
-      indexView.querySelector<HTMLButtonElement>('button[aria-pressed]')?.click();
+      [...indexView.querySelectorAll<HTMLButtonElement>('button')]
+        .find((b) => b.textContent?.includes('With photos'))
+        ?.click();
     });
     act(() => {
       [...indexView.querySelectorAll<HTMLButtonElement>('button')]

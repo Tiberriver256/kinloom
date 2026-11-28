@@ -150,8 +150,8 @@ test('KinloomApp applies white-label title, theme accent, custom loader, and qui
   const appEl = container.querySelector<HTMLElement>('.kinloom-app');
   assert.equal(appEl?.style.getPropertyValue('--accent-primary'), '#2F5245');
 
-  // Configured lineage section and person card rendered
-  assert.match(container.textContent ?? '', /Massachusetts Founders/);
+  // By Era section and person card rendered (while customSiteConfig.lineageSections stays backwards-compatible)
+  assert.match(container.textContent ?? '', /1800–1849/);
   assert.match(container.textContent ?? '', /Clara Barton/);
 
   // Quiet footer displays "Built with Kinloom" + SVG mark

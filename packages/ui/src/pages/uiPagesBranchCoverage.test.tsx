@@ -2393,7 +2393,7 @@ describe('TreePage, ArchiveDataContext, and IndexPage branch coverage', () => {
         </ArchiveProvider>
       </MemoryRouter>
     );
-    expect(mounted.container.textContent).toContain('Alder Relatives');
+    expect(mounted.container.textContent).toContain('1850–1899');
 
     // Search by alt_name ('May Birch') -> singular export (1 relative)
     const searchInput = mounted.container.querySelector<HTMLInputElement>('input[type="search"]');
