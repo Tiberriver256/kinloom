@@ -168,15 +168,19 @@ Run full-archive invariants across local data/*.yaml files:
      - Empty GEDCOM placeholder events (title starting with "Recorded event for ")
 
   8. Pronunciation audit (living-person pronunciation leaks fail; coverage gaps warn unless --strict-pronunciation or --strict is set)
-  9. Site plugin verifyChecks (auto-discovered from extensions/*/cli.{mjs,js} and kinloom.config.yaml plugins)
+  9. External media/audio URL CSP check (flags non-local audio_url, token_audio_urls, portrait_url, or media asset URLs pointing to external hosts; ignores sources.yaml citation URLs; warns unless --strict-external-media or --strict is set)
+  10. Tracked binary media check (flags .mp3, .wav, or .mp4 files tracked in Git via git ls-files; warns unless --strict-tracked-media or --strict is set)
+  11. Site plugin verifyChecks (auto-discovered from extensions/*/cli.{mjs,js} and kinloom.config.yaml plugins)
 
 Options:
-  --repo <dir>             Archive repository root (default: current working directory)
-  --strict-hygiene         Fail verification (exit 1) when any tree-hygiene warning is found
-  --strict-pronunciation   Fail verification (exit 1) when any pronunciation coverage or provenance warning is found
-  --strict                 Enable both --strict-hygiene and --strict-pronunciation (and plugin strictFailures)
-  --json             Emit structured JSON scorecard (includes hygiene.warnings and hygiene.counts)
-  -h, --help         Show this help message`;
+  --repo <dir>              Archive repository root (default: current working directory)
+  --strict-hygiene          Fail verification (exit 1) when any tree-hygiene warning is found
+  --strict-pronunciation    Fail verification (exit 1) when any pronunciation coverage or provenance warning is found
+  --strict-external-media   Fail verification (exit 1) when any rendered media/audio asset points to an external host
+  --strict-tracked-media    Fail verification (exit 1) when any .mp3, .wav, or .mp4 binary is tracked in Git
+  --strict                  Enable --strict-hygiene, --strict-pronunciation, --strict-external-media, --strict-tracked-media, and plugin strictFailures
+  --json                    Emit structured JSON scorecard (includes hygiene.warnings, externalMedia.hits, trackedMedia.files)
+  -h, --help                Show this help message`;
 
 export const SYNC_HELP = `Usage: kinloom sync [options]
 

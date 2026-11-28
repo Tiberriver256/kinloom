@@ -19,6 +19,8 @@ export interface VerifyCommandOptions {
   json?: boolean;
   strictHygiene?: boolean;
   strictPronunciation?: boolean;
+  strictExternalMedia?: boolean;
+  strictTrackedMedia?: boolean;
   plugins?: readonly KinloomCliPlugin[];
 }
 
@@ -87,12 +89,42 @@ export interface VerifyLivingNamesResult {
   hits: LivingNameHit[];
 }
 
+export interface VerifyExternalMediaHit {
+  file: string;
+  entityId: string;
+  field: string;
+  url: string;
+  host: string;
+}
+
+export interface VerifyExternalMediaResult {
+  ok: boolean;
+  checkedCount: number;
+  hits: VerifyExternalMediaHit[];
+}
+
+export type VerifyTrackedBinaryExtension = '.mp3' | '.wav' | '.mp4';
+
+export interface VerifyTrackedMediaFile {
+  path: string;
+  extension: VerifyTrackedBinaryExtension;
+}
+
+export interface VerifyTrackedMediaResult {
+  ok: boolean;
+  isGitRepo: boolean;
+  trackedCount: number;
+  files: VerifyTrackedMediaFile[];
+}
+
 export interface VerifyCommandResult {
   ok: boolean;
   repo: string;
   duration_ms: number;
   strictHygiene: boolean;
   strictPronunciation: boolean;
+  strictExternalMedia: boolean;
+  strictTrackedMedia: boolean;
   checks: {
     citations: VerifyCitationsResult;
     places: VerifyPlacesResult;
@@ -101,6 +133,8 @@ export interface VerifyCommandResult {
     media: VerifyMediaResult;
     livingNames: VerifyLivingNamesResult;
     pronunciation: ExecutedPluginCheckResult;
+    externalMedia: VerifyExternalMediaResult;
+    trackedMedia: VerifyTrackedMediaResult;
   };
   pluginChecks: ExecutedPluginCheckResult[];
   hygiene: TreeHygieneSummary;

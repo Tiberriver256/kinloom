@@ -4,10 +4,12 @@ import type {
   VerifyCitationsResult,
   VerifyCommandResult,
   VerifyCompileResult,
+  VerifyExternalMediaResult,
   VerifyLivingNamesResult,
   VerifyMediaResult,
   VerifyPlacesResult,
   VerifySsnResult,
+  VerifyTrackedMediaResult,
 } from './types.js';
 
 export function collectVerifyDiagnostics(input: {
@@ -19,14 +21,26 @@ export function collectVerifyDiagnostics(input: {
   livingNames: VerifyLivingNamesResult;
   hygiene: TreeHygieneSummary;
   pronunciation: ExecutedPluginCheckResult;
+  externalMedia: VerifyExternalMediaResult;
+  trackedMedia: VerifyTrackedMediaResult;
   pluginDiscoveryWarnings: readonly string[];
   pluginChecks: readonly ExecutedPluginCheckResult[];
   strictHygiene: boolean;
   strictPronunciation: boolean;
+  strictExternalMedia: boolean;
+  strictTrackedMedia: boolean;
 }): { warnings: string[]; errors: string[] } {
   const warnings = [
     ...input.hygiene.warnings.map((warning) => `[${warning.category}] ${warning.message}`),
     ...input.pronunciation.warnings.map((w) => `[pronunciation] ${w}`),
+    ...input.externalMedia.hits.map(
+      (hit) =>
+        `[external-media] ${hit.file} (${hit.entityId}) ${hit.field} points to external host '${hit.host}' (${hit.url}); self-host under /media/ to satisfy 'self' CSP.`
+    ),
+    ...input.trackedMedia.files.map(
+      (file) =>
+        `[tracked-media] ${file.path} (${file.extension}) is tracked in Git; host audio/video binaries in R2 instead of committing them.`
+    ),
     ...input.pluginDiscoveryWarnings.map((w) => `[plugin] ${w}`),
     ...input.pluginChecks.flatMap((pc) => pc.warnings.map((w) => `[plugin:${pc.id}] ${w}`)),
   ];
@@ -54,6 +68,17 @@ export function collectVerifyDiagnostics(input: {
     ...(input.strictPronunciation
       ? input.pronunciation.strictFailures.map((f) => `pronunciation: ${f}`)
       : []),
+    ...(input.strictExternalMedia
+      ? input.externalMedia.hits.map(
+          (hit) =>
+            `external-media: ${hit.file} (${hit.entityId}) ${hit.field} points to external host '${hit.host}' (${hit.url})`
+        )
+      : []),
+    ...(input.strictTrackedMedia
+      ? input.trackedMedia.files.map(
+          (file) => `tracked-media: ${file.path} (${file.extension}) is tracked in Git`
+        )
+      : []),
     ...(input.strictHygiene || input.strictPronunciation
       ? input.pluginChecks.flatMap((pc) => pc.strictFailures.map((f) => `plugin(${pc.id}): ${f}`))
       : []),
@@ -70,6 +95,10 @@ export function formatVerifyTextReport(report: Omit<VerifyCommandResult, 'render
     .map((category) => `${category}=${report.hygiene.counts[category]}`)
     .join(', ');
   const hygieneSuffix = hygieneCountDetail ? ` (${hygieneCountDetail})` : '';
+  const externalMediaStatus =
+    report.checks.externalMedia.hits.length === 0 ? 'PASS' : report.strictExternalMedia ? 'FAIL' : 'WARN';
+  const trackedMediaStatus =
+    report.checks.trackedMedia.files.length === 0 ? 'PASS' : report.strictTrackedMedia ? 'FAIL' : 'WARN';
 
   const lines: string[] = [
     `Verify [${status}] ${report.repo} (${report.duration_ms} ms)`,
@@ -89,6 +118,8 @@ export function formatVerifyTextReport(report: Omit<VerifyCommandResult, 'render
             : 'WARN'
           : 'PASS'
     } | errors=${report.checks.pronunciation.errors.length} warnings=${report.checks.pronunciation.warnings.length}`,
+    `  9. External media CSP: ${externalMediaStatus} | checked=${report.checks.externalMedia.checkedCount} hits=${report.checks.externalMedia.hits.length}`,
+    `  10. Tracked binary media: ${trackedMediaStatus} | git=${report.checks.trackedMedia.isGitRepo ? 'yes' : 'no'} tracked=${report.checks.trackedMedia.trackedCount} hits=${report.checks.trackedMedia.files.length}`,
     ...report.pluginChecks.map((pc) => {
       const pcStatus = !pc.ok ? 'FAIL' : pc.warnings.length > 0 || !pc.strictOk ? 'WARN' : 'PASS';
       return `  Plugin [${pc.pluginId}/${pc.id}] ${pc.name}: ${pcStatus} (${pc.durationMs} ms) | errors=${pc.errors.length} warnings=${pc.warnings.length}`;
@@ -118,7 +149,7 @@ export function formatVerifyTextReport(report: Omit<VerifyCommandResult, 'render
   }
 
   if (nonHygieneWarnings.length > 0) {
-    lines.push(`Pronunciation & plugin warnings (${nonHygieneWarnings.length}):`);
+    lines.push(`Pronunciation, media & plugin warnings (${nonHygieneWarnings.length}):`);
     for (const warning of nonHygieneWarnings.slice(0, 30)) {
       lines.push(`  WARN: ${warning}`);
     }
