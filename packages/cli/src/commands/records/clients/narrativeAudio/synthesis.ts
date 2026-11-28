@@ -87,7 +87,14 @@ export function findExecutableOnPath(name: string, env: NodeJS.ProcessEnv): stri
 
 export function requireExistingFile(rawPath: string, label: string, ctx: RecordCommandContext): string {
   const abs = resolveUserPathFromContext(rawPath, ctx);
-  if (!fs.existsSync(abs) || !fs.statSync(abs).isFile()) {
+  try {
+    if (!fs.statSync(abs).isFile()) {
+      throw new CliValidationError(`${label} not found: ${rawPath}`);
+    }
+  } catch (err: unknown) {
+    if (err instanceof CliValidationError) {
+      throw err;
+    }
     throw new CliValidationError(`${label} not found: ${rawPath}`);
   }
   return abs;
@@ -368,13 +375,11 @@ export async function encodePcmToMp3(options: {
   readonly outPath: string;
   readonly ctx: RecordCommandContext;
 }): Promise<void> {
-  const tmpPcmPath = path.join(
-    os.tmpdir(),
-    `kinloom-narrative-audio-${process.pid}-${process.hrtime.bigint()}.pcm`
-  );
+  const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'kinloom-narrative-audio-'));
+  const tmpPcmPath = path.join(tmpDir, 'input.pcm');
   const execFn = options.ctx.execFileImpl ?? defaultExecFile;
   try {
-    fs.writeFileSync(tmpPcmPath, options.pcm);
+    fs.writeFileSync(tmpPcmPath, options.pcm, { flag: 'wx', mode: 0o600 });
     fs.mkdirSync(path.dirname(options.outPath), { recursive: true });
     await execFn(
       'ffmpeg',
@@ -402,11 +407,7 @@ export async function encodePcmToMp3(options: {
     }
     throw err;
   } finally {
-    try {
-      fs.unlinkSync(tmpPcmPath);
-    } catch {
-      // Best-effort temp cleanup.
-    }
+    fs.rmSync(tmpDir, { recursive: true, force: true });
   }
 }
 

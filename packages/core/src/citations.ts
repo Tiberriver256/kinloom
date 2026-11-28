@@ -6,7 +6,28 @@ const SINGLE_CITATION_TOKEN_RE = /^\[\^([A-Za-z0-9._:-]+)(?:\|([A-Za-z0-9._:-]+)
 const SCAN_MARKDOWN_CITATIONS_RE =
   /```[\s\S]*?```|`[^`\n]+`|\[\^([A-Za-z0-9._:-]+)(?:\|([A-Za-z0-9._:-]+))?\]/g;
 
-const NON_IMAGE_FILE_RE = /\.(mp4|webm|mov|m4v|mp3|m4a|ogg|wav|flac|pdf)(\?.*)?$/i;
+const NON_IMAGE_EXTENSIONS: ReadonlySet<string> = new Set([
+  'mp4',
+  'webm',
+  'mov',
+  'm4v',
+  'mp3',
+  'm4a',
+  'ogg',
+  'wav',
+  'flac',
+  'pdf',
+]);
+
+function isNonImageMediaFile(filePath: string): boolean {
+  const qIdx = filePath.indexOf('?');
+  const pathname = qIdx === -1 ? filePath : filePath.slice(0, qIdx);
+  const dotIdx = pathname.lastIndexOf('.');
+  if (dotIdx === -1) {
+    return false;
+  }
+  return NON_IMAGE_EXTENSIONS.has(pathname.slice(dotIdx + 1).toLowerCase());
+}
 
 export interface ParsedInlineCitationToken {
   sourceId: string;
@@ -173,7 +194,7 @@ export function isPreviewableCitationImage(media: MediaItem): boolean {
     return false;
   }
   const candidatePath = (media.thumb_file || media.file || '').trim();
-  if (!candidatePath || NON_IMAGE_FILE_RE.test(candidatePath)) {
+  if (!candidatePath || isNonImageMediaFile(candidatePath)) {
     return false;
   }
   return true;

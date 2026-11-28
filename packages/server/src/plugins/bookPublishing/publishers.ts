@@ -252,15 +252,23 @@ export interface LuluBookPublisherOptions {
   readonly nowMs?: () => number;
 }
 
+function trimTrailingSlashes(value: string): string {
+  let end = value.length;
+  while (end > 0 && value.charCodeAt(end - 1) === 47) {
+    end -= 1;
+  }
+  return end === value.length ? value : value.slice(0, end);
+}
+
 /**
  * First-class Lulu Print API adapter (OAuth2 client_credentials, cached token with 401 refresh,
  * landscape Casewrap hardcover SKUs, preflight validation, cost quotes, and HMAC-SHA256 webhooks).
  */
 export function createLuluBookPublisherAdapter(options: LuluBookPublisherOptions): BookPublisherProvider {
   const sandbox = options.environment === 'sandbox';
-  const baseUrl = (
+  const baseUrl = trimTrailingSlashes(
     options.baseUrlOverride ?? (sandbox ? LULU_SANDBOX_BASE_URL : LULU_PRODUCTION_BASE_URL)
-  ).replace(/\/+$/, '');
+  );
   const fetchImpl = options.fetchImpl ?? globalThis.fetch;
   const nowMs = options.nowMs ?? (() => Date.now());
 

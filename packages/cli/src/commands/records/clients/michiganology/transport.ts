@@ -162,39 +162,44 @@ function readFileCache(
   }
   const [bodyPath, metaPath] = fileCachePaths(ctx, itemId);
   try {
-    if (!fs.statSync(bodyPath).isFile()) {
-      return null;
+    const fd = fs.openSync(bodyPath, 'r');
+    let body: Buffer;
+    let size: number;
+    try {
+      const stat = fs.fstatSync(fd);
+      if (!stat.isFile() || stat.size <= 0) {
+        return null;
+      }
+      size = stat.size;
+      const rawMeta = readJsonRecordIfValid(metaPath);
+      if (!rawMeta || rawMeta.schema !== CACHE_SCHEMA) {
+        return null;
+      }
+      const fetched = rawMeta.fetched_at;
+      const filename = rawMeta.filename;
+      const contentType = rawMeta.content_type;
+      if (
+        typeof fetched !== 'number' ||
+        !Number.isFinite(fetched) ||
+        typeof filename !== 'string' ||
+        !filename ||
+        typeof contentType !== 'string' ||
+        !contentType ||
+        rawMeta.bytes !== size
+      ) {
+        return null;
+      }
+      if (ctx.nowMs() / 1000 - fetched > ttlHours * 3600) {
+        return null;
+      }
+      body = fs.readFileSync(fd);
+      if (body.length === 0 || isHtmlPayload(contentType, body)) {
+        return null;
+      }
+      return { body, filename, content_type: contentType };
+    } finally {
+      fs.closeSync(fd);
     }
-    const size = fs.statSync(bodyPath).size;
-    if (size <= 0) {
-      return null;
-    }
-    const rawMeta = readJsonRecordIfValid(metaPath);
-    if (!rawMeta || rawMeta.schema !== CACHE_SCHEMA) {
-      return null;
-    }
-    const fetched = rawMeta.fetched_at;
-    const filename = rawMeta.filename;
-    const contentType = rawMeta.content_type;
-    if (
-      typeof fetched !== 'number' ||
-      !Number.isFinite(fetched) ||
-      typeof filename !== 'string' ||
-      !filename ||
-      typeof contentType !== 'string' ||
-      !contentType ||
-      rawMeta.bytes !== size
-    ) {
-      return null;
-    }
-    if (ctx.nowMs() / 1000 - fetched > ttlHours * 3600) {
-      return null;
-    }
-    const body = fs.readFileSync(bodyPath);
-    if (body.length === 0 || isHtmlPayload(contentType, body)) {
-      return null;
-    }
-    return { body, filename, content_type: contentType };
   } catch {
     return null;
   }

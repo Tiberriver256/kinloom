@@ -102,9 +102,14 @@ function pdfPageCachePaths(
 
 function readNonEmptyFile(filePath: string): Buffer | null {
   try {
-    const stat = fs.statSync(filePath);
-    if (stat.isFile() && stat.size > 0) {
-      return fs.readFileSync(filePath);
+    const fd = fs.openSync(filePath, 'r');
+    try {
+      const stat = fs.fstatSync(fd);
+      if (stat.isFile() && stat.size > 0) {
+        return fs.readFileSync(fd);
+      }
+    } finally {
+      fs.closeSync(fd);
     }
   } catch {
     // Cache miss.
@@ -331,10 +336,17 @@ export async function cmdPdfPages(
 
 function readCachedPdfPages(cachePath: string): string[] | null {
   try {
-    if (!fs.statSync(cachePath).isFile()) {
-      return null;
+    const fd = fs.openSync(cachePath, 'r');
+    let rawText: string;
+    try {
+      if (!fs.fstatSync(fd).isFile()) {
+        return null;
+      }
+      rawText = fs.readFileSync(fd, 'utf8');
+    } finally {
+      fs.closeSync(fd);
     }
-    const parsed: unknown = JSON.parse(fs.readFileSync(cachePath, 'utf8'));
+    const parsed: unknown = JSON.parse(rawText);
     if (!isPlainRecord(parsed)) {
       return null;
     }

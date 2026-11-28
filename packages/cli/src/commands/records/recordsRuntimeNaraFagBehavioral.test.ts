@@ -821,8 +821,9 @@ describe('Find a Grave transport retries, redirects, photo cache, and error hand
     expect(photoCacheFresh(photoPath, 1, () => fs.statSync(photoPath).mtimeMs + 1000)).toBe(true);
 
     // HTML bytes rejected by cache check
-    fs.writeFileSync(photoPath, '<!doctype html><html>error</html>');
-    expect(photoCacheFresh(photoPath, 1, () => fs.statSync(photoPath).mtimeMs + 1000)).toBe(false);
+    const htmlPhotoPath = path.join(dir, 'photo-html.jpg');
+    fs.writeFileSync(htmlPhotoPath, '<!doctype html><html>error</html>');
+    expect(photoCacheFresh(htmlPhotoPath, 1, () => fs.statSync(htmlPhotoPath).mtimeMs + 1000)).toBe(false);
   });
 
   it('handles GraphQL redirects, retries, HTML/JSON/GraphQL errors, and network failures', async () => {

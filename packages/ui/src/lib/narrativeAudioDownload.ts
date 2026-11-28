@@ -20,20 +20,33 @@ const DEFAULT_AUDIO_EXTENSION = 'mp3';
 const DEFAULT_FILENAME_STEM = 'narrative-audio';
 const MAX_FILENAME_STEM_LENGTH = 80;
 
+function trimEdgeDashes(value: string): string {
+  let start = 0;
+  let end = value.length;
+  while (start < end && value.charCodeAt(start) === 45) {
+    start += 1;
+  }
+  while (end > start && value.charCodeAt(end - 1) === 45) {
+    end -= 1;
+  }
+  return value.slice(start, end);
+}
+
 export function sanitizeAudioFilenameStem(raw: string | null | undefined): string {
   if (!raw) {
     return '';
   }
-  const normalized = raw
-    .normalize('NFKD')
-    .replaceAll(/[\u0300-\u036f]/g, '')
-    .toLowerCase()
-    .replaceAll(/[^a-z0-9]+/g, '-')
-    .replace(/^-+|-+$/g, '');
+  const normalized = trimEdgeDashes(
+    raw
+      .normalize('NFKD')
+      .replaceAll(/[\u0300-\u036f]/g, '')
+      .toLowerCase()
+      .replaceAll(/[^a-z0-9]+/g, '-')
+  );
   if (normalized.length <= MAX_FILENAME_STEM_LENGTH) {
     return normalized;
   }
-  return normalized.slice(0, MAX_FILENAME_STEM_LENGTH).replace(/-+$/g, '');
+  return trimEdgeDashes(normalized.slice(0, MAX_FILENAME_STEM_LENGTH));
 }
 
 export function extractAudioExtension(src: string): string {

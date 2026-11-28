@@ -19,12 +19,36 @@ const HONORIFIC_PREFIXES = new Set([
 
 const NAME_SUFFIXES = new Set(['jr', 'sr', 'ii', 'iii', 'iv', 'v', 'vi', 'esq', 'md', 'phd']);
 
+function stripParentheticals(input: string): string {
+  if (!input.includes('(')) {
+    return input;
+  }
+  let out = '';
+  let cursor = 0;
+  while (cursor < input.length) {
+    const openIdx = input.indexOf('(', cursor);
+    if (openIdx === -1) {
+      out += input.slice(cursor);
+      break;
+    }
+    const closeIdx = input.indexOf(')', openIdx + 1);
+    if (closeIdx === -1) {
+      out += input.slice(cursor);
+      break;
+    }
+    out += input.slice(cursor, openIdx);
+    out += ' ';
+    cursor = closeIdx + 1;
+  }
+  return out;
+}
+
 export function initialsOf(name: string): string {
-  const withoutParens = name.replaceAll(/\([^)]*\)/g, ' ');
+  const withoutParens = stripParentheticals(name);
   const rawTokens = withoutParens
     .trim()
     .split(/\s+/)
-    .map((token) => token.replaceAll(/^[^A-Za-zÀ-ÖØ-öø-ÿ]+|[^A-Za-zÀ-ÖØ-öø-ÿ]+$/g, ''))
+    .map((token) => token.replace(/^[^A-Za-zÀ-ÖØ-öø-ÿ]+/, '').replace(/[^A-Za-zÀ-ÖØ-öø-ÿ]+$/, ''))
     .filter(Boolean);
 
   if (rawTokens.length === 0) {

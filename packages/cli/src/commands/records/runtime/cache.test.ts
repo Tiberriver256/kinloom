@@ -153,12 +153,13 @@ describe('records runtime cache', () => {
     expect(fs.existsSync(lockPath)).toBe(false);
 
     // Simulate stale lock with dead PID.
-    fs.writeFileSync(lockPath, '99999999\n', 'utf8');
-    const reclaimed = await withAdvisoryLock(lockPath, async () => 'reclaimed', {
+    const staleLockPath = path.join(tmp, 'stale.lock');
+    fs.writeFileSync(staleLockPath, '99999999\n', 'utf8');
+    const reclaimed = await withAdvisoryLock(staleLockPath, async () => 'reclaimed', {
       staleAfterMs: 120_000,
     });
     expect(reclaimed).toBe('reclaimed');
-    expect(fs.existsSync(lockPath)).toBe(false);
+    expect(fs.existsSync(staleLockPath)).toBe(false);
   });
 
   it('tracks multi-lookup cache_hit accurately', () => {

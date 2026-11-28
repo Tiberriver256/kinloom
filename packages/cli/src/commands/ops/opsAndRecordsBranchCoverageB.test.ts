@@ -836,8 +836,8 @@ describe('ops/pronounce (lookupProviders, mediaWiki, lookup, deduplicate, audit,
       cacheDir: tmp,
       sleepFn: async () => {},
       fetchImpl: async (input) => {
-        const url = String(input);
-        if (url.includes('en.wiktionary.org')) {
+        const hostname = new URL(String(input)).hostname;
+        if (hostname === 'en.wiktionary.org') {
           return new Response(
             JSON.stringify({
               query: {

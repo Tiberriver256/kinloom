@@ -258,14 +258,18 @@ export function parseGedcomText(text: string): GedcomParseResult {
   let curSourRef = '';
 
   for (const line of lines) {
-    const m = /^(\d+)\s+(?:(@[^@]+@)\s+)?([A-Z0-9_]+)(?:\s+(.*))?$/.exec(line);
+    const m = /^(\d+)\s+(?:(@[^@]+@)\s+)?([A-Z0-9_]+)/.exec(line);
     if (!m) {
       continue;
     }
-    const [, levelStr, xrefRaw, tag, valRaw] = m;
+    const tail = line.slice(m[0].length);
+    if (tail.length > 0 && !/^\s/.test(tail)) {
+      continue;
+    }
+    const [, levelStr, xrefRaw, tag] = m;
     const level = Number(levelStr);
     const xref = xrefRaw || '';
-    const val = (valRaw || '').trim();
+    const val = tail.trim();
 
     if (level === 0) {
       curType = tag;

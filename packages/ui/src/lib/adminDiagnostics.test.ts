@@ -235,4 +235,21 @@ describe('adminDiagnostics pure helpers', () => {
     expect(fallbackParsed.searchParams.get('environment')).toContain('Node 24.1.0');
     expect(fallbackParsed.searchParams.get('description')).toContain('Paste the copied Kinloom Diagnostics');
   });
+
+  it('escapes backslashes before pipes in Markdown cells and parses adversarial UAs in linear time', () => {
+    const md = formatDiagnosticsMarkdown({
+      report: {
+        ...SAMPLE_REPORT,
+        health_checks: [{ name: 'repository', status: 'pass', latency_ms: 1.0, detail: 'path\\|injected' }],
+      },
+      client: SAMPLE_CLIENT,
+      mergedPlugins: [],
+    });
+    expect(md).toContain('path\\\\\\|injected');
+
+    const t0 = performance.now();
+    const adversarialUa = `Mozilla/5.0 Version/18.0${' '.repeat(25_000)}NotSafari`;
+    expect(parseClientUserAgent(adversarialUa)).toEqual({ browser: 'Unknown', os: 'Unknown' });
+    expect(performance.now() - t0).toBeLessThan(100);
+  });
 });

@@ -316,6 +316,16 @@ describe('OpenAI-compatible speech client and ffmpeg normalizer', () => {
     const okOut = await defaultAudioExecFile(process.execPath, ['-e', 'process.stdout.write("audio-ok")']);
     expect(okOut.stdout.toString('utf8')).toBe('audio-ok');
 
+    const stdinOut = await defaultAudioExecFile(
+      process.execPath,
+      [
+        '-e',
+        'const chunks=[];process.stdin.on("data",c=>chunks.push(c));process.stdin.on("end",()=>process.stdout.write(Buffer.concat(chunks)));',
+      ],
+      { input: Buffer.from('piped-audio-bytes') }
+    );
+    expect(stdinOut.stdout.toString('utf8')).toBe('piped-audio-bytes');
+
     await expect(
       defaultAudioExecFile(process.execPath, ['-e', 'process.stderr.write("boom"); process.exit(1)'])
     ).rejects.toMatchObject({

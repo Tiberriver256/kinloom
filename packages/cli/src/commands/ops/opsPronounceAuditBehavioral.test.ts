@@ -474,7 +474,8 @@ describe('pronunciation tokenAlignment behavioral edge cases', () => {
 
 describe('pronounce deduplicate command and rules behavioral coverage', () => {
   it('validates missing repo directory and missing kinloom.config.yaml', async () => {
-    const missingDir = path.join(os.tmpdir(), `kinloom-missing-${Date.now()}`);
+    const missingBase = await makeTempDir('kinloom-dedupe-missing-');
+    const missingDir = path.join(missingBase, 'does-not-exist');
     expect(() => runPronounceDeduplicateCommand({ repoDir: missingDir })).toThrow(CliValidationError);
 
     const emptyRepo = await makeTempDir('kinloom-dedupe-noconfig-');

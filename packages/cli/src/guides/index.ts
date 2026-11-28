@@ -97,8 +97,20 @@ for (const guide of EMBEDDED_GUIDES) {
   }
 }
 
+function trimSlashes(value: string): string {
+  let start = 0;
+  let end = value.length;
+  while (start < end && value.charCodeAt(start) === 47) {
+    start += 1;
+  }
+  while (end > start && value.charCodeAt(end - 1) === 47) {
+    end -= 1;
+  }
+  return value.slice(start, end);
+}
+
 export function resolveEmbeddedGuide(topic: string): ResolvedEmbeddedGuide | undefined {
-  const normalized = topic.trim().replace(/^\/+|\/+$/g, '');
+  const normalized = trimSlashes(topic.trim());
   if (!normalized) {
     return undefined;
   }

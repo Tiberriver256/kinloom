@@ -19,23 +19,39 @@ export interface InitCommandResult {
   skipped: string[];
 }
 
+function trimEdgeChar(value: string, ch: string): string {
+  let start = 0;
+  let end = value.length;
+  while (start < end && value[start] === ch) {
+    start += 1;
+  }
+  while (end > start && value[end - 1] === ch) {
+    end -= 1;
+  }
+  return value.slice(start, end);
+}
+
 function slugifyIdentifier(raw: string): string {
-  const slug = raw
-    .normalize('NFKD')
-    .replaceAll(/[\u0300-\u036F]/g, '')
-    .toLowerCase()
-    .replaceAll(/[^a-z0-9]+/g, '-')
-    .replaceAll(/^-+|-+$/g, '');
+  const slug = trimEdgeChar(
+    raw
+      .normalize('NFKD')
+      .replaceAll(/[\u0300-\u036F]/g, '')
+      .toLowerCase()
+      .replaceAll(/[^a-z0-9]+/g, '-'),
+    '-'
+  );
   return slug || 'primary';
 }
 
 function toGedcomSourceName(family: string): string {
-  const upper = family
-    .normalize('NFKD')
-    .replaceAll(/[\u0300-\u036F]/g, '')
-    .toUpperCase()
-    .replaceAll(/[^A-Z0-9]+/g, '_')
-    .replaceAll(/^_+|_+$/g, '');
+  const upper = trimEdgeChar(
+    family
+      .normalize('NFKD')
+      .replaceAll(/[\u0300-\u036F]/g, '')
+      .toUpperCase()
+      .replaceAll(/[^A-Z0-9]+/g, '_'),
+    '_'
+  );
   return upper ? `${upper}_ARCHIVE` : 'KINLOOM_ARCHIVE';
 }
 

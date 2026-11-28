@@ -204,25 +204,31 @@ export function readImageDimensions(rawBytes: Buffer): readonly [number, number]
 }
 
 export function validateImageFile(imgPath: string): Buffer {
-  if (!fs.existsSync(imgPath)) {
-    throw new InputImageError(`image file not found: ${imgPath}`);
-  }
-  let stat: fs.Stats;
+  let fd: number;
   try {
-    stat = fs.statSync(imgPath);
+    fd = fs.openSync(imgPath, 'r');
   } catch (err: unknown) {
+    if (typeof err === 'object' && err !== null && 'code' in err && err.code === 'ENOENT') {
+      throw new InputImageError(`image file not found: ${imgPath}`);
+    }
     const detail = err instanceof Error ? err.message : String(err);
     throw new InputImageError(`cannot read image file ${imgPath}: ${detail}`);
-  }
-  if (!stat.isFile()) {
-    throw new InputImageError(`image path is not a regular file: ${imgPath}`);
   }
   let rawBytes: Buffer;
   try {
-    rawBytes = fs.readFileSync(imgPath);
+    const stat = fs.fstatSync(fd);
+    if (!stat.isFile()) {
+      throw new InputImageError(`image path is not a regular file: ${imgPath}`);
+    }
+    rawBytes = fs.readFileSync(fd);
   } catch (err: unknown) {
+    if (err instanceof InputImageError) {
+      throw err;
+    }
     const detail = err instanceof Error ? err.message : String(err);
     throw new InputImageError(`cannot read image file ${imgPath}: ${detail}`);
+  } finally {
+    fs.closeSync(fd);
   }
   if (rawBytes.length === 0) {
     throw new InputImageError(`image file is empty (0 bytes): ${imgPath}`);

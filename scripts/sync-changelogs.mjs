@@ -4,10 +4,15 @@ import path from 'node:path';
 export function syncBuiltinModuleChangelogs(root, version) {
   const rel = 'packages/core/src/changelogs/builtinModuleChangelogs.ts';
   const full = path.join(root, rel);
-  if (!fs.existsSync(full)) {
-    return;
+  let source;
+  try {
+    source = fs.readFileSync(full, 'utf8');
+  } catch (err) {
+    if (err && typeof err === 'object' && 'code' in err && err.code === 'ENOENT') {
+      return;
+    }
+    throw err;
   }
-  const source = fs.readFileSync(full, 'utf8');
   const today = new Date().toISOString().slice(0, 10);
   const entrySnippet = [
     '      {',
@@ -32,5 +37,12 @@ export function syncBuiltinModuleChangelogs(root, version) {
     }
     return `${match}${entrySnippet}\n`;
   });
-  fs.writeFileSync(full, updated);
+  const tmpDir = fs.mkdtempSync(path.join(path.dirname(full), '.kinloom-changelog-'));
+  const tmpFile = path.join(tmpDir, 'builtinModuleChangelogs.ts');
+  try {
+    fs.writeFileSync(tmpFile, updated, { encoding: 'utf8', flag: 'wx' });
+    fs.renameSync(tmpFile, full);
+  } finally {
+    fs.rmSync(tmpDir, { recursive: true, force: true });
+  }
 }

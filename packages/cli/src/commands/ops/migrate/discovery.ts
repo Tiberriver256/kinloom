@@ -155,22 +155,32 @@ export function resolveMigrationsDir(
 }
 
 export function discoverMigrations(migrationsDir: string): DiscoveredMigration[] {
-  if (!fs.existsSync(migrationsDir) || !fs.statSync(migrationsDir).isDirectory()) {
+  let dirEntries: fs.Dirent[];
+  try {
+    dirEntries = fs.readdirSync(migrationsDir, { withFileTypes: true });
+  } catch {
     throw new CliValidationError(`Migrations directory not found: ${migrationsDir}`);
   }
 
   const entries: DiscoveredMigration[] = [];
-  for (const fileName of fs.readdirSync(migrationsDir)) {
+  for (const dirent of dirEntries) {
+    const fileName = dirent.name;
     const match = MIGRATION_FILE_RE.exec(fileName);
     if (!match) {
       continue;
     }
     const number = Number.parseInt(match[1], 10);
     const filePath = path.join(migrationsDir, fileName);
-    if (!fs.statSync(filePath).isFile()) {
-      continue;
+    let sql: string;
+    const fd = fs.openSync(filePath, 'r');
+    try {
+      if (!fs.fstatSync(fd).isFile()) {
+        continue;
+      }
+      sql = fs.readFileSync(fd, 'utf8');
+    } finally {
+      fs.closeSync(fd);
     }
-    const sql = fs.readFileSync(filePath, 'utf8');
     entries.push({
       id: fileName,
       number,

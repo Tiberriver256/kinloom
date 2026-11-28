@@ -49,8 +49,11 @@ function normalizeUiRoutePath(raw: string, pluginId: string): string {
   if (!trimmed.startsWith('/')) {
     throw new RangeError(`UI plugin '${pluginId}' route path '${raw}' must start with '/'.`);
   }
-  const withoutTrailingSlash = trimmed.replace(/\/+$/, '');
-  return withoutTrailingSlash.length > 0 ? withoutTrailingSlash : '/';
+  let end = trimmed.length;
+  while (end > 0 && trimmed.charCodeAt(end - 1) === 47) {
+    end -= 1;
+  }
+  return end > 0 ? trimmed.slice(0, end) : '/';
 }
 
 /**

@@ -139,7 +139,11 @@ function normalizeBaseUrl(rawUrl: string): string {
       `Unsupported site URL protocol '${parsed.protocol}'. Expected http: or https:.`
     );
   }
-  return trimmed.replace(/\/+$/, '');
+  let end = trimmed.length;
+  while (end > 0 && trimmed.charCodeAt(end - 1) === 47) {
+    end -= 1;
+  }
+  return end === trimmed.length ? trimmed : trimmed.slice(0, end);
 }
 
 async function parseErrorResponse(response: Response): Promise<KinloomApiError> {

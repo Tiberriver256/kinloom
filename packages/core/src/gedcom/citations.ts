@@ -4,7 +4,23 @@ export const UNVERIFIED_TREE_SOURCE_ID = 'src_unverified_tree_entry';
 
 const RE_SSN_NUMBER = /\bNumber:\s*\d{3}-\d{2}-\d{4}\s*;?\s*/gi;
 const RE_SSN_BARE = /\b\d{3}-\d{2}-\d{4}\b/g;
-const RE_TRIM_SEPARATORS = /^[;,\s]+|[;,\s]+$/g;
+const NEWSPAPERS_COM_TOKENS = new Set(['newspapers.com', 'www.newspapers.com']);
+
+function isCitationSeparatorChar(code: number): boolean {
+  return code === 59 || code === 44 || code <= 32;
+}
+
+function trimCitationSeparators(value: string): string {
+  let start = 0;
+  let end = value.length;
+  while (start < end && isCitationSeparatorChar(value.charCodeAt(start))) {
+    start += 1;
+  }
+  while (end > start && isCitationSeparatorChar(value.charCodeAt(end - 1))) {
+    end -= 1;
+  }
+  return value.slice(start, end);
+}
 
 const MAX_CITATION_CACHE_SIZE = 16384;
 const summaryCleanCache = new Map<string, string>();
@@ -90,8 +106,8 @@ export function redactSensitiveCitationDetail(raw: string): string {
   }
   const first = text.charCodeAt(0);
   const last = text.charCodeAt(text.length - 1);
-  if (first === 59 || first === 44 || first <= 32 || last === 59 || last === 44 || last <= 32) {
-    text = text.replaceAll(RE_TRIM_SEPARATORS, '');
+  if (isCitationSeparatorChar(first) || isCitationSeparatorChar(last)) {
+    text = trimCitationSeparators(text);
   }
   setBoundedCitationCache(citationDetailCache, raw, text);
   return text;
@@ -102,14 +118,14 @@ export function cleanSourceCitationTitle(rawTitle: string): string {
   if (cached !== undefined) {
     return cached;
   }
-  let out = rawTitle;
-  if (out.includes('@')) {
-    out = out.replace(/\s*\(Ancestry GEDCOM\s+@S\d+@\)\s*$/i, '');
-  }
-  if (hasIrregularWhitespace(out)) {
-    out = out.replaceAll(/\s+/g, ' ');
-  }
+  let out = hasIrregularWhitespace(rawTitle) ? rawTitle.replaceAll(/\s+/g, ' ') : rawTitle;
   out = out.trim();
+  if (out.includes('@') && out.endsWith(')')) {
+    const openIdx = out.lastIndexOf('(');
+    if (openIdx !== -1 && /^\(Ancestry GEDCOM @S\d+@\)$/i.test(out.slice(openIdx))) {
+      out = out.slice(0, openIdx).trimEnd();
+    }
+  }
   setBoundedCitationCache(sourceTitleCache, rawTitle, out);
   return out;
 }
@@ -134,7 +150,7 @@ export function inferSourceRepository(title: string, repoName?: string, publishe
   if (t.includes('general land office')) {
     return 'U.S. Bureau of Land Management (GLO)';
   }
-  if (t.includes('newspapers.com')) {
+  if (t.split(/[^a-z0-9.]+/).some((tok) => NEWSPAPERS_COM_TOKENS.has(tok))) {
     return 'Newspapers.com Historical Archive';
   }
   if (t.includes('texas, marriage')) {
@@ -159,34 +175,33 @@ export function inferSourceRepository(title: string, repoName?: string, publishe
   return 'Archival Record Collection (imported via Ancestry tree)';
 }
 
-const RE_AT_ANCESTRY_GEDCOM = /\s*\((?:Ancestry\s+)?GEDCOM\s+@[A-Za-z][0-9]+@\)/gi;
-const RE_AT_ACCORDING = /\s+according to the Ancestry GEDCOM\s*\(@[A-Za-z][0-9]+@\)\.?/gi;
-const RE_AT_PARENS = /\s*\(@[A-Za-z][0-9]+@\)/g;
-const RE_AT_GEDCOM = /\bGEDCOM\s+@[A-Za-z][0-9]+@\b/gi;
-const RE_AT_BARE = /\s*@[A-Za-z][0-9]+@/g;
-const RE_RECORDED_MARRIAGE_YEAR = /\brecorded marriage on\s+(?=\d{4}\b)/gi;
+const RE_AT_ANCESTRY_GEDCOM = / ?\((?:Ancestry )?GEDCOM @[A-Za-z][0-9]+@\)/gi;
+const RE_AT_ACCORDING = / according to the Ancestry GEDCOM ?\(@[A-Za-z][0-9]+@\)\.?/gi;
+const RE_AT_PARENS = / ?\(@[A-Za-z][0-9]+@\)/g;
+const RE_AT_GEDCOM = /\bGEDCOM @[A-Za-z][0-9]+@\b/gi;
+const RE_AT_BARE = / ?@[A-Za-z][0-9]+@/g;
+const RE_RECORDED_MARRIAGE_YEAR = /\brecorded marriage on (?=\d{4}\b)/gi;
 const RE_RECORDED_MARRIAGE_MONTH =
-  /\brecorded marriage on\s+(?=(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\.?\s+\d{4}\b)/gi;
-const RE_RECORDED_MARRIAGE = /\brecorded marriage on\s+/gi;
+  /\brecorded marriage on (?=(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\.? \d{4}\b)/gi;
+const RE_RECORDED_MARRIAGE = /\brecorded marriage on /gi;
 const RE_RECORDED_DIVORCE_YEAR_MONTH =
-  /\brecorded divorce on\s+(?=(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\.?\s+\d{4}\b|\d{4}\b)/gi;
-const RE_RECORDED_DIVORCE = /\brecorded divorce on\s+/gi;
+  /\brecorded divorce on (?=(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\.? \d{4}\b|\d{4}\b)/gi;
+const RE_RECORDED_DIVORCE = /\brecorded divorce on /gi;
 const RE_WAS_DIED_ON = /\bwas died on\b/gi;
-const RE_WAS_BORN_ABT = /\bwas born on\s+Abt\.?\s+/gi;
-const RE_DIED_ABT = /\bdied on\s+Abt\.?\s+/gi;
-const RE_WAS_BORN_YEAR = /\bwas born on\s+(\d{4})(?=\b(?!\s*[-–/]\s*\d))/g;
-const RE_DIED_YEAR = /\bdied on\s+(\d{4})(?=\b(?!\s*[-–/]\s*\d))/g;
-const RE_CONFLICT_ONE = /Note:\s*1\s+conflicting\s+GEDCOM\s+entr(?:y|ies)\s+recorded\.?/gi;
-const RE_CONFLICT_MANY = /Note:\s*(\d+)\s+conflicting\s+GEDCOM\s+entr(?:y|ies)\s+recorded\.?/gi;
-const RE_DAY_MONTH_YEAR = /\b(\d{1,2})\s+(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)\s+(\d{4})\b/gi;
-const RE_DAY_MONTH_YEAR_PROBE = /\d\s+(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)\s+\d{4}/i;
-const RE_SPACE_DOT = /\s+\./g;
+const RE_WAS_BORN_ABT = /\bwas born on Abt\.? /gi;
+const RE_DIED_ABT = /\bdied on Abt\.? /gi;
+const RE_WAS_BORN_YEAR = /\bwas born on (\d{4})(?=\b(?! ?[-–/] ?\d))/g;
+const RE_DIED_YEAR = /\bdied on (\d{4})(?=\b(?! ?[-–/] ?\d))/g;
+const RE_CONFLICT_ONE = /Note: ?1 conflicting GEDCOM entr(?:y|ies) recorded\.?/gi;
+const RE_CONFLICT_MANY = /Note: ?(\d+) conflicting GEDCOM entr(?:y|ies) recorded\.?/gi;
+const RE_DAY_MONTH_YEAR = /\b(\d{1,2}) (jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec) (\d{4})\b/gi;
+const RE_DAY_MONTH_YEAR_PROBE = /\d (?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec) \d{4}/i;
 const RE_DOUBLE_DOT = /\.\.+/g;
 const RE_MULTI_SPACE = /\s{2,}/g;
 
-const RE_ALT_GEDCOM_DATE = /\bGEDCOM\s+alternate\s+date:/gi;
-const RE_ALT_GEDCOM_PLACE = /\bGEDCOM\s+alternate\s+place:/gi;
-const RE_ALT_GEDCOM_ENTRY = /\bGEDCOM\s+entry\b/gi;
+const RE_ALT_GEDCOM_DATE = /\bGEDCOM alternate date:/gi;
+const RE_ALT_GEDCOM_PLACE = /\bGEDCOM alternate place:/gi;
+const RE_ALT_GEDCOM_ENTRY = /\bGEDCOM entry\b/gi;
 
 export function cleanEventSummaryProse(summary: string): string {
   if (!summary) {
@@ -196,7 +211,7 @@ export function cleanEventSummaryProse(summary: string): string {
   if (cached !== undefined) {
     return cached;
   }
-  let out = summary;
+  let out = hasIrregularWhitespace(summary) ? summary.replaceAll(/\s+/g, ' ') : summary;
   if (out.includes('@')) {
     out = out
       .replaceAll(RE_AT_ANCESTRY_GEDCOM, '')
@@ -232,8 +247,8 @@ export function cleanEventSummaryProse(summary: string): string {
       (_, d: string, m: string, y: string) => `${d} ${m[0].toUpperCase()}${m.slice(1).toLowerCase()} ${y}`
     );
   }
-  if (out.includes(' .') || out.includes('\t.') || out.includes('\n.')) {
-    out = out.replaceAll(RE_SPACE_DOT, '.');
+  if (out.includes(' .')) {
+    out = out.replaceAll(' .', '.');
   }
   if (out.includes('..')) {
     out = out.replaceAll(RE_DOUBLE_DOT, '.');
@@ -250,7 +265,7 @@ export function cleanAlternateNote(note: string): string {
   if (!note) {
     return note;
   }
-  let out = note;
+  let out = hasIrregularWhitespace(note) ? note.replaceAll(/\s+/g, ' ') : note;
   if (out.includes('@') || out.includes('GEDCOM') || out.includes('gedcom')) {
     out = out
       .replaceAll(RE_ALT_GEDCOM_DATE, 'Alternate date:')

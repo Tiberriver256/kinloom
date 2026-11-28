@@ -14,11 +14,20 @@ export function formatFileSize(bytes?: number): string {
   return `${(kb / 1024).toFixed(1)} MB`;
 }
 
+function trimDashes(value: string): string {
+  let start = 0;
+  let end = value.length;
+  while (start < end && value.charCodeAt(start) === 45) {
+    start += 1;
+  }
+  while (end > start && value.charCodeAt(end - 1) === 45) {
+    end -= 1;
+  }
+  return value.slice(start, end);
+}
+
 export function buildSourceTextFilename(doc: ReadingDocument): string {
-  const slug = doc.title
-    .toLowerCase()
-    .replaceAll(/[^a-z0-9]+/g, '-')
-    .replaceAll(/^-+|-+$/g, '');
+  const slug = trimDashes(doc.title.toLowerCase().replaceAll(/[^a-z0-9]+/g, '-'));
   return `${slug || doc.source_id}.txt`;
 }
 

@@ -92,18 +92,28 @@ export function normalizeIpaComparable(value?: string | null): string {
   return normalizeWhitespace(stripIpaDelimiters(trimmed));
 }
 
+function trimCharsOrSpace(value: string, chars: string): string {
+  let start = 0;
+  let end = value.length;
+  while (start < end && (chars.includes(value[start]) || /\s/.test(value[start]))) {
+    start += 1;
+  }
+  while (end > start && (chars.includes(value[end - 1]) || /\s/.test(value[end - 1]))) {
+    end -= 1;
+  }
+  return value.slice(start, end);
+}
+
 export function cleanExtractedPhonetic(raw: string): string | null {
-  const cleaned = normalizeWhitespace(raw)
-    .replaceAll(/\s*-\s*/g, '-')
-    .replace(/^[.,;:!?()[\]"“”\-\s]+|[.,;:!?()[\]"“”\-\s]+$/g, '')
-    .trim();
+  const cleaned = trimCharsOrSpace(
+    normalizeWhitespace(raw).replaceAll(/\s*-\s*/g, '-'),
+    '.,;:!?()[]"“”-'
+  ).trim();
   return cleaned || null;
 }
 
 export function cleanExtractedIpa(raw: string): string | null {
-  const cleaned = normalizeIpaComparable(raw)
-    .replace(/^[,;:/[\]\-\s]+|[,;:/[\]\-\s]+$/g, '')
-    .trim();
+  const cleaned = trimCharsOrSpace(normalizeIpaComparable(raw), ',;:/[]-').trim();
   return cleaned || null;
 }
 

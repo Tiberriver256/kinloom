@@ -90,27 +90,64 @@ function formatDeduplicateText(result: Omit<PronounceDeduplicateResult, 'rendere
   return lines.join('\n');
 }
 
+function isEnoentError(err: unknown): boolean {
+  return typeof err === 'object' && err !== null && 'code' in err && err.code === 'ENOENT';
+}
+
+function writeTextAtomically(targetPath: string, content: string): void {
+  const dir = path.dirname(targetPath);
+  const tmpDir = fs.mkdtempSync(path.join(dir, '.kinloom-dedupe-'));
+  const tmpFile = path.join(tmpDir, 'payload');
+  try {
+    fs.writeFileSync(tmpFile, content, { encoding: 'utf8', flag: 'wx' });
+    fs.renameSync(tmpFile, targetPath);
+  } finally {
+    fs.rmSync(tmpDir, { recursive: true, force: true });
+  }
+}
+
 export function runPronounceDeduplicateCommand(
   options: PronounceDeduplicateOptions
 ): PronounceDeduplicateResult {
   const repoDir = path.resolve(options.repoDir?.trim() || process.cwd());
-  if (!fs.existsSync(repoDir) || !fs.statSync(repoDir).isDirectory()) {
+  try {
+    if (!fs.statSync(repoDir).isDirectory()) {
+      throw new CliValidationError(`Repository directory does not exist: ${repoDir}`);
+    }
+  } catch (err: unknown) {
+    if (err instanceof CliValidationError) {
+      throw err;
+    }
     throw new CliValidationError(`Repository directory does not exist: ${repoDir}`);
   }
 
   const configPath = path.join(repoDir, 'kinloom.config.yaml');
   const peoplePath = path.join(repoDir, 'data', 'people.yaml');
 
-  if (!fs.existsSync(configPath)) {
-    throw new CliValidationError(
-      `Missing ${configPath} (pass --repo <archive-root> if running outside the archive root).`
-    );
+  let rawConfig: string;
+  try {
+    rawConfig = fs.readFileSync(configPath, 'utf8');
+  } catch (err: unknown) {
+    if (isEnoentError(err)) {
+      throw new CliValidationError(
+        `Missing ${configPath} (pass --repo <archive-root> if running outside the archive root).`
+      );
+    }
+    throw err;
   }
 
-  const siteConfig: KinloomSiteConfig = parseKinloomConfigYaml(fs.readFileSync(configPath, 'utf8'));
-  const people: RawPerson[] = fs.existsSync(peoplePath)
-    ? parsePeopleYaml(fs.readFileSync(peoplePath, 'utf8'))
-    : [];
+  const siteConfig: KinloomSiteConfig = parseKinloomConfigYaml(rawConfig);
+  let hasPeopleFile = false;
+  let people: RawPerson[] = [];
+  try {
+    const rawPeople = fs.readFileSync(peoplePath, 'utf8');
+    hasPeopleFile = true;
+    people = parsePeopleYaml(rawPeople);
+  } catch (err: unknown) {
+    if (!isEnoentError(err)) {
+      throw err;
+    }
+  }
 
   const livingIdsLower = new Set<string>();
   const livingFullNamesLower = new Set<string>();
@@ -276,11 +313,11 @@ export function runPronounceDeduplicateCommand(
           ...promotedLexiconAdditions,
         },
       };
-      fs.writeFileSync(configPath, serializeKinloomConfigYaml(nextConfig), 'utf8');
+      writeTextAtomically(configPath, serializeKinloomConfigYaml(nextConfig));
       filesWritten.push('kinloom.config.yaml');
     }
 
-    if (removableIds.size > 0 && fs.existsSync(peoplePath)) {
+    if (removableIds.size > 0 && hasPeopleFile) {
       const updatedPeople = people.map((person) => {
         if (!removableIds.has(person.id)) {
           return person;
@@ -288,7 +325,7 @@ export function runPronounceDeduplicateCommand(
         const { pronunciation: _removed, ...rest } = person;
         return rest;
       });
-      fs.writeFileSync(peoplePath, serializePeopleYaml(updatedPeople), 'utf8');
+      writeTextAtomically(peoplePath, serializePeopleYaml(updatedPeople));
       filesWritten.push('data/people.yaml');
     }
   }

@@ -17,13 +17,27 @@ export function cleanHtmlText(
   html: string,
   options: { readonly stripScriptsAndStyles?: boolean } = {}
 ): string {
-  let stripped = html;
+  const $ = loadHtml(`<body>${html}</body>`);
   if (options.stripScriptsAndStyles) {
-    stripped = stripped.replace(/<script[\s\S]*?<\/script>/gi, ' ').replace(/<style[\s\S]*?<\/style>/gi, ' ');
+    $('script, style').remove();
   }
-  stripped = stripped.replace(/<[^>]+>/g, ' ');
-  const $ = loadHtml(`<body>${stripped.replace(/</g, '&lt;')}</body>`);
-  return collapseWhitespace($('body').text());
+  const chunks: string[] = [];
+  const rootContents = $('body').contents();
+  const collectText = (nodes: typeof rootContents): void => {
+    nodes.each((_idx, node) => {
+      if (node.type === 'text') {
+        if (node.data) {
+          chunks.push(node.data);
+        }
+        return;
+      }
+      if ('children' in node && node.children.length > 0) {
+        collectText($(node).contents());
+      }
+    });
+  };
+  collectText(rootContents);
+  return collapseWhitespace(chunks.join(' '));
 }
 
 export function extractFormHiddenInputs($: CheerioDocument, formSelector = 'form'): Record<string, string> {

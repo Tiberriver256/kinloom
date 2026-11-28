@@ -25,19 +25,21 @@ function validateDownloadFile(
   filePath: string,
   options: { readonly url: string; readonly contentType: string; readonly kind: ChronamAssetKind }
 ): number {
-  let nbytes: number;
+  let fd: number;
   try {
-    nbytes = fs.statSync(filePath).size;
+    fd = fs.openSync(filePath, 'r');
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : String(err);
     throw new RecordRuntimeError(`Failed reading downloaded file for ${options.url}: ${message}`);
   }
-  if (nbytes <= 0) {
-    throw new RecordRuntimeError(`Download was empty: ${options.url}`);
-  }
-  const fd = fs.openSync(filePath, 'r');
-  const head = Buffer.alloc(Math.min(512, nbytes));
+  let nbytes: number;
+  let head: Buffer;
   try {
+    nbytes = fs.fstatSync(fd).size;
+    if (nbytes <= 0) {
+      throw new RecordRuntimeError(`Download was empty: ${options.url}`);
+    }
+    head = Buffer.alloc(Math.min(512, nbytes));
     fs.readSync(fd, head, 0, head.length, 0);
   } finally {
     fs.closeSync(fd);

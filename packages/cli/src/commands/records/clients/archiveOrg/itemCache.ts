@@ -338,12 +338,19 @@ export function reuseExistingItemArtifact(
       const rawSize = fileEntry.size;
       if (rawSize !== undefined && rawSize !== null) {
         const expectedSize = Number.parseInt(String(rawSize), 10);
-        try {
-          if (Number.isFinite(expectedSize) && fs.statSync(djvuPath).size === expectedSize) {
-            return fs.readFileSync(djvuPath);
+        if (Number.isFinite(expectedSize)) {
+          try {
+            const fd = fs.openSync(djvuPath, 'r');
+            try {
+              if (fs.fstatSync(fd).size === expectedSize) {
+                return fs.readFileSync(fd);
+              }
+            } finally {
+              fs.closeSync(fd);
+            }
+          } catch {
+            // Ignore open/read error.
           }
-        } catch {
-          // Ignore stat error.
         }
       } else if (!findItemFile(fileList, HOCR_TEXT_SPEC)) {
         return fs.readFileSync(djvuPath);
@@ -404,9 +411,14 @@ export async function ensurePageImageCache(
     options.refresh ?? false,
     () => {
       try {
-        const stat = fs.statSync(pageCachePath);
-        if (stat.isFile() && stat.size > 0) {
-          return [fs.readFileSync(pageCachePath), pageCachePath, true];
+        const fd = fs.openSync(pageCachePath, 'r');
+        try {
+          const stat = fs.fstatSync(fd);
+          if (stat.isFile() && stat.size > 0) {
+            return [fs.readFileSync(fd), pageCachePath, true];
+          }
+        } finally {
+          fs.closeSync(fd);
         }
       } catch {
         // Not cached.

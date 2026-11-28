@@ -332,19 +332,33 @@ export function normalizeRecipeTags(tags: readonly string[]): string[] {
   return out;
 }
 
+function trimDashes(value: string): string {
+  let start = 0;
+  let end = value.length;
+  while (start < end && value.charCodeAt(start) === 45) {
+    start += 1;
+  }
+  while (end > start && value.charCodeAt(end - 1) === 45) {
+    end -= 1;
+  }
+  return value.slice(start, end);
+}
+
 /**
  * Generates a deterministic URL-safe recipe slug from a human title.
  */
 export function slugifyRecipeTitle(title: string): string {
-  const ascii = title
-    .normalize('NFKD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/^-+|-+$/g, '')
-    .replace(/-{2,}/g, '-')
-    .slice(0, 88)
-    .replace(/-+$/g, '');
+  const ascii = trimDashes(
+    trimDashes(
+      title
+        .normalize('NFKD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, '-')
+    )
+      .replace(/-{2,}/g, '-')
+      .slice(0, 88)
+  );
   if (ascii.length >= 2) {
     return ascii;
   }

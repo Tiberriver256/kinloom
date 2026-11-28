@@ -88,6 +88,26 @@ function formatIntervalSideDate(side: string, isLeft: boolean): string {
 /**
  * Convert EDTF dates into valid GEDCOM 7.0 date values.
  */
+function trimTrailingChars(value: string, chars: string): string {
+  let end = value.length;
+  while (end > 0 && chars.includes(value[end - 1])) {
+    end -= 1;
+  }
+  return end === value.length ? value : value.slice(0, end);
+}
+
+function trimEdgeChar(value: string, ch: string): string {
+  let start = 0;
+  let end = value.length;
+  while (start < end && value[start] === ch) {
+    start += 1;
+  }
+  while (end > start && value[end - 1] === ch) {
+    end -= 1;
+  }
+  return value.slice(start, end);
+}
+
 export function formatEdtfToGedcomDate(edtf?: string | number | null): string {
   if (edtf === null || edtf === undefined || edtf === '') {
     return '';
@@ -99,14 +119,8 @@ export function formatEdtfToGedcomDate(edtf?: string | number | null): string {
 
   if (raw.includes('/')) {
     const idx = raw.indexOf('/');
-    const left = raw
-      .slice(0, idx)
-      .replace(/[~?%]+$/, '')
-      .trim();
-    const right = raw
-      .slice(idx + 1)
-      .replace(/[~?%]+$/, '')
-      .trim();
+    const left = trimTrailingChars(raw.slice(0, idx), '~?%').trim();
+    const right = trimTrailingChars(raw.slice(idx + 1), '~?%').trim();
     const a = left ? formatIntervalSideDate(left, true) : '';
     const b = right ? formatIntervalSideDate(right, false) : '';
     if (a && b) {
@@ -122,8 +136,7 @@ export function formatEdtfToGedcomDate(edtf?: string | number | null): string {
   }
 
   const approx = raw.endsWith('~') || raw.endsWith('?') || raw.endsWith('%') || /^abt\.?\s/i.test(raw);
-  const cleaned = raw
-    .replaceAll(/[~?%]+$/g, '')
+  const cleaned = trimTrailingChars(raw, '~?%')
     .replace(/^abt\.?\s+/i, '')
     .trim();
 
@@ -208,10 +221,10 @@ export interface GedcomFilenameParams {
 }
 
 export function buildGedcomExportFilename(params: GedcomFilenameParams): string {
-  const baseSlug = (params.familySlug || 'family-archive')
-    .toLowerCase()
-    .replaceAll(/[^a-z0-9]+/g, '-')
-    .replaceAll(/^-+|-+$/g, '');
+  const baseSlug = trimEdgeChar(
+    (params.familySlug || 'family-archive').toLowerCase().replaceAll(/[^a-z0-9]+/g, '-'),
+    '-'
+  );
   const parts: string[] = [baseSlug || 'family-archive'];
   if (params.lineageFilter && params.lineageFilter !== 'all') {
     parts.push(params.lineageFilter.replaceAll(/[^a-z0-9]+/gi, '-').toLowerCase());
@@ -222,12 +235,13 @@ export function buildGedcomExportFilename(params: GedcomFilenameParams): string 
   if (params.onlyWithMedia) {
     parts.push('with-media');
   }
-  const cleanQ = params.query
-    .trim()
-    .toLowerCase()
-    .replaceAll(/[^a-z0-9]+/g, '-')
-    .replaceAll(/^-+|-+$/g, '')
-    .slice(0, 24);
+  const cleanQ = trimEdgeChar(
+    params.query
+      .trim()
+      .toLowerCase()
+      .replaceAll(/[^a-z0-9]+/g, '-'),
+    '-'
+  ).slice(0, 24);
   if (cleanQ) {
     parts.push(cleanQ);
   }

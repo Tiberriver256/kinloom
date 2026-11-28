@@ -81,7 +81,7 @@ describe('ca-archives native client', () => {
     let calls = 0;
     const fetchImpl: typeof fetch = async (input) => {
       calls += 1;
-      if (String(input).includes('archives.sos.ca.gov')) {
+      if (new URL(String(input)).hostname === 'archives.sos.ca.gov') {
         return new Response(PORTAL_SEARCH_HTML, { status: 200 });
       }
       return new Response(JSON.stringify(EXHIBITS_SEARCH_JSON), {
@@ -228,7 +228,7 @@ describe('ca-archives native client', () => {
             },
             evaluate: async <T>(fn: string | (() => T)): Promise<T> => {
               const expr = String(fn);
-              if (currentUrl.includes('oac.cdlib.org')) {
+              if (new URL(currentUrl).hostname === 'oac.cdlib.org') {
                 if (expr.includes('innerText')) {
                   return 'Showing 1-2 of 2 entries' as unknown as T;
                 }
@@ -321,7 +321,7 @@ describe('ca-archives native client', () => {
             },
             content: async () => '',
             evaluate: async <T>(fn: string | (() => T)): Promise<T> => {
-              if (currentUrl.includes('calisphere.org')) {
+              if (new URL(currentUrl).hostname === 'calisphere.org') {
                 return new Promise<T>(() => {});
               }
               const expr = String(fn);
@@ -371,7 +371,7 @@ describe('ca-archives native client', () => {
     expect(signals).toEqual(['SIGTERM', 'SIGKILL']);
 
     const fetchFast: typeof fetch = async (input) => {
-      if (String(input).includes('archives.sos.ca.gov')) {
+      if (new URL(String(input)).hostname === 'archives.sos.ca.gov') {
         return new Response(PORTAL_SEARCH_HTML, { status: 200 });
       }
       return new Response(JSON.stringify(EXHIBITS_SEARCH_JSON), {

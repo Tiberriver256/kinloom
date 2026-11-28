@@ -153,16 +153,20 @@ export function loadStagedPackage(personId: string, packageDir: string): ParsedP
 }
 
 function hashAndMeasure(diskPath: string): Omit<ScanCollisionPackage, 'person_id'> {
-  const stat = fs.statSync(diskPath);
   const hash = crypto.createHash('sha256');
-  const headerLen = Math.min(stat.size, 65_536);
-  const header = Buffer.allocUnsafe(headerLen);
   const fd = fs.openSync(diskPath, 'r');
+  let size: number;
+  let headerLen: number;
+  let header: Buffer;
   try {
+    const stat = fs.fstatSync(fd);
+    size = stat.size;
+    headerLen = Math.min(size, 65_536);
+    header = Buffer.allocUnsafe(headerLen);
     let offset = 0;
     const buf = Buffer.allocUnsafe(1024 * 1024);
-    while (offset < stat.size) {
-      const read = fs.readSync(fd, buf, 0, Math.min(buf.length, stat.size - offset), offset);
+    while (offset < size) {
+      const read = fs.readSync(fd, buf, 0, Math.min(buf.length, size - offset), offset);
       if (read <= 0) {
         break;
       }
@@ -178,7 +182,7 @@ function hashAndMeasure(diskPath: string): Omit<ScanCollisionPackage, 'person_id
   const info =
     headerLen === 0 ? { width: null, height: null } : inspectImageBuffer(header.subarray(0, headerLen));
   return {
-    bytes: stat.size,
+    bytes: size,
     width: info.width,
     height: info.height,
     sha256: hash.digest('hex'),

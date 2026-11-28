@@ -116,8 +116,12 @@ export function createRecipesUiPlugin(options: RecipesUiPluginOptions = {}): Kin
     };
   }
 
-  const basePath =
-    options.basePath?.trim().replace(/\/+$/, '') || DEFAULT_RECIPES_ROUTE_BASE || DEFAULT_RECIPES_ROUTE_BASE;
+  const trimmedBasePath = options.basePath?.trim() ?? '';
+  let baseEnd = trimmedBasePath.length;
+  while (baseEnd > 0 && trimmedBasePath.charCodeAt(baseEnd - 1) === 47) {
+    baseEnd -= 1;
+  }
+  const basePath = trimmedBasePath.slice(0, baseEnd) || DEFAULT_RECIPES_ROUTE_BASE;
   const showIndexWidget = options.showIndexWidget ?? true;
 
   const client: RecipesClient = options.client

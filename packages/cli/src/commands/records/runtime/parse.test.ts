@@ -2,6 +2,7 @@ import { gzipSync } from 'node:zlib';
 import { zipSync } from 'fflate';
 import { describe, expect, it } from 'vitest';
 import {
+  cleanHtmlText,
   collapseWhitespace,
   extractFormHiddenInputs,
   extractHtmlTables,
@@ -48,5 +49,21 @@ describe('records runtime parse helpers', () => {
 
     const gz = gzipSync(Buffer.from('ocr-payload', 'utf8'));
     expect(gunzipText(gz)).toBe('ocr-payload');
+  });
+
+  it('strips scripts with whitespace in end tags and handles adversarial inputs in linear time', () => {
+    expect(
+      cleanHtmlText('<script>alert(1)</script ><style>.a{color:red}</style ><b>Hello</b><p>World</p>', {
+        stripScriptsAndStyles: true,
+      })
+    ).toBe('Hello World');
+    expect(cleanHtmlText('<span>Alpha &amp; Beta</span>')).toBe('Alpha & Beta');
+
+    const start = performance.now();
+    const longScripts = '<script'.repeat(10_000);
+    const longAngles = '<'.repeat(10_000);
+    expect(cleanHtmlText(longScripts, { stripScriptsAndStyles: true })).toBe('');
+    expect(cleanHtmlText(longAngles)).toBe(longAngles);
+    expect(performance.now() - start).toBeLessThan(2000);
   });
 });

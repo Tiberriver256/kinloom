@@ -417,6 +417,14 @@ export interface CloudflareBrowserPdfRendererOptions {
   readonly fetchImpl?: typeof fetch;
 }
 
+function trimTrailingSlashes(value: string): string {
+  let end = value.length;
+  while (end > 0 && value.charCodeAt(end - 1) === 47) {
+    end -= 1;
+  }
+  return end === value.length ? value : value.slice(0, end);
+}
+
 /**
  * Cloudflare Browser Rendering PDF adapter (works in Cloudflare Workers and Node).
  * Calls POST /accounts/{accountId}/browser-rendering/pdf with preferCSSPageSize=true.
@@ -424,7 +432,7 @@ export interface CloudflareBrowserPdfRendererOptions {
 export function createCloudflareBrowserPdfRenderer(
   options: CloudflareBrowserPdfRendererOptions
 ): PdfRendererPort {
-  const baseUrl = (options.apiBaseUrl ?? 'https://api.cloudflare.com/client/v4').replace(/\/+$/, '');
+  const baseUrl = trimTrailingSlashes(options.apiBaseUrl ?? 'https://api.cloudflare.com/client/v4');
   const fetchImpl = options.fetchImpl ?? globalThis.fetch;
 
   async function renderHtmlToPdf(html: string, widthIn: number, heightIn: number): Promise<Uint8Array> {

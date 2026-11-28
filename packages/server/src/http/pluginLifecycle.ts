@@ -199,8 +199,11 @@ function normalizePathWithoutTrailingSlash(pathname: string): string {
   if (pathname === '/' || pathname === '') {
     return '/';
   }
-  const stripped = pathname.replace(/\/+$/, '');
-  return stripped.length > 0 ? stripped : '/';
+  let end = pathname.length;
+  while (end > 0 && pathname.charCodeAt(end - 1) === 47) {
+    end -= 1;
+  }
+  return end > 0 ? pathname.slice(0, end) : '/';
 }
 
 /**

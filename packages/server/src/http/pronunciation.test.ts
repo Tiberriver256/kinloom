@@ -879,10 +879,11 @@ describe('Shared pronunciation lexicon endpoints (GET /api/pronunciations, PUT /
       const body = String(init?.body ?? '');
       observedFetchCalls.push({ url, headers, body });
 
-      if (url.includes('fail-primary.example')) {
+      const { hostname } = new URL(url);
+      if (hostname === 'fail-primary.example') {
         return new Response('primary down', { status: 503 });
       }
-      if (url.includes('generativelanguage.googleapis.com')) {
+      if (hostname === 'generativelanguage.googleapis.com') {
         return new Response(
           JSON.stringify({
             candidates: [

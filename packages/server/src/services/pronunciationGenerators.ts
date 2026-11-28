@@ -156,6 +156,26 @@ function formatLanguageDirective(language: string): string {
   return display ? `${display} (${trimmed})` : trimmed;
 }
 
+function trimEdgeSlashes(value: string): string {
+  let start = 0;
+  let end = value.length;
+  while (start < end && value.charCodeAt(start) === 47) {
+    start += 1;
+  }
+  while (end > start && value.charCodeAt(end - 1) === 47) {
+    end -= 1;
+  }
+  return value.slice(start, end);
+}
+
+function trimTrailingSlashes(value: string): string {
+  let end = value.length;
+  while (end > 0 && value.charCodeAt(end - 1) === 47) {
+    end -= 1;
+  }
+  return end === value.length ? value : value.slice(0, end);
+}
+
 export function buildPronunciationPrompt(params: {
   text: string;
   phonetic?: string;
@@ -166,7 +186,7 @@ export function buildPronunciationPrompt(params: {
   const mode: PronunciationPhonemeMode = params.phonemeMode ?? 'ipa';
   const text = params.text.trim();
   const rawIpa = params.ipa?.trim();
-  const strippedIpa = rawIpa ? rawIpa.replace(/^\/+|\/+$/g, '').trim() : '';
+  const strippedIpa = rawIpa ? trimEdgeSlashes(rawIpa).trim() : '';
   const ipa = mode === 'plain' ? '' : strippedIpa ? `/${strippedIpa}/` : '';
   const phonetic = params.phonetic?.trim() ?? '';
   const language = params.language?.trim() ?? '';
@@ -315,7 +335,7 @@ export class GeminiPronunciationAudioGenerator implements PronunciationAudioGene
 }
 
 function normalizeOpenAiSpeechEndpoint(rawBaseUrl: string): string {
-  const trimmed = rawBaseUrl.trim().replace(/\/+$/, '');
+  const trimmed = trimTrailingSlashes(rawBaseUrl.trim());
   if (!trimmed) {
     throw new Error('OpenAiSpeechPronunciationGenerator requires a non-empty baseUrl.');
   }

@@ -17,6 +17,19 @@ export interface MediaPlayerProps {
   className?: string;
 }
 
+const VIDEO_EXTENSIONS: ReadonlySet<string> = new Set(['mp4', 'webm', 'mov', 'm4v']);
+const AUDIO_EXTENSIONS: ReadonlySet<string> = new Set(['mp3', 'm4a', 'ogg', 'wav', 'flac']);
+
+function getLowerExtension(filePath: string): string {
+  const qIdx = filePath.indexOf('?');
+  const pathname = qIdx === -1 ? filePath : filePath.slice(0, qIdx);
+  const dotIdx = pathname.lastIndexOf('.');
+  if (dotIdx === -1) {
+    return '';
+  }
+  return pathname.slice(dotIdx + 1).toLowerCase();
+}
+
 export function isVideoMedia(media: MediaItem): boolean {
   if (media.kind === 'video_story') {
     return true;
@@ -25,7 +38,7 @@ export function isVideoMedia(media: MediaItem): boolean {
   if (mime.startsWith('video/')) {
     return true;
   }
-  return /\.(mp4|webm|mov|m4v)(\?.*)?$/i.test(media.file);
+  return VIDEO_EXTENSIONS.has(getLowerExtension(media.file));
 }
 
 export function isAudioMedia(media: MediaItem): boolean {
@@ -36,7 +49,7 @@ export function isAudioMedia(media: MediaItem): boolean {
   if (mime.startsWith('audio/')) {
     return true;
   }
-  return /\.(mp3|m4a|ogg|wav|flac)(\?.*)?$/i.test(media.file);
+  return AUDIO_EXTENSIONS.has(getLowerExtension(media.file));
 }
 
 export function isPdfMedia(media: MediaItem): boolean {
@@ -44,7 +57,7 @@ export function isPdfMedia(media: MediaItem): boolean {
   if (mime === 'application/pdf') {
     return true;
   }
-  return /\.pdf(\?.*)?$/i.test(media.file);
+  return getLowerExtension(media.file) === 'pdf';
 }
 
 export function formatDurationSeconds(seconds: number | null | undefined): string | null {

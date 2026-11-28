@@ -1,6 +1,5 @@
 import { type ExecFileOptions, execFile } from 'node:child_process';
 import fs from 'node:fs';
-import os from 'node:os';
 import path from 'node:path';
 import { CliValidationError } from '../../../../errors.js';
 
@@ -45,31 +44,44 @@ export interface OpenAiSpeechResponse {
   readonly contentType: string;
 }
 
+export type AudioExecFileOptions = ExecFileOptions & {
+  readonly input?: Buffer;
+};
+
 export type AudioExecFileFn = (
   file: string,
   args: readonly string[],
-  options?: ExecFileOptions
+  options?: AudioExecFileOptions
 ) => Promise<{ readonly stdout: Buffer; readonly stderr: Buffer }>;
 
 export function defaultAudioExecFile(
   file: string,
   args: readonly string[],
-  options?: ExecFileOptions
+  options?: AudioExecFileOptions
 ): Promise<{ readonly stdout: Buffer; readonly stderr: Buffer }> {
+  const { input, ...execOptions } = options ?? {};
   return new Promise((resolve, reject) => {
-    execFile(file, [...args], { ...options, encoding: 'buffer' }, (error, stdout, stderr) => {
-      if (error) {
-        const enriched = error as Error & { stdout?: Buffer; stderr?: Buffer };
-        enriched.stdout = Buffer.isBuffer(stdout) ? stdout : Buffer.from(stdout ?? '');
-        enriched.stderr = Buffer.isBuffer(stderr) ? stderr : Buffer.from(stderr ?? '');
-        reject(enriched);
-        return;
+    const child = execFile(
+      file,
+      [...args],
+      { ...execOptions, encoding: 'buffer' },
+      (error, stdout, stderr) => {
+        if (error) {
+          const enriched = error as Error & { stdout?: Buffer; stderr?: Buffer };
+          enriched.stdout = Buffer.isBuffer(stdout) ? stdout : Buffer.from(stdout ?? '');
+          enriched.stderr = Buffer.isBuffer(stderr) ? stderr : Buffer.from(stderr ?? '');
+          reject(enriched);
+          return;
+        }
+        resolve({
+          stdout: Buffer.isBuffer(stdout) ? stdout : Buffer.from(stdout),
+          stderr: Buffer.isBuffer(stderr) ? stderr : Buffer.from(stderr),
+        });
       }
-      resolve({
-        stdout: Buffer.isBuffer(stdout) ? stdout : Buffer.from(stdout),
-        stderr: Buffer.isBuffer(stderr) ? stderr : Buffer.from(stderr),
-      });
-    });
+    );
+    if (input !== undefined && child.stdin) {
+      child.stdin.end(input);
+    }
   });
 }
 
@@ -98,7 +110,11 @@ export function normalizeSpeechEndpointUrl(endpoint: string): string {
   if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
     throw new CliValidationError(`Speech endpoint must use http or https protocol: '${endpoint}'.`);
   }
-  const cleanPath = parsed.pathname.replace(/\/+$/, '');
+  let pathEnd = parsed.pathname.length;
+  while (pathEnd > 0 && parsed.pathname.charCodeAt(pathEnd - 1) === 47) {
+    pathEnd -= 1;
+  }
+  const cleanPath = parsed.pathname.slice(0, pathEnd);
   if (cleanPath.endsWith('/v1/audio/speech')) {
     parsed.pathname = cleanPath;
   } else if (cleanPath.endsWith('/v1')) {
@@ -116,10 +132,23 @@ export function loadVoiceCloneReference(refAudioPath: string, refText: string): 
       'Voice cloning reference requires non-empty --ref-text alongside --ref-audio.'
     );
   }
-  if (!fs.existsSync(refAudioPath) || !fs.statSync(refAudioPath).isFile()) {
+  let bytes: Buffer;
+  try {
+    const fd = fs.openSync(refAudioPath, 'r');
+    try {
+      if (!fs.fstatSync(fd).isFile()) {
+        throw new CliValidationError(`Reference audio file not found: ${refAudioPath}`);
+      }
+      bytes = fs.readFileSync(fd);
+    } finally {
+      fs.closeSync(fd);
+    }
+  } catch (err: unknown) {
+    if (err instanceof CliValidationError) {
+      throw err;
+    }
     throw new CliValidationError(`Reference audio file not found: ${refAudioPath}`);
   }
-  const bytes = fs.readFileSync(refAudioPath);
   if (bytes.byteLength === 0) {
     throw new CliValidationError(`Reference audio file is empty: ${refAudioPath}`);
   }
@@ -250,10 +279,6 @@ export async function normalizePronunciationAudioWithFfmpeg(params: {
   readonly env?: NodeJS.ProcessEnv;
 }): Promise<{ readonly sizeBytes: number }> {
   const execFn = params.execFileImpl ?? defaultAudioExecFile;
-  const tmpInputPath = path.join(
-    os.tmpdir(),
-    `kinloom-pron-in-${process.pid}-${process.hrtime.bigint()}.audio`
-  );
   const filters: string[] = [];
   if (params.trimSilence !== false) {
     filters.push('silenceremove=start_periods=1:start_silence=0.08:start_threshold=-45dB');
@@ -265,7 +290,7 @@ export async function normalizePronunciationAudioWithFfmpeg(params: {
     '-loglevel',
     'error',
     '-i',
-    tmpInputPath,
+    'pipe:0',
     '-af',
     filters.join(','),
     '-ar',
@@ -280,10 +305,14 @@ export async function normalizePronunciationAudioWithFfmpeg(params: {
   }
 
   try {
-    fs.writeFileSync(tmpInputPath, params.inputBytes);
     fs.mkdirSync(path.dirname(params.outPath), { recursive: true });
-    await execFn('ffmpeg', ffmpegArgs, { env: params.env });
-    const sizeBytes = fs.existsSync(params.outPath) ? fs.statSync(params.outPath).size : 0;
+    await execFn('ffmpeg', ffmpegArgs, { env: params.env, input: params.inputBytes });
+    let sizeBytes = 0;
+    try {
+      sizeBytes = fs.statSync(params.outPath).size;
+    } catch {
+      sizeBytes = 0;
+    }
     return { sizeBytes };
   } catch (err: unknown) {
     if (
@@ -295,11 +324,5 @@ export async function normalizePronunciationAudioWithFfmpeg(params: {
       throw new Error('ffmpeg not found on PATH');
     }
     throw err;
-  } finally {
-    try {
-      fs.unlinkSync(tmpInputPath);
-    } catch {
-      // Best-effort temp cleanup.
-    }
   }
 }

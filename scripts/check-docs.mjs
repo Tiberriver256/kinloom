@@ -113,17 +113,34 @@ function maskInlineCode(line) {
   return out;
 }
 
+function stripInlineHtmlTags(input) {
+  let out = input;
+  for (;;) {
+    const openIdx = out.indexOf('<');
+    if (openIdx === -1) {
+      return out;
+    }
+    const closeIdx = out.indexOf('>', openIdx + 1);
+    if (closeIdx === -1) {
+      return out;
+    }
+    const innerOpen = out.lastIndexOf('<', closeIdx - 1);
+    out = out.slice(0, innerOpen) + out.slice(closeIdx + 1);
+  }
+}
+
 /**
  * GitHub-compatible heading slug generator.
  */
 export function slugifyHeading(rawHeading) {
-  const text = rawHeading
-    .trim()
-    .replace(/\s+#+\s*$/, '')
-    .replace(/!\[([^\]]*)\]\([^)]*\)/g, '$1')
-    .replace(/\[([^\]]+)\]\([^)]*\)/g, '$1')
-    .replace(/`([^`]*)`/g, '$1')
-    .replace(/<[^>]+>/g, '')
+  const text = stripInlineHtmlTags(
+    rawHeading
+      .trim()
+      .replace(/\s+#+\s*$/, '')
+      .replace(/!\[([^\]]*)\]\([^)]*\)/g, '$1')
+      .replace(/\[([^\]]+)\]\([^)]*\)/g, '$1')
+      .replace(/`([^`]*)`/g, '$1')
+  )
     .replace(/\*\*([^*]+)\*\*/g, '$1')
     .replace(/\*([^*]+)\*/g, '$1')
     .replace(/~~([^~]+)~~/g, '$1')

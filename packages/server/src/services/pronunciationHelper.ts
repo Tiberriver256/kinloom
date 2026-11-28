@@ -8,6 +8,18 @@ export interface StoredPronunciationAudio {
   deduplicated?: boolean;
 }
 
+function trimEdgeSlashes(value: string): string {
+  let start = 0;
+  let end = value.length;
+  while (start < end && value.charCodeAt(start) === 47) {
+    start += 1;
+  }
+  while (end > start && value.charCodeAt(end - 1) === 47) {
+    end -= 1;
+  }
+  return value.slice(start, end);
+}
+
 /**
  * Build a deterministic, case-normalized cache key for a pronunciation request
  * so shared surnames, given names, and places reuse one R2 clip without
@@ -23,10 +35,7 @@ export async function computePronunciationPromptHash(params: {
 }): Promise<string> {
   const text = params.text.trim().toLowerCase();
   const phonetic = (params.phonetic ?? '').trim().toLowerCase();
-  const ipa = (params.ipa ?? '')
-    .trim()
-    .replace(/^\/+|\/+$/g, '')
-    .trim();
+  const ipa = trimEdgeSlashes((params.ipa ?? '').trim()).trim();
   const lang = (params.language ?? '').trim().toLowerCase();
   const voice = (params.voice ?? 'Charon').trim().toLowerCase();
   const modeSuffix = params.phonemeMode && params.phonemeMode !== 'ipa' ? `|mode:${params.phonemeMode}` : '';

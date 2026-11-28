@@ -91,13 +91,20 @@ export function asStringArray(value: unknown): string[] {
   return value.filter((item): item is string => typeof item === 'string');
 }
 
+function trimEdgeDashes(value: string): string {
+  let start = 0;
+  let end = value.length;
+  while (start < end && value.charCodeAt(start) === 45) {
+    start += 1;
+  }
+  while (end > start && value.charCodeAt(end - 1) === 45) {
+    end -= 1;
+  }
+  return value.slice(start, end);
+}
+
 export function slugify(value: string): string {
-  return (
-    value
-      .toLowerCase()
-      .replaceAll(/[^a-z0-9]+/g, '-')
-      .replaceAll(/^-+|-+$/g, '') || 'record'
-  );
+  return trimEdgeDashes(value.toLowerCase().replaceAll(/[^a-z0-9]+/g, '-')) || 'record';
 }
 
 export function buildUniquePersonIdentity(

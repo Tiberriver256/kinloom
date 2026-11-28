@@ -817,7 +817,8 @@ describe('prep-scan native client', () => {
     expect(parsed.cache_hit).toBe(false);
     expect(parsed.matches[0]).toMatchObject({ page: 1, line: 1, match: 'Lincoln' });
     expect(pdftotextCalls).toBe(1);
-    expect(fs.existsSync(cacheFile)).toBe(true);
+    const initialCache = JSON.parse(fs.readFileSync(cacheFile, 'utf8')) as { pages: string[] };
+    expect(initialCache.pages).toHaveLength(5);
 
     // 2. Warm cached search skips pdftotext
     const caseSensitive = await run(['pdf-grep', pdfPath, '--pattern', 'Lincoln', '--limit', '1']);

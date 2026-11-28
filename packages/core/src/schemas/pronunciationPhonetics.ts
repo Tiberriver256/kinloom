@@ -227,6 +227,30 @@ export function lookupCompatiblePersonLexiconEntry(
 
 const SIMPLE_PERSON_NAME_RE = /^[A-Za-z0-9 .'-]+$/;
 
+function stripParentheticals(input: string): string {
+  if (!input.includes('(')) {
+    return input;
+  }
+  let out = '';
+  let cursor = 0;
+  while (cursor < input.length) {
+    const openIdx = input.indexOf('(', cursor);
+    if (openIdx === -1) {
+      out += input.slice(cursor);
+      break;
+    }
+    const closeIdx = input.indexOf(')', openIdx + 1);
+    if (closeIdx === -1) {
+      out += input.slice(cursor);
+      break;
+    }
+    out += input.slice(cursor, openIdx);
+    out += ' ';
+    cursor = closeIdx + 1;
+  }
+  return out;
+}
+
 export function tokenizePersonName(person: {
   readonly full_name?: string;
   readonly given_name?: string;
@@ -254,17 +278,13 @@ export function tokenizePersonName(person: {
     }
     return out;
   }
-  const cleaned = combined
-    .replaceAll(/\([^)]*\)/g, ' ')
-    .replaceAll(/[“”"]/g, ' ')
-    .replaceAll(/,/g, ' ')
-    .trim();
+  const cleaned = stripParentheticals(combined).replaceAll(/[“”"]/g, ' ').replaceAll(/,/g, ' ').trim();
   if (!cleaned) {
     return [];
   }
   return cleaned
     .split(/\s+/)
-    .map((tok) => tok.replaceAll(/^[^A-Za-zÀ-ÖØ-öø-ÿ0-9]+|[^A-Za-zÀ-ÖØ-öø-ÿ0-9.]+$/g, ''))
+    .map((tok) => tok.replace(/^[^A-Za-zÀ-ÖØ-öø-ÿ0-9]+/, '').replace(/[^A-Za-zÀ-ÖØ-öø-ÿ0-9.]+$/, ''))
     .filter(Boolean);
 }
 

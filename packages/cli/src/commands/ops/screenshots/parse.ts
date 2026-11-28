@@ -58,12 +58,34 @@ const SENSITIVE_QUERY_KEYS = new Set([
   'signature',
 ]);
 
+function trimEdgeChar(value: string, ch: string): string {
+  let start = 0;
+  let end = value.length;
+  while (start < end && value[start] === ch) {
+    start += 1;
+  }
+  while (end > start && value[end - 1] === ch) {
+    end -= 1;
+  }
+  return value.slice(start, end);
+}
+
+function trimTrailingChar(value: string, ch: string): string {
+  let end = value.length;
+  while (end > 0 && value[end - 1] === ch) {
+    end -= 1;
+  }
+  return end === value.length ? value : value.slice(0, end);
+}
+
 export function sanitizeSlug(raw: string, fallback = 'item'): string {
-  const normalized = raw
-    .trim()
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/^-+|-+$/g, '');
+  const normalized = trimEdgeChar(
+    raw
+      .trim()
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, '-'),
+    '-'
+  );
   return normalized.length > 0 ? normalized.slice(0, 80) : fallback;
 }
 
@@ -88,7 +110,7 @@ export function validateTargetBaseUrl(raw: string): string {
       'Embedded credentials in `--url` are not allowed. Use `--auth-cookie` or `--auth-header` instead.'
     );
   }
-  const cleanPath = parsed.pathname.replace(/\/+$/, '');
+  const cleanPath = trimTrailingChar(parsed.pathname, '/');
   return `${parsed.origin}${cleanPath}`;
 }
 
@@ -103,7 +125,7 @@ export function normalizeRoutePath(raw: string): string {
   const withSlash = trimmed.startsWith('/') ? trimmed : `/${trimmed}`;
   const withoutHash = withSlash.split('#')[0];
   const [pathnamePart, queryPart] = withoutHash.split('?');
-  const collapsedPath = pathnamePart.replace(/\/+/g, '/').replace(/\/+$/, '') || '/';
+  const collapsedPath = trimTrailingChar(pathnamePart.replace(/\/+/g, '/'), '/') || '/';
   return queryPart ? `${collapsedPath}?${queryPart}` : collapsedPath;
 }
 

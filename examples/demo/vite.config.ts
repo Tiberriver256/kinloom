@@ -82,9 +82,10 @@ function kinloomPerfPlugin(): Plugin {
       }
 
       if (Object.keys(routeMap).length > 0) {
-        const preloadScript = `<script>(function(){var p=location.pathname,m=${JSON.stringify(
-          routeMap
-        )};for(var k in m){if(p===k||p.indexOf(k)===0){var d=document,h=d.head,e=m[k];e.j.forEach(function(u){var l=d.createElement('link');l.rel='modulepreload';l.href=u;h.appendChild(l);});e.c.forEach(function(u){var l=d.createElement('link');l.rel='preload';l.as='style';l.href=u;h.appendChild(l);});break;}}})();</script>`;
+        const encodedRouteMap = Buffer.from(JSON.stringify(routeMap), 'utf8').toString('base64');
+        const preloadScript =
+          `<meta name="kinloom-route-preload" content="${encodedRouteMap}">\n` +
+          `    <script>(function(){var el=document.querySelector('meta[name="kinloom-route-preload"]');if(!el)return;var p=location.pathname,m=JSON.parse(atob(el.content));for(var k in m){if(p===k||p.indexOf(k)===0){var d=document,h=d.head,e=m[k];e.j.forEach(function(u){var l=d.createElement('link');l.rel='modulepreload';l.href=u;h.appendChild(l);});e.c.forEach(function(u){var l=d.createElement('link');l.rel='preload';l.as='style';l.href=u;h.appendChild(l);});break;}}})();</script>`;
         out = out.replace('<script type="module"', `${preloadScript}\n    <script type="module"`);
       }
 

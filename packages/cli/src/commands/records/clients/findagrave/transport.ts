@@ -87,11 +87,16 @@ function cachedPhotoBytesOk(filePath: string, content: Uint8Array): boolean {
   }
   const notePath = photoTypeNotePath(filePath);
   try {
-    if (!fs.statSync(notePath).isFile()) {
-      return false;
+    const fd = fs.openSync(notePath, 'r');
+    try {
+      if (!fs.fstatSync(fd).isFile()) {
+        return false;
+      }
+      const stored = fs.readFileSync(fd, 'utf8');
+      return imageContentType(stored) !== undefined;
+    } finally {
+      fs.closeSync(fd);
     }
-    const stored = fs.readFileSync(notePath, 'utf8');
-    return imageContentType(stored) !== undefined;
   } catch {
     return false;
   }
@@ -103,14 +108,20 @@ export function photoCacheFresh(filePath: string, ttlHours: number, nowMs: () =>
     return false;
   }
   try {
-    const stat = fs.statSync(filePath);
-    if (!stat.isFile()) {
-      return false;
+    const fd = fs.openSync(filePath, 'r');
+    let content: Buffer;
+    try {
+      const stat = fs.fstatSync(fd);
+      if (!stat.isFile()) {
+        return false;
+      }
+      if ((nowMs() - stat.mtimeMs) / 1000 > ttlSeconds) {
+        return false;
+      }
+      content = fs.readFileSync(fd);
+    } finally {
+      fs.closeSync(fd);
     }
-    if ((nowMs() - stat.mtimeMs) / 1000 > ttlSeconds) {
-      return false;
-    }
-    const content = fs.readFileSync(filePath);
     return cachedPhotoBytesOk(filePath, content);
   } catch {
     return false;
@@ -125,11 +136,9 @@ export function storePhotoCache(filePath: string, content: Uint8Array, contentTy
     atomicWriteFileSync(notePath, `${imgType}\n`);
   } else {
     try {
-      if (fs.statSync(notePath).isFile()) {
-        fs.unlinkSync(notePath);
-      }
+      fs.rmSync(notePath, { force: true });
     } catch {
-      // Ignore missing .type sidecar.
+      // Ignore missing or unremovable .type sidecar.
     }
   }
 }

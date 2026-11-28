@@ -719,14 +719,14 @@ describe('native TypeScript OCR, alias routing, and ubiquitous-language parity',
     const telemetryFile = path.join(tmp, 'calls.jsonl');
     const cacheDir = path.join(tmp, 'cache');
     const mockFetch: typeof fetch = async (input) => {
-      const url = String(input);
-      if (url.includes('api.wikitree.com')) {
+      const { hostname } = new URL(String(input));
+      if (hostname === 'api.wikitree.com') {
         return new Response(
           JSON.stringify([{ status: 0, person: { Id: 100, Name: 'Lincoln-1', FirstName: 'Abraham' } }]),
           { status: 200 }
         );
       }
-      if (url.includes('catalog.hathitrust.org')) {
+      if (hostname === 'catalog.hathitrust.org') {
         return new Response(
           JSON.stringify({
             records: {
@@ -740,13 +740,13 @@ describe('native TypeScript OCR, alias routing, and ubiquitous-language parity',
           { status: 200 }
         );
       }
-      if (url.includes('discovery.nationalarchives.gov.uk')) {
+      if (hostname === 'discovery.nationalarchives.gov.uk') {
         return new Response(
           JSON.stringify({ records: [{ id: 'C12345', title: 'Alder Estate' }], count: 1 }),
           { status: 200 }
         );
       }
-      if (url.includes('data.riksarkivet.se')) {
+      if (hostname === 'data.riksarkivet.se') {
         return new Response(JSON.stringify({ items: [], totalHits: 0 }), { status: 200 });
       }
       return new Response('not found', { status: 404 });

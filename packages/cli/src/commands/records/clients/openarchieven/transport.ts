@@ -405,33 +405,38 @@ export function readCachedScan(
     return undefined;
   }
   try {
-    if (!fs.statSync(binPath).isFile()) {
-      return undefined;
+    const fd = fs.openSync(binPath, 'r');
+    try {
+      if (!fs.fstatSync(fd).isFile()) {
+        return undefined;
+      }
+      const raw = readJsonRecordIfValid(metaPath);
+      if (!raw || raw.schema !== CACHE_SCHEMA) {
+        return undefined;
+      }
+      const fetched = raw.fetched_at;
+      const nbytes = raw.nbytes;
+      if (
+        typeof fetched !== 'number' ||
+        !Number.isFinite(fetched) ||
+        typeof nbytes !== 'number' ||
+        !Number.isInteger(nbytes) ||
+        nbytes <= 0
+      ) {
+        return undefined;
+      }
+      if (nowMs() / 1000 - fetched > ttlHours * 3600) {
+        return undefined;
+      }
+      const data = fs.readFileSync(fd);
+      if (data.length !== nbytes) {
+        return undefined;
+      }
+      const ext = classifyScanPayload(data, 'application/octet-stream');
+      return { body: data, ext };
+    } finally {
+      fs.closeSync(fd);
     }
-    const raw = readJsonRecordIfValid(metaPath);
-    if (!raw || raw.schema !== CACHE_SCHEMA) {
-      return undefined;
-    }
-    const fetched = raw.fetched_at;
-    const nbytes = raw.nbytes;
-    if (
-      typeof fetched !== 'number' ||
-      !Number.isFinite(fetched) ||
-      typeof nbytes !== 'number' ||
-      !Number.isInteger(nbytes) ||
-      nbytes <= 0
-    ) {
-      return undefined;
-    }
-    if (nowMs() / 1000 - fetched > ttlHours * 3600) {
-      return undefined;
-    }
-    const data = fs.readFileSync(binPath);
-    if (data.length !== nbytes) {
-      return undefined;
-    }
-    const ext = classifyScanPayload(data, 'application/octet-stream');
-    return { body: data, ext };
   } catch {
     return undefined;
   }

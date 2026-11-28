@@ -490,7 +490,19 @@ async function main() {
       page.on('console', (msg) => {
         if (msg.type() === 'error') {
           const text = msg.text();
-          if (!text.includes('openhistoricalmap.org')) {
+          const locUrl = msg.location().url;
+          const isOhmUrl = (candidate) => {
+            const matches = candidate.match(/https?:\/\/[^\s"'<>)]+/gi) ?? [];
+            return matches.some((rawUrl) => {
+              try {
+                const host = new URL(rawUrl).hostname.toLowerCase();
+                return host === 'openhistoricalmap.org' || host.endsWith('.openhistoricalmap.org');
+              } catch {
+                return false;
+              }
+            });
+          };
+          if (!isOhmUrl(text) && !isOhmUrl(locUrl)) {
             errors.push(`${shot.route} console.error: ${text}`);
           }
         }

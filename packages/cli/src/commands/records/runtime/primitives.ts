@@ -101,10 +101,17 @@ export function atomicCopyFileSync(src: string, dest: string): void {
 
 export function readJsonRecordIfValid(filePath: string): Record<string, unknown> | null {
   try {
-    if (!fs.statSync(filePath).isFile()) {
-      return null;
+    const fd = fs.openSync(filePath, 'r');
+    let rawText: string;
+    try {
+      if (!fs.fstatSync(fd).isFile()) {
+        return null;
+      }
+      rawText = fs.readFileSync(fd, 'utf8');
+    } finally {
+      fs.closeSync(fd);
     }
-    const parsed: unknown = JSON.parse(fs.readFileSync(filePath, 'utf8'));
+    const parsed: unknown = JSON.parse(rawText);
     return isPlainRecord(parsed) ? parsed : null;
   } catch {
     return null;

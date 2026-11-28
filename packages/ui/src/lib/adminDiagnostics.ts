@@ -64,7 +64,16 @@ export function parseClientUserAgent(userAgent: string): { readonly browser: str
   const edgeMatch = /\bEdg\/(\d+)/.exec(ua);
   const firefoxMatch = /\bFirefox\/(\d+)/.exec(ua);
   const chromeMatch = /\b(?:Chrome|Chromium)\/(\d+)/.exec(ua);
-  const safariMatch = /\bVersion\/(\d+(?:\.\d+)?)\s+.*Safari\//.exec(ua);
+  const safariVersionMatch = /\bVersion\/(\d+(?:\.\d+)?)\s/.exec(ua);
+  const safariAfterVersion = safariVersionMatch
+    ? ua.indexOf('Safari/', safariVersionMatch.index + safariVersionMatch[0].length)
+    : -1;
+  const safariMatch =
+    safariVersionMatch &&
+    safariAfterVersion !== -1 &&
+    !ua.slice(safariVersionMatch.index + safariVersionMatch[0].length, safariAfterVersion).includes('\n')
+      ? safariVersionMatch
+      : null;
 
   if (edgeMatch) {
     browser = `Edge ${edgeMatch[1]}`;
@@ -115,7 +124,11 @@ export function mergePluginDiagnostics(
 }
 
 function escapeMarkdownCell(value: string): string {
-  return redactDiagnosticText(value).replace(/\|/g, '\\|').replace(/\r?\n/g, ' ').trim();
+  return redactDiagnosticText(value)
+    .replace(/\\/g, '\\\\')
+    .replace(/\|/g, '\\|')
+    .replace(/\r?\n/g, ' ')
+    .trim();
 }
 
 export function formatDiagnosticsMarkdown(params: {

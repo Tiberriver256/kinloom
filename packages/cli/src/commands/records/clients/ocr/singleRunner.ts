@@ -102,18 +102,23 @@ export async function runLayoutData(params: {
   const workDir = path.join(cacheDir, '.work');
 
   const readCachedTsv = (): string | null => {
-    if (force || !fs.existsSync(tsvPath)) {
+    if (force) {
       return null;
     }
     try {
-      return fs.statSync(tsvPath).isFile() ? fs.readFileSync(tsvPath, 'utf8') : null;
+      const fd = fs.openSync(tsvPath, 'r');
+      try {
+        return fs.fstatSync(fd).isFile() ? fs.readFileSync(fd, 'utf8') : null;
+      } finally {
+        fs.closeSync(fd);
+      }
     } catch {
       return null;
     }
   };
 
   const readCachedBoxes = (): OcrLayoutRecord | null => {
-    if (force || !fs.existsSync(boxesPath)) {
+    if (force) {
       return null;
     }
     const parsed = readJsonRecordIfValid(boxesPath);

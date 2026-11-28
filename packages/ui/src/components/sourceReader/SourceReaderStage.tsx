@@ -8,11 +8,20 @@ import readerStyles from '../SourceReaderDrawer.module.css';
 
 export type ReaderViewMode = 'text' | 'split' | 'scan';
 
+function trimEdgeDashes(value: string): string {
+  let start = 0;
+  let end = value.length;
+  while (start < end && value.charCodeAt(start) === 45) {
+    start += 1;
+  }
+  while (end > start && value.charCodeAt(end - 1) === 45) {
+    end -= 1;
+  }
+  return value.slice(start, end);
+}
+
 export function slugifyFamilyName(name: string): string {
-  const slug = name
-    .toLowerCase()
-    .replaceAll(/[^a-z0-9]+/g, '-')
-    .replaceAll(/^-+|-+$/g, '');
+  const slug = trimEdgeDashes(name.toLowerCase().replaceAll(/[^a-z0-9]+/g, '-'));
   return slug || 'archive';
 }
 

@@ -34,19 +34,26 @@ export function runScanInventoryCheck(
       return;
     }
     checkedPaths.add(resolved);
-    if (!fs.existsSync(resolved)) {
-      errors.push(`Missing scan file for ${mediaId ?? 'scans/'}: ${fileUrl ?? resolved}`);
-      return;
-    }
-    const stat = fs.statSync(resolved);
-    if (stat.size === 0) {
-      errors.push(`Empty (0 byte) scan file: ${resolved}`);
-      return;
-    }
-    const fd = fs.openSync(resolved, 'r');
-    const readLen = Math.min(stat.size, 65_536);
-    const buf = Buffer.allocUnsafe(readLen);
+    let fd: number;
     try {
+      fd = fs.openSync(resolved, 'r');
+    } catch (err: unknown) {
+      if (typeof err === 'object' && err !== null && 'code' in err && err.code === 'ENOENT') {
+        errors.push(`Missing scan file for ${mediaId ?? 'scans/'}: ${fileUrl ?? resolved}`);
+        return;
+      }
+      throw err;
+    }
+    let stat: fs.Stats;
+    let buf: Buffer;
+    try {
+      stat = fs.fstatSync(fd);
+      if (stat.size === 0) {
+        errors.push(`Empty (0 byte) scan file: ${resolved}`);
+        return;
+      }
+      const readLen = Math.min(stat.size, 65_536);
+      buf = Buffer.allocUnsafe(readLen);
       fs.readSync(fd, buf, 0, readLen, 0);
     } finally {
       fs.closeSync(fd);

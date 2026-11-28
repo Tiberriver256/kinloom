@@ -104,13 +104,55 @@ function findTemplates(wikitext: string): Array<{ name: string; params: string[]
   return templates;
 }
 
+function stripHtmlComments(input: string): string {
+  let current = input;
+  for (;;) {
+    const startIdx = current.indexOf('<!--');
+    if (startIdx === -1) {
+      return current;
+    }
+    const endIdx = current.indexOf('-->', startIdx + 4);
+    if (endIdx === -1) {
+      return current.slice(0, startIdx);
+    }
+    current = current.slice(0, startIdx) + current.slice(endIdx + 3);
+  }
+}
+
+function stripMediaWikiRefTags(input: string): string {
+  let current = input;
+  for (;;) {
+    const lower = current.toLowerCase();
+    const openIdx = lower.indexOf('<ref');
+    if (openIdx === -1) {
+      return current;
+    }
+    const nextChar = lower[openIdx + 4];
+    if (nextChar !== undefined && nextChar !== '>' && nextChar !== '/' && !/\s/.test(nextChar)) {
+      return current;
+    }
+    const openEnd = current.indexOf('>', openIdx + 4);
+    if (openEnd === -1) {
+      return current.slice(0, openIdx);
+    }
+    if (current[openEnd - 1] === '/') {
+      current = current.slice(0, openIdx) + current.slice(openEnd + 1);
+      continue;
+    }
+    const closeIdx = lower.indexOf('</ref', openEnd + 1);
+    if (closeIdx === -1) {
+      return current.slice(0, openIdx);
+    }
+    const closeEnd = current.indexOf('>', closeIdx + 5);
+    if (closeEnd === -1) {
+      return current.slice(0, openIdx);
+    }
+    current = current.slice(0, openIdx) + current.slice(closeEnd + 1);
+  }
+}
+
 function normalizeExtractedIpa(raw: string): string | null {
-  const stripped = raw
-    .replace(/<ref[^>]*>[\s\S]*?<\/ref>/gi, '')
-    .replace(/<ref[^>]*\/>/gi, '')
-    .replace(/<!--[\s\S]*?-->/g, '')
-    .replace(/''+/g, '')
-    .trim();
+  const stripped = stripHtmlComments(stripMediaWikiRefTags(raw)).replace(/''+/g, '').trim();
   if (!stripped) {
     return null;
   }
@@ -126,7 +168,15 @@ function normalizeExtractedIpa(raw: string): string | null {
   if (stripped.startsWith('[') && stripped.endsWith(']') && stripped.length > 2) {
     return stripped;
   }
-  const clean = stripped.replace(/^\/+|\/+$/g, '').trim();
+  let start = 0;
+  let end = stripped.length;
+  while (start < end && stripped.charCodeAt(start) === 47) {
+    start += 1;
+  }
+  while (end > start && stripped.charCodeAt(end - 1) === 47) {
+    end -= 1;
+  }
+  const clean = stripped.slice(start, end).trim();
   if (!clean || clean.length > 120) {
     return null;
   }

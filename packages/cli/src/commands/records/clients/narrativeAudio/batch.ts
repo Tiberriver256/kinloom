@@ -19,6 +19,7 @@ import {
   type VoiceCloneReference,
 } from '../../../ops/shared/audio/index.js';
 import { getBooleanOption, getNumberOption, getStringOption, parseCommandArgs } from '../../runtime/args.js';
+import { atomicWriteFileSync } from '../../runtime/cache.js';
 import { resolveUserPathFromContext } from '../../runtime/primitives.js';
 import {
   emitJsonStdout,
@@ -60,6 +61,10 @@ export {
   narrativeMarkdownToSpokenScript,
 };
 
+function isEnoentError(err: unknown): boolean {
+  return typeof err === 'object' && err !== null && 'code' in err && err.code === 'ENOENT';
+}
+
 export async function runBatch(
   argv: readonly string[],
   ctx: RecordCommandContext
@@ -74,18 +79,36 @@ export async function runBatch(
   const peoplePath = path.join(repoDir, 'data', 'people.yaml');
   const narrativesPath = path.join(repoDir, 'data', 'narratives.yaml');
 
-  if (!fs.existsSync(configPath)) {
-    throw new CliValidationError(`Missing ${configPath} (pass --repo <archive-root>).`);
-  }
-  if (!fs.existsSync(narrativesPath)) {
-    throw new CliValidationError(`Missing ${narrativesPath}.`);
+  let rawConfig: string;
+  try {
+    rawConfig = fs.readFileSync(configPath, 'utf8');
+  } catch (err: unknown) {
+    if (isEnoentError(err)) {
+      throw new CliValidationError(`Missing ${configPath} (pass --repo <archive-root>).`);
+    }
+    throw err;
   }
 
-  const siteConfig = parseKinloomConfigYaml(fs.readFileSync(configPath, 'utf8'));
-  const people: RawPerson[] = fs.existsSync(peoplePath)
-    ? parsePeopleYaml(fs.readFileSync(peoplePath, 'utf8'))
-    : [];
-  const allNarratives = parseCoreNarrativesYaml(fs.readFileSync(narrativesPath, 'utf8'));
+  let rawNarratives: string;
+  try {
+    rawNarratives = fs.readFileSync(narrativesPath, 'utf8');
+  } catch (err: unknown) {
+    if (isEnoentError(err)) {
+      throw new CliValidationError(`Missing ${narrativesPath}.`);
+    }
+    throw err;
+  }
+
+  const siteConfig = parseKinloomConfigYaml(rawConfig);
+  let people: RawPerson[] = [];
+  try {
+    people = parsePeopleYaml(fs.readFileSync(peoplePath, 'utf8'));
+  } catch (err: unknown) {
+    if (!isEnoentError(err)) {
+      throw err;
+    }
+  }
+  const allNarratives = parseCoreNarrativesYaml(rawNarratives);
 
   const referenceYear = siteConfig.privacy.referenceYear ?? getCurrentReferenceYear();
   const livingIds = new Set<string>();
@@ -235,7 +258,14 @@ export async function runBatch(
 
   if (importDirArg) {
     const importDir = resolveUserPathFromContext(importDirArg, ctx);
-    if (!fs.existsSync(importDir) || !fs.statSync(importDir).isDirectory()) {
+    try {
+      if (!fs.statSync(importDir).isDirectory()) {
+        throw new CliValidationError(`Import directory does not exist: ${importDir}`);
+      }
+    } catch (err: unknown) {
+      if (err instanceof CliValidationError) {
+        throw err;
+      }
       throw new CliValidationError(`Import directory does not exist: ${importDir}`);
     }
     fs.mkdirSync(outDir, { recursive: true });
@@ -281,7 +311,7 @@ export async function runBatch(
         const update = updatesById.get(n.id);
         return update ? withNarrativeAudioExtension(n, update) : n;
       });
-      fs.writeFileSync(narrativesPath, serializeNarrativesYaml(updatedNarratives), 'utf8');
+      atomicWriteFileSync(narrativesPath, serializeNarrativesYaml(updatedNarratives));
     }
 
     const summary = {
@@ -434,7 +464,7 @@ export async function runBatch(
       const update = updatesById.get(n.id);
       return update ? withNarrativeAudioExtension(n, update) : n;
     });
-    fs.writeFileSync(narrativesPath, serializeNarrativesYaml(updatedNarratives), 'utf8');
+    atomicWriteFileSync(narrativesPath, serializeNarrativesYaml(updatedNarratives));
   }
 
   const summary = {

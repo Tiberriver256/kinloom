@@ -197,22 +197,22 @@ function readCachedCensus1950Image(filePath: string, ttlHours: number, nowMs: ()
   if (ttlHours <= 0) {
     return null;
   }
-  let stat: fs.Stats;
-  try {
-    stat = fs.statSync(filePath);
-    if (!stat.isFile()) {
-      return null;
-    }
-  } catch {
-    return null;
-  }
-  const ageSeconds = (nowMs() - stat.mtimeMs) / 1000;
-  if (ageSeconds > ttlHours * 3600) {
-    return null;
-  }
   let data: Buffer;
   try {
-    data = fs.readFileSync(filePath);
+    const fd = fs.openSync(filePath, 'r');
+    try {
+      const stat = fs.fstatSync(fd);
+      if (!stat.isFile()) {
+        return null;
+      }
+      const ageSeconds = (nowMs() - stat.mtimeMs) / 1000;
+      if (ageSeconds > ttlHours * 3600) {
+        return null;
+      }
+      data = fs.readFileSync(fd);
+    } finally {
+      fs.closeSync(fd);
+    }
   } catch {
     return null;
   }

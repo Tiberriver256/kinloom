@@ -2130,7 +2130,7 @@ describe('caArchives behavioral edge cases', () => {
 
     // Multi-source portal timeout degrades gracefully when paired with exhibits, and vice versa
     const portalTimeoutFetch: typeof fetch = async (input) => {
-      if (String(input).includes('archives.sos.ca.gov')) {
+      if (new URL(String(input)).hostname === 'archives.sos.ca.gov') {
         throw new Error('Request timed out');
       }
       return jsonResp([{ 'o:id': 7, 'o:title': 'Oakville Exhibit', '@type': ['o:Item'] }], 200, {
@@ -2147,7 +2147,7 @@ describe('caArchives behavioral edge cases', () => {
     expect(JSON.parse(degraded1.stdout).timed_out_sources).toEqual(['portal']);
 
     const exhibitsTimeoutFetch: typeof fetch = async (input) => {
-      if (String(input).includes('exhibits.sos.ca.gov')) {
+      if (new URL(String(input)).hostname === 'exhibits.sos.ca.gov') {
         throw new Error('Request timed out');
       }
       return new Response(

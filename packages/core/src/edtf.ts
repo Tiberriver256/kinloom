@@ -570,6 +570,32 @@ function parseSingleGedcomDate(text: string): string {
   return '';
 }
 
+function stripGedcomPrefix(upperCollapsed: string, prefixes: readonly string[]): string | null {
+  for (const prefix of prefixes) {
+    if (upperCollapsed.startsWith(prefix)) {
+      const rest = upperCollapsed.slice(prefix.length);
+      return rest.length > 0 ? rest : null;
+    }
+  }
+  return null;
+}
+
+const GEDCOM_BET_PREFIXES = ['BET. ', 'BET '] as const;
+const GEDCOM_ABT_PREFIXES = [
+  'ABT. ',
+  'ABT ',
+  'ABOUT ',
+  'CA. ',
+  'CA ',
+  'CIRCA ',
+  'EST. ',
+  'EST ',
+  'CAL. ',
+  'CAL ',
+] as const;
+const GEDCOM_BEF_PREFIXES = ['BEF. ', 'BEF ', 'BEFORE '] as const;
+const GEDCOM_AFT_PREFIXES = ['AFT. ', 'AFT ', 'AFTER '] as const;
+
 /**
  * Convert a GEDCOM date string (ABT, BEF, AFT, BET...AND, FROM...TO, Old Style) to EDTF.
  */
@@ -581,43 +607,49 @@ export function parseGedcomDateToEdtf(raw: string): string {
   if (!s) {
     return '';
   }
-  const up = s.toUpperCase();
+  const up = s.toUpperCase().replace(/\s+/g, ' ');
 
-  const mBet = /^BET\.?\s+(.+?)\s+AND\s+(.+)$/.exec(up);
-  if (mBet) {
-    const a = parseSingleGedcomDate(mBet[1]);
-    const b = parseSingleGedcomDate(mBet[2]);
-    if (a && b) {
-      return `${a}/${b}`;
+  const betRest = stripGedcomPrefix(up, GEDCOM_BET_PREFIXES);
+  if (betRest !== null) {
+    const andIdx = betRest.indexOf(' AND ');
+    if (andIdx > 0 && andIdx + 5 < betRest.length) {
+      const a = parseSingleGedcomDate(betRest.slice(0, andIdx));
+      const b = parseSingleGedcomDate(betRest.slice(andIdx + 5));
+      if (a && b) {
+        return `${a}/${b}`;
+      }
+      return a || b;
     }
-    return a || b;
   }
 
-  const mFrom = /^FROM\s+(.+?)\s+TO\s+(.+)$/.exec(up);
-  if (mFrom) {
-    const a = parseSingleGedcomDate(mFrom[1]);
-    const b = parseSingleGedcomDate(mFrom[2]);
-    if (a && b) {
-      return `${a}/${b}`;
+  if (up.startsWith('FROM ')) {
+    const fromRest = up.slice(5);
+    const toIdx = fromRest.indexOf(' TO ');
+    if (toIdx > 0 && toIdx + 4 < fromRest.length) {
+      const a = parseSingleGedcomDate(fromRest.slice(0, toIdx));
+      const b = parseSingleGedcomDate(fromRest.slice(toIdx + 4));
+      if (a && b) {
+        return `${a}/${b}`;
+      }
+      return a || b;
     }
-    return a || b;
   }
 
-  const mAbt = /^(?:ABT\.?|ABOUT|CA\.?|CIRCA|EST\.?|CAL\.?)\s+(.+)$/.exec(up);
-  if (mAbt) {
-    const base = parseSingleGedcomDate(mAbt[1]);
+  const abtRest = stripGedcomPrefix(up, GEDCOM_ABT_PREFIXES);
+  if (abtRest !== null) {
+    const base = parseSingleGedcomDate(abtRest);
     return base ? `${base}~` : '';
   }
 
-  const mBef = /^(?:BEF\.?|BEFORE)\s+(.+)$/.exec(up);
-  if (mBef) {
-    const base = parseSingleGedcomDate(mBef[1]);
+  const befRest = stripGedcomPrefix(up, GEDCOM_BEF_PREFIXES);
+  if (befRest !== null) {
+    const base = parseSingleGedcomDate(befRest);
     return base ? `/${base}` : '';
   }
 
-  const mAft = /^(?:AFT\.?|AFTER)\s+(.+)$/.exec(up);
-  if (mAft) {
-    const base = parseSingleGedcomDate(mAft[1]);
+  const aftRest = stripGedcomPrefix(up, GEDCOM_AFT_PREFIXES);
+  if (aftRest !== null) {
+    const base = parseSingleGedcomDate(aftRest);
     return base ? `${base}/` : '';
   }
 

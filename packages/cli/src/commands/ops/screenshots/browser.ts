@@ -227,6 +227,11 @@ export interface RawThemeSurfaceProbe {
   readonly prefersDark: boolean | null;
 }
 
+const APPLY_LIGHT_THEME_EXPR =
+  "(() => { const root = document.documentElement; if (root && root.hasAttribute('data-theme')) { root.setAttribute('data-theme', 'light'); } })()";
+const APPLY_DARK_THEME_EXPR =
+  "(() => { const root = document.documentElement; if (root && root.hasAttribute('data-theme')) { root.setAttribute('data-theme', 'dark'); } })()";
+
 export async function navigateAndSettlePage(options: {
   readonly page: ScreenshotPageHandle;
   readonly url: string;
@@ -261,9 +266,7 @@ export async function navigateAndSettlePage(options: {
   // Apply data-theme only if the site already declares a data-theme attribute on <html>,
   // while colorScheme emulation handles prefers-color-scheme automatically.
   try {
-    await page.evaluate(
-      `(() => { const root = document.documentElement; if (root && root.hasAttribute('data-theme')) { root.setAttribute('data-theme', ${JSON.stringify(theme)}); } })()`
-    );
+    await page.evaluate(theme === 'dark' ? APPLY_DARK_THEME_EXPR : APPLY_LIGHT_THEME_EXPR);
   } catch {
     // Non-fatal if document evaluation fails on error page.
   }

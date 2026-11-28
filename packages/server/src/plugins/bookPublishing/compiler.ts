@@ -50,10 +50,46 @@ function escapeHtml(text: string): string {
   return escapeXml(text);
 }
 
+function stripMarkdownLinksAndImages(input: string): string {
+  if (!input.includes('[')) {
+    return input;
+  }
+  let out = '';
+  let i = 0;
+  while (i < input.length) {
+    const isImage = input[i] === '!' && input[i + 1] === '[';
+    const openBracket = isImage ? i + 1 : input[i] === '[' ? i : -1;
+    if (openBracket === -1) {
+      out += input[i];
+      i += 1;
+      continue;
+    }
+    const closeBracket = input.indexOf(']', openBracket + 1);
+    if (closeBracket === -1) {
+      out += input.slice(i);
+      break;
+    }
+    if (input[closeBracket + 1] === '(') {
+      const closeParen = input.indexOf(')', closeBracket + 2);
+      if (closeParen === -1) {
+        out += input.slice(i);
+        break;
+      }
+      const label = input.slice(openBracket + 1, closeBracket);
+      if (isImage || label.length > 0) {
+        out += label;
+        i = closeParen + 1;
+        continue;
+      }
+    }
+    out += input[i];
+    i += 1;
+  }
+  return out;
+}
+
 function stripMarkdownToPlain(md: string): string {
-  return md
-    .replaceAll(/!\[([^\]]*)\]\([^)]*\)/g, '$1')
-    .replaceAll(/\[([^\]]+)\]\([^)]*\)/g, '$1')
+  return stripMarkdownLinksAndImages(md)
     .replaceAll(/^#{1,6}\s+/gm, '')
     .replaceAll(/[*_`~]/g, '')
     .replaceAll(/\r?\n{2,}/g, '\n')

@@ -22,19 +22,20 @@ export function validateDownloadedFile(
   filePath: string,
   options: { readonly url: string; readonly contentType: string; readonly filenameHint?: string }
 ): number {
-  let size: number;
+  let fd: number;
   try {
-    size = fs.statSync(filePath).size;
+    fd = fs.openSync(filePath, 'r');
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : String(err);
     throw new RecordRuntimeError(`Failed reading downloaded file for ${options.url}: ${message}`);
   }
-  if (size <= 0) {
-    throw new RecordRuntimeError(`Downloaded empty response from ${options.url}`);
-  }
-  const fd = fs.openSync(filePath, 'r');
+  let size: number;
   let head: Buffer;
   try {
+    size = fs.fstatSync(fd).size;
+    if (size <= 0) {
+      throw new RecordRuntimeError(`Downloaded empty response from ${options.url}`);
+    }
     const buf = Buffer.alloc(Math.min(512, size));
     const bytesRead = fs.readSync(fd, buf, 0, buf.length, 0);
     head = buf.subarray(0, bytesRead);

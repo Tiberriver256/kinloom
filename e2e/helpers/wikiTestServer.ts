@@ -131,21 +131,31 @@ function createDemoDistAssetHandler(
             },
           });
         }
-        if (
-          candidate.startsWith(`${resolvedDist}${path.sep}`) &&
-          fs.existsSync(candidate) &&
-          fs.statSync(candidate).isFile()
-        ) {
-          const bytes = new Uint8Array(fs.readFileSync(candidate));
-          const contentType = contentTypeForPath(candidate);
-          fileCache.set(candidate, { bytes, contentType });
-          return new Response(Buffer.from(bytes), {
-            status: 200,
-            headers: {
-              'content-type': contentType,
-              'cache-control': 'no-cache',
-            },
-          });
+        if (candidate.startsWith(`${resolvedDist}${path.sep}`)) {
+          let bytes: Uint8Array | null = null;
+          try {
+            const fd = fs.openSync(candidate, 'r');
+            try {
+              if (fs.fstatSync(fd).isFile()) {
+                bytes = new Uint8Array(fs.readFileSync(fd));
+              }
+            } finally {
+              fs.closeSync(fd);
+            }
+          } catch {
+            bytes = null;
+          }
+          if (bytes !== null) {
+            const contentType = contentTypeForPath(candidate);
+            fileCache.set(candidate, { bytes, contentType });
+            return new Response(Buffer.from(bytes), {
+              status: 200,
+              headers: {
+                'content-type': contentType,
+                'cache-control': 'no-cache',
+              },
+            });
+          }
         }
       }
 
@@ -297,22 +307,37 @@ async function getCachedDemoSeed(): Promise<CachedDemoSeed> {
         contentType: string;
         sha256: Sha256Hex;
       }> = [];
-      if (fs.existsSync(DEMO_PUBLIC_MEDIA_DIR)) {
-        const files = fs.readdirSync(DEMO_PUBLIC_MEDIA_DIR);
-        for (const filename of files) {
-          const fullPath = path.join(DEMO_PUBLIC_MEDIA_DIR, filename);
-          if (!fs.statSync(fullPath).isFile()) {
-            continue;
+      let files: string[] = [];
+      try {
+        files = fs.readdirSync(DEMO_PUBLIC_MEDIA_DIR);
+      } catch {
+        files = [];
+      }
+      for (const filename of files) {
+        const fullPath = path.join(DEMO_PUBLIC_MEDIA_DIR, filename);
+        let bytes: Uint8Array | null = null;
+        try {
+          const fd = fs.openSync(fullPath, 'r');
+          try {
+            if (fs.fstatSync(fd).isFile()) {
+              bytes = new Uint8Array(fs.readFileSync(fd));
+            }
+          } finally {
+            fs.closeSync(fd);
           }
-          const bytes = new Uint8Array(fs.readFileSync(fullPath));
-          const digest = await sha256Hex(bytes);
-          mediaFiles.push({
-            key: `media/${filename}`,
-            bytes,
-            contentType: contentTypeForPath(fullPath),
-            sha256: digest,
-          });
+        } catch {
+          bytes = null;
         }
+        if (bytes === null) {
+          continue;
+        }
+        const digest = await sha256Hex(bytes);
+        mediaFiles.push({
+          key: `media/${filename}`,
+          bytes,
+          contentType: contentTypeForPath(fullPath),
+          sha256: digest,
+        });
       }
 
       const agentHash = await sha256Hex(new TextEncoder().encode(DEFAULT_AGENT_TOKEN_SECRET));
@@ -482,9 +507,17 @@ export async function startLiveWikiTestServer(
         const responseBuffer = Buffer.from(await webRes.arrayBuffer());
         res.end(responseBuffer);
       } catch (error) {
+        console.error('[wikiTestServer] unhandled request error:', error);
         res.statusCode = 500;
-        res.setHeader('content-type', 'text/plain; charset=utf-8');
-        res.end(error instanceof Error ? error.message : String(error));
+        res.setHeader('content-type', 'application/json; charset=utf-8');
+        res.end(
+          JSON.stringify({
+            error: {
+              code: 'INTERNAL_SERVER_ERROR',
+              message: 'Internal server error',
+            },
+          })
+        );
       }
     })();
   });

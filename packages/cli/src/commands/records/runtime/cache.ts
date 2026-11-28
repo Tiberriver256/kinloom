@@ -121,10 +121,17 @@ export function readSchemaCacheEntry<T>(
     return undefined;
   }
   try {
-    if (!fs.statSync(filePath).isFile()) {
-      return undefined;
+    const fd = fs.openSync(filePath, 'r');
+    let rawText: string;
+    try {
+      if (!fs.fstatSync(fd).isFile()) {
+        return undefined;
+      }
+      rawText = fs.readFileSync(fd, 'utf8');
+    } finally {
+      fs.closeSync(fd);
     }
-    const raw: unknown = JSON.parse(fs.readFileSync(filePath, 'utf8'));
+    const raw: unknown = JSON.parse(rawText);
     if (typeof raw !== 'object' || raw === null || Array.isArray(raw)) {
       return undefined;
     }
@@ -205,18 +212,13 @@ export async function cachedJsonCall<T>(
 export function atomicWriteFileSync(targetPath: string, data: string | Uint8Array): void {
   const dir = path.dirname(targetPath);
   fs.mkdirSync(dir, { recursive: true });
-  const base = path.basename(targetPath);
-  const tmpPath = path.join(dir, `.${base}.${process.pid}.${process.hrtime.bigint()}.tmp`);
+  const tmpDir = fs.mkdtempSync(path.join(dir, '.kinloom-tmp-'));
+  const tmpPath = path.join(tmpDir, 'payload');
   try {
-    fs.writeFileSync(tmpPath, data);
+    fs.writeFileSync(tmpPath, data, { flag: 'wx' });
     fs.renameSync(tmpPath, targetPath);
-  } catch (err) {
-    try {
-      fs.unlinkSync(tmpPath);
-    } catch {
-      // Best-effort temp cleanup.
-    }
-    throw err;
+  } finally {
+    fs.rmSync(tmpDir, { recursive: true, force: true });
   }
 }
 
@@ -237,16 +239,21 @@ export function readBinaryCache(
     return { hit: false };
   }
   try {
-    const stat = fs.statSync(filePath);
-    if (!stat.isFile()) {
-      return { hit: false };
+    const fd = fs.openSync(filePath, 'r');
+    try {
+      const stat = fs.fstatSync(fd);
+      if (!stat.isFile()) {
+        return { hit: false };
+      }
+      const ageMs = nowMs() - stat.mtimeMs;
+      if (ageMs > ttlMs) {
+        return { hit: false };
+      }
+      const data = fs.readFileSync(fd);
+      return { hit: true, value: data, mtimeMs: stat.mtimeMs };
+    } finally {
+      fs.closeSync(fd);
     }
-    const ageMs = nowMs() - stat.mtimeMs;
-    if (ageMs > ttlMs) {
-      return { hit: false };
-    }
-    const data = fs.readFileSync(filePath);
-    return { hit: true, value: data, mtimeMs: stat.mtimeMs };
   } catch {
     return { hit: false };
   }
@@ -276,20 +283,26 @@ function isProcessAlive(pid: number): boolean {
 
 function tryReclaimStaleLock(lockPath: string, staleAfterMs: number, now: number): boolean {
   try {
-    const stat = fs.statSync(lockPath);
-    const ageMs = now - stat.mtimeMs;
+    const fd = fs.openSync(lockPath, 'r');
+    let ageMs: number;
     let ownerDead = false;
     try {
-      const content = fs.readFileSync(lockPath, 'utf8').trim();
-      const pid = Number.parseInt(content, 10);
-      if (Number.isInteger(pid) && pid > 0 && !isProcessAlive(pid)) {
-        ownerDead = true;
+      const stat = fs.fstatSync(fd);
+      ageMs = now - stat.mtimeMs;
+      try {
+        const content = fs.readFileSync(fd, 'utf8').trim();
+        const pid = Number.parseInt(content, 10);
+        if (Number.isInteger(pid) && pid > 0 && !isProcessAlive(pid)) {
+          ownerDead = true;
+        }
+      } catch {
+        // Ignore unreadable lock payload.
       }
-    } catch {
-      // Ignore unreadable lock payload.
+    } finally {
+      fs.closeSync(fd);
     }
     if (ageMs > staleAfterMs || ownerDead) {
-      fs.unlinkSync(lockPath);
+      fs.rmSync(lockPath, { force: true });
       return true;
     }
   } catch {

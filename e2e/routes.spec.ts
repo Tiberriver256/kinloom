@@ -1,6 +1,18 @@
 import type { Page } from '@playwright/test';
 import { expect, test } from '@playwright/test';
 
+function mentionsOpenHistoricalMapUrl(text: string): boolean {
+  const matches = text.match(/https?:\/\/[^\s"'<>)]+/gi) ?? [];
+  return matches.some((rawUrl) => {
+    try {
+      const host = new URL(rawUrl).hostname.toLowerCase();
+      return host === 'openhistoricalmap.org' || host.endsWith('.openhistoricalmap.org');
+    } catch {
+      return false;
+    }
+  });
+}
+
 function attachErrorCollector(page: Page): string[] {
   const errors: string[] = [];
   page.on('pageerror', (err) => {
@@ -9,7 +21,8 @@ function attachErrorCollector(page: Page): string[] {
   page.on('console', (msg) => {
     if (msg.type() === 'error') {
       const text = msg.text();
-      if (!text.includes('openhistoricalmap.org')) {
+      const locUrl = msg.location().url;
+      if (!mentionsOpenHistoricalMapUrl(text) && !mentionsOpenHistoricalMapUrl(locUrl)) {
         errors.push(`console.error: ${text}`);
       }
     }

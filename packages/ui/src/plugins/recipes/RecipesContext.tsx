@@ -51,12 +51,21 @@ export interface BindRecipesProviderOptions {
   readonly pageDescription?: string;
 }
 
+function trimTrailingSlashes(value: string): string {
+  let end = value.length;
+  while (end > 0 && value.charCodeAt(end - 1) === 47) {
+    end -= 1;
+  }
+  return end === value.length ? value : value.slice(0, end);
+}
+
 export function bindRecipesProvider(
   options: BindRecipesProviderOptions
 ): React.ComponentType<{ children: React.ReactNode }> {
+  const normalizedBasePath = options.basePath ? trimTrailingSlashes(options.basePath.trim()) : '';
   const config: Omit<RecipesPluginProviderProps, 'children'> = {
     client: options.client,
-    basePath: options.basePath?.trim().replace(/\/+$/, '') || DEFAULT_RECIPES_ROUTE_BASE,
+    basePath: normalizedBasePath || DEFAULT_RECIPES_ROUTE_BASE,
     showIndexWidget: options.showIndexWidget ?? true,
     pageTitle: options.pageTitle?.trim() || 'Family Recipe Box',
     pageDescription:

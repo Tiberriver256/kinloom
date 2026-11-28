@@ -138,8 +138,11 @@ function normalizePathname(rawPathname: string): string {
   if (withoutQuery === '/' || withoutQuery === '') {
     return '/';
   }
-  const stripped = withoutQuery.replace(/\/+$/, '');
-  return stripped.length > 0 ? stripped : '/';
+  let end = withoutQuery.length;
+  while (end > 0 && withoutQuery.charCodeAt(end - 1) === 47) {
+    end -= 1;
+  }
+  return end > 0 ? withoutQuery.slice(0, end) : '/';
 }
 
 function safeDecodeSlug(segment: string): string | null {
