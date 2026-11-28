@@ -14,6 +14,7 @@ import { TreePedigreeRoll } from '../components/tree/TreePedigreeRoll.js';
 import { TreeToolbar } from '../components/tree/TreeToolbar.js';
 import { CreateEntityModal } from '../components/wiki/CreateEntityModal.js';
 import { useArchiveData } from '../context/ArchiveDataContext.js';
+import { useOptionalOnboarding } from '../context/OnboardingContext.js';
 import type { TreeLineageMode, TreeViewSurface } from '../lib/archivalTreeModel.js';
 import {
   buildArchivalTreeModel,
@@ -40,6 +41,7 @@ import { useTreeViewportTransform } from './tree/useTreeViewportTransform.js';
 
 export const TreePage: React.FC = () => {
   const { siteConfig, baseUrl, bundle, placesById, capabilities, loading } = useArchiveData();
+  const onboarding = useOptionalOnboarding();
   const [searchParams, setSearchParams] = useSearchParams();
 
   const personThumbMap = useMemo(
@@ -280,9 +282,10 @@ export const TreePage: React.FC = () => {
         lastFocusedNodeRef.current = document.activeElement;
       }
       setSelectedPersonId(person.id);
+      onboarding?.recordSignal('tree_focus');
       setLiveAnnouncement(`Focused ${person.full_name} and traced direct lineage.`);
     },
-    [surface, canvas.didDragMoveRef]
+    [surface, canvas.didDragMoveRef, onboarding]
   );
 
   const handleClearFocus = useCallback((): void => {
@@ -572,32 +575,58 @@ export const TreePage: React.FC = () => {
 
         {model.totalVisibleCount === 0 ? (
           <div className={cx(treePageStyles, 'tree-empty-wrap')}>
-            <EmptyStateNotice
-              title={
-                bundle.people.length === 0
-                  ? 'No people have been added to this archive yet.'
-                  : 'No people appear in this branch or lineage view.'
-              }
-              body={
-                bundle.people.length > 0
-                  ? 'Switch to All Branches or Full Tree to view the documented family lines.'
-                  : undefined
-              }
-              action={
-                branchFilter !== 'all' || mode !== 'full' ? (
-                  <button
-                    type="button"
-                    className={cx(controlStyles, 'pill-btn')}
-                    onClick={() => {
-                      setBranchFilter('all');
-                      setMode('full');
-                    }}
-                  >
-                    Show Full Tree
-                  </button>
-                ) : undefined
-              }
-            />
+            {bundle.people.length === 0 ? (
+              <EmptyStateNotice
+                eyebrow="Family Tree"
+                title="Your family tree is ready for its first branch"
+                body="No people have been added to this archive yet. Adding connected relatives builds the interactive pedigree diagram and printable roll."
+                action={
+                  capabilities.canEdit ? (
+                    <button
+                      type="button"
+                      className={cx(controlStyles, 'pill-btn active')}
+                      onClick={() => {
+                        setCreatePersonOpen(true);
+                      }}
+                    >
+                      + Add first person
+                    </button>
+                  ) : undefined
+                }
+                secondaryAction={
+                  onboarding ? (
+                    <button
+                      type="button"
+                      className={cx(controlStyles, 'pill-btn')}
+                      onClick={() => {
+                        onboarding.openGuide('core-tree-pedigree');
+                      }}
+                    >
+                      Watch Tree tutorial
+                    </button>
+                  ) : undefined
+                }
+              />
+            ) : (
+              <EmptyStateNotice
+                title="No people appear in this branch or lineage view."
+                body="Switch to All Branches or Full Tree to view the documented family lines."
+                action={
+                  branchFilter !== 'all' || mode !== 'full' ? (
+                    <button
+                      type="button"
+                      className={cx(controlStyles, 'pill-btn')}
+                      onClick={() => {
+                        setBranchFilter('all');
+                        setMode('full');
+                      }}
+                    >
+                      Show Full Tree
+                    </button>
+                  ) : undefined
+                }
+              />
+            )}
           </div>
         ) : surface === 'roll' ? (
           <TreePedigreeRoll

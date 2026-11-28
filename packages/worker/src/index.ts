@@ -7,6 +7,7 @@ import type {
   PluginSettingsStore,
   PronunciationAudioGenerator,
   PronunciationLexiconStore,
+  UserOnboardingStore,
 } from '@kinloom/core';
 import {
   createKinloomServer,
@@ -25,6 +26,7 @@ import { D1PluginDatabaseFactory } from './adapters/d1PluginDatabase.js';
 import { D1PluginSettingsStore } from './adapters/d1PluginSettingsStore.js';
 import { D1PronunciationLexiconStore } from './adapters/d1PronunciationLexiconStore.js';
 import { createD1ArchiveRepository } from './adapters/d1Repository.js';
+import { D1UserOnboardingStore } from './adapters/d1UserOnboardingStore.js';
 import { R2IncrementalPatchBundleCache } from './adapters/r2BundleCache.js';
 import { R2MediaStore } from './adapters/r2MediaStore.js';
 import type { ExecutionContext, ExportedHandler, KinloomWorkerEnv } from './types.js';
@@ -226,6 +228,7 @@ export {
   D1ArchiveRepository,
   type D1ArchiveRepositoryOptions,
 } from './adapters/d1Repository.js';
+export { D1UserOnboardingStore } from './adapters/d1UserOnboardingStore.js';
 export {
   buildPronunciationPrompt,
   DEFAULT_GEMINI_TTS_MODEL,
@@ -281,6 +284,7 @@ export interface CreateCloudflareWorkerOptions {
   pluginSettingsStore?: PluginSettingsStore;
   pluginDatabaseFactory?: PluginDatabaseFactory;
   pageVisitStatsStore?: PageVisitStatsStore;
+  userOnboardingStore?: UserOnboardingStore;
   onPluginError?: (pluginId: string, error: unknown) => void;
   buildCommitSha?: string;
   buildTimestamp?: string;
@@ -345,6 +349,7 @@ export function createCloudflareWorker(
       const pluginSettingsStore = options.pluginSettingsStore ?? new D1PluginSettingsStore(env.DB);
       const pluginDatabaseFactory = options.pluginDatabaseFactory ?? new D1PluginDatabaseFactory(env.DB);
       const pageVisitStatsStore = options.pageVisitStatsStore ?? new D1PageVisitStatsStore(env.DB);
+      const userOnboardingStore = options.userOnboardingStore ?? new D1UserOnboardingStore(env.DB);
 
       const server = createKinloomServer({
         siteConfig: options.siteConfig,
@@ -377,6 +382,7 @@ export function createCloudflareWorker(
           pluginSettingsStore,
           pluginDatabaseFactory,
           pageVisitStatsStore,
+          userOnboardingStore,
           plugins,
         },
       });

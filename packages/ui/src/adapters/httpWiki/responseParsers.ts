@@ -12,6 +12,7 @@ import type {
   GeneratedPronunciationAudioResult,
   InviteRecord,
   MediaItem,
+  OnboardingSessionResponse,
   PluginSettingsSnapshot,
   Pronunciation,
   PronunciationLexicon,
@@ -35,6 +36,7 @@ import {
   EntityPayloadSchema,
   EntityTypeSchema,
   MediaItemSchema,
+  OnboardingSessionResponseSchema,
   PronunciationSchema,
   RevisionActionSchema,
   StewardReviewStampSchema,
@@ -458,4 +460,8 @@ export function parseAdminPluginSettingsListResponse(raw: unknown): readonly Plu
 
 export function parseAdminPluginSettingsUpdateResponse(raw: unknown): PluginSettingsSnapshot {
   return AdminPluginSettingsUpdateResponseSchema.parse(raw).plugin;
+}
+
+export function parseOnboardingSessionResponse(raw: unknown): OnboardingSessionResponse {
+  return OnboardingSessionResponseSchema.parse(raw);
 }

@@ -109,6 +109,18 @@ export function createAuthRouteHandler(deps: AuthRouteHandlerDeps): HttpRouteHan
       return jsonResponse(authService.getSessionInfo(auth.principal), 200);
     }
 
+    if (method === 'GET' && pathname === '/api/auth/me/onboarding') {
+      const onboarding = await authService.getOnboardingSession(auth.principal);
+      return jsonResponse(onboarding, 200, { 'cache-control': 'no-store' });
+    }
+
+    if (method === 'PUT' && pathname === '/api/auth/me/onboarding') {
+      enforceCsrfOrigin(request, url, auth.authMethod, telemetry);
+      const body = await readJsonBody(request);
+      const updated = await authService.updateOnboardingSession(auth.principal, body);
+      return jsonResponse(updated, 200, { 'cache-control': 'no-store' });
+    }
+
     if (method === 'GET' && pathname === '/api/auth/google/start') {
       const requestedNext = url.searchParams.get('next');
       const selectAccountParam = url.searchParams.get('select_account')?.trim().toLowerCase();

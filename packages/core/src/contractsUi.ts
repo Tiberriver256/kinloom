@@ -17,6 +17,7 @@ import type {
   Pronunciation,
   ReadingsBundle,
 } from './schemas/entities.js';
+import type { OnboardingSessionResponse, UpdateOnboardingStateRequest } from './schemas/onboarding.js';
 import type { PluginSettingsSnapshot, PluginSettingsUpdateRequest } from './schemas/pluginSettings.js';
 import type {
   AgentTokenScope,
@@ -158,6 +159,11 @@ export interface ArchiveDataSource {
     capabilities: ArchiveCapabilities;
     authProviders?: ArchiveAuthProviders;
   }>;
+  getOnboardingState?(options?: { signal?: AbortSignal }): Promise<OnboardingSessionResponse>;
+  updateOnboardingState?(
+    patch: UpdateOnboardingStateRequest,
+    options?: { signal?: AbortSignal }
+  ): Promise<OnboardingSessionResponse>;
 
   getEntity?(
     entityType: EntityType,

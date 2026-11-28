@@ -1,11 +1,13 @@
 import {
   type ArchiveBundle,
   type ArchiveRawSnapshot,
+  applyOnboardingPatch,
   asRevisionId,
   type BundleCache,
   type CachedBundleObject,
   type Clock,
   compileArchive,
+  createDefaultUserOnboardingState,
   extractCollectionsFromSnapshot,
   type KinloomSiteConfig,
   type MediaByteRange,
@@ -22,6 +24,9 @@ import {
   type StoredMediaObject,
   type StoredPluginSecretMetadata,
   type StoredPluginSettingsRecord,
+  type StoredUserOnboardingRecord,
+  type UpdateOnboardingStateRequest,
+  type UserOnboardingStore,
 } from '@kinloom/core';
 import { bytesToStream, matchesIfNoneMatch, readStreamToBytes } from '../../crypto.js';
 
@@ -324,5 +329,64 @@ export class InMemoryPluginSettingsStore implements PluginSettingsStore {
       },
       secretMetadata: await this.getSecretMetadata(params.pluginId),
     };
+  }
+}
+
+export class InMemoryUserOnboardingStore implements UserOnboardingStore {
+  readonly adapterKind = 'in-memory';
+  private readonly records = new Map<string, StoredUserOnboardingRecord>();
+
+  private cloneRecord(record: StoredUserOnboardingRecord): StoredUserOnboardingRecord {
+    return {
+      email: record.email,
+      first_login_pending: record.first_login_pending,
+      state: {
+        ...record.state,
+        completed_step_ids: [...record.state.completed_step_ids],
+        skipped_step_ids: [...record.state.skipped_step_ids],
+        completed_chapter_ids: [...record.state.completed_chapter_ids],
+      },
+    };
+  }
+
+  async get(email: string): Promise<StoredUserOnboardingRecord | null> {
+    const existing = this.records.get(email.trim().toLowerCase());
+    return existing ? this.cloneRecord(existing) : null;
+  }
+
+  async markFirstLoginIfUnset(email: string, nowIso: string): Promise<StoredUserOnboardingRecord> {
+    const normalized = email.trim().toLowerCase();
+    const existing = this.records.get(normalized);
+    if (existing) {
+      return this.cloneRecord(existing);
+    }
+    const created: StoredUserOnboardingRecord = {
+      email: normalized,
+      first_login_pending: true,
+      state: createDefaultUserOnboardingState(nowIso),
+    };
+    this.records.set(normalized, created);
+    return this.cloneRecord(created);
+  }
+
+  async patch(
+    email: string,
+    mutation: UpdateOnboardingStateRequest,
+    nowIso: string
+  ): Promise<StoredUserOnboardingRecord> {
+    const normalized = email.trim().toLowerCase();
+    const existing = this.records.get(normalized) ?? {
+      email: normalized,
+      first_login_pending: false,
+      state: createDefaultUserOnboardingState(null),
+    };
+    const next = applyOnboardingPatch(existing, mutation, nowIso);
+    const updated: StoredUserOnboardingRecord = {
+      email: normalized,
+      first_login_pending: next.first_login_pending,
+      state: next.state,
+    };
+    this.records.set(normalized, updated);
+    return this.cloneRecord(updated);
   }
 }

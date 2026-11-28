@@ -144,6 +144,7 @@ const EXACT_STATIC_ROUTES = new Set<string>([
   '/api/export/yaml',
   '/api/export/snapshot',
   '/api/auth/me',
+  '/api/auth/me/onboarding',
   '/api/auth/google/start',
   '/api/auth/google/callback',
   '/api/auth/magic-link/request',

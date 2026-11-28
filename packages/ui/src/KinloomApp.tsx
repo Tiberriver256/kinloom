@@ -13,6 +13,7 @@ import type { ArchiveCapabilities, ArchiveDataLoader, ArchiveSession } from './c
 import { useArchiveData } from './context/ArchiveDataContext.js';
 import { ArchiveProvider } from './context/ArchiveProvider.js';
 import { useArchiveUi } from './context/ArchiveUiContext.js';
+import { useOptionalOnboarding } from './context/OnboardingContext.js';
 import { cx } from './lib/cx.js';
 import { IndexPage } from './pages/IndexPage.js';
 import { NotFoundPage } from './pages/NotFoundPage.js';
@@ -72,6 +73,14 @@ const LazySourceInspectorDrawer = lazy(async () => {
   const module = await import('./components/SourceInspectorDrawer.js');
   return { default: module.SourceInspectorDrawer };
 });
+const LazyKeyboardShortcutsDialog = lazy(async () => {
+  const module = await import('./components/GuideOverlays.js');
+  return { default: module.KeyboardShortcutsDialog };
+});
+const LazyQuickArchiveGuideDialog = lazy(async () => {
+  const module = await import('./components/GuideOverlays.js');
+  return { default: module.QuickArchiveGuideDialog };
+});
 
 export interface KinloomAppProps {
   siteConfig: KinloomSiteConfig;
@@ -104,11 +113,16 @@ const RouteLoading: React.FC = () => (
 
 const LazyShellOverlays: React.FC = () => {
   const { searchOpen, sourceReader, sourceInspector } = useArchiveUi();
+  const onboarding = useOptionalOnboarding();
   return (
     <Suspense fallback={null}>
       {sourceReader !== null && <LazySourceReaderDrawer />}
       {sourceInspector !== null && <LazySourceInspectorDrawer />}
       {searchOpen && <LazyGlobalSearchModal />}
+      {onboarding?.shortcutsDialogOpen && <LazyKeyboardShortcutsDialog />}
+      {onboarding?.guideDialogChapter !== null && onboarding?.guideDialogChapter !== undefined && (
+        <LazyQuickArchiveGuideDialog />
+      )}
     </Suspense>
   );
 };
@@ -117,6 +131,19 @@ const RoutedAppShell: React.FC<{ siteTitle: string; baseUrl: string }> = ({ site
   const location = useLocation();
   const { routes: pluginRoutes } = useKinloomPlugins();
   const { bundle, loading, session } = useArchiveData();
+  const onboarding = useOptionalOnboarding();
+  const recordSignal = onboarding?.recordSignal;
+
+  useEffect(() => {
+    if (!recordSignal) {
+      return;
+    }
+    if (location.pathname.startsWith('/person/')) {
+      recordSignal('person_visit');
+    } else if (location.pathname === '/changes') {
+      recordSignal('changes_visit');
+    }
+  }, [location.pathname, recordSignal]);
 
   if (!loading && bundle === null && session?.principal_kind === 'anonymous') {
     return (

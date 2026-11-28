@@ -13,6 +13,7 @@ import type {
   GeneratePronunciationAudioInput,
   MediaChecklistItem,
   MediaItem,
+  OnboardingSessionResponse,
   OptimisticConflictError,
   Pronunciation,
   PronunciationLexicon,
@@ -22,6 +23,7 @@ import type {
   RevisionRecord,
   StewardReviewStamp,
   TalkComment,
+  UpdateOnboardingStateRequest,
   UpsertPronunciationTermResult,
 } from '@kinloom/core';
 import {
@@ -45,6 +47,7 @@ import {
   parseGeneratedPronunciationAudioResponse,
   parseMagicLinkResponse,
   parseMediaUploadResponse,
+  parseOnboardingSessionResponse,
   parsePronunciationLexiconResponse,
   parseRevisionListResponse,
   parseRevisionOnlyResponse,
@@ -223,6 +226,24 @@ export class HttpWikiDataSource implements ArchiveDataSource {
     authProviders?: ArchiveAuthProviders;
   }> {
     return this.requestJson('/api/auth/me', parseSessionResponse, { signal: options?.signal });
+  }
+
+  async getOnboardingState(options?: { signal?: AbortSignal }): Promise<OnboardingSessionResponse> {
+    return this.requestJson('/api/auth/me/onboarding', parseOnboardingSessionResponse, {
+      signal: options?.signal,
+    });
+  }
+
+  async updateOnboardingState(
+    patch: UpdateOnboardingStateRequest,
+    options?: { signal?: AbortSignal }
+  ): Promise<OnboardingSessionResponse> {
+    return this.requestJson('/api/auth/me/onboarding', parseOnboardingSessionResponse, {
+      method: 'PUT',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(patch),
+      signal: options?.signal,
+    });
   }
 
   async getEntity(

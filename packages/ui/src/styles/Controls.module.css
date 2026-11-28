@@ -69,6 +69,16 @@ dialog[open] {
   margin: 12px 0 24px;
 }
 
+.empty-state-notice-eyebrow {
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--accent-primary);
+  margin-bottom: 4px;
+}
+
 .empty-state-notice-title {
   margin: 0;
   font-family: var(--font-serif);
@@ -86,6 +96,10 @@ dialog[open] {
 
 .empty-state-notice-action {
   margin-top: 12px;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
 }
 
 /* Unboxed Ink Controls */
@@ -142,7 +156,8 @@ select.pill-btn option {
 :global(.person-header-actions) .pill-btn,
 :global(.index-filter-actions) .pill-btn,
 :global(.ink-filter-bar) .pill-btn,
-:global(.evidence-tabs) .pill-btn {
+:global(.evidence-tabs) .pill-btn,
+.empty-state-notice-action .pill-btn {
   border: 1px solid var(--border-control);
   border-radius: var(--radius-sm);
   padding: 5px 11px;
@@ -158,7 +173,8 @@ select.pill-btn option {
   :global(.person-header-actions) .pill-btn:hover,
   :global(.index-filter-actions) .pill-btn:hover,
   :global(.ink-filter-bar) .pill-btn:hover,
-  :global(.evidence-tabs) .pill-btn:hover {
+  :global(.evidence-tabs) .pill-btn:hover,
+  .empty-state-notice-action .pill-btn:hover {
     background: var(--surface-linen);
     border-color: var(--surface-header);
   }

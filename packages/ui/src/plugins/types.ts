@@ -7,6 +7,7 @@ import type {
   KinloomSiteConfig,
   MediaItem,
   Narrative,
+  OnboardingRole,
   Person,
   Place,
   PluginDocumentation,
@@ -18,7 +19,51 @@ import type {
   EntityEditFormEntry,
 } from '../components/wiki/entityForms/fieldTypes.js';
 
+export type { OnboardingRole };
+
 export type KinloomUiPluginNavMinRole = 'public' | 'viewer' | 'editor' | 'admin';
+
+export interface KinloomOnboardingContext {
+  readonly bundle: ArchiveBundle | null;
+  readonly siteConfig: KinloomSiteConfig;
+  readonly baseUrl: string;
+  readonly session: ArchiveSessionState | null;
+  readonly capabilities: ArchiveCapabilities;
+  readonly role: OnboardingRole;
+  readonly completedStepIds: ReadonlySet<string>;
+}
+
+export type KinloomOnboardingStepAction =
+  | { readonly kind: 'route'; readonly to: string; readonly label: string }
+  | { readonly kind: 'tutorial'; readonly chapterId: string; readonly label: string }
+  | {
+      readonly kind: 'callback';
+      readonly label: string;
+      readonly onActivate: (ctx: KinloomOnboardingContext) => void;
+    };
+
+export interface KinloomOnboardingStep {
+  /** Globally unique stable identifier, namespaced as `<pluginId>:<step-slug>` (core uses `core:<role>:<slug>`). */
+  readonly id: string;
+  readonly title: string;
+  readonly description: string;
+  /** Minimum role required to see this step. Defaults to `'viewer'`. */
+  readonly minRole?: OnboardingRole;
+  /** Restrict to exact roles instead of hierarchical minRole (e.g. `['admin']` or `['viewer']`). */
+  readonly roles?: readonly OnboardingRole[];
+  /** Sort order within the checklist. Core steps use 10..90; plugins default to 200. */
+  readonly order?: number;
+  /** Optional target route shortcut (shorthand when full `action` object is not needed). */
+  readonly targetRoute?: string;
+  /** Explicit action button descriptor; takes precedence over `targetRoute`. */
+  readonly action?: KinloomOnboardingStepAction;
+  /** Optional deep-link into an interactive tutorial chapter (#53). */
+  readonly tutorialChapterId?: string;
+  /** Optional predicate to hide a step when its prerequisite data is absent. */
+  readonly isApplicable?: (ctx: KinloomOnboardingContext) => boolean;
+  /** Optional pure predicate that marks the step completed automatically from live archive state. */
+  readonly isComplete?: (ctx: KinloomOnboardingContext) => boolean;
+}
 
 export interface KinloomUiPluginRoute {
   readonly path: string;
@@ -96,4 +141,6 @@ export interface KinloomUiPlugin {
   readonly mediaRenderers?: readonly KinloomMediaRenderer[];
   readonly entityEditForms?: Readonly<Partial<Record<EntityType, EntityEditFormEntry>>>;
   readonly entityCreateForms?: Readonly<Partial<Record<EntityType, EntityCreateFormEntry>>>;
+  readonly onboardingSteps?: readonly KinloomOnboardingStep[];
+  readonly getOnboardingSteps?: (ctx: KinloomOnboardingContext) => readonly KinloomOnboardingStep[];
 }

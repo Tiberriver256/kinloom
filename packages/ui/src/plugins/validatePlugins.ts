@@ -1,9 +1,24 @@
-import { type EntityType, validatePluginDocumentation } from '@kinloom/core';
+import {
+  type EntityType,
+  isSafeInternalRoute,
+  KinloomOnboardingStepSchema,
+  validatePluginDocumentation,
+} from '@kinloom/core';
 import type {
   EntityCreateFormEntry,
   EntityEditFormEntry,
 } from '../components/wiki/entityForms/fieldTypes.js';
-import type { KinloomMediaRenderer, KinloomUiPlugin, KinloomUiPluginRoute } from './types.js';
+import type {
+  KinloomMediaRenderer,
+  KinloomOnboardingContext,
+  KinloomOnboardingStep,
+  KinloomUiPlugin,
+  KinloomUiPluginRoute,
+} from './types.js';
+
+export type CompiledKinloomOnboardingStep = KinloomOnboardingStep & {
+  readonly pluginId: string;
+};
 
 export interface CompiledKinloomUiPlugins {
   readonly plugins: readonly KinloomUiPlugin[];
@@ -11,6 +26,7 @@ export interface CompiledKinloomUiPlugins {
   readonly mediaRenderers: readonly KinloomMediaRenderer[];
   readonly entityEditForms: Readonly<Partial<Record<EntityType, EntityEditFormEntry>>>;
   readonly entityCreateForms: Readonly<Partial<Record<EntityType, EntityCreateFormEntry>>>;
+  readonly onboardingSteps: readonly CompiledKinloomOnboardingStep[];
 }
 
 export const RESERVED_UI_ROUTE_PATHS: readonly string[] = [
@@ -55,13 +71,160 @@ const RESERVED_UI_ROUTE_KEYS = new Map<string, string>(
   RESERVED_UI_ROUTE_PATHS.map((p) => [routeCollisionKey(p), p])
 );
 
+function compareCompiledOnboardingSteps(
+  a: CompiledKinloomOnboardingStep,
+  b: CompiledKinloomOnboardingStep
+): number {
+  const orderA = a.order ?? 200;
+  const orderB = b.order ?? 200;
+  if (orderA !== orderB) {
+    return orderA - orderB;
+  }
+  const byPlugin = a.pluginId.localeCompare(b.pluginId);
+  if (byPlugin !== 0) {
+    return byPlugin;
+  }
+  return a.id.localeCompare(b.id);
+}
+
+function validatePluginOnboardingStep(
+  step: KinloomOnboardingStep,
+  pluginId: string,
+  seenStepOwners: Map<string, string>
+): CompiledKinloomOnboardingStep {
+  const parsed = KinloomOnboardingStepSchema.safeParse({
+    id: step.id,
+    title: step.title,
+    description: step.description,
+    ...(step.minRole !== undefined ? { minRole: step.minRole } : {}),
+    ...(step.roles !== undefined ? { roles: [...step.roles] } : {}),
+    ...(step.order !== undefined ? { order: step.order } : {}),
+    ...(step.targetRoute !== undefined ? { targetRoute: step.targetRoute } : {}),
+    ...(step.tutorialChapterId !== undefined ? { tutorialChapterId: step.tutorialChapterId } : {}),
+  });
+
+  if (!parsed.success) {
+    const issue = parsed.error.issues[0];
+    const pathLabel = issue?.path?.length ? issue.path.join('.') : 'step';
+    throw new RangeError(
+      `UI plugin '${pluginId}' onboarding step '${String(step.id ?? '')}' has invalid ${pathLabel}: ${issue?.message ?? 'invalid schema'}.`
+    );
+  }
+
+  const normalizedId = parsed.data.id;
+  if (normalizedId.toLowerCase().startsWith('core:')) {
+    throw new RangeError(
+      `UI plugin '${pluginId}' onboarding step '${normalizedId}' cannot use reserved 'core:' prefix.`
+    );
+  }
+
+  const existingOwner = seenStepOwners.get(normalizedId);
+  if (existingOwner) {
+    throw new RangeError(
+      `Duplicate UI plugin onboarding step id '${normalizedId}' in plugin '${pluginId}' (already registered by plugin '${existingOwner}').`
+    );
+  }
+
+  if (step.action !== undefined) {
+    const action = step.action;
+    if (typeof action.label !== 'string' || action.label.trim().length === 0) {
+      throw new RangeError(
+        `UI plugin '${pluginId}' onboarding step '${normalizedId}' action.label must be a non-empty string.`
+      );
+    }
+    if (action.kind === 'route') {
+      if (typeof action.to !== 'string' || !isSafeInternalRoute(action.to)) {
+        throw new RangeError(
+          `UI plugin '${pluginId}' onboarding step '${normalizedId}' action.to '${String(action.to)}' must be a safe internal route starting with '/'.`
+        );
+      }
+    } else if (action.kind === 'tutorial') {
+      if (typeof action.chapterId !== 'string' || action.chapterId.trim().length === 0) {
+        throw new RangeError(
+          `UI plugin '${pluginId}' onboarding step '${normalizedId}' action.chapterId must be a non-empty string.`
+        );
+      }
+    } else if (action.kind === 'callback') {
+      if (typeof action.onActivate !== 'function') {
+        throw new RangeError(
+          `UI plugin '${pluginId}' onboarding step '${normalizedId}' action.onActivate must be a function.`
+        );
+      }
+    } else {
+      throw new RangeError(
+        `UI plugin '${pluginId}' onboarding step '${normalizedId}' has unsupported action kind.`
+      );
+    }
+  }
+
+  seenStepOwners.set(normalizedId, pluginId);
+
+  return {
+    ...step,
+    id: normalizedId,
+    title: parsed.data.title,
+    description: parsed.data.description,
+    ...(parsed.data.targetRoute !== undefined ? { targetRoute: parsed.data.targetRoute } : {}),
+    ...(parsed.data.tutorialChapterId !== undefined
+      ? { tutorialChapterId: parsed.data.tutorialChapterId }
+      : {}),
+    pluginId,
+  };
+}
+
 /**
- * Validate UI plugin IDs, route paths, and entity form overrides at provider startup.
- * Throws RangeError on empty/duplicate IDs, reserved or duplicate routes, or duplicate form overrides.
+ * Fault-isolated resolver for dynamic `plugin.getOnboardingSteps(ctx)` hooks.
+ * Invalid, spoofed (`core:*`), duplicate, or throwing plugin hooks are ignored safely.
+ */
+export function resolveDynamicPluginOnboardingSteps(
+  plugins: readonly KinloomUiPlugin[],
+  staticStepIds: ReadonlySet<string>,
+  ctx: KinloomOnboardingContext
+): readonly CompiledKinloomOnboardingStep[] {
+  const seenStepOwners = new Map<string, string>();
+  for (const id of staticStepIds) {
+    seenStepOwners.set(id, 'static');
+  }
+  const resolved: CompiledKinloomOnboardingStep[] = [];
+
+  for (const plugin of plugins) {
+    if (typeof plugin.getOnboardingSteps !== 'function') {
+      continue;
+    }
+    let rawSteps: readonly KinloomOnboardingStep[];
+    try {
+      const result = plugin.getOnboardingSteps(ctx);
+      if (!Array.isArray(result)) {
+        continue;
+      }
+      rawSteps = result;
+    } catch {
+      continue;
+    }
+
+    for (const rawStep of rawSteps) {
+      if (!rawStep || typeof rawStep !== 'object') {
+        continue;
+      }
+      try {
+        resolved.push(validatePluginOnboardingStep(rawStep, plugin.id.trim(), seenStepOwners));
+      } catch {
+        // Ignore malformed or colliding dynamic plugin steps rather than crashing the shell.
+      }
+    }
+  }
+
+  return resolved.toSorted(compareCompiledOnboardingSteps);
+}
+
+/**
+ * Validate UI plugin IDs, route paths, entity form overrides, and static onboarding steps at provider startup.
+ * Throws RangeError on empty/duplicate IDs, reserved or duplicate routes, conflicting form overrides, or invalid onboarding steps.
  */
 export function validateAndCompileUiPlugins(plugins: readonly KinloomUiPlugin[]): CompiledKinloomUiPlugins {
   const seenPluginIds = new Set<string>();
   const seenRouteOwners = new Map<string, { pluginId: string; path: string }>();
+  const seenStepOwners = new Map<string, string>();
   const editFormOwners = new Map<EntityType, string>();
   const createFormOwners = new Map<EntityType, string>();
 
@@ -69,6 +232,7 @@ export function validateAndCompileUiPlugins(plugins: readonly KinloomUiPlugin[])
   const mediaRenderers: KinloomMediaRenderer[] = [];
   const entityEditForms: Partial<Record<EntityType, EntityEditFormEntry>> = {};
   const entityCreateForms: Partial<Record<EntityType, EntityCreateFormEntry>> = {};
+  const onboardingSteps: CompiledKinloomOnboardingStep[] = [];
 
   for (const plugin of plugins) {
     const pluginId = plugin.id.trim();
@@ -160,7 +324,20 @@ export function validateAndCompileUiPlugins(plugins: readonly KinloomUiPlugin[])
         entityCreateForms[entityType] = entry;
       }
     }
+
+    if (plugin.onboardingSteps) {
+      for (const step of plugin.onboardingSteps) {
+        onboardingSteps.push(validatePluginOnboardingStep(step, pluginId, seenStepOwners));
+      }
+    }
   }
 
-  return { plugins, routes, mediaRenderers, entityEditForms, entityCreateForms };
+  return {
+    plugins,
+    routes,
+    mediaRenderers,
+    entityEditForms,
+    entityCreateForms,
+    onboardingSteps: onboardingSteps.toSorted(compareCompiledOnboardingSteps),
+  };
 }

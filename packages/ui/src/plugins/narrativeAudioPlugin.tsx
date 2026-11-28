@@ -12,7 +12,12 @@ import {
   resolveNarrativeAudioLabels,
 } from './narrativeAudio/audioContext.js';
 import { NarrativeAudioDock, NarrativeAudioMarginBar } from './narrativeAudio/NarrativeAudioPlayers.js';
-import type { KinloomUiPlugin, KinloomUiPluginSlotContext } from './types.js';
+import type {
+  KinloomOnboardingContext,
+  KinloomOnboardingStep,
+  KinloomUiPlugin,
+  KinloomUiPluginSlotContext,
+} from './types.js';
 
 export type {
   ActiveNarrativeAudioTrack,
@@ -121,6 +126,37 @@ const NARRATIVE_AUDIO_DOCS = {
   ],
 } as const;
 
+function findFirstNarratedPublicPerson(ctx: KinloomOnboardingContext): Person | null {
+  const bundle = ctx.bundle;
+  if (!bundle) {
+    return null;
+  }
+  const peopleById = new Map(bundle.people.map((person) => [person.id, person]));
+  const narratedPersonIds = new Set<string>();
+  for (const narrative of bundle.narratives ?? []) {
+    if (readNarrativeAudioMeta(narrative) === null) {
+      continue;
+    }
+    if (narrative.subject_person_id) {
+      narratedPersonIds.add(narrative.subject_person_id);
+    }
+    for (const personId of narrative.person_ids) {
+      narratedPersonIds.add(personId);
+    }
+  }
+  const candidates: Person[] = [];
+  for (const personId of narratedPersonIds) {
+    const person = peopleById.get(personId);
+    if (person && !isLivingPerson(person)) {
+      candidates.push(person);
+    }
+  }
+  if (candidates.length === 0) {
+    return null;
+  }
+  return candidates.toSorted((a, b) => a.full_name.localeCompare(b.full_name))[0] ?? null;
+}
+
 export function createNarrativeAudioPlugin(options: NarrativeAudioPluginOptions = {}): KinloomUiPlugin {
   const id = options.id ?? 'kinloom-narrative-audio';
   const defaultStoryVoice = options.defaultStoryVoice ?? 'Charon';
@@ -171,6 +207,26 @@ export function createNarrativeAudioPlugin(options: NarrativeAudioPluginOptions 
     slots: {
       narrativeHeader: renderNarrativeHeader,
       appShell: () => <NarrativeAudioDock />,
+    },
+    getOnboardingSteps(ctx: KinloomOnboardingContext): readonly KinloomOnboardingStep[] {
+      const targetPerson = findFirstNarratedPublicPerson(ctx);
+      if (!targetPerson) {
+        return [];
+      }
+      return [
+        {
+          id: `${id}:listen-biography`,
+          title: 'Listen to a narrated story',
+          description: `Open ${targetPerson.full_name}'s dossier and play a spoken family biography while you browse.`,
+          roles: ['viewer', 'editor'],
+          order: 180,
+          action: {
+            kind: 'route',
+            to: `/person/${targetPerson.slug}`,
+            label: `Listen on ${targetPerson.full_name}`,
+          },
+        },
+      ];
     },
   };
 }

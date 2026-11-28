@@ -21,6 +21,7 @@ import type { ChangelogEntry } from './schemas/changelogs.js';
 import type { KinloomSiteConfig } from './schemas/config.js';
 import type { PluginRuntimeStatus, PluginStatusProbeResult } from './schemas/diagnostics.js';
 import type { ArchiveBundle, Pronunciation } from './schemas/entities.js';
+import type { UpdateOnboardingStateRequest, UserOnboardingState } from './schemas/onboarding.js';
 import type {
   AppliedPluginMigrationRecord,
   PluginDatabaseFactory,
@@ -417,6 +418,23 @@ export interface PronunciationLexiconStore {
   delete(term: string): Promise<void>;
 }
 
+export interface StoredUserOnboardingRecord {
+  readonly email: string;
+  readonly state: UserOnboardingState;
+  readonly first_login_pending: boolean;
+}
+
+export interface UserOnboardingStore {
+  readonly adapterKind?: string;
+  get(email: string): Promise<StoredUserOnboardingRecord | null>;
+  markFirstLoginIfUnset(email: string, nowIso: string): Promise<StoredUserOnboardingRecord>;
+  patch(
+    email: string,
+    mutation: UpdateOnboardingStateRequest,
+    nowIso: string
+  ): Promise<StoredUserOnboardingRecord>;
+}
+
 export interface KinloomServerPorts {
   repository: ArchiveRepository;
   bundleCache: BundleCache;
@@ -430,6 +448,7 @@ export interface KinloomServerPorts {
   pronunciationLexiconStore?: PronunciationLexiconStore;
   pluginSettingsStore?: PluginSettingsStore;
   pluginDatabaseFactory?: PluginDatabaseFactory;
+  userOnboardingStore?: UserOnboardingStore;
   plugins?: readonly KinloomServerPlugin[];
 }
 

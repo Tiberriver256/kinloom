@@ -9,11 +9,13 @@ import {
 } from '@kinloom/core';
 import type React from 'react';
 import { useCallback, useMemo, useState } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import statusShellStyles from '../components/ArchiveStatusShell.module.css';
+import { EmptyStateNotice } from '../components/Atoms.js';
 import canvasSurfaceStyles from '../components/CanvasSurfacePrimitives.module.css';
 import { ExplorerTopBar } from '../components/ExplorerTopBar.js';
 import { useArchiveData } from '../context/ArchiveDataContext.js';
+import { useOptionalOnboarding } from '../context/OnboardingContext.js';
 import { useThemePreference } from '../hooks/useThemePreference.js';
 import { cx, joinClasses } from '../lib/cx.js';
 import { getResolvedThemeColorTokens } from '../lib/tokens.js';
@@ -27,7 +29,9 @@ import { buildFamilyOverlay, computeDefaultMapBounds } from './map/mapOverlayDat
 import { useMigrationMapController } from './map/useMigrationMapController.js';
 
 export const MapPage: React.FC = () => {
-  const { siteConfig, bundle, peopleById, placesById, placesBySlug, loading, error } = useArchiveData();
+  const { siteConfig, bundle, peopleById, placesById, placesBySlug, capabilities, loading, error } =
+    useArchiveData();
+  const onboarding = useOptionalOnboarding();
   const { isDark } = useThemePreference();
   const [searchParams] = useSearchParams();
 
@@ -125,11 +129,17 @@ export const MapPage: React.FC = () => {
   const stopIds = useMemo(() => stops.map((stop) => stop.id), [stops]);
   const journey: MapJourneyState = { stepIndex, playing, selectedStopId };
 
-  const applyJourney = useCallback((next: MapJourneyState) => {
-    setStepIndex(next.stepIndex);
-    setPlaying(next.playing);
-    setSelectedStopId(next.selectedStopId);
-  }, []);
+  const applyJourney = useCallback(
+    (next: MapJourneyState) => {
+      setStepIndex(next.stepIndex);
+      setPlaying(next.playing);
+      setSelectedStopId(next.selectedStopId);
+      if (next.playing || next.stepIndex >= 0 || next.selectedStopId !== null) {
+        onboarding?.recordSignal('map_or_time_interact');
+      }
+    },
+    [onboarding]
+  );
 
   const overlay = useMemo(
     () =>
@@ -239,6 +249,40 @@ export const MapPage: React.FC = () => {
         />
         {controller.historicalMap.kind === 'failed' && (
           <output className={cx(mapStyles, 'map-style-note')}>Showing offline paper basemap.</output>
+        )}
+
+        {allStopsForPerson.length === 0 && selectedPersonId === 'all' && (
+          <div className={cx(mapStyles, 'map-empty-canvas-overlay')}>
+            <EmptyStateNotice
+              eyebrow="Migration Map"
+              title="No mapped locations yet"
+              body="Places with coordinates linked to dated events generate migration routes automatically."
+              action={
+                capabilities.canEdit ? (
+                  <Link to="/places" className={cx(controlStyles, 'pill-btn active')}>
+                    Add a place or event
+                  </Link>
+                ) : (
+                  <Link to="/" className={cx(controlStyles, 'pill-btn active')}>
+                    Browse People
+                  </Link>
+                )
+              }
+              secondaryAction={
+                onboarding ? (
+                  <button
+                    type="button"
+                    className={cx(controlStyles, 'pill-btn')}
+                    onClick={() => {
+                      onboarding.openGuide('core-map-timeline');
+                    }}
+                  >
+                    Open Map guide
+                  </button>
+                ) : undefined
+              }
+            />
+          </div>
         )}
 
         <MapToolbar

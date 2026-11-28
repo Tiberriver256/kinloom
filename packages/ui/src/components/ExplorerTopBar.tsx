@@ -1,7 +1,8 @@
 import React, { useEffect, useId, useRef, useState } from 'react';
-import { Link, useLocation } from 'react-router-dom';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useArchiveData } from '../context/ArchiveDataContext.js';
 import { useArchiveUi } from '../context/ArchiveUiContext.js';
+import { useOptionalOnboarding } from '../context/OnboardingContext.js';
 import { useThemePreference } from '../hooks/useThemePreference.js';
 import { cx, joinClasses } from '../lib/cx.js';
 import { isPluginNavRouteActive, selectVisiblePluginNavRoutes } from '../lib/pluginNav.js';
@@ -19,18 +20,25 @@ export const ExplorerTopBar: React.FC = () => {
   const authActorRef = AuthSessionActorContext.useActorRef();
   const signingOut = AuthSessionActorContext.useSelector((state) => state.matches('signingOut'));
   const { activeYear, pivotTrail, openSourceReader, openSearch } = useArchiveUi();
+  const onboarding = useOptionalOnboarding();
   const { preference, systemTheme, isDark, setPreference, toggleQuickTheme } = useThemePreference();
   const { routes: pluginRoutes } = useKinloomPlugins();
   const location = useLocation();
+  const navigate = useNavigate();
   const navPluginRoutes = selectVisiblePluginNavRoutes(pluginRoutes, session, capabilities);
 
   const disclosureMenuId = useId();
+  const guideMenuId = useId();
   const [accountOpen, setAccountOpen] = useState(false);
+  const [guideOpen, setGuideOpen] = useState(false);
   const [signInOpen, setSignInOpen] = useState(false);
   const headerRef = useRef<HTMLElement | null>(null);
   const accountMenuRef = useRef<HTMLDivElement | null>(null);
   const accountTriggerRef = useRef<HTMLButtonElement | null>(null);
   const accountDropdownRef = useRef<HTMLElement | null>(null);
+  const guideMenuRef = useRef<HTMLDivElement | null>(null);
+  const guideTriggerRef = useRef<HTMLButtonElement | null>(null);
+  const guideDropdownRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
     const headerEl = headerRef.current;
@@ -75,7 +83,44 @@ export const ExplorerTopBar: React.FC = () => {
   // biome-ignore lint/correctness/useExhaustiveDependencies: close menus when route pathname changes
   useEffect(() => {
     setAccountOpen(false);
+    setGuideOpen(false);
   }, [location.pathname]);
+
+  useEffect(() => {
+    if (!guideOpen) {
+      return undefined;
+    }
+    const items = [
+      ...(guideDropdownRef.current?.querySelectorAll<HTMLElement>('[role="menuitem"]:not([disabled])') ?? []),
+    ];
+    items[0]?.focus();
+    const onPointerDown = (event: PointerEvent): void => {
+      if (guideMenuRef.current && !guideMenuRef.current.contains(event.target as Node)) {
+        setGuideOpen(false);
+      }
+    };
+    const onKeyDown = (event: KeyboardEvent): void => {
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        setGuideOpen(false);
+        guideTriggerRef.current?.focus();
+        return;
+      }
+      if ((event.key === 'ArrowDown' || event.key === 'ArrowUp') && items.length > 0) {
+        event.preventDefault();
+        const activeIdx = items.indexOf(document.activeElement as HTMLElement);
+        const delta = event.key === 'ArrowDown' ? 1 : -1;
+        const nextIdx = activeIdx === -1 ? 0 : (activeIdx + delta + items.length) % items.length;
+        items[nextIdx]?.focus();
+      }
+    };
+    document.addEventListener('pointerdown', onPointerDown);
+    document.addEventListener('keydown', onKeyDown);
+    return (): void => {
+      document.removeEventListener('pointerdown', onPointerDown);
+      document.removeEventListener('keydown', onKeyDown);
+    };
+  }, [guideOpen]);
 
   useEffect(() => {
     if (!accountOpen) {
@@ -107,7 +152,43 @@ export const ExplorerTopBar: React.FC = () => {
 
   const handleOpenSources = (): void => {
     setAccountOpen(false);
+    setGuideOpen(false);
     openSourceReader({ sourceId: featuredDocumentId ?? '' });
+  };
+
+  const handleOpenChecklist = (): void => {
+    setAccountOpen(false);
+    setGuideOpen(false);
+    if (!onboarding) {
+      return;
+    }
+    onboarding.reopenChecklist();
+    const targetPath = onboarding.role === 'admin' ? '/admin' : '/';
+    if (location.pathname !== targetPath) {
+      navigate(targetPath);
+    }
+    window.setTimeout(() => {
+      const el = document.getElementById('onboarding-checklist');
+      el?.focus({ preventScroll: false });
+    }, 0);
+  };
+
+  const handleOpenGuideDialog = (): void => {
+    setAccountOpen(false);
+    setGuideOpen(false);
+    onboarding?.openGuide();
+  };
+
+  const handleOpenShortcuts = (): void => {
+    setAccountOpen(false);
+    setGuideOpen(false);
+    onboarding?.openShortcutsDialog();
+  };
+
+  const handleResetOnboarding = (): void => {
+    setAccountOpen(false);
+    setGuideOpen(false);
+    onboarding?.resetProgress();
   };
 
   const handleLogout = (): void => {
@@ -511,6 +592,51 @@ export const ExplorerTopBar: React.FC = () => {
 
                   <PluginSlot name="topBarMobileMenu" as="fragment" />
 
+                  {onboarding && (
+                    <li
+                      className={cx(topBarStyles, 'topbar-account-item-mobile-only topbar-mobile-guide-li')}
+                    >
+                      <div className={cx(wikiChromeStyles, 'topbar-account-divider')} role="separator" />
+                      <div
+                        className={cx(wikiChromeStyles, 'topbar-theme-group')}
+                        role="group"
+                        aria-label="Guide and help"
+                      >
+                        <div className={cx(wikiChromeStyles, 'topbar-theme-group-label')} aria-hidden="true">
+                          Guide &amp; Help
+                        </div>
+                        <button
+                          type="button"
+                          className={cx(wikiChromeStyles, 'topbar-account-item')}
+                          onClick={handleOpenGuideDialog}
+                        >
+                          {onboarding.hasTutorialLauncher ? 'Interactive Tutorials' : 'Quick Archive Guide'}
+                        </button>
+                        <button
+                          type="button"
+                          className={cx(wikiChromeStyles, 'topbar-account-item')}
+                          onClick={handleOpenChecklist}
+                        >
+                          Getting Started Checklist
+                        </button>
+                        <button
+                          type="button"
+                          className={cx(wikiChromeStyles, 'topbar-account-item')}
+                          onClick={handleOpenShortcuts}
+                        >
+                          Keyboard Shortcuts
+                        </button>
+                        <button
+                          type="button"
+                          className={cx(wikiChromeStyles, 'topbar-account-item')}
+                          onClick={handleResetOnboarding}
+                        >
+                          Reset Onboarding Progress
+                        </button>
+                      </div>
+                    </li>
+                  )}
+
                   {isSignedInMember && capabilities.hasRevisionHistory && (
                     <li>
                       <Link
@@ -609,6 +735,84 @@ export const ExplorerTopBar: React.FC = () => {
               </nav>
             )}
           </div>
+
+          {onboarding && (
+            <div
+              className={joinClasses(
+                cx(wikiChromeStyles, 'topbar-account'),
+                cx(topBarStyles, 'nav-pill-desktop-only')
+              )}
+              ref={guideMenuRef}
+            >
+              <button
+                ref={guideTriggerRef}
+                type="button"
+                className={cx(topBarStyles, `nav-pill nav-guide-btn ${guideOpen ? 'active' : ''}`)}
+                aria-haspopup="menu"
+                aria-expanded={guideOpen}
+                aria-controls={guideMenuId}
+                onClick={() => {
+                  setAccountOpen(false);
+                  setGuideOpen((open) => !open);
+                }}
+              >
+                <span>Guide</span>
+              </button>
+              {guideOpen && (
+                <div
+                  id={guideMenuId}
+                  ref={guideDropdownRef}
+                  role="menu"
+                  aria-label="Guide and help"
+                  className={joinClasses(
+                    cx(wikiChromeStyles, 'topbar-account-menu'),
+                    cx(topBarStyles, 'topbar-disclosure-panel')
+                  )}
+                >
+                  <button
+                    type="button"
+                    role="menuitem"
+                    className={cx(wikiChromeStyles, 'topbar-account-item')}
+                    onClick={handleOpenGuideDialog}
+                  >
+                    <span>
+                      {onboarding.hasTutorialLauncher ? 'Interactive Tutorials' : 'Quick Archive Guide'}
+                    </span>
+                    {onboarding.state.completed_chapter_ids.length > 0 && (
+                      <span className={cx(topBarStyles, 'topbar-guide-badge')}>
+                        {onboarding.state.completed_chapter_ids.length}
+                      </span>
+                    )}
+                  </button>
+                  <button
+                    type="button"
+                    role="menuitem"
+                    className={cx(wikiChromeStyles, 'topbar-account-item')}
+                    onClick={handleOpenChecklist}
+                  >
+                    Getting Started Checklist
+                  </button>
+                  <button
+                    type="button"
+                    role="menuitem"
+                    className={cx(wikiChromeStyles, 'topbar-account-item')}
+                    onClick={handleOpenShortcuts}
+                  >
+                    Keyboard Shortcuts
+                  </button>
+                  <div className={cx(wikiChromeStyles, 'topbar-account-divider')} role="separator" />
+                  <button
+                    type="button"
+                    role="menuitem"
+                    className={cx(wikiChromeStyles, 'topbar-account-item')}
+                    onClick={handleResetOnboarding}
+                  >
+                    Reset Onboarding Progress
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
         </div>
 
         {pivotTrail.length > 1 && location.pathname.startsWith('/person/') && (

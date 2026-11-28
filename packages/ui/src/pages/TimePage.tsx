@@ -11,11 +11,13 @@ import {
 import type React from 'react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
+import { EmptyStateNotice } from '../components/Atoms.js';
 import atomStyles from '../components/Atoms.module.css';
 import { EvidenceLegend } from '../components/EvidenceLegend.js';
 import { ExplorerTopBar } from '../components/ExplorerTopBar.js';
 import { KinloomFooter } from '../components/KinloomFooter.js';
 import { useArchiveData } from '../context/ArchiveDataContext.js';
+import { useOptionalOnboarding } from '../context/OnboardingContext.js';
 import { useDialogFocusTrap } from '../hooks/useDialogFocusTrap.js';
 import { cx, joinClasses } from '../lib/cx.js';
 import {
@@ -30,7 +32,9 @@ import { TimeChevronIcon as ChevronIcon, TimeLocalNote, TimePersonCard } from '.
 import scrubberStyles from './time/TimeScrubber.module.css';
 
 export const TimePage: React.FC = () => {
-  const { siteConfig, baseUrl, bundle, placesById, loading, error, reloadArchive } = useArchiveData();
+  const { siteConfig, baseUrl, bundle, placesById, capabilities, loading, error, reloadArchive } =
+    useArchiveData();
+  const onboarding = useOptionalOnboarding();
   const [searchParams] = useSearchParams();
   const [year, setYear] = useState<number | null>(null);
   const [yearSheetOpen, setYearSheetOpen] = useState(false);
@@ -310,6 +314,7 @@ export const TimePage: React.FC = () => {
                   value={activeYear}
                   onChange={(e) => {
                     setYear(Number(e.target.value));
+                    onboarding?.recordSignal('map_or_time_interact');
                   }}
                   className={cx(scrubberStyles, 'ink-range-slider')}
                   aria-label={`Select year to inspect ${siteConfig.site.familyName} locations`}
@@ -421,42 +426,78 @@ export const TimePage: React.FC = () => {
             )}
 
             {snapshot.lanes.length === 0 ? (
-              <section className={cx(timeStyles, 'time-empty-state')}>
-                <p>
-                  {KINLOOM_VOCABULARY.time.emptyStatePrefix} <strong>{activeYear}</strong>.
-                  {fallbackAnchorA !== undefined && (
-                    <>
-                      {' '}
-                      Try a milestone year (such as{' '}
-                      <button
-                        type="button"
-                        className={cx(atomStyles, 'ink-inline-btn')}
-                        onClick={() => {
-                          setYear(fallbackAnchorA);
-                        }}
-                      >
-                        {fallbackAnchorA}
-                      </button>
-                      {fallbackAnchorB !== undefined && (
-                        <>
-                          {' '}
-                          or{' '}
-                          <button
-                            type="button"
-                            className={cx(atomStyles, 'ink-inline-btn')}
-                            onClick={() => {
-                              setYear(fallbackAnchorB);
-                            }}
-                          >
-                            {fallbackAnchorB}
-                          </button>
-                        </>
-                      )}
-                      ).
-                    </>
-                  )}
-                </p>
-              </section>
+              bundle && bundle.events.length === 0 && suggestedYears.length === 0 ? (
+                <section className={cx(timeStyles, 'time-empty-state')}>
+                  <EmptyStateNotice
+                    eyebrow="Timeline"
+                    title="No dated milestones recorded yet"
+                    body="Dated births, residences, and census events populate town lanes across centuries."
+                    action={
+                      capabilities.canEdit ? (
+                        <Link to="/" className={cx(controlStyles, 'pill-btn active')}>
+                          Add a person or milestone
+                        </Link>
+                      ) : (
+                        <Link to="/" className={cx(controlStyles, 'pill-btn active')}>
+                          Browse People
+                        </Link>
+                      )
+                    }
+                    secondaryAction={
+                      onboarding ? (
+                        <button
+                          type="button"
+                          className={cx(controlStyles, 'pill-btn')}
+                          onClick={() => {
+                            onboarding.openGuide('core-map-timeline');
+                          }}
+                        >
+                          Watch Timeline tutorial
+                        </button>
+                      ) : undefined
+                    }
+                  />
+                </section>
+              ) : (
+                <section className={cx(timeStyles, 'time-empty-state')}>
+                  <EmptyStateNotice
+                    title={`${KINLOOM_VOCABULARY.time.emptyStatePrefix} ${activeYear}.`}
+                    body={
+                      fallbackAnchorA !== undefined
+                        ? 'Select a documented milestone year below to inspect where relatives lived.'
+                        : 'Move the year scrubber above to inspect another decade in the archive.'
+                    }
+                    action={
+                      fallbackAnchorA !== undefined ? (
+                        <button
+                          type="button"
+                          className={cx(atomStyles, 'ink-inline-btn')}
+                          onClick={() => {
+                            setYear(fallbackAnchorA);
+                            onboarding?.recordSignal('map_or_time_interact');
+                          }}
+                        >
+                          {fallbackAnchorA}
+                        </button>
+                      ) : undefined
+                    }
+                    secondaryAction={
+                      fallbackAnchorB !== undefined ? (
+                        <button
+                          type="button"
+                          className={cx(atomStyles, 'ink-inline-btn')}
+                          onClick={() => {
+                            setYear(fallbackAnchorB);
+                            onboarding?.recordSignal('map_or_time_interact');
+                          }}
+                        >
+                          {fallbackAnchorB}
+                        </button>
+                      ) : undefined
+                    }
+                  />
+                </section>
+              )
             ) : (
               <section
                 className={cx(timeStyles, 'time-lanes')}

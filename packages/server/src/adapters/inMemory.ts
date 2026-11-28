@@ -12,6 +12,7 @@ import {
   InMemoryMediaStore,
   InMemoryPluginSettingsStore,
   InMemoryPronunciationLexiconStore,
+  InMemoryUserOnboardingStore,
 } from './inMemory/bundleAndMediaStores.js';
 import { InMemoryEntityAndMutationStore } from './inMemory/entityAndMutationStore.js';
 import { FixedClock } from './systemClock.js';
@@ -28,6 +29,7 @@ export {
   InMemoryMediaStore,
   InMemoryPluginSettingsStore,
   InMemoryPronunciationLexiconStore,
+  InMemoryUserOnboardingStore,
 } from './inMemory/bundleAndMediaStores.js';
 
 export interface InMemoryArchiveRepositoryOptions {
@@ -88,6 +90,7 @@ export interface InMemoryServerPortsBundle extends KinloomServerPorts {
   clock: FixedClock;
   pronunciationLexiconStore: InMemoryPronunciationLexiconStore;
   pluginSettingsStore: InMemoryPluginSettingsStore;
+  userOnboardingStore: InMemoryUserOnboardingStore;
 }
 
 export function createInMemoryServerPorts(
@@ -102,6 +105,7 @@ export function createInMemoryServerPorts(
   const authProvider = new FakeAuthProvider();
   const pronunciationLexiconStore = new InMemoryPronunciationLexiconStore();
   const pluginSettingsStore = new InMemoryPluginSettingsStore();
+  const userOnboardingStore = new InMemoryUserOnboardingStore();
 
   return {
     repository,
@@ -112,5 +116,6 @@ export function createInMemoryServerPorts(
     clock,
     pronunciationLexiconStore,
     pluginSettingsStore,
+    userOnboardingStore,
   };
 }

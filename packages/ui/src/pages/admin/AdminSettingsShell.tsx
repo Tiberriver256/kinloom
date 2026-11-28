@@ -71,22 +71,26 @@ export const AdminSettingsShell: React.FC<AdminSettingsShellProps> = ({
   extraPanels,
 }) => (
   <div data-testid="admin-settings-shell">
-    <SystemDiagnosticsSection
-      report={diagnostics}
-      loading={diagnosticsLoading}
-      error={diagnosticsError}
-      supported={diagnosticsSupported}
-      onRefresh={onRefreshDiagnostics}
-    />
-    {pluginSettingsSupported && onRefreshPluginSettings && onUpdatePluginSettings && (
-      <PluginSettingsSection
-        plugins={pluginSettings}
-        loading={pluginSettingsLoading}
-        error={pluginSettingsError}
-        supported={pluginSettingsSupported}
-        onRefresh={onRefreshPluginSettings}
-        onUpdatePlugin={onUpdatePluginSettings}
+    <div id="diagnostics">
+      <SystemDiagnosticsSection
+        report={diagnostics}
+        loading={diagnosticsLoading}
+        error={diagnosticsError}
+        supported={diagnosticsSupported}
+        onRefresh={onRefreshDiagnostics}
       />
+    </div>
+    {pluginSettingsSupported && onRefreshPluginSettings && onUpdatePluginSettings && (
+      <div id="plugin-settings">
+        <PluginSettingsSection
+          plugins={pluginSettings}
+          loading={pluginSettingsLoading}
+          error={pluginSettingsError}
+          supported={pluginSettingsSupported}
+          onRefresh={onRefreshPluginSettings}
+          onUpdatePlugin={onUpdatePluginSettings}
+        />
+      </div>
     )}
     <AdminDocsSection
       docs={docs}

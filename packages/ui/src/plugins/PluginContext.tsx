@@ -26,9 +26,19 @@ import type {
   KinloomUiPluginSlotContext,
   KinloomUiPluginSlotName,
 } from './types.js';
-import { RESERVED_UI_ROUTE_PATHS, validateAndCompileUiPlugins } from './validatePlugins.js';
+import {
+  type CompiledKinloomOnboardingStep,
+  RESERVED_UI_ROUTE_PATHS,
+  resolveDynamicPluginOnboardingSteps,
+  validateAndCompileUiPlugins,
+} from './validatePlugins.js';
 
-export { RESERVED_UI_ROUTE_PATHS, validateAndCompileUiPlugins };
+export {
+  type CompiledKinloomOnboardingStep,
+  RESERVED_UI_ROUTE_PATHS,
+  resolveDynamicPluginOnboardingSteps,
+  validateAndCompileUiPlugins,
+};
 
 export interface PluginSettingsSyncEvent {
   readonly pluginId: string;
@@ -44,6 +54,7 @@ export interface KinloomPluginContextValue {
   readonly mediaRenderers: readonly KinloomMediaRenderer[];
   readonly entityEditForms: Readonly<Partial<Record<EntityType, EntityEditFormEntry>>>;
   readonly entityCreateForms: Readonly<Partial<Record<EntityType, EntityCreateFormEntry>>>;
+  readonly onboardingSteps: readonly CompiledKinloomOnboardingStep[];
   readonly apiClient: PluginApiClient;
   readonly subscribePluginSettings: (pluginId: string | '*', listener: PluginSettingsListener) => () => void;
   readonly notifyPluginSettingsUpdated: (event: PluginSettingsSyncEvent) => void;
@@ -75,6 +86,7 @@ const KinloomPluginContext = createContext<KinloomPluginContextValue>({
   mediaRenderers: [],
   entityEditForms: EMPTY_EDIT_FORMS,
   entityCreateForms: EMPTY_CREATE_FORMS,
+  onboardingSteps: [],
   apiClient: DEFAULT_PLUGIN_API_CLIENT,
   subscribePluginSettings: NOOP_SUBSCRIBE,
   notifyPluginSettingsUpdated: NOOP_NOTIFY,

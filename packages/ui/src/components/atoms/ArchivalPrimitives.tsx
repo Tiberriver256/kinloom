@@ -9,12 +9,21 @@ import { PersonPortrait } from './PersonPortrait.js';
 export const EmptyStateNotice: React.FC<{
   title: string;
   body?: string;
+  eyebrow?: string;
+  role?: 'status' | 'note';
   action?: React.ReactNode;
-}> = ({ title, body, action }) => (
-  <div className={cx(controlStyles, 'empty-state-notice')} role="status">
+  secondaryAction?: React.ReactNode;
+}> = ({ title, body, eyebrow, role = 'status', action, secondaryAction }) => (
+  <div className={cx(controlStyles, 'empty-state-notice')} role={role}>
+    {eyebrow && <div className={cx(controlStyles, 'empty-state-notice-eyebrow')}>{eyebrow}</div>}
     <p className={cx(controlStyles, 'empty-state-notice-title')}>{title}</p>
     {body && <p className={cx(controlStyles, 'empty-state-notice-body')}>{body}</p>}
-    {action && <div className={cx(controlStyles, 'empty-state-notice-action')}>{action}</div>}
+    {(action || secondaryAction) && (
+      <div className={cx(controlStyles, 'empty-state-notice-action')}>
+        {action}
+        {secondaryAction}
+      </div>
+    )}
   </div>
 );
 

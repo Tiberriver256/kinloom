@@ -8,8 +8,10 @@ import atomStyles from '../components/Atoms.module.css';
 import { DirectoryJumpStrip } from '../components/atoms/DirectoryJumpStrip.js';
 import { ExplorerTopBar } from '../components/ExplorerTopBar.js';
 import { KinloomFooter } from '../components/KinloomFooter.js';
+import { OnboardingChecklistCard } from '../components/OnboardingChecklistCard.js';
 import wikiChromeStyles from '../components/wiki/WikiChrome.module.css';
 import { useArchiveData } from '../context/ArchiveDataContext.js';
+import { useOptionalOnboarding } from '../context/OnboardingContext.js';
 import { cx, joinClasses } from '../lib/cx.js';
 import type { PeopleDirectoryView, ResolvedArchiveFrontispiece } from '../lib/peopleDirectoryModel.js';
 import {
@@ -202,6 +204,7 @@ export const IndexPage: React.FC = () => {
     error,
     reloadArchive,
   } = useArchiveData();
+  const onboarding = useOptionalOnboarding();
   const [searchParams, setSearchParams] = useSearchParams();
   const [onlyWithPhotos, setOnlyWithPhotos] = useState<boolean>(false);
   const [query, setQuery] = useState<string>('');
@@ -351,6 +354,7 @@ export const IndexPage: React.FC = () => {
 
         <PluginSlot name="indexHero" />
         <PluginSlot name="indexWidgets" />
+        <OnboardingChecklistCard surface="index" />
 
         {loading && <p>Loading family archive…</p>}
         {error && (
@@ -505,24 +509,79 @@ export const IndexPage: React.FC = () => {
             )}
 
             {!hasVisibleResults ? (
-              <EmptyStateNotice
-                title={
-                  bundle.people.length === 0
-                    ? 'No people have been added to this archive yet.'
-                    : 'No people match the active filters.'
-                }
-                action={
-                  hasActiveFilters ? (
-                    <button
-                      type="button"
-                      className={cx(controlStyles, 'pill-btn')}
-                      onClick={handleClearFilters}
-                    >
-                      Clear filters
-                    </button>
-                  ) : undefined
-                }
-              />
+              bundle.people.length === 0 ? (
+                <EmptyStateNotice
+                  eyebrow={capabilities.canEdit ? 'Archive Setup' : 'Archive Preview'}
+                  title={
+                    capabilities.canEdit ? 'Start your family archive' : 'This archive is being prepared'
+                  }
+                  body="No people have been added to this archive yet. People cards link biographies, places, primary citations, and archival scans."
+                  action={
+                    capabilities.canEdit ? (
+                      <button
+                        type="button"
+                        className={cx(wikiChromeStyles, 'wiki-btn-secondary wiki-btn-sm')}
+                        onClick={() => {
+                          setCreateOpen(true);
+                        }}
+                      >
+                        + Add first person
+                      </button>
+                    ) : onboarding ? (
+                      <button
+                        type="button"
+                        className={cx(controlStyles, 'pill-btn')}
+                        onClick={() => {
+                          onboarding.openGuide('core-getting-started');
+                        }}
+                      >
+                        Open Quick Guide
+                      </button>
+                    ) : undefined
+                  }
+                  secondaryAction={
+                    capabilities.canManageSite ? (
+                      <Link to="/admin" className={cx(controlStyles, 'pill-btn')}>
+                        Open Admin setup
+                      </Link>
+                    ) : capabilities.canEdit && onboarding ? (
+                      <button
+                        type="button"
+                        className={cx(controlStyles, 'pill-btn')}
+                        onClick={() => {
+                          onboarding.openGuide('core-getting-started');
+                        }}
+                      >
+                        Open Quick Guide
+                      </button>
+                    ) : undefined
+                  }
+                />
+              ) : (
+                <EmptyStateNotice
+                  title="No people match the active filters."
+                  body={
+                    hasActiveQuery && onlyWithPhotos
+                      ? `No relatives with photos matched "${query.trim()}".`
+                      : hasActiveQuery
+                        ? `No relatives matched "${query.trim()}".`
+                        : onlyWithPhotos
+                          ? 'No relatives in this selection have attached photos yet.'
+                          : 'Try clearing the active branch filter to view all relatives.'
+                  }
+                  action={
+                    hasActiveFilters ? (
+                      <button
+                        type="button"
+                        className={cx(controlStyles, 'pill-btn')}
+                        onClick={handleClearFilters}
+                      >
+                        Clear filters
+                      </button>
+                    ) : undefined
+                  }
+                />
+              )
             ) : (
               <div className={cx(indexStyles, 'index-directory-shell')}>
                 {model.showJumpStrip && (

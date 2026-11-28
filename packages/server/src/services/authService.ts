@@ -4,17 +4,24 @@ import {
   type ArchiveCapabilities,
   type ArchiveSessionState,
   type AuthProvider,
+  applyOnboardingPatch,
   type CallerPrincipal,
   type Clock,
   canAutoEnrollViaInvite,
   canCompleteAdminAuth,
   canCompleteMemberEditorAuth,
+  createDefaultOnboardingSessionResponse,
+  createDefaultUserOnboardingState,
   type EmailSender,
   evaluateInviteStatus,
   type InviteRecord,
   isInviteActive,
   type KinloomSiteConfig,
+  type OnboardingSessionResponse,
   resolveCapabilities,
+  toOnboardingSessionResponse,
+  UpdateOnboardingStateRequestSchema,
+  type UserOnboardingStore,
   type UserRecord,
 } from '@kinloom/core';
 import { z } from 'zod';
@@ -33,6 +40,7 @@ export interface AuthServiceDeps {
   magicLinkTtlMinutes?: number;
   magicLinkMaxPerWindow?: number;
   magicLinkWindowMs?: number;
+  userOnboardingStore?: UserOnboardingStore;
 }
 
 const STRIPPED_NEXT_PARAMS = [
@@ -91,6 +99,7 @@ export class AuthService {
   private readonly magicLinkTtlMinutes: number;
   private readonly magicLinkMaxPerWindow: number;
   private readonly magicLinkWindowMs: number;
+  private readonly userOnboardingStore?: UserOnboardingStore;
 
   constructor(deps: AuthServiceDeps) {
     this.repository = deps.repository;
@@ -104,6 +113,7 @@ export class AuthService {
     this.magicLinkTtlMinutes = deps.magicLinkTtlMinutes ?? 15;
     this.magicLinkMaxPerWindow = deps.magicLinkMaxPerWindow ?? 10;
     this.magicLinkWindowMs = deps.magicLinkWindowMs ?? 60 * 60 * 1000;
+    this.userOnboardingStore = deps.userOnboardingStore;
   }
 
   private isGoogleAuthConfigured(): boolean {
@@ -384,6 +394,41 @@ export class AuthService {
     });
   }
 
+  async getOnboardingSession(principal: CallerPrincipal): Promise<OnboardingSessionResponse> {
+    if (principal.kind !== 'user') {
+      return createDefaultOnboardingSessionResponse();
+    }
+    if (!this.userOnboardingStore) {
+      return createDefaultOnboardingSessionResponse();
+    }
+    const stored = await this.userOnboardingStore.get(principal.email);
+    if (!stored) {
+      return createDefaultOnboardingSessionResponse();
+    }
+    return toOnboardingSessionResponse(stored);
+  }
+
+  async updateOnboardingSession(
+    principal: CallerPrincipal,
+    rawPatch: unknown
+  ): Promise<OnboardingSessionResponse> {
+    if (principal.kind !== 'user') {
+      throw new KinloomHttpError(401, 'AUTH_REQUIRED', 'Sign in to save onboarding progress.');
+    }
+    const parsedPatch = UpdateOnboardingStateRequestSchema.parse(rawPatch);
+    const nowIso = this.clock.nowIso();
+    if (!this.userOnboardingStore) {
+      const updated = applyOnboardingPatch(
+        { state: createDefaultUserOnboardingState(null), first_login_pending: false },
+        parsedPatch,
+        nowIso
+      );
+      return toOnboardingSessionResponse(updated);
+    }
+    const stored = await this.userOnboardingStore.patch(principal.email, parsedPatch, nowIso);
+    return toOnboardingSessionResponse(stored);
+  }
+
   private async resolveOrEnrollUser(params: {
     email: string;
     displayName: string;
@@ -395,7 +440,11 @@ export class AuthService {
 
     if (existing) {
       if (canCompleteAdminAuth(true, existing.role) || canCompleteMemberEditorAuth(true, existing.role)) {
+        const isFirstAuthenticatedLogin = existing.last_login_at === null;
         await this.repository.touchUserLogin(existing.email, nowIso);
+        if (isFirstAuthenticatedLogin && this.userOnboardingStore) {
+          await this.userOnboardingStore.markFirstLoginIfUnset(existing.email, nowIso);
+        }
         return {
           user: { ...existing, last_login_at: nowIso },
           autoEnrolled: false,
@@ -412,6 +461,9 @@ export class AuthService {
         added_at: nowIso,
         last_login_at: nowIso,
       });
+      if (this.userOnboardingStore) {
+        await this.userOnboardingStore.markFirstLoginIfUnset(bootstrapped.email, nowIso);
+      }
       return { user: bootstrapped, autoEnrolled: false };
     }
 
@@ -430,6 +482,9 @@ export class AuthService {
           added_at: nowIso,
           last_login_at: nowIso,
         });
+        if (this.userOnboardingStore) {
+          await this.userOnboardingStore.markFirstLoginIfUnset(enrolled.email, nowIso);
+        }
         return { user: enrolled, autoEnrolled: true };
       }
 

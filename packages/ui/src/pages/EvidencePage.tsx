@@ -34,8 +34,16 @@ import {
 } from './evidence/evidenceViewModel.js';
 
 export const EvidencePage: React.FC = () => {
-  const { bundle, baseUrl, peopleById, sourcesById, readableSourceIds, loadMediaChecklist, loading } =
-    useArchiveData();
+  const {
+    bundle,
+    baseUrl,
+    peopleById,
+    sourcesById,
+    readableSourceIds,
+    capabilities,
+    loadMediaChecklist,
+    loading,
+  } = useArchiveData();
   const { openSourceReader, openSourceInspector } = useArchiveUi();
   const [searchParams, setSearchParams] = useSearchParams();
 
@@ -272,6 +280,7 @@ export const EvidencePage: React.FC = () => {
         {tab === 'citations' && (
           <EvidenceSourcesTab
             totalSourceCount={bundle.sources.length}
+            canEdit={capabilities.canEdit}
             filteredSources={filteredSources}
             sourceLimit={sourceLimit}
             sourceQuery={sourceQuery}
@@ -303,6 +312,7 @@ export const EvidencePage: React.FC = () => {
         {tab === 'media' && (
           <EvidenceMediaTab
             allMedia={allMedia}
+            canEdit={capabilities.canEdit}
             filteredMedia={filteredMedia}
             mediaLimit={mediaLimit}
             mediaKindFilter={mediaKindFilter}

@@ -14,6 +14,7 @@ import { filterUnverifiedEvents } from './evidenceViewModel.js';
 
 export interface EvidenceSourcesTabProps {
   readonly totalSourceCount: number;
+  readonly canEdit?: boolean;
   readonly filteredSources: readonly SourceRecord[];
   readonly sourceLimit?: number;
   readonly sourceQuery: string;
@@ -36,6 +37,7 @@ export interface EvidenceSourcesTabProps {
 
 export const EvidenceSourcesTab: React.FC<EvidenceSourcesTabProps> = ({
   totalSourceCount,
+  canEdit = false,
   filteredSources,
   sourceLimit,
   sourceQuery,
@@ -81,7 +83,14 @@ export const EvidenceSourcesTab: React.FC<EvidenceSourcesTabProps> = ({
         </div>
       )}
       {unverifiedEvents.length === 0 ? (
-        <EmptyStateNotice title="All events have primary citations." />
+        <EmptyStateNotice
+          title="All events have primary citations."
+          body={
+            totalSourceCount === 0
+              ? 'Add dated milestones and catalog primary sources to track citation coverage here.'
+              : 'Every documented event currently links to at least one primary archival source.'
+          }
+        />
       ) : (
         <>
           <div
@@ -241,10 +250,16 @@ export const EvidenceSourcesTab: React.FC<EvidenceSourcesTabProps> = ({
             <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
               {filteredSources.length === 0 ? (
                 <EmptyStateNotice
+                  eyebrow={totalSourceCount === 0 ? 'Source Registry' : undefined}
                   title={
                     totalSourceCount === 0
                       ? 'No sources have been cataloged yet.'
                       : 'No sources match that filter.'
+                  }
+                  body={
+                    totalSourceCount === 0
+                      ? 'Catalog primary census, vital, and archival sources so every milestone links back to verifiable evidence.'
+                      : `No cataloged sources matched "${sourceQuery.trim()}".`
                   }
                   action={
                     sourceQuery.trim() ? (
@@ -257,6 +272,10 @@ export const EvidenceSourcesTab: React.FC<EvidenceSourcesTabProps> = ({
                       >
                         Clear filter
                       </button>
+                    ) : totalSourceCount === 0 && canEdit ? (
+                      <Link to="/" className={cx(controlStyles, 'pill-btn active')}>
+                        Add a source on a record
+                      </Link>
                     ) : undefined
                   }
                 />

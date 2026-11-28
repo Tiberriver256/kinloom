@@ -1,5 +1,6 @@
 import type { InviteRecord } from '@kinloom/core';
 import type React from 'react';
+import { EmptyStateNotice } from '../../components/Atoms.js';
 import wikiChromeStyles from '../../components/wiki/WikiChrome.module.css';
 import wikiFormStyles from '../../components/wiki/WikiForms.module.css';
 import wikiPanelStyles from '../../components/wiki/WikiPanels.module.css';
@@ -42,7 +43,7 @@ export const InvitesSection: React.FC<InvitesSectionProps> = ({
   onSetPendingConfirm,
   onRevokeInvite,
 }) => (
-  <section className={cx(layoutStyles, 'place-map-box')}>
+  <section id="invites" className={cx(layoutStyles, 'place-map-box')}>
     <h2 className={cx(wikiPanelStyles, 'wiki-section-title')}>Family Invite Links</h2>
     <form
       className={cx(wikiFormStyles, 'wiki-inline-form')}
@@ -108,6 +109,14 @@ export const InvitesSection: React.FC<InvitesSectionProps> = ({
     )}
 
     <div className={cx(wikiPanelStyles, 'wiki-admin-list')} style={{ marginTop: 12 }}>
+      {invites.length === 0 && (
+        <EmptyStateNotice
+          role="note"
+          eyebrow="Family Access"
+          title="No family invite links yet"
+          body="Create a revocable read-only invite link above to share this archive safely with relatives. Invitees can browse immediately and optionally sign in to contribute edits."
+        />
+      )}
       {invites.map((inv) => {
         const confirmingRevoke =
           pendingConfirm?.kind === 'revoke_invite' && pendingConfirm.token === inv.token;

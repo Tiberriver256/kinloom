@@ -17,6 +17,7 @@ import { MEDIA_KIND_FILTER_ORDER } from './evidenceViewModel.js';
 
 export interface EvidenceMediaTabProps {
   readonly allMedia: readonly MediaItem[];
+  readonly canEdit?: boolean;
   readonly filteredMedia: readonly MediaItem[];
   readonly mediaLimit: number;
   readonly mediaKindFilter: MediaKindFilter;
@@ -34,6 +35,7 @@ export interface EvidenceMediaTabProps {
 
 export const EvidenceMediaTab: React.FC<EvidenceMediaTabProps> = ({
   allMedia,
+  canEdit = false,
   filteredMedia,
   mediaLimit,
   mediaKindFilter,
@@ -127,16 +129,26 @@ export const EvidenceMediaTab: React.FC<EvidenceMediaTabProps> = ({
 
         {displayedMedia.length === 0 ? (
           <EmptyStateNotice
+            eyebrow={allMedia.length === 0 ? 'Archival Media' : undefined}
             title={
               allMedia.length === 0
-                ? 'No photos or documents have been added yet.'
+                ? 'No archival scans or photographs yet'
                 : KINLOOM_VOCABULARY.evidence.mediaEmpty
+            }
+            body={
+              allMedia.length === 0
+                ? 'No photos or documents have been added yet. Portraits, family photographs, headstones, and document scans attached to deceased ancestors appear here.'
+                : 'Clear the category or search filter to view all archival scans and photographs.'
             }
             action={
               mediaKindFilter !== 'all' || mediaQuery.trim() ? (
                 <button type="button" className={cx(controlStyles, 'pill-btn')} onClick={onClearMediaFilters}>
                   Clear filters
                 </button>
+              ) : allMedia.length === 0 && canEdit ? (
+                <Link to="/" className={cx(controlStyles, 'pill-btn active')}>
+                  Upload scan from a profile
+                </Link>
               ) : undefined
             }
           />

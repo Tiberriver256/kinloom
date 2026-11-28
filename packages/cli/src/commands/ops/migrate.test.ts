@@ -183,6 +183,7 @@ describe('kinloom migrate', () => {
       '0005_page_visit_stats.sql',
       '0006_plugin_migrations.sql',
       '0007_steward_reviews.sql',
+      '0008_user_onboarding.sql',
     ]);
     expect(migrations[0].requirements.isInitialSchema).toBe(true);
     expect(migrations[0].requirements.createdTables).toContain('revisions');
@@ -201,6 +202,7 @@ describe('kinloom migrate', () => {
     ]);
     expect(migrations[5].requirements.createdTables).toEqual(['plugin_migrations']);
     expect(migrations[6].requirements.createdTables).toEqual(['steward_reviews']);
+    expect(migrations[7].requirements.createdTables).toEqual(['user_onboarding_state']);
   });
 
   it('resolves D1 database binding from wrangler.jsonc, wrangler.json, and wrangler.toml', () => {
@@ -272,6 +274,7 @@ database_name = "example-toml-db" # archive database
       '0005_page_visit_stats.sql',
       '0006_plugin_migrations.sql',
       '0007_steward_reviews.sql',
+      '0008_user_onboarding.sql',
     ]);
     expect(calls.every((c) => !c.args.includes('--file'))).toBe(true);
     expect(calls.every((c) => c.args.includes('--remote'))).toBe(true);
@@ -282,6 +285,7 @@ database_name = "example-toml-db" # archive database
     expect(result.rendered).toContain('0005_page_visit_stats.sql');
     expect(result.rendered).toContain('0006_plugin_migrations.sql');
     expect(result.rendered).toContain('0007_steward_reviews.sql');
+    expect(result.rendered).toContain('0008_user_onboarding.sql');
     expect(result.pluginMigrationsDir).toBeUndefined();
   });
 
@@ -319,6 +323,7 @@ database_name = "example-toml-db" # archive database
       '0005_page_visit_stats.sql',
       '0006_plugin_migrations.sql',
       '0007_steward_reviews.sql',
+      '0008_user_onboarding.sql',
     ]);
     expect(first.applied.map((m) => [m.id, m.satisfiedBy])).toEqual([
       ['0001_initial.sql', 'schema'],
@@ -328,10 +333,11 @@ database_name = "example-toml-db" # archive database
       ['0005_page_visit_stats.sql', 'applied_now'],
       ['0006_plugin_migrations.sql', 'applied_now'],
       ['0007_steward_reviews.sql', 'applied_now'],
+      ['0008_user_onboarding.sql', 'applied_now'],
     ]);
 
     const fileExecs = calls.filter((c) => c.args.includes('--file'));
-    expect(fileExecs).toHaveLength(6);
+    expect(fileExecs).toHaveLength(7);
     expect(path.basename(fileExecs[0].args[fileExecs[0].args.indexOf('--file') + 1])).toBe(
       '0002_pronunciations.sql'
     );
@@ -350,6 +356,9 @@ database_name = "example-toml-db" # archive database
     expect(path.basename(fileExecs[5].args[fileExecs[5].args.indexOf('--file') + 1])).toBe(
       '0007_steward_reviews.sql'
     );
+    expect(path.basename(fileExecs[6].args[fileExecs[6].args.indexOf('--file') + 1])).toBe(
+      '0008_user_onboarding.sql'
+    );
 
     // Second run converges with zero write executions
     const callCountBeforeSecond = calls.length;
@@ -363,7 +372,7 @@ database_name = "example-toml-db" # archive database
     expect(second.verified).toBe(true);
     expect(second.executed).toEqual([]);
     expect(second.pending).toEqual([]);
-    expect(second.applied).toHaveLength(7);
+    expect(second.applied).toHaveLength(8);
     const secondCalls = calls.slice(callCountBeforeSecond);
     expect(secondCalls.every((c) => !c.args.includes('--file'))).toBe(true);
   });
@@ -386,6 +395,7 @@ database_name = "example-toml-db" # archive database
         'observability_cache_daily',
         'plugin_migrations',
         'steward_reviews',
+        'user_onboarding_state',
       ]),
       indexes: new Set([
         'idx_plugin_setting_secrets_plugin_id',
@@ -516,6 +526,7 @@ database_name = "example-toml-db" # archive database
         'page_visit_daily',
         'observability_cache_daily',
         'steward_reviews',
+        'user_onboarding_state',
       ]),
       indexes: new Set([
         'idx_plugin_setting_secrets_plugin_id',

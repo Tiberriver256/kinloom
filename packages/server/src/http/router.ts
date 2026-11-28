@@ -248,6 +248,7 @@ export function createKinloomServer(config: KinloomServerConfig): KinloomServer 
     siteConfig: config.siteConfig,
     bootstrapAdminEmail: config.bootstrapAdminEmail,
     magicLinkTtlMinutes: config.magicLinkTtlMinutes,
+    userOnboardingStore: config.ports.userOnboardingStore,
   });
 
   const wikiWriteService = new WikiWriteService({

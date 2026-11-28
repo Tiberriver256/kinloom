@@ -4,9 +4,11 @@ import type {
   ArchiveDataSource,
   ArchiveSessionState,
   MediaChecklistItem,
+  OnboardingSessionResponse,
   ReadingsBundle,
 } from '@kinloom/core';
 import {
+  createDefaultOnboardingSessionResponse,
   tryValidateArchiveBundle,
   tryValidateMediaChecklistItems,
   tryValidateReadingsBundle,
@@ -117,6 +119,10 @@ export class StaticDemoDataSource implements ArchiveDataSource {
       session: { ...STATIC_ANONYMOUS_SESSION },
       capabilities: { ...STATIC_READONLY_CAPABILITIES },
     };
+  }
+
+  async getOnboardingState(): Promise<OnboardingSessionResponse> {
+    return createDefaultOnboardingSessionResponse();
   }
 }
 

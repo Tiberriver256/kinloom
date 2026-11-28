@@ -132,6 +132,7 @@ export {
 // Core Explorer Components
 export { ExplorerTopBar } from './components/ExplorerTopBar.js';
 export { GlobalSearchModal } from './components/GlobalSearchModal.js';
+export { KeyboardShortcutsDialog, QuickArchiveGuideDialog } from './components/GuideOverlays.js';
 export type { InlineEntityMentionProps } from './components/InlineEntityMention.js';
 export { InlineEntityMention } from './components/InlineEntityMention.js';
 export { KinloomFooter, KinloomMark } from './components/KinloomFooter.js';
@@ -146,6 +147,8 @@ export {
   MediaPlayer,
 } from './components/MediaPlayer.js';
 export { MilestoneStoryCard } from './components/MilestoneStoryCard.js';
+export type { OnboardingChecklistCardProps } from './components/OnboardingChecklistCard.js';
+export { OnboardingChecklistCard } from './components/OnboardingChecklistCard.js';
 export type { PronunciationBadgeProps } from './components/PronunciationBadge.js';
 export { PronunciationBadge } from './components/PronunciationBadge.js';
 export { ScrollMemory } from './components/ScrollMemory.js';
@@ -242,6 +245,8 @@ export type { ArchiveProviderProps } from './context/ArchiveProvider.js';
 export { ArchiveProvider } from './context/ArchiveProvider.js';
 export type { ArchiveUiContextValue, PivotCrumb } from './context/ArchiveUiContext.js';
 export { ArchiveUiProvider, useArchiveUi } from './context/ArchiveUiContext.js';
+export type { OnboardingContextValue, TutorialLauncher } from './context/OnboardingContext.js';
+export { OnboardingProvider, useOnboarding, useOptionalOnboarding } from './context/OnboardingContext.js';
 export type { ThemePreferenceState } from './hooks/useThemePreference.js';
 export {
   applyThemeToDocument,
@@ -258,6 +263,7 @@ export * from './lib/archivalTreeModel.js';
 export * from './lib/bookPublishingModel.js';
 export * from './lib/lightboxModel.js';
 export * from './lib/observabilityStatsModel.js';
+export * from './lib/onboardingModel.js';
 export * from './lib/openFinanceModel.js';
 export * from './lib/pluginNav.js';
 export * from './lib/pluginSettingsForm.js';
@@ -324,6 +330,7 @@ export {
   OPEN_FINANCE_UI_PLUGIN_ID,
 } from './plugins/openFinancePlugin.js';
 export type {
+  CompiledKinloomOnboardingStep,
   KinloomPluginContextValue,
   KinloomPluginProviderProps,
   KinloomPluginRuntimeContext,
@@ -336,6 +343,7 @@ export {
   KinloomPluginProvider,
   PluginSlot,
   RESERVED_UI_ROUTE_PATHS,
+  resolveDynamicPluginOnboardingSteps,
   useKinloomPluginContext,
   useKinloomPlugins,
   validateAndCompileUiPlugins,
@@ -345,6 +353,9 @@ export { createRecipesUiPlugin, RECIPES_UI_PLUGIN_ID } from './plugins/recipesPl
 export type {
   KinloomMediaRenderer,
   KinloomMediaRendererProps,
+  KinloomOnboardingContext,
+  KinloomOnboardingStep,
+  KinloomOnboardingStepAction,
   KinloomUiPlugin,
   KinloomUiPluginNavMinRole,
   KinloomUiPluginRoute,
@@ -352,5 +363,6 @@ export type {
   KinloomUiPluginSlotName,
   KinloomUiPluginSlotRenderer,
   KinloomUiPluginSlots,
+  OnboardingRole,
 } from './plugins/types.js';
 export { KINLOOM_UI_VERSION } from './version.js';

@@ -52,7 +52,11 @@ export const EvidenceDiscrepanciesTab: React.FC<EvidenceDiscrepanciesTabProps> =
   return (
     <section style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
       {conflictEvents.length === 0 ? (
-        <EmptyStateNotice title="No source discrepancies are recorded." />
+        <EmptyStateNotice
+          eyebrow="Conflict Preservation"
+          title="No source discrepancies are recorded."
+          body="When primary sources disagree on a date, place, or spelling, Kinloom preserves both claims side by side here."
+        />
       ) : (
         <>
           {visibleEvents.map((ev) => {

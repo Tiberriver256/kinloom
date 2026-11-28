@@ -647,3 +647,20 @@
   color: var(--text-secondary);
   margin-bottom: 6px;
 }
+
+.map-empty-canvas-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 18;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 80px 18px 110px;
+  pointer-events: none;
+}
+
+.map-empty-canvas-overlay > * {
+  pointer-events: auto;
+  max-width: min(460px, 100%);
+  box-shadow: var(--shadow-active);
+}

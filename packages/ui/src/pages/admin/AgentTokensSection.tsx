@@ -1,5 +1,6 @@
 import type { AgentTokenScope, CreatedAgentTokenResponse, PublicAgentTokenRecord } from '@kinloom/core';
 import type React from 'react';
+import { EmptyStateNotice } from '../../components/Atoms.js';
 import wikiChromeStyles from '../../components/wiki/WikiChrome.module.css';
 import wikiFormStyles from '../../components/wiki/WikiForms.module.css';
 import wikiPanelStyles from '../../components/wiki/WikiPanels.module.css';
@@ -42,7 +43,7 @@ export const AgentTokensSection: React.FC<AgentTokensSectionProps> = ({
   onSetPendingConfirm,
   onRevokeToken,
 }) => (
-  <section className={cx(layoutStyles, 'place-map-box')}>
+  <section id="agent-tokens" className={cx(layoutStyles, 'place-map-box')}>
     <h2 className={cx(wikiPanelStyles, 'wiki-section-title')}>Scoped AI Agent &amp; Backup Tokens</h2>
     <form
       className={cx(wikiFormStyles, 'wiki-inline-form')}
@@ -105,6 +106,14 @@ export const AgentTokensSection: React.FC<AgentTokensSectionProps> = ({
     )}
 
     <div className={cx(wikiPanelStyles, 'wiki-admin-list')} style={{ marginTop: 12 }}>
+      {tokens.length === 0 && (
+        <EmptyStateNotice
+          role="note"
+          eyebrow="Automation & Backups"
+          title="No scoped agent or backup tokens yet"
+          body="Use a read_backup token for automated archival exports, or a write_batch token for auditable research assistant updates."
+        />
+      )}
       {tokens.map((tok) => {
         const confirmingRevoke =
           pendingConfirm?.kind === 'revoke_token' && pendingConfirm.tokenId === tok.token_id;

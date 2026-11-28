@@ -19,7 +19,7 @@ export async function probeD1SchemaMigrationLevel(db: D1Database): Promise<strin
   try {
     const tablesRes = await db
       .prepare(
-        "SELECT name FROM sqlite_master WHERE type = 'table' AND name IN ('entities', 'pronunciation_lexicon', 'plugin_settings', 'plugin_setting_secrets', 'page_visit_daily', 'observability_cache_daily', 'plugin_migrations', 'steward_reviews')"
+        "SELECT name FROM sqlite_master WHERE type = 'table' AND name IN ('entities', 'pronunciation_lexicon', 'plugin_settings', 'plugin_setting_secrets', 'page_visit_daily', 'observability_cache_daily', 'plugin_migrations', 'steward_reviews', 'user_onboarding_state')"
       )
       .all<{ name?: unknown }>();
     const tableNames = new Set(
@@ -27,6 +27,9 @@ export async function probeD1SchemaMigrationLevel(db: D1Database): Promise<strin
         .map((row) => (typeof row.name === 'string' ? row.name : ''))
         .filter((name) => name.length > 0)
     );
+    if (tableNames.has('user_onboarding_state')) {
+      return '0008_user_onboarding.sql';
+    }
     if (tableNames.has('steward_reviews')) {
       return '0007_steward_reviews.sql';
     }

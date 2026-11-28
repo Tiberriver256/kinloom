@@ -20,6 +20,8 @@ export type {
   PronunciationLexiconStore,
   StoredPluginSecretMetadata,
   StoredPluginSettingsRecord,
+  StoredUserOnboardingRecord,
+  UserOnboardingStore,
 } from '@kinloom/core';
 export { extractCollectionsFromSnapshot } from '@kinloom/core';
 export {
@@ -39,6 +41,7 @@ export {
   InMemoryPluginSettingsStore,
   InMemoryPronunciationLexiconStore,
   type InMemoryServerPortsBundle,
+  InMemoryUserOnboardingStore,
   type SentMagicLinkEmail,
 } from './adapters/inMemory.js';
 // Layer 4: Portable Built-in Adapters

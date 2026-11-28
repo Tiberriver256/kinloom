@@ -18,9 +18,11 @@ import { Link } from 'react-router-dom';
 import atomStyles from '../components/Atoms.module.css';
 import { ExplorerTopBar } from '../components/ExplorerTopBar.js';
 import { KinloomFooter } from '../components/KinloomFooter.js';
+import { OnboardingChecklistCard } from '../components/OnboardingChecklistCard.js';
 import { SignInModal } from '../components/wiki/SignInModal.js';
 import wikiPanelStyles from '../components/wiki/WikiPanels.module.css';
 import { useArchiveData } from '../context/ArchiveDataContext.js';
+import { useOptionalOnboarding } from '../context/OnboardingContext.js';
 import { cx } from '../lib/cx.js';
 import { useKinloomPlugins } from '../plugins/PluginContext.js';
 import controlStyles from '../styles/Controls.module.css';
@@ -40,6 +42,8 @@ export interface AdminPageProps {
 
 export const AdminPage: React.FC<AdminPageProps> = ({ adminClient, extraSettingsPanels }) => {
   const { session, dataSource, adminDataSource, capabilities } = useArchiveData();
+  const onboarding = useOptionalOnboarding();
+  const recordOnboardingSignal = onboarding?.recordSignal;
   const { subscribePluginSettings, notifyPluginSettingsUpdated } = useKinloomPlugins();
   const client: AdminDataSource | null = adminClient ?? adminDataSource ?? dataSource.admin ?? null;
 
@@ -104,12 +108,15 @@ export const AdminPage: React.FC<AdminPageProps> = ({ adminClient, extraSettings
     try {
       const report = await client.getSystemDiagnostics();
       setDiagnostics(report);
+      if (report.health_checks.length > 0 && report.health_checks.every((check) => check.status === 'pass')) {
+        recordOnboardingSignal?.('admin_diagnostics_healthy');
+      }
     } catch (err) {
       setDiagnosticsError(err instanceof Error ? err.message : String(err));
     } finally {
       setDiagnosticsLoading(false);
     }
-  }, [client, capabilities.canManageSite]);
+  }, [client, capabilities.canManageSite, recordOnboardingSignal]);
 
   const loadChangelogs = useCallback(async (): Promise<void> => {
     if (!client?.getChangelogs || !capabilities.canManageSite) {
@@ -182,11 +189,12 @@ export const AdminPage: React.FC<AdminPageProps> = ({ adminClient, extraSettings
         snapshot: updated,
         source: 'plugin-settings-section',
       });
+      onboarding?.recordSignal('admin_settings_or_token_saved');
       void loadDiagnostics();
       void loadChangelogs();
       return updated;
     },
-    [client, notifyPluginSettingsUpdated, loadDiagnostics, loadChangelogs]
+    [client, notifyPluginSettingsUpdated, onboarding, loadDiagnostics, loadChangelogs]
   );
 
   useEffect(() => {
@@ -252,12 +260,15 @@ export const AdminPage: React.FC<AdminPageProps> = ({ adminClient, extraSettings
       setUsers(u);
       setInvites(inv);
       setTokens(tok);
+      if (inv.some((item) => !item.revoked_at)) {
+        recordOnboardingSignal?.('admin_invite_created');
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
     } finally {
       setLoading(false);
     }
-  }, [client, capabilities.canManageSite]);
+  }, [client, capabilities.canManageSite, recordOnboardingSignal]);
 
   useEffect(() => {
     void loadAll();
@@ -301,6 +312,7 @@ export const AdminPage: React.FC<AdminPageProps> = ({ adminClient, extraSettings
       setCreatedInviteUrl(res.invite_url);
       setInviteLabel('');
       setInvites((prev) => [res.invite, ...prev]);
+      onboarding?.recordSignal('admin_invite_created');
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
     } finally {
@@ -342,6 +354,7 @@ export const AdminPage: React.FC<AdminPageProps> = ({ adminClient, extraSettings
       setRevealedSecret(created);
       setCopiedSecret(false);
       setTokenLabel('');
+      onboarding?.recordSignal('admin_settings_or_token_saved');
       await loadAll();
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
@@ -443,6 +456,8 @@ export const AdminPage: React.FC<AdminPageProps> = ({ adminClient, extraSettings
           </div>
         )}
         {loading && <p className={cx(controlStyles, 'empty-ring-note')}>Loading administration records…</p>}
+
+        <OnboardingChecklistCard surface="admin" />
 
         <MembersSection
           users={users}
