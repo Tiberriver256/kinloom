@@ -1,6 +1,6 @@
 {
   "name": "@kinloom/worker",
-  "version": "0.81.2",
+  "version": "0.82.0",
   "type": "module",
   "license": "MIT",
   "description": "Cloudflare Worker API, D1 revision ledger, R2 media and bundle cache, and auth/RBAC layer for Kinloom family archives.",
@@ -31,8 +31,8 @@
     "typecheck": "tsc --noEmit -p tsconfig.json"
   },
   "dependencies": {
-    "@kinloom/core": "^0.81.2",
-    "@kinloom/server": "^0.81.2",
+    "@kinloom/core": "^0.82.0",
+    "@kinloom/server": "^0.82.0",
     "zod": "^4.6.7"
   },
   "devDependencies": {
