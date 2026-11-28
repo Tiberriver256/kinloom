@@ -4,6 +4,9 @@ import {
   getCurrentReferenceYear,
   type KinloomSiteConfig,
   type Narrative,
+  parseNarrativesYaml as parseCoreNarrativesYaml,
+  parseKinloomConfigYaml,
+  parsePeopleYaml,
   type RawPerson,
   resolveEffectiveLiving,
 } from '@kinloom/core';
@@ -48,7 +51,152 @@ export interface ImportedAudioMeta {
   readonly notes_voice?: string | undefined;
 }
 
+export interface LoadedNarrativeArchive {
+  readonly siteConfig: KinloomSiteConfig;
+  readonly people: readonly RawPerson[];
+  readonly allNarratives: readonly Narrative[];
+  readonly livingIds: ReadonlySet<string>;
+  readonly lexiconHints: Record<string, PhonemeTermHint>;
+  readonly narrativesPath: string;
+}
+
+export interface CandidateSelectionResult {
+  readonly candidates: readonly Narrative[];
+  readonly livingSkipped: number;
+  readonly alreadyHasAudio: number;
+}
+
+export interface BatchSliceRange {
+  readonly start: number;
+  readonly end?: number | undefined;
+}
+
 const NOTES_HEADING_RE = /^(?:editor'?s|research|source|archival)\s+notes?\b|^discrepanc(?:y|ies)\b/i;
+
+function isEnoentError(err: unknown): boolean {
+  return typeof err === 'object' && err !== null && 'code' in err && err.code === 'ENOENT';
+}
+
+export function loadArchiveForNarrativeAudio(repoDir: string): LoadedNarrativeArchive {
+  const configPath = path.join(repoDir, 'kinloom.config.yaml');
+  const peoplePath = path.join(repoDir, 'data', 'people.yaml');
+  const narrativesPath = path.join(repoDir, 'data', 'narratives.yaml');
+
+  let rawConfig: string;
+  try {
+    rawConfig = fs.readFileSync(configPath, 'utf8');
+  } catch (err: unknown) {
+    if (isEnoentError(err)) {
+      throw new CliValidationError(`Missing ${configPath} (pass --repo <archive-root>).`);
+    }
+    throw err;
+  }
+
+  let rawNarratives: string;
+  try {
+    rawNarratives = fs.readFileSync(narrativesPath, 'utf8');
+  } catch (err: unknown) {
+    if (isEnoentError(err)) {
+      throw new CliValidationError(`Missing ${narrativesPath}.`);
+    }
+    throw err;
+  }
+
+  const siteConfig = parseKinloomConfigYaml(rawConfig);
+  let people: RawPerson[] = [];
+  try {
+    people = parsePeopleYaml(fs.readFileSync(peoplePath, 'utf8'));
+  } catch (err: unknown) {
+    if (!isEnoentError(err)) {
+      throw err;
+    }
+  }
+  const allNarratives = parseCoreNarrativesYaml(rawNarratives);
+
+  const referenceYear = siteConfig.privacy.referenceYear ?? getCurrentReferenceYear();
+  const livingIds = new Set<string>();
+  for (const person of people) {
+    if (
+      person.is_living ||
+      person.full_name.trim() === 'Living' ||
+      resolveEffectiveLiving(person, siteConfig.privacy, referenceYear)
+    ) {
+      livingIds.add(person.id);
+    }
+  }
+
+  const lexiconHints = collectArchiveLexiconHints(repoDir, siteConfig, people);
+
+  return {
+    siteConfig,
+    people,
+    allNarratives,
+    livingIds,
+    lexiconHints,
+    narrativesPath,
+  };
+}
+
+export function selectNarrativeCandidates(options: {
+  readonly allNarratives: readonly Narrative[];
+  readonly livingIds: ReadonlySet<string>;
+  readonly kindFilter: string;
+  readonly force: boolean;
+}): CandidateSelectionResult {
+  let livingSkipped = 0;
+  let alreadyHasAudio = 0;
+  const candidates: Narrative[] = [];
+  for (const narrative of options.allNarratives) {
+    const touchesLiving =
+      (narrative.subject_person_id !== undefined && options.livingIds.has(narrative.subject_person_id)) ||
+      narrative.person_ids.some((pid) => options.livingIds.has(pid));
+    if (touchesLiving) {
+      livingSkipped += 1;
+      continue;
+    }
+    if (options.kindFilter && narrative.kind !== options.kindFilter) {
+      continue;
+    }
+    if (!options.force && hasExistingNarrativeAudio(narrative)) {
+      alreadyHasAudio += 1;
+      continue;
+    }
+    candidates.push(narrative);
+  }
+  return { candidates, livingSkipped, alreadyHasAudio };
+}
+
+export function parseBatchSlice(raw: string): BatchSliceRange {
+  const trimmed = raw.trim();
+  const match = /^(\d*):(\d*)$/.exec(trimmed);
+  if (!match || (match[1] === '' && match[2] === '')) {
+    throw new CliValidationError(
+      `Invalid --slice '${raw}': expected <start>:<end> with non-negative integers (e.g. 0:10, 5:, :10).`
+    );
+  }
+  const startRaw = match[1] ?? '';
+  const endRaw = match[2] ?? '';
+  const start = startRaw.length > 0 ? Number.parseInt(startRaw, 10) : 0;
+  const end = endRaw.length > 0 ? Number.parseInt(endRaw, 10) : undefined;
+  if (!Number.isSafeInteger(start) || (end !== undefined && !Number.isSafeInteger(end))) {
+    throw new CliValidationError(`Invalid --slice '${raw}': slice bounds out of range.`);
+  }
+  if (end !== undefined && end < start) {
+    throw new CliValidationError(
+      `Invalid --slice '${raw}': end (${end}) must be greater than or equal to start (${start}).`
+    );
+  }
+  return { start, end };
+}
+
+export function hasNonEmptyAudioFile(filePath: string): boolean {
+  try {
+    const stat = fs.statSync(filePath);
+    return stat.isFile() && stat.size > 0;
+  } catch {
+    return false;
+  }
+}
 
 function stripMarkdownToSpoken(raw: string): string {
   return raw

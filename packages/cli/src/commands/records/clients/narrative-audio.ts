@@ -6,10 +6,24 @@ import {
   type NarrativeBatchManifest,
   type NarrativeBatchManifestItem,
   narrativeMarkdownToSpokenScript,
+  parseBatchSlice,
   runBatch,
 } from './narrativeAudio/batch.js';
 import { renderRootHelp } from './narrativeAudio/cliSpecs.js';
 import { runCheck, runExtract, runList, runSynth, runTranscribe } from './narrativeAudio/commands.js';
+import {
+  type AudioQaFileResult,
+  type AudioQaSummary,
+  type AudioQaThresholds,
+  probeAudioFile,
+  runQa,
+} from './narrativeAudio/qa.js';
+import {
+  buildScriptNamesMap,
+  runScaffold,
+  type ScaffoldedNarrativeItem,
+  type ScaffoldSummary,
+} from './narrativeAudio/scaffold.js';
 
 export {
   applyNames,
@@ -39,10 +53,18 @@ export {
 export { lintNarrativeScript, type ScriptLintResult } from './narrativeAudio/scriptLint.js';
 export { loadNarratives } from './narrativeAudio/synthesis.js';
 export {
+  type AudioQaFileResult,
+  type AudioQaSummary,
+  type AudioQaThresholds,
+  buildScriptNamesMap,
   collectArchiveLexiconHints,
   type NarrativeBatchManifest,
   type NarrativeBatchManifestItem,
   narrativeMarkdownToSpokenScript,
+  parseBatchSlice,
+  probeAudioFile,
+  type ScaffoldedNarrativeItem,
+  type ScaffoldSummary,
 };
 
 export const runNarrativeAudioCommand: RecordHandler = async (args, ctx): Promise<RecordCommandOutcome> => {
@@ -62,12 +84,16 @@ export const runNarrativeAudioCommand: RecordHandler = async (args, ctx): Promis
         return runList(rest, ctx);
       case 'extract':
         return runExtract(rest, ctx);
+      case 'scaffold':
+        return runScaffold(rest, ctx);
       case 'check':
         return runCheck(rest, ctx);
       case 'synth':
         return await runSynth(rest, ctx);
       case 'batch':
         return await runBatch(rest, ctx);
+      case 'qa':
+        return await runQa(rest, ctx);
       case 'transcribe':
         return await runTranscribe(rest, ctx);
       default:
