@@ -399,6 +399,14 @@ describe('OnboardingChecklistCard, Guide menu, persistence, and contextual empty
     );
 
     const card = firstMount.container.querySelector('[data-testid="onboarding-checklist-card"]');
+    expect(card?.textContent).toContain('Reader guide');
+    expect(card?.textContent).toContain('0/6');
+    expect(card?.textContent).not.toContain('Explore this family archive');
+    const openStripBtn = findButtonByText(firstMount.container, 'Open');
+    expect(openStripBtn?.getAttribute('aria-expanded')).toBe('false');
+    await act(async () => {
+      openStripBtn?.click();
+    });
     expect(card?.textContent).toContain('Explore this family archive');
     expect(card?.textContent).toContain('0 of 6 steps completed');
 
@@ -423,18 +431,23 @@ describe('OnboardingChecklistCard, Guide menu, persistence, and contextual empty
     });
     expect(firstMount.container.textContent).toContain('1 of 6 steps completed');
 
-    // Collapse then expand
+    // Collapse, dismiss directly from the compact strip, and verify persistence across remount
     await act(async () => {
       findButtonByText(firstMount.container, 'Collapse')?.click();
     });
-    expect(findButtonByText(firstMount.container, 'Expand checklist')).toBeTruthy();
+    expect(card?.textContent).toContain('1/6');
+    expect(findButtonByText(firstMount.container, 'Open')?.getAttribute('aria-expanded')).toBe('false');
     await act(async () => {
-      findButtonByText(firstMount.container, 'Expand checklist')?.click();
+      findButtonByText(firstMount.container, 'Open')?.click();
     });
+    expect(card?.textContent).toContain('Explore this family archive');
 
-    // Dismiss checklist and verify persistence across remount
+    // Dismiss from expanded card, reopen via collapse/dismiss path as well
     await act(async () => {
-      findButtonByText(firstMount.container, 'Dismiss checklist')?.click();
+      findButtonByText(firstMount.container, 'Collapse')?.click();
+    });
+    await act(async () => {
+      findButtonByText(firstMount.container, 'Dismiss')?.click();
     });
     expect(firstMount.container.querySelector('[data-testid="onboarding-checklist-card"]')).toBeNull();
     await firstMount.unmount();
@@ -465,7 +478,22 @@ describe('OnboardingChecklistCard, Guide menu, persistence, and contextual empty
     expect(secondMount.container.querySelector('[role="menu"][aria-label="Guide and help"]')).toBeNull();
     expect(document.activeElement).toBe(guideBtn);
 
-    // Reopen checklist via Guide menu
+    // Reopen checklist via Guide menu (expands directly to full checklist)
+    await act(async () => {
+      guideBtn?.click();
+    });
+    await act(async () => {
+      findButtonByText(secondMount.container, 'Getting Started Checklist')?.click();
+    });
+    const reopenedCard = secondMount.container.querySelector('[data-testid="onboarding-checklist-card"]');
+    expect(reopenedCard).toBeTruthy();
+    expect(reopenedCard?.textContent).toContain('Explore this family archive');
+
+    // Also cover Dismiss checklist button in expanded state, then reopen via Guide menu
+    await act(async () => {
+      findButtonByText(secondMount.container, 'Dismiss checklist')?.click();
+    });
+    expect(secondMount.container.querySelector('[data-testid="onboarding-checklist-card"]')).toBeNull();
     await act(async () => {
       guideBtn?.click();
     });
@@ -533,6 +561,7 @@ describe('OnboardingChecklistCard, Guide menu, persistence, and contextual empty
         ...storedResponse,
         state: {
           ...storedResponse.state,
+          checklist_visibility: patch.checklist_visibility ?? storedResponse.state.checklist_visibility,
           completed_step_ids: [
             ...new Set([...storedResponse.state.completed_step_ids, ...(patch.complete_step_ids ?? [])]),
           ],
@@ -572,6 +601,13 @@ describe('OnboardingChecklistCard, Guide menu, persistence, and contextual empty
       </ArchiveProvider>
     );
 
+    expect(mounted.container.textContent).toContain('Contributor guide');
+    expect(mounted.container.textContent).not.toContain('Make your first archival contribution');
+
+    await act(async () => {
+      findButtonByText(mounted.container, 'Open')?.click();
+      await Promise.resolve();
+    });
     expect(mounted.container.textContent).toContain('Make your first archival contribution');
 
     await act(async () => {
@@ -586,6 +622,7 @@ describe('OnboardingChecklistCard, Guide menu, persistence, and contextual empty
       findButtonByText(mounted.container, 'Mark "Inspect revision history" as completed')?.click();
       await Promise.resolve();
     });
+    expect(updateSpy).toHaveBeenCalledWith({ checklist_visibility: 'open' });
     expect(updateSpy).toHaveBeenCalledWith({ complete_step_ids: ['core:editor:review-changes'] });
     await mounted.unmount();
   });
@@ -726,6 +763,10 @@ describe('OnboardingChecklistCard, Guide menu, persistence, and contextual empty
         </MemoryRouter>
       </ArchiveProvider>
     );
+    expect(adminMount.container.textContent).toContain('Admin setup');
+    await act(async () => {
+      findButtonByText(adminMount.container, 'Open')?.click();
+    });
     expect(adminMount.container.textContent).toContain('Verify your Kinloom archive');
     expect(adminMount.container.textContent).toContain('No family invite links yet');
     expect(adminMount.container.textContent).toContain('No scoped agent or backup tokens yet');

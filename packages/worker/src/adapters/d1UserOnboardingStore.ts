@@ -68,7 +68,7 @@ function rowToStoredRecord(row: UserOnboardingRow, fallbackEmail: string): Store
       ? row.schema_version
       : 1;
   const parsedVisibility = ChecklistVisibilitySchema.safeParse(row.checklist_visibility);
-  const visibility = parsedVisibility.success ? parsedVisibility.data : 'open';
+  const visibility = parsedVisibility.success ? parsedVisibility.data : 'collapsed';
   const firstLoginPending = row.first_login_pending === 1 || row.first_login_pending === true;
   const state: UserOnboardingState = {
     schema_version: schemaVersion,
@@ -137,10 +137,10 @@ export class D1UserOnboardingStore implements UserOnboardingStore {
              completed_step_ids_json, skipped_step_ids_json, completed_chapter_ids_json,
              tutorial_modal_dismissed_at, checklist_dismissed_at, last_seen_version, updated_at
            )
-           VALUES (?, 1, 'open', 1, '[]', '[]', '[]', NULL, NULL, NULL, ?)
+           VALUES (?, 1, ?, 1, '[]', '[]', '[]', NULL, NULL, NULL, ?)
            ON CONFLICT(email) DO NOTHING`
         )
-        .bind(normalized, nowIso)
+        .bind(normalized, defaultState.checklist_visibility, nowIso)
         .run();
       const stored = await this.get(normalized);
       return (

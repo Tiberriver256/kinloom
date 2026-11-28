@@ -15,16 +15,19 @@ export interface OnboardingChecklistCardProps {
 
 const ROLE_COPY = {
   viewer: {
+    shortLabel: 'Reader guide',
     eyebrow: 'Getting Started · Reader Guide',
     heading: 'Explore this family archive',
     summary: 'Follow a few quick steps to trace relatives, read cited stories, and map migrations.',
   },
   editor: {
+    shortLabel: 'Contributor guide',
     eyebrow: 'Getting Started · Contributor Guide',
     heading: 'Make your first archival contribution',
     summary: 'Add records, verify primary citations, upload scans, and inspect revision history.',
   },
   admin: {
+    shortLabel: 'Admin setup',
     eyebrow: 'Getting Started · Admin Setup',
     heading: 'Verify your Kinloom archive',
     summary: 'Check diagnostics, confirm initial records, create a family invite, and review plugins.',
@@ -146,52 +149,88 @@ export const OnboardingChecklistCard: React.FC<OnboardingChecklistCardProps> = (
       className={cx(styles, `onboarding-card${isCollapsed ? ' is-collapsed' : ''}`)}
       data-testid="onboarding-checklist-card"
     >
-      <div className={cx(styles, 'onboarding-header')}>
-        <div className={cx(styles, 'onboarding-title-group')}>
-          <span className={cx(styles, 'onboarding-eyebrow')}>{copy.eyebrow}</span>
-          <h3 id="onboarding-checklist-heading" className={cx(styles, 'onboarding-heading')}>
-            {copy.heading}
-          </h3>
-          {!isCollapsed && <p className={cx(styles, 'onboarding-summary')}>{copy.summary}</p>}
+      {isCollapsed ? (
+        <div className={cx(styles, 'onboarding-collapsed-strip')}>
+          <span id="onboarding-checklist-heading" className={cx(styles, 'onboarding-collapsed-label')}>
+            <span className={cx(styles, 'onboarding-collapsed-title')}>{copy.shortLabel}</span>
+            <span aria-hidden="true" className={cx(styles, 'onboarding-collapsed-sep')}>
+              ·
+            </span>
+            <span className={cx(styles, 'onboarding-collapsed-count')}>
+              {checklist.completedCount}/{checklist.totalCount}
+            </span>
+          </span>
+
+          <div className={cx(styles, 'onboarding-collapsed-actions')}>
+            <button
+              type="button"
+              className={cx(styles, 'onboarding-strip-btn onboarding-strip-open')}
+              aria-expanded={false}
+              aria-label={`Open ${copy.shortLabel}`}
+              onClick={() => {
+                setChecklistVisibility('open');
+              }}
+            >
+              Open
+            </button>
+            <button
+              type="button"
+              className={cx(styles, 'onboarding-strip-btn')}
+              aria-label={`Dismiss ${copy.shortLabel}`}
+              onClick={() => {
+                dismissChecklist();
+              }}
+            >
+              Dismiss
+            </button>
+          </div>
         </div>
-
-        <div className={cx(styles, 'onboarding-header-actions')}>
-          <button
-            type="button"
-            className={cx(styles, 'onboarding-ctrl-btn')}
-            aria-expanded={!isCollapsed}
-            onClick={() => {
-              setChecklistVisibility(isCollapsed ? 'open' : 'collapsed');
-            }}
-          >
-            {isCollapsed ? 'Expand checklist' : 'Collapse'}
-          </button>
-          <button
-            type="button"
-            className={cx(styles, 'onboarding-ctrl-btn')}
-            onClick={() => {
-              dismissChecklist();
-            }}
-          >
-            Dismiss checklist
-          </button>
-        </div>
-      </div>
-
-      <div className={cx(styles, 'onboarding-progress-row')}>
-        <progress
-          className={cx(styles, 'onboarding-progress-bar')}
-          max={checklist.totalCount}
-          value={checklist.resolvedCount}
-          aria-label={`${checklist.completedCount} of ${checklist.totalCount} steps completed`}
-        />
-        <span className={cx(styles, 'onboarding-progress-label')}>
-          {checklist.completedCount} of {checklist.totalCount} steps completed
-        </span>
-      </div>
-
-      {!isCollapsed && (
+      ) : (
         <>
+          <div className={cx(styles, 'onboarding-header')}>
+            <div className={cx(styles, 'onboarding-title-group')}>
+              <span className={cx(styles, 'onboarding-eyebrow')}>{copy.eyebrow}</span>
+              <h3 id="onboarding-checklist-heading" className={cx(styles, 'onboarding-heading')}>
+                {copy.heading}
+              </h3>
+              <p className={cx(styles, 'onboarding-summary')}>{copy.summary}</p>
+            </div>
+
+            <div className={cx(styles, 'onboarding-header-actions')}>
+              <button
+                type="button"
+                className={cx(styles, 'onboarding-ctrl-btn')}
+                aria-expanded={true}
+                onClick={() => {
+                  setChecklistVisibility('collapsed');
+                }}
+              >
+                Collapse
+              </button>
+              <button
+                type="button"
+                className={cx(styles, 'onboarding-ctrl-btn')}
+                onClick={() => {
+                  dismissChecklist();
+                }}
+              >
+                Dismiss checklist
+              </button>
+            </div>
+          </div>
+
+          <div className={cx(styles, 'onboarding-progress-row')}>
+            <progress
+              className={cx(styles, 'onboarding-progress-bar')}
+              max={checklist.totalCount}
+              value={checklist.resolvedCount}
+              aria-label={`${checklist.completedCount} of ${checklist.totalCount} steps completed`}
+            />
+            <span className={cx(styles, 'onboarding-progress-label')}>
+              {checklist.completedCount} of {checklist.totalCount} steps completed
+            </span>
+          </div>
+
           {checklist.allResolved && (
             <div className={cx(styles, 'onboarding-complete-banner')} role="status">
               All getting started steps are complete. You can dismiss this card or reopen it anytime from the

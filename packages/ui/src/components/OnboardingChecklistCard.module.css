@@ -13,7 +13,95 @@
 }
 
 .onboarding-card.is-collapsed {
-  padding: 12px 16px;
+  margin: 0 0 12px;
+  padding: 2px 12px;
+  border: none;
+  background: var(--surface-subtle);
+  box-shadow: none;
+}
+
+.onboarding-collapsed-strip {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  min-height: 36px;
+}
+
+.onboarding-collapsed-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: var(--font-ui);
+  font-size: 0.82rem;
+  color: var(--text-primary);
+}
+
+.onboarding-collapsed-title {
+  font-weight: 600;
+  color: var(--text-primary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.onboarding-collapsed-sep {
+  color: var(--text-secondary);
+  flex-shrink: 0;
+}
+
+.onboarding-collapsed-count {
+  font-family: var(--font-mono);
+  font-size: 0.78rem;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-secondary);
+  flex-shrink: 0;
+}
+
+.onboarding-collapsed-actions {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  flex-shrink: 0;
+}
+
+.onboarding-strip-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-block-size: 36px;
+  min-inline-size: 44px;
+  padding: 4px 10px;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text-secondary);
+  font-family: var(--font-ui);
+  font-size: 0.8rem;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+  transition:
+    background-color 0.14s ease,
+    color 0.14s ease;
+}
+
+.onboarding-strip-open {
+  color: var(--jump-active-fg);
+}
+
+.onboarding-strip-btn:hover {
+  background: var(--surface-linen);
+  color: var(--text-primary);
+}
+
+.onboarding-strip-btn:focus-visible {
+  outline: 2px solid var(--action-focus);
+  outline-offset: 2px;
 }
 
 .onboarding-header {
@@ -313,6 +401,15 @@
     padding: 14px 12px;
   }
 
+  .onboarding-card.is-collapsed {
+    padding: 0 10px;
+  }
+
+  .onboarding-strip-btn {
+    min-block-size: 42px;
+    padding: 4px 10px;
+  }
+
   .onboarding-ctrl-btn,
   .onboarding-action-link {
     min-height: 44px;
@@ -333,6 +430,7 @@
 
 @media (prefers-reduced-motion: reduce) {
   .onboarding-ctrl-btn,
+  .onboarding-strip-btn,
   .onboarding-step-check,
   .onboarding-action-link {
     transition: none;

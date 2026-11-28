@@ -76,6 +76,7 @@ describe('@kinloom/core onboarding schemas and domain reducers', () => {
       state: createDefaultUserOnboardingState(null),
       first_login_pending: true,
     };
+    expect(initial.state.checklist_visibility).toBe('collapsed');
     expect(toOnboardingSessionResponse(initial)).toEqual({
       state: initial.state,
       is_first_login: true,
@@ -145,6 +146,6 @@ describe('@kinloom/core onboarding schemas and domain reducers', () => {
     expect(OnboardingSessionResponseSchema.parse(createDefaultOnboardingSessionResponse())).toEqual(
       createDefaultOnboardingSessionResponse()
     );
-    expect(UserOnboardingStateSchema.parse({}).checklist_visibility).toBe('open');
+    expect(UserOnboardingStateSchema.parse({}).checklist_visibility).toBe('collapsed');
   });
 });

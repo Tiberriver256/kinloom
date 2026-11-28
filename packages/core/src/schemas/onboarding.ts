@@ -44,7 +44,7 @@ export type KinloomOnboardingStepMetadata = z.infer<typeof KinloomOnboardingStep
  */
 export const UserOnboardingStateSchema = z.object({
   schema_version: z.number().int().positive().default(1),
-  checklist_visibility: ChecklistVisibilitySchema.default('open'),
+  checklist_visibility: ChecklistVisibilitySchema.default('collapsed'),
   completed_step_ids: z.array(OnboardingStepIdSchema).default([]),
   skipped_step_ids: z.array(OnboardingStepIdSchema).default([]),
   completed_chapter_ids: z.array(OnboardingStepIdSchema).default([]),
@@ -89,7 +89,7 @@ export interface OnboardingCapabilitiesLike {
 export function createDefaultUserOnboardingState(updatedAt: string | null = null): UserOnboardingState {
   return {
     schema_version: 1,
-    checklist_visibility: 'open',
+    checklist_visibility: 'collapsed',
     completed_step_ids: [],
     skipped_step_ids: [],
     completed_chapter_ids: [],

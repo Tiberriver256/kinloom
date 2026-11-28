@@ -25,6 +25,21 @@ test.describe('Issue #54 Onboarding checklist, Guide menu, and 360px mobile over
     });
     const card = page.getByTestId('onboarding-checklist-card');
     await expect(card).toBeVisible();
+    await expect(card).toContainText('Reader guide');
+    await expect(card).toContainText('0/5');
+    await expect(card).not.toContainText('Listen to a narrated story');
+    const collapsedHeight = await card.evaluate((el) => Math.round(el.getBoundingClientRect().height));
+    expect(collapsedHeight).toBeLessThanOrEqual(48);
+
+    const mobileOverflowCollapsed = await page.evaluate(
+      () => document.documentElement.scrollWidth - window.innerWidth
+    );
+    expect(mobileOverflowCollapsed).toBeLessThanOrEqual(1);
+
+    // Expand checklist on demand from the compact strip
+    const openBtn = card.getByRole('button', { name: 'Open Reader guide' });
+    await expect(openBtn).toHaveAttribute('aria-expanded', 'false');
+    await openBtn.click();
     await expect(card).toContainText('Listen to a narrated story');
 
     const mobileOverflow = await page.evaluate(
@@ -134,21 +149,35 @@ test.describe('Issue #54 Onboarding checklist, Guide menu, and 360px mobile over
       },
     ]);
 
-    for (const vp of [
-      { width: 360, height: 800 },
-      { width: 1280, height: 800 },
-    ]) {
-      await page.setViewportSize(vp);
-      await page.goto(`${wiki.baseUrl}/admin`, { waitUntil: 'networkidle' });
-      const card = page.getByTestId('onboarding-checklist-card');
-      await expect(card).toBeVisible();
-      await expect(card).toContainText('Verify your Kinloom archive');
-      const overflow = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
-      expect(overflow, `/admin overflow @ ${vp.width}px`).toBeLessThanOrEqual(1);
-    }
+    await page.setViewportSize({ width: 360, height: 800 });
+    await page.goto(`${wiki.baseUrl}/admin`, { waitUntil: 'networkidle' });
+    const card = page.getByTestId('onboarding-checklist-card');
+    await expect(card).toBeVisible();
+    await expect(card).toContainText('Admin setup');
+    const adminCollapsedHeight = await card.evaluate((el) => Math.round(el.getBoundingClientRect().height));
+    expect(adminCollapsedHeight).toBeLessThanOrEqual(48);
+    const mobileCollapsedOverflow = await page.evaluate(
+      () => document.documentElement.scrollWidth - window.innerWidth
+    );
+    expect(mobileCollapsedOverflow, '/admin collapsed overflow @ 360px').toBeLessThanOrEqual(1);
+
+    await card.getByRole('button', { name: 'Open Admin setup' }).click();
+    await expect(card).toContainText('Verify your Kinloom archive');
+    const mobileExpandedOverflow = await page.evaluate(
+      () => document.documentElement.scrollWidth - window.innerWidth
+    );
+    expect(mobileExpandedOverflow, '/admin expanded overflow @ 360px').toBeLessThanOrEqual(1);
+
+    await page.setViewportSize({ width: 1280, height: 800 });
+    await page.goto(`${wiki.baseUrl}/admin`, { waitUntil: 'networkidle' });
+    await expect(card).toBeVisible();
+    await expect(card).toContainText('Verify your Kinloom archive');
+    const desktopOverflow = await page.evaluate(
+      () => document.documentElement.scrollWidth - window.innerWidth
+    );
+    expect(desktopOverflow, '/admin overflow @ 1280px').toBeLessThanOrEqual(1);
 
     // Complete a step and verify persistence across reload via GET/PUT /api/auth/me/onboarding
-    const card = page.getByTestId('onboarding-checklist-card');
     const settingsBtn = page.getByRole('button', {
       name: 'Mark "Review plugin settings and backup tokens" as completed',
     });
