@@ -105,10 +105,12 @@ dialog[open] {
     background-color 0.14s ease;
 }
 
-.pill-btn:hover {
-  color: var(--surface-header);
-  border-bottom-color: var(--border-control);
-  background: rgba(234, 225, 206, 0.45);
+@media (hover: hover) and (pointer: fine) {
+  .pill-btn:hover {
+    color: var(--surface-header);
+    border-bottom-color: var(--border-control);
+    background: rgba(234, 225, 206, 0.45);
+  }
 }
 
 .pill-btn:global(.active) {
@@ -152,12 +154,14 @@ select.pill-btn option {
     color 0.14s ease;
 }
 
-:global(.person-header-actions) .pill-btn:hover,
-:global(.index-filter-actions) .pill-btn:hover,
-:global(.ink-filter-bar) .pill-btn:hover,
-:global(.evidence-tabs) .pill-btn:hover {
-  background: var(--surface-linen);
-  border-color: var(--surface-header);
+@media (hover: hover) and (pointer: fine) {
+  :global(.person-header-actions) .pill-btn:hover,
+  :global(.index-filter-actions) .pill-btn:hover,
+  :global(.ink-filter-bar) .pill-btn:hover,
+  :global(.evidence-tabs) .pill-btn:hover {
+    background: var(--surface-linen);
+    border-color: var(--surface-header);
+  }
 }
 
 :global(.person-header-actions) .pill-btn:global(.active),
@@ -236,10 +240,14 @@ select.pill-btn option {
 @media (max-width: 768px) {
   .search-input {
     padding: 8px 10px;
-    font-size: 1rem;
+    font-size: 16px;
     min-height: 44px;
     width: 100%;
     min-width: 0;
+  }
+
+  select.pill-btn {
+    font-size: 16px;
   }
 
   .pill-btn,

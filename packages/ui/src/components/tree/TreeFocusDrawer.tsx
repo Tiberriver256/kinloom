@@ -91,7 +91,7 @@ export const TreeFocusDrawer: React.FC<TreeFocusDrawerProps> = ({
           aria-label="Clear focus"
           onClick={onClearFocus}
         >
-          ✕
+          <kbd className="kl-kbd">Esc</kbd>
         </button>
       </div>
 

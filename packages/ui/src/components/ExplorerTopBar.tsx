@@ -245,9 +245,10 @@ export const ExplorerTopBar: React.FC = () => {
             type="button"
             className={cx(topBarStyles, 'nav-pill nav-pill-desktop-only')}
             onClick={openSearch}
+            aria-label={KINLOOM_VOCABULARY.nav.searchDesktop}
             title={KINLOOM_VOCABULARY.nav.searchTooltip}
           >
-            {KINLOOM_VOCABULARY.nav.searchDesktop}
+            <span>Search</span> <kbd className="kl-kbd">/</kbd>
           </button>
 
           {isInviteViewer && (

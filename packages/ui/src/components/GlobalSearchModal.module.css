@@ -36,7 +36,8 @@
 }
 
 .global-search-header:focus-within {
-  box-shadow: inset 0 0 0 2px var(--action-focus);
+  border-bottom-color: var(--action-focus);
+  box-shadow: inset 0 -2px 0 0 var(--action-focus);
 }
 
 .global-search-input {
@@ -92,10 +93,46 @@
   color: var(--text-primary);
 }
 
-.global-search-item:hover,
 .global-search-item:global(.active) {
   background: var(--surface-radar);
   border-left-color: var(--radar-copresence);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .global-search-item:hover {
+    background: var(--surface-radar);
+    border-left-color: var(--radar-copresence);
+  }
+}
+
+.global-search-mark {
+  background: rgba(182, 134, 44, 0.24);
+  color: inherit;
+  padding: 0 1px;
+  border-radius: 2px;
+}
+
+.global-search-suggestion-chip {
+  padding: 5px 10px;
+  border: 1px solid var(--border-control);
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text-primary);
+  font-family: var(--font-mono);
+  font-size: 0.78rem;
+  cursor: pointer;
+  transition:
+    border-color 0.14s ease,
+    color 0.14s ease,
+    background-color 0.14s ease;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .global-search-suggestion-chip:hover {
+    border-color: var(--accent-primary);
+    color: var(--accent-primary);
+    background: var(--surface-linen);
+  }
 }
 
 .global-search-footer {

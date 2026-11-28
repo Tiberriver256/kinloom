@@ -5,6 +5,7 @@ import { KinloomFooter } from '../components/KinloomFooter.js';
 import { useArchiveUi } from '../context/ArchiveUiContext.js';
 import { cx } from '../lib/cx.js';
 import { KINLOOM_VOCABULARY } from '../lib/vocabulary.js';
+import layoutStyles from '../styles/Layout.module.css';
 import notFoundStyles from './NotFoundPage.module.css';
 
 export const NotFoundPage: React.FC = () => {
@@ -12,7 +13,7 @@ export const NotFoundPage: React.FC = () => {
   const { openSearch } = useArchiveUi();
 
   return (
-    <div>
+    <div className={cx(layoutStyles, 'page-shell')}>
       <ExplorerTopBar />
       <main id="main-content" className={cx(notFoundStyles, 'not-found-page')}>
         <h1 className={cx(notFoundStyles, 'not-found-title')}>Page Not Found</h1>

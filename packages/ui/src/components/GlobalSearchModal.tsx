@@ -1,7 +1,7 @@
 import type { ArchiveSearchResult, SearchResultKind } from '@kinloom/core';
 import { searchArchive } from '@kinloom/core';
 import type React from 'react';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useArchiveData } from '../context/ArchiveDataContext.js';
 import { useArchiveUi } from '../context/ArchiveUiContext.js';
@@ -13,10 +13,43 @@ import controlStyles from '../styles/Controls.module.css';
 import overlayStyles from '../styles/Overlays.module.css';
 import searchModalStyles from './GlobalSearchModal.module.css';
 
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+function renderHighlightedText(text: string, rawQuery: string, markClassName: string): React.ReactNode {
+  const terms = rawQuery
+    .trim()
+    .split(/\s+/)
+    .filter((t) => t.length >= 2);
+  if (terms.length === 0) {
+    return text;
+  }
+  const regex = new RegExp(`(${terms.map(escapeRegExp).join('|')})`, 'gi');
+  const parts = text.split(regex);
+  if (parts.length <= 1) {
+    return text;
+  }
+  let offset = 0;
+  return parts.map((part) => {
+    const start = offset;
+    offset += part.length;
+    const isMatch = terms.some((term) => term.toLowerCase() === part.toLowerCase());
+    return isMatch ? (
+      <mark key={`m-${start}-${part}`} className={markClassName}>
+        {part}
+      </mark>
+    ) : (
+      part
+    );
+  });
+}
+
 export const GlobalSearchModal: React.FC = () => {
   const { bundle, placesById, readings, readingsLoading, siteConfig } = useArchiveData();
   const { searchOpen, closeSearch, openSourceReader } = useArchiveUi();
   const navigate = useNavigate();
+  const listboxId = useId();
   const inputRef = useRef<HTMLInputElement | null>(null);
   const [query, setQuery] = useState('');
   const [activeIdx, setActiveIdx] = useState(0);
@@ -143,6 +176,15 @@ export const GlobalSearchModal: React.FC = () => {
     }))
     .filter((g) => g.items.length > 0);
 
+  const searchable = isSearchableQuery(query);
+  const activeOptionId = searchable && results[activeIdx] ? `${listboxId}-option-${activeIdx}` : undefined;
+  const liveCountAnnouncement = searchable
+    ? results.length === 0
+      ? `No results for ${query.trim()}`
+      : `${results.length} matching ${results.length === 1 ? 'result' : 'results'} for ${query.trim()}`
+    : '';
+  const markClass = cx(searchModalStyles, 'global-search-mark');
+
   return (
     <dialog
       ref={dialogRef}
@@ -163,6 +205,11 @@ export const GlobalSearchModal: React.FC = () => {
           <input
             ref={inputRef}
             type="search"
+            role="combobox"
+            aria-expanded={searchable && results.length > 0}
+            aria-autocomplete="list"
+            aria-controls={listboxId}
+            aria-activedescendant={activeOptionId}
             className={cx(searchModalStyles, 'global-search-input')}
             placeholder={KINLOOM_VOCABULARY.search.placeholder}
             value={query}
@@ -180,13 +227,19 @@ export const GlobalSearchModal: React.FC = () => {
             aria-label="Close search"
             onClick={closeSearch}
           >
-            <span className={cx(searchModalStyles, 'global-search-close-desktop')}>Esc</span>
+            <kbd className={joinClasses('kl-kbd', cx(searchModalStyles, 'global-search-close-desktop'))}>
+              Esc
+            </kbd>
             <span className={cx(searchModalStyles, 'global-search-close-mobile')}>Close</span>
           </button>
         </div>
 
+        <div className="visually-hidden" aria-live="polite" aria-atomic="true">
+          {liveCountAnnouncement}
+        </div>
+
         <div className={cx(searchModalStyles, 'global-search-body')}>
-          {isSearchableQuery(query) ? (
+          {searchable ? (
             <>
               {results.length === 0 && (
                 <div style={{ padding: '18px 16px', color: 'var(--text-secondary)', fontSize: '0.9rem' }}>
@@ -194,7 +247,12 @@ export const GlobalSearchModal: React.FC = () => {
                 </div>
               )}
               {results.length > 0 && (
-                <div className={cx(searchModalStyles, 'global-search-groups')}>
+                <div
+                  id={listboxId}
+                  role="listbox"
+                  aria-label="Search results"
+                  className={cx(searchModalStyles, 'global-search-groups')}
+                >
                   {grouped.map((group) => (
                     <div key={group.kind} className={'global-search-group'}>
                       <div className={cx(searchModalStyles, 'global-search-group-title')}>
@@ -206,6 +264,9 @@ export const GlobalSearchModal: React.FC = () => {
                         return (
                           <button
                             key={item.id}
+                            id={`${listboxId}-option-${flatIdx}`}
+                            role="option"
+                            aria-selected={isActive}
                             type="button"
                             className={cx(
                               searchModalStyles,
@@ -218,10 +279,16 @@ export const GlobalSearchModal: React.FC = () => {
                               activateResult(item);
                             }}
                           >
-                            <div className={'global-search-item-title'}>{item.title}</div>
-                            <div className={'global-search-item-sub'}>{item.subtitle}</div>
+                            <div className={'global-search-item-title'}>
+                              {renderHighlightedText(item.title, query, markClass)}
+                            </div>
+                            <div className={'global-search-item-sub'}>
+                              {renderHighlightedText(item.subtitle, query, markClass)}
+                            </div>
                             {item.snippet && (
-                              <div className={'global-search-item-snippet'}>{item.snippet}</div>
+                              <div className={'global-search-item-snippet'}>
+                                {renderHighlightedText(item.snippet, query, markClass)}
+                              </div>
                             )}
                           </button>
                         );
@@ -245,12 +312,12 @@ export const GlobalSearchModal: React.FC = () => {
                 {totalSourcePages > 0 ? `${totalSourcePages} SOURCE PAGES:` : 'SOURCE PAGES:'}
               </div>
               {quickQueries.length > 0 && (
-                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                <div className="kl-cluster">
                   {quickQueries.map((q) => (
                     <button
                       key={q}
                       type="button"
-                      className={cx(controlStyles, 'pill-btn')}
+                      className={cx(searchModalStyles, 'global-search-suggestion-chip')}
                       onClick={() => {
                         setQuery(q);
                       }}
@@ -278,7 +345,9 @@ export const GlobalSearchModal: React.FC = () => {
 
         <div className={cx(searchModalStyles, 'global-search-footer')}>
           <span className={cx(searchModalStyles, 'global-search-kbd-hint')}>
-            ↑↓ navigate · Enter open · Esc close
+            <kbd className="kl-kbd">↑</kbd>
+            <kbd className="kl-kbd">↓</kbd> navigate · <kbd className="kl-kbd">Enter</kbd> open ·{' '}
+            <kbd className="kl-kbd">Esc</kbd> close
           </span>
           <span>{readings ? `${totalSourcePages} source pages searchable` : 'Archive ready'}</span>
         </div>

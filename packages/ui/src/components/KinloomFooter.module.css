@@ -2,6 +2,7 @@
    Kinloom White-Label Colophon Footer
    ========================================================================== */
 .kinloom-footer {
+  width: 100%;
   max-width: 1180px;
   margin: 0 auto;
   padding: 18px 26px 32px;
@@ -37,9 +38,11 @@
     border-color 0.14s ease;
 }
 
-.kinloom-footer-link:hover {
-  color: var(--radar-copresence);
-  border-bottom-color: var(--radar-copresence);
+@media (hover: hover) and (pointer: fine) {
+  .kinloom-footer-link:hover {
+    color: var(--radar-copresence);
+    border-bottom-color: var(--radar-copresence);
+  }
 }
 
 .kinloom-footer-credit {

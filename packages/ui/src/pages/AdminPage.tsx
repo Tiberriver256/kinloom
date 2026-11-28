@@ -12,9 +12,11 @@ import type {
 } from '@kinloom/core';
 import type React from 'react';
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { Link } from 'react-router-dom';
 import atomStyles from '../components/Atoms.module.css';
 import { ExplorerTopBar } from '../components/ExplorerTopBar.js';
 import { KinloomFooter } from '../components/KinloomFooter.js';
+import { SignInModal } from '../components/wiki/SignInModal.js';
 import wikiPanelStyles from '../components/wiki/WikiPanels.module.css';
 import { useArchiveData } from '../context/ArchiveDataContext.js';
 import { cx } from '../lib/cx.js';
@@ -73,6 +75,7 @@ export const AdminPage: React.FC<AdminPageProps> = ({ adminClient, extraSettings
   const [tokenScope, setTokenScope] = useState<AgentTokenScope>('write_batch');
   const [revealedSecret, setRevealedSecret] = useState<CreatedAgentTokenResponse | null>(null);
   const [copiedSecret, setCopiedSecret] = useState(false);
+  const [signInOpen, setSignInOpen] = useState(false);
 
   const diagnosticsSupported = Boolean(client?.getSystemDiagnostics);
   const pluginSettingsSupported = Boolean(client?.getPluginSettings && client?.updatePluginSettings);
@@ -302,24 +305,47 @@ export const AdminPage: React.FC<AdminPageProps> = ({ adminClient, extraSettings
   const currentAdminEmail = session?.email?.toLowerCase() ?? null;
 
   if (!capabilities.canManageSite) {
+    const canSignIn = !session?.authenticated || session.principal_kind === 'invite_viewer';
     return (
-      <div>
+      <div className={cx(layoutStyles, 'page-shell')}>
         <ExplorerTopBar />
         <main id="main-content" className={cx(layoutStyles, 'place-page')}>
-          <section className={cx(layoutStyles, 'place-map-box')}>
+          <section className="kl-stack">
             <h1>Site Administration</h1>
             <p className={cx(controlStyles, 'empty-ring-note')}>
               Administrator permissions are required to manage members, invite links, and agent tokens.
             </p>
+            <div className="kl-cluster">
+              {canSignIn && (
+                <button
+                  type="button"
+                  className={cx(controlStyles, 'pill-btn')}
+                  onClick={() => {
+                    setSignInOpen(true);
+                  }}
+                >
+                  Sign in
+                </button>
+              )}
+              <Link to="/" className={cx(controlStyles, 'pill-btn')}>
+                Return to archive
+              </Link>
+            </div>
           </section>
         </main>
         <KinloomFooter />
+        <SignInModal
+          open={signInOpen}
+          onClose={() => {
+            setSignInOpen(false);
+          }}
+        />
       </div>
     );
   }
 
   return (
-    <div>
+    <div className={cx(layoutStyles, 'page-shell')}>
       <ExplorerTopBar />
       <main id="main-content" className={cx(layoutStyles, 'place-page')}>
         <section className={cx(layoutStyles, 'wire-banner')} style={{ marginBottom: 18 }}>

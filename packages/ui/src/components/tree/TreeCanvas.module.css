@@ -75,3 +75,17 @@
 .tree-canvas:global(.has-selection) :global(.tree-diagram-sibling-toggle):global(.is-lit) {
   opacity: 1;
 }
+
+@media (forced-colors: active) {
+  .tree-canvas :global(.tree-node-card.is-direct) rect {
+    stroke: CanvasText;
+    stroke-width: 2;
+    stroke-dasharray: none;
+  }
+
+  .tree-canvas :global(.tree-node-card.is-collateral) rect {
+    stroke: GrayText;
+    stroke-width: 2;
+    stroke-dasharray: 5 4;
+  }
+}

@@ -354,7 +354,10 @@ test.describe('Wave 50B UX regression suite', () => {
     // 8. P1-4: TreeFocusDrawer breadcrumb separator WCAG AA contrast >= 4.5
     await page.setViewportSize({ width: 1280, height: 800 });
     await page.goto('/tree?surface=roll&mode=full');
-    await page.locator('[aria-label="Inspect Abraham Lincoln"]').first().click();
+    await page
+      .getByRole('button', { name: /Abraham Lincoln/ })
+      .first()
+      .click();
     await expect(page.locator('.tree-focus-drawer')).toBeVisible();
     const crumbContrast = await page.evaluate(() => {
       const sep = document.querySelector('.tree-focus-crumb-sep');
@@ -568,7 +571,7 @@ test.describe('Wave 50B UX regression suite', () => {
         expect(unit.borderLeftWidth, `Direct unit left/right border mismatch at ${vp.name}`).toBe(
           unit.borderRightWidth
         );
-        expect(unit.borderRadius, `Direct unit borderRadius at ${vp.name}`).toBe('4px');
+        expect(unit.borderRadius, `Direct unit borderRadius at ${vp.name}`).toBe('0px');
       }
       expect(treeMetrics.earlyStrips.length).toBeGreaterThan(0);
       for (const strip of treeMetrics.earlyStrips) {
@@ -709,7 +712,7 @@ test.describe('Wave 50B UX regression suite', () => {
     expect(mainFocused).toBe('main-content');
 
     // GlobalSearchModal: aria-modal, Tab trap (never hits backdrop close), Escape restores focus
-    const searchBtn = page.locator('header.topbar button', { hasText: 'Search (/)' });
+    const searchBtn = page.getByRole('button', { name: 'Search (/)' });
     await searchBtn.focus();
     await searchBtn.click();
     const searchDialog = page.locator('dialog.global-search-backdrop[open]');

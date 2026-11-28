@@ -130,7 +130,7 @@ export const RecentChangesPage: React.FC<RecentChangesPageProps> = ({ initialRev
   const canRevertRevision = Boolean(capabilities.canEdit && dataSource.revertRevision);
 
   return (
-    <div>
+    <div className={cx(layoutStyles, 'page-shell')}>
       <ExplorerTopBar />
       <main id="main-content" className={cx(layoutStyles, 'place-page')}>
         <section className={cx(layoutStyles, 'wire-banner')} style={{ marginBottom: 18 }}>

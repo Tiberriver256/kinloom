@@ -25,8 +25,8 @@
   scrollbar-width: none;
   background: rgba(252, 249, 242, 0.96);
   border: 1px solid var(--border-control);
-  border-radius: 999px;
-  padding: 5px 10px;
+  border-radius: var(--radius-md);
+  padding: 5px 8px;
   box-shadow: var(--shadow-print);
 }
 
@@ -55,19 +55,17 @@
 }
 
 .tree-search-input {
-  width: 176px;
+  width: 196px;
   min-height: 30px;
   padding: 4px 26px 4px 30px;
-  border-radius: 999px;
+  border-radius: var(--radius-md);
   border: 1px solid var(--border-control);
   background: var(--surface-card);
   color: var(--text-primary);
   font-family: var(--font-mono);
   font-size: 0.78rem;
   line-height: 1.25;
-  transition:
-    border-color 0.14s ease,
-    width 0.16s ease;
+  transition: border-color 0.14s ease;
 }
 
 .tree-search-input::-webkit-search-cancel-button {
@@ -80,7 +78,6 @@
 }
 
 .tree-search-input:focus {
-  width: 212px;
   border-color: var(--accent-primary);
 }
 
@@ -94,7 +91,7 @@
   right: 4px;
   width: 22px;
   height: 22px;
-  border-radius: 999px;
+  border-radius: var(--radius-sm);
   border: none;
   background: transparent;
   color: var(--text-secondary);
@@ -105,15 +102,17 @@
   justify-content: center;
 }
 
-.tree-search-clear:hover {
-  color: var(--surface-header);
-  background: var(--surface-linen);
+@media (hover: hover) and (pointer: fine) {
+  .tree-search-clear:hover {
+    color: var(--surface-header);
+    background: var(--surface-linen);
+  }
 }
 
 .tree-search-toggle-btn {
   display: none;
   flex-shrink: 0;
-  border-radius: 999px;
+  border-radius: var(--radius-md);
   border: 1px solid var(--border-control);
   background: var(--surface-card);
   color: var(--surface-header);
@@ -166,9 +165,14 @@
   gap: 2px;
 }
 
-.tree-search-option:global(.is-active),
-.tree-search-option:hover {
+.tree-search-option:global(.is-active) {
   background: var(--surface-linen);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .tree-search-option:hover {
+    background: var(--surface-linen);
+  }
 }
 
 .tree-search-option:focus-visible {
@@ -212,19 +216,19 @@
   min-width: 0;
   min-height: 44px;
   padding: 6px 12px;
-  border-radius: 999px;
+  border-radius: var(--radius-md);
   border: 1px solid var(--border-control);
   background: var(--surface-card);
   color: var(--text-primary);
   font-family: var(--font-serif);
-  font-size: 1rem;
+  font-size: 16px;
 }
 
 .tree-search-mobile-close {
   flex-shrink: 0;
   min-height: 44px;
   padding: 0 12px;
-  border-radius: 999px;
+  border-radius: var(--radius-md);
   border: 1px solid var(--border-control);
   background: var(--surface-card);
   color: var(--surface-header);
@@ -236,14 +240,14 @@
   align-items: center;
   gap: 2px;
   padding: 2px;
-  border-radius: 999px;
+  border-radius: var(--radius-md);
   background: var(--surface-linen);
   border: 1px solid var(--border-decorative);
   flex-shrink: 0;
 }
 
 .tree-segmented :global(.tree-seg-btn) {
-  border-radius: 999px;
+  border-radius: var(--radius-sm);
   padding: 4px 11px;
   font-size: 0.78rem;
   line-height: 1.25;
@@ -253,8 +257,10 @@
   color: var(--text-secondary);
 }
 
-.tree-segmented :global(.tree-seg-btn):hover {
-  color: var(--surface-header);
+@media (hover: hover) and (pointer: fine) {
+  .tree-segmented :global(.tree-seg-btn):hover {
+    color: var(--surface-header);
+  }
 }
 
 .tree-segmented :global(.tree-seg-btn):global(.active) {
@@ -269,7 +275,7 @@
 }
 
 .tree-toolbar select:global(.pill-btn).tree-branch-select {
-  border-radius: 999px;
+  border-radius: var(--radius-md);
   padding: 4px 10px;
   font-size: 0.78rem;
   border: 1px solid var(--border-control);
@@ -282,7 +288,7 @@
 .tree-toolbar :global(.tree-add-person-btn) {
   padding: 4px 11px;
   border: 1px solid var(--accent-primary);
-  border-radius: 999px;
+  border-radius: var(--radius-md);
   background: var(--surface-card);
   color: var(--accent-primary);
   font-weight: 600;
@@ -291,24 +297,22 @@
   flex-shrink: 0;
 }
 
-.tree-toolbar :global(.tree-add-person-btn):hover {
-  background: var(--accent-primary);
-  color: var(--text-inverse);
-}
-
 .tree-toolbar :global(.tree-add-person-mobile-btn) {
   display: none;
   border: 1px solid var(--accent-primary);
-  border-radius: 999px;
+  border-radius: var(--radius-md);
   background: var(--surface-card);
   color: var(--accent-primary);
   padding: 0;
   flex: 0 0 auto;
 }
 
-.tree-toolbar :global(.tree-add-person-mobile-btn):hover {
-  background: var(--accent-primary);
-  color: var(--text-inverse);
+@media (hover: hover) and (pointer: fine) {
+  .tree-toolbar :global(.tree-add-person-btn):hover,
+  .tree-toolbar :global(.tree-add-person-mobile-btn):hover {
+    background: var(--accent-primary);
+    color: var(--text-inverse);
+  }
 }
 
 @media (max-width: 768px) {
@@ -413,6 +417,7 @@
     max-width: none;
     min-height: 44px;
     width: 100%;
+    font-size: 16px;
   }
 
   .tree-segmented :global(.tree-seg-btn) {

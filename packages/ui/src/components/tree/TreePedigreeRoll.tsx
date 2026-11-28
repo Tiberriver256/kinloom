@@ -72,7 +72,6 @@ const RollPersonCard: React.FC<RollPersonCardProps> = ({
       type="button"
       className={cx(pedigreeRollStyles, classes)}
       data-person-id={person.id}
-      aria-label={`Inspect ${person.full_name}`}
       aria-pressed={isSelected}
       onClick={() => {
         onSelect(person);
@@ -447,6 +446,8 @@ export const TreePedigreeRoll: React.FC<TreePedigreeRollProps> = ({
               onClick={() => {
                 const target = document.getElementById(`tree-roll-gen-${g.gen}`);
                 target?.scrollIntoView({ behavior: scrollBehaviorForMotion(), block: 'start' });
+                const heading = document.getElementById(`tree-roll-gen-heading-${g.gen}`);
+                heading?.focus({ preventScroll: true });
               }}
             >
               {g.label}
@@ -468,8 +469,14 @@ export const TreePedigreeRoll: React.FC<TreePedigreeRollProps> = ({
               className={cx(pedigreeRollStyles, 'tree-roll-generation')}
             >
               <header className={cx(pedigreeRollStyles, 'tree-roll-gen-header')}>
-                <span className={cx(pedigreeRollStyles, 'tree-roll-gen-badge')}>{genGroup.label}</span>
-                <span className={cx(pedigreeRollStyles, 'tree-roll-gen-years')}>{genGroup.yearRange}</span>
+                <h2
+                  id={`tree-roll-gen-heading-${genGroup.gen}`}
+                  tabIndex={-1}
+                  className={cx(pedigreeRollStyles, 'tree-roll-gen-heading')}
+                >
+                  <span className={cx(pedigreeRollStyles, 'tree-roll-gen-badge')}>{genGroup.label}</span>
+                  <span className={cx(pedigreeRollStyles, 'tree-roll-gen-years')}>{genGroup.yearRange}</span>
+                </h2>
               </header>
               <div className={cx(pedigreeRollStyles, 'tree-roll-gen-units')}>
                 {genGroup.units.map((unit) => renderUnit(unit, idx === 0))}

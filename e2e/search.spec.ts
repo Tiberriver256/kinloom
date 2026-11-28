@@ -20,7 +20,7 @@ test('global search opens via / shortcut, searches people/places/readings, and n
   await input.fill('Mary Ann Todd');
   await expect(page.getByText(/People \(\d+\)/)).toBeVisible();
   await page
-    .getByRole('button', { name: /Mary Ann Todd/ })
+    .getByRole('option', { name: /Mary Ann Todd/ })
     .first()
     .click();
   await expect(page).toHaveURL(/\/person\/mary-ann-todd$/);
@@ -31,7 +31,7 @@ test('global search opens via / shortcut, searches people/places/readings, and n
   await page.getByLabel('Search the archive').fill('Hodgenville');
   await expect(page.getByText(/Places \(\d+\)/)).toBeVisible();
   await page
-    .getByRole('button', { name: /Hodgenville, Hardin County/ })
+    .getByRole('option', { name: /Hodgenville, Hardin County/ })
     .first()
     .click();
   await expect(page).toHaveURL(/\/place\/hodgenville-kentucky$/);
@@ -41,7 +41,7 @@ test('global search opens via / shortcut, searches people/places/readings, and n
   await page.getByLabel('Search the archive').fill('Rule of Three');
   await expect(page.getByText(/Source Pages \(\d+\)/)).toBeVisible();
   await page
-    .getByRole('button', { name: /Autobiographical Sketch/ })
+    .getByRole('option', { name: /Autobiographical Sketch/ })
     .first()
     .click();
   const reader = page.getByRole('dialog', { name: 'Source Reader' });

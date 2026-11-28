@@ -71,6 +71,56 @@ select {
   white-space: nowrap;
 }
 
+/* Reusable intrinsic CSS layout primitives */
+.kl-stack {
+  display: flex;
+  flex-direction: column;
+  gap: var(--kl-space, 12px);
+}
+
+.kl-cluster {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--kl-space, 8px);
+}
+
+.kl-switcher {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--kl-space, 16px);
+}
+
+.kl-switcher > * {
+  flex-grow: 1;
+  flex-basis: calc((var(--kl-threshold, 30rem) - 100%) * 999);
+  min-width: 0;
+}
+
+.kl-kbd {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 1.35em;
+  padding: 1px 5px;
+  border: 1px solid var(--border-control);
+  border-bottom-width: 2px;
+  border-radius: var(--radius-sm);
+  background: var(--surface-card);
+  color: var(--text-secondary);
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  font-weight: 600;
+  line-height: 1.25;
+}
+
+@media (max-width: 768px) {
+  input:not([type="checkbox"]):not([type="radio"]):not([type="range"]),
+  select {
+    font-size: 16px;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,
