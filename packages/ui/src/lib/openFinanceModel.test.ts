@@ -193,4 +193,188 @@ describe('openFinanceModel URL allowlist and money parsing', () => {
       })
     ).toThrow(RangeError);
   });
+
+  it('handles open-finance normalization, summary fallbacks, and strict boundary parser errors', () => {
+    expect(formatUiCurrencyCents(12.6)).toBe('$0.13');
+    const emptyTotals = computeUiOpenFinanceTotals([]);
+    expect(
+      computeUiFundingGoalSummary(
+        { enabled: true, period: 'monthly', target_cents: 0, received_cents: 100 },
+        emptyTotals
+      )
+    ).toEqual({
+      period: 'monthly',
+      target_cents: 0,
+      received_cents: 100,
+      remaining_cents: 0,
+      progress_percent: 0,
+      raw_percent: 0,
+    });
+
+    const defaults = normalizeUiOpenFinanceConfig();
+    expect(defaults.primary_platform).toBeNull();
+    expect(defaults.currency).toBe('USD');
+    expect(defaults.funding_goal).toBeNull();
+
+    expect(() => normalizeUiOpenFinanceConfig({ platforms: [{ platform: 'ko_fi' }] })).toThrow(RangeError);
+    expect(() =>
+      normalizeUiOpenFinanceConfig({ platforms: [{ platform: 'ko_fi', url: 'https://evil.example/x' }] })
+    ).toThrow(RangeError);
+    expect(() =>
+      normalizeUiOpenFinanceConfig({
+        cost_items: [{ id: '   ', label: 'X', category: 'other', cadence: 'one_time', amount_cents: 100 }],
+      })
+    ).toThrow(RangeError);
+    expect(() =>
+      normalizeUiOpenFinanceConfig({
+        cost_items: [{ id: 'a', label: 'X', category: 'other', cadence: 'one_time', amount_cents: -5 }],
+      })
+    ).toThrow(RangeError);
+
+    const richCfg = normalizeUiOpenFinanceConfig({
+      supporter_message: '  Custom note  ',
+      platforms: [
+        {
+          platform: 'ko_fi',
+          url: 'https://ko-fi.com/alderarchive',
+          description: 'Coffee support',
+          enabled: false,
+        },
+        {
+          platform: 'buy_me_a_coffee',
+          handle: 'alderarchive',
+          description: 'One-time gift',
+        },
+      ],
+      cost_items: [
+        {
+          id: 'dom',
+          label: '  ',
+          category: 'domain',
+          cadence: 'annual',
+          amount_cents: 1200,
+          notes: 'Yearly',
+        },
+        { id: 'scan', label: 'Scanner', category: 'other', cadence: 'one_time', amount_cents: 5000 },
+      ],
+    });
+    expect(richCfg.cost_items[0]?.label).toBe('dom');
+    expect(richCfg.cost_items[0]?.notes).toBe('Yearly');
+
+    // Summary builder handles stale primary_platform pointing to disabled entry and empty enabled list
+    const stalePrimarySummary = buildUiOpenFinanceSummaryFromConfig({
+      ...richCfg,
+      primary_platform: 'ko_fi',
+    });
+    expect(stalePrimarySummary.platforms[0]?.platform).toBe('buy_me_a_coffee');
+    expect(stalePrimarySummary.platforms[0]?.is_primary).toBe(true);
+    expect(stalePrimarySummary.platforms[0]?.description).toBe('One-time gift');
+    expect(stalePrimarySummary.cost_items[0]?.monthly_equivalent_cents).toBe(100);
+    expect(stalePrimarySummary.cost_items[1]?.annual_equivalent_cents).toBe(0);
+
+    const noEnabledSummary = buildUiOpenFinanceSummaryFromConfig({
+      ...richCfg,
+      platforms: [],
+      primary_platform: null,
+    });
+    expect(noEnabledSummary.platforms).toEqual([]);
+
+    // parseUiOpenFinanceSummary optional fields and error guards
+    const parsedWithOptionals = parseUiOpenFinanceSummary({
+      ...stalePrimarySummary,
+      supporter_message: 123,
+      platforms: [{ ...stalePrimarySummary.platforms[0], label: '   ' }],
+      funding_goal: {
+        period: 'annual',
+        target_cents: 1000,
+        received_cents: 500,
+        remaining_cents: 500,
+        progress_percent: 50,
+        raw_percent: 50,
+        label: 'Annual Goal',
+      },
+      updated_at: '',
+    });
+    expect(parsedWithOptionals.supporter_message).toBe('');
+    expect(parsedWithOptionals.platforms[0]?.label).toBe('Buy Me a Coffee');
+    expect(parsedWithOptionals.funding_goal?.label).toBe('Annual Goal');
+    expect(parsedWithOptionals.updated_at).toBeNull();
+
+    const invalidSummaries: unknown[] = [
+      { ...stalePrimarySummary, currency: 'JPY' },
+      { ...stalePrimarySummary, visibility: null },
+      { ...stalePrimarySummary, totals: null },
+      { ...stalePrimarySummary, platforms: 'bad' },
+      { ...stalePrimarySummary, cost_items: 'bad' },
+      { ...stalePrimarySummary, platforms: [{ platform: 'bogus' }] },
+      { ...stalePrimarySummary, platforms: [{ ...stalePrimarySummary.platforms[0], is_primary: 'yes' }] },
+      { ...stalePrimarySummary, cost_items: [null] },
+      { ...stalePrimarySummary, cost_items: [{ ...stalePrimarySummary.cost_items[0], category: 'bad' }] },
+      { ...stalePrimarySummary, cost_items: [{ ...stalePrimarySummary.cost_items[0], cadence: 'weekly' }] },
+      { ...stalePrimarySummary, cost_items: [{ ...stalePrimarySummary.cost_items[0], amount_cents: -1 }] },
+      { ...stalePrimarySummary, page_title: '   ' },
+      { ...stalePrimarySummary, funding_goal: 'bad' },
+      { ...stalePrimarySummary, funding_goal: { period: 'weekly' } },
+    ];
+    for (const bad of invalidSummaries) {
+      expect(() => parseUiOpenFinanceSummary(bad)).toThrow();
+    }
+
+    // parseUiOpenFinanceAdminConfig optional fields and error guards
+    const validAdminBase = {
+      config: {
+        ...richCfg,
+        supporter_message: 42,
+        primary_platform: null,
+        platforms: [{ platform: 'buy_me_a_coffee', url: 'https://buymeacoffee.com/alderarchive' }],
+        cost_items: [
+          {
+            id: 'n1',
+            label: 'Notes item',
+            category: 'other',
+            cadence: 'one_time',
+            amount_cents: 100,
+            notes: 'ok',
+          },
+        ],
+        funding_goal: {
+          enabled: true,
+          period: 'annual',
+          target_cents: 1000,
+          received_cents: 250,
+          label: 'Yearly Goal',
+        },
+      },
+      summary: stalePrimarySummary,
+      updated_at: null,
+      updated_by: null,
+      persistence_available: 'yes',
+    };
+    const parsedAdmin = parseUiOpenFinanceAdminConfig(validAdminBase);
+    expect(parsedAdmin.config.supporter_message).toBe('');
+    expect(parsedAdmin.config.funding_goal?.label).toBe('Yearly Goal');
+    expect(parsedAdmin.updated_at).toBeNull();
+    expect(parsedAdmin.updated_by).toBeNull();
+    expect(parsedAdmin.persistence_available).toBe(true);
+
+    const parsedAdminNoGoal = parseUiOpenFinanceAdminConfig({
+      ...validAdminBase,
+      config: { ...validAdminBase.config, funding_goal: null },
+    });
+    expect(parsedAdminNoGoal.config.funding_goal).toBeNull();
+
+    const invalidAdmins: unknown[] = [
+      { ...validAdminBase, config: { ...validAdminBase.config, currency: 'JPY' } },
+      { ...validAdminBase, config: { ...validAdminBase.config, visibility: null } },
+      { ...validAdminBase, config: { ...validAdminBase.config, platforms: 'bad' } },
+      { ...validAdminBase, config: { ...validAdminBase.config, platforms: [{ platform: 'bad' }] } },
+      { ...validAdminBase, config: { ...validAdminBase.config, cost_items: [{ category: 'bad' }] } },
+      { ...validAdminBase, config: { ...validAdminBase.config, funding_goal: 'bad' } },
+      { ...validAdminBase, config: { ...validAdminBase.config, funding_goal: { period: 'weekly' } } },
+      { ...validAdminBase, config: { ...validAdminBase.config, primary_platform: 'bogus' } },
+    ];
+    for (const bad of invalidAdmins) {
+      expect(() => parseUiOpenFinanceAdminConfig(bad)).toThrow();
+    }
+  });
 });

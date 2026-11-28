@@ -343,6 +343,126 @@ describe('open-finance integer-cents cost math and config validation', () => {
     expect(summary.platforms[1]?.is_primary).toBe(true);
     expect(summary.cost_items[0]?.annual_equivalent_cents).toBe(5400);
   });
+
+  it('covers Zod schema errors, summary fallbacks, and partial PluginSettingsStore rehydration edge cases', () => {
+    expect(formatCurrencyCents(12.6)).toBe('$0.13');
+    const rootInvalid = validateOpenFinanceConfig('not-an-object');
+    expect(rootInvalid.ok).toBe(false);
+    if (!rootInvalid.ok) {
+      expect(typeof rootInvalid.fieldErrors._root).toBe('string');
+    }
+    const multiIssue = validateOpenFinanceConfig({
+      currency: 'JPY',
+      cost_items: [{ id: 'bad id!', label: '', category: 'domain', cadence: 'annual', amount_cents: -1 }],
+    });
+    expect(multiIssue.ok).toBe(false);
+
+    const zeroGoal = computeFundingGoalSummary(
+      { enabled: true, period: 'annual', target_cents: 0, received_cents: 500 },
+      computeOpenFinanceTotals([])
+    );
+    expect(zeroGoal?.raw_percent).toBe(0);
+
+    const notedConfig = parseOpenFinanceConfig({
+      platforms: [
+        { platform: 'ko_fi', handle: 'alderarchive', description: 'Tip jar', enabled: false },
+        { platform: 'buy_me_a_coffee', handle: 'alderarchive', description: 'Coffee' },
+      ],
+      cost_items: [
+        {
+          id: 'scan',
+          label: 'Scanner',
+          category: 'other',
+          cadence: 'one_time',
+          amount_cents: 2500,
+          notes: 'One-time flatbed purchase',
+        },
+        {
+          id: 'dom',
+          label: 'Domain',
+          category: 'domain',
+          cadence: 'annual',
+          amount_cents: 1200,
+        },
+      ],
+      funding_goal: {
+        enabled: true,
+        period: 'annual',
+        target_cents: 5000,
+        received_cents: 1000,
+        label: 'Annual Hosting',
+      },
+    });
+    expect(notedConfig.cost_items[0]?.notes).toBe('One-time flatbed purchase');
+    expect(notedConfig.funding_goal?.label).toBe('Annual Hosting');
+
+    const fallbackPrimarySummary = buildOpenFinancePublicSummary(
+      { ...notedConfig, primary_platform: 'ko_fi' },
+      null
+    );
+    expect(fallbackPrimarySummary.platforms[0]?.platform).toBe('buy_me_a_coffee');
+    expect(fallbackPrimarySummary.platforms[0]?.is_primary).toBe(true);
+    expect(fallbackPrimarySummary.cost_items[0]?.monthly_equivalent_cents).toBe(0);
+    expect(fallbackPrimarySummary.cost_items[0]?.annual_equivalent_cents).toBe(0);
+    expect(fallbackPrimarySummary.cost_items[0]?.notes).toBe('One-time flatbed purchase');
+    expect(fallbackPrimarySummary.cost_items[1]?.monthly_equivalent_cents).toBe(100);
+
+    const emptySummary = buildOpenFinancePublicSummary(
+      { ...notedConfig, platforms: [], primary_platform: null },
+      null
+    );
+    expect(emptySummary.platforms).toEqual([]);
+
+    // Rehydration with fallback values when scalar keys are missing, invalid, or malformed JSON
+    const fallbackCfg = notedConfig;
+    const rehydratedFromBadScalars = settingsValuesToOpenFinanceConfig(
+      {
+        currency: 'JPY',
+        page_title: '   ',
+        nav_label: '',
+        supporter_message: 42 as unknown as string,
+        show_support_page: 'yes' as unknown as boolean,
+        show_in_nav: 'yes' as unknown as boolean,
+        show_in_footer: 'yes' as unknown as boolean,
+        platform_order_json: '{bad json',
+        cost_ledger_json: 'not-json',
+        funding_goal_json: 'not-json',
+        primary_platform: 'auto',
+      },
+      fallbackCfg
+    );
+    expect(rehydratedFromBadScalars.currency).toBe(fallbackCfg.currency);
+    expect(rehydratedFromBadScalars.page_title).toBe(fallbackCfg.page_title);
+    expect(rehydratedFromBadScalars.primary_platform).toBe('buy_me_a_coffee');
+    expect(rehydratedFromBadScalars.platforms).toHaveLength(2);
+
+    // Rehydration handles invalid platform entries in JSON, clearing an enabled platform URL, preserving disabled ones, and invalid primary
+    const rehydratedMutations = settingsValuesToOpenFinanceConfig(
+      {
+        platform_order_json: JSON.stringify([
+          { platform: 'bogus_platform', url: 'https://example.com/x' },
+          { platform: 'ko_fi', url: 'https://ko-fi.com/alderarchive', enabled: false },
+          { platform: 'buy_me_a_coffee', url: 'https://buymeacoffee.com/alderarchive', enabled: true },
+        ]),
+        kofi_url: '',
+        buy_me_a_coffee_url: '',
+        stripe_payment_link_url: 123 as unknown as string,
+        primary_platform: 'ko_fi',
+      },
+      fallbackCfg
+    );
+    expect(rehydratedMutations.platforms.map((p) => p.platform)).toEqual(['ko_fi']);
+    expect(rehydratedMutations.primary_platform).toBeNull();
+
+    // Rehydration falls back to `fallbackCfg` when resulting merged config fails allowlist validation
+    const rehydratedInvalidUrl = settingsValuesToOpenFinanceConfig(
+      {
+        github_sponsors_url: 'https://evil.example/sponsors/alder',
+      },
+      fallbackCfg
+    );
+    expect(rehydratedInvalidUrl).toEqual(fallbackCfg);
+  });
 });
 
 describe('createOpenFinancePlugin server integration', () => {
