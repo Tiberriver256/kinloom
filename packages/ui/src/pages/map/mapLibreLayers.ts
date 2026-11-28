@@ -58,32 +58,94 @@ export function setPeriodBasemap(map: MapLibreMap): void {
   );
 }
 
+export interface FitPaddingMeasurements {
+  readonly viewportWidth: number;
+  readonly viewportHeight?: number;
+  readonly toolbarHeight?: number;
+  readonly bottomDockHeight?: number;
+  readonly hasSelectedStop: boolean;
+  readonly drawerBottomPx?: number;
+}
+
+export interface FitPadding {
+  readonly top: number;
+  readonly right: number;
+  readonly bottom: number;
+  readonly left: number;
+}
+
+export function computeSafeFitPadding(input: FitPaddingMeasurements): FitPadding {
+  const isMobile = input.viewportWidth <= 767;
+  const toolbarOffset = isMobile ? 8 : 12;
+  const toolbarGap = isMobile ? 16 : 20;
+  const measuredTop =
+    input.toolbarHeight !== undefined && input.toolbarHeight > 0
+      ? Math.ceil(input.toolbarHeight) + toolbarOffset + toolbarGap
+      : isMobile
+        ? 124
+        : 82;
+
+  const defaultBottom = isMobile ? (input.hasSelectedStop ? 210 : 124) : 112;
+  const measuredBottom =
+    input.bottomDockHeight !== undefined && input.bottomDockHeight > 0
+      ? Math.ceil(input.bottomDockHeight) + (isMobile ? 18 : 24)
+      : 0;
+
+  let top = measuredTop;
+  let bottom = Math.max(defaultBottom, measuredBottom, input.drawerBottomPx ?? 0);
+  let left = isMobile ? 20 : 28;
+  let right = isMobile ? 76 : input.hasSelectedStop ? 344 : 110;
+
+  if (input.viewportHeight !== undefined && input.viewportHeight > 0) {
+    const maxVertical = Math.max(0, input.viewportHeight - 120);
+    if (top + bottom > maxVertical) {
+      const scale = maxVertical / Math.max(1, top + bottom);
+      top = Math.floor(top * scale);
+      bottom = Math.floor(bottom * scale);
+    }
+  }
+
+  if (input.viewportWidth > 0) {
+    const maxHorizontal = Math.max(0, input.viewportWidth - 120);
+    if (left + right > maxHorizontal) {
+      const scale = maxHorizontal / Math.max(1, left + right);
+      left = Math.floor(left * scale);
+      right = Math.floor(right * scale);
+    }
+  }
+
+  return { top, right, bottom, left };
+}
+
 export function getFitOptions(
   hasSelectedStop: boolean,
-  drawerBottomPx?: number
+  drawerBottomPx?: number,
+  measurements?: {
+    readonly viewportWidth?: number;
+    readonly viewportHeight?: number;
+    readonly toolbarHeight?: number;
+    readonly bottomDockHeight?: number;
+  }
 ): {
   padding: { top: number; right: number; bottom: number; left: number };
   duration: number;
   maxZoom: number;
   absolutePadding: boolean;
 } {
-  const isMobile = typeof window !== 'undefined' && window.innerWidth <= 767;
-  if (isMobile) {
-    const defaultBottom = hasSelectedStop ? 210 : 116;
-    return {
-      padding: {
-        top: 72,
-        right: 76,
-        bottom: drawerBottomPx !== undefined ? Math.max(defaultBottom, drawerBottomPx) : defaultBottom,
-        left: 20,
-      },
-      duration: 0,
-      maxZoom: 6.5,
-      absolutePadding: true,
-    };
-  }
+  const viewportWidth =
+    measurements?.viewportWidth ?? (typeof window !== 'undefined' ? window.innerWidth : 1280);
+  const viewportHeight =
+    measurements?.viewportHeight ?? (typeof window !== 'undefined' ? window.innerHeight : undefined);
+  const padding = computeSafeFitPadding({
+    viewportWidth,
+    viewportHeight,
+    toolbarHeight: measurements?.toolbarHeight,
+    bottomDockHeight: measurements?.bottomDockHeight,
+    hasSelectedStop,
+    drawerBottomPx,
+  });
   return {
-    padding: { top: 82, right: hasSelectedStop ? 344 : 110, bottom: 108, left: 28 },
+    padding: { top: padding.top, right: padding.right, bottom: padding.bottom, left: padding.left },
     duration: 0,
     maxZoom: 6.5,
     absolutePadding: true,

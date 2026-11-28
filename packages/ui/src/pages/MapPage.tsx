@@ -238,6 +238,7 @@ export const MapPage: React.FC = () => {
         )}
 
         <MapToolbar
+          toolbarRef={controller.toolbarRef}
           selectablePeople={selectablePeople}
           selectedPersonId={selectedPersonId}
           selectedEraId={selectedEraId}

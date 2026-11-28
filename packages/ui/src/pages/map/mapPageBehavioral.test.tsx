@@ -140,6 +140,7 @@ vi.mock('@openhistoricalmap/maplibre-gl-dates', () => ({
 
 import { ArchiveProvider } from '../../context/ArchiveProvider.js';
 import { MapPage } from '../MapPage.js';
+import { MapToolbar } from './MapToolbar.js';
 
 declare global {
   var IS_REACT_ACT_ENVIRONMENT: boolean | undefined;
@@ -438,5 +439,138 @@ describe('MapPage behavioral migration journey flows', () => {
     await flushUi();
     await flushUi();
     expect(errContainer.textContent).toContain('Unable to load migration map');
+  });
+
+  it('collapses overflowing desktop eras into a keyboard-accessible More menu and renders segmented route-mode controls', async () => {
+    const onSelectEraId = vi.fn();
+    const onSetRouteMode = vi.fn();
+    const onSelectPersonId = vi.fn();
+
+    const eras = [
+      { id: 'era_1', label: 'British Isles Origins', description: '', color: '#3B4D61' },
+      { id: 'era_2', label: 'Colonial Seaboard', description: '', color: '#1B2A41' },
+      { id: 'era_3', label: 'Appalachian Frontier', description: '', color: '#2F5245' },
+      { id: 'era_4', label: 'Illinois Prairie & Midwest', description: '', color: '#7A4612' },
+      { id: 'era_5', label: 'Pacific & Western Crossing', description: '', color: '#5B3A5E' },
+    ];
+    const counts = new Map([
+      ['era_1', 4],
+      ['era_2', 12],
+      ['era_3', 20],
+      ['era_4', 22],
+      ['era_5', 11],
+    ]);
+
+    const origGetBoundingClientRect = HTMLElement.prototype.getBoundingClientRect;
+    vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(function (this: HTMLElement) {
+      const key = this.dataset?.measureEra;
+      if (key === 'all') {
+        return new DOMRect(0, 0, 100, 32);
+      }
+      if (key === 'more') {
+        return new DOMRect(0, 0, 100, 32);
+      }
+      if (key?.startsWith('era_')) {
+        return new DOMRect(0, 0, 180, 32);
+      }
+      if (this.dataset?.mapTraceLabel === 'true') {
+        return new DOMRect(0, 0, 220, 32);
+      }
+      if (this.dataset?.mapRouteMode === 'true') {
+        return new DOMRect(0, 0, 200, 32);
+      }
+      return origGetBoundingClientRect.call(this);
+    });
+
+    const host = document.createElement('div');
+    Object.defineProperty(host, 'clientWidth', { configurable: true, value: 1120 });
+    document.body.append(host);
+    const root = createRoot(host);
+    cleanups.push(() => {
+      act(() => {
+        root.unmount();
+      });
+      host.remove();
+    });
+
+    act(() => {
+      root.render(
+        <MapToolbar
+          selectablePeople={SAMPLE_BUNDLE.people}
+          selectedPersonId="all"
+          selectedEraId="all"
+          routeMode="per-person"
+          allStopsCount={69}
+          migrationEras={eras}
+          eraStopCounts={counts}
+          onSelectPersonId={onSelectPersonId}
+          onSelectEraId={onSelectEraId}
+          onSetRouteMode={onSetRouteMode}
+        />
+      );
+    });
+    await flushUi();
+
+    const moreBtn = host.querySelector<HTMLButtonElement>('button[aria-haspopup="menu"]');
+    expect(moreBtn).not.toBeNull();
+    expect(moreBtn?.getAttribute('aria-expanded')).toBe('false');
+    expect(moreBtn?.textContent).toContain('More (+3)');
+
+    // Open menu, close with Escape, reopen, select overflow era
+    act(() => {
+      moreBtn?.click();
+    });
+    await flushUi();
+    expect(moreBtn?.getAttribute('aria-expanded')).toBe('true');
+    const menu = host.querySelector('[role="menu"]');
+    expect(menu).not.toBeNull();
+    const items = [...(menu?.querySelectorAll<HTMLButtonElement>('[role="menuitemradio"]') ?? [])];
+    expect(items).toHaveLength(3);
+    expect(items.map((el) => el.textContent)).toEqual([
+      'Appalachian Frontier(20)',
+      'Illinois Prairie & Midwest(22)',
+      'Pacific & Western Crossing(11)',
+    ]);
+
+    act(() => {
+      document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+    });
+    await flushUi();
+    expect(host.querySelector('[role="menu"]')).toBeNull();
+
+    act(() => {
+      moreBtn?.click();
+    });
+    await flushUi();
+    act(() => {
+      document.body.dispatchEvent(new Event('pointerdown', { bubbles: true }));
+    });
+    await flushUi();
+    expect(host.querySelector('[role="menu"]')).toBeNull();
+
+    act(() => {
+      moreBtn?.click();
+    });
+    await flushUi();
+    const lastOverflowItem = host.querySelectorAll<HTMLButtonElement>('[role="menuitemradio"]')[2];
+    act(() => {
+      lastOverflowItem?.click();
+    });
+    await flushUi();
+    expect(onSelectEraId).toHaveBeenCalledWith('era_5');
+    expect(host.querySelector('[role="menu"]')).toBeNull();
+
+    // Segmented route mode exposes both states clearly
+    const modeButtons = [
+      ...host.querySelectorAll<HTMLButtonElement>('fieldset[aria-label="Full lineage route mode"] button'),
+    ];
+    expect(modeButtons.map((b) => [b.textContent?.trim(), b.getAttribute('aria-pressed')])).toEqual([
+      ['By person', 'true'],
+      ['Chronological', 'false'],
+    ]);
+    act(() => {
+      modeButtons[1]?.click();
+    });
+    expect(onSetRouteMode).toHaveBeenCalledWith('chronological');
   });
 });

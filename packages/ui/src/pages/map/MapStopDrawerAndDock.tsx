@@ -205,7 +205,7 @@ export const MapStopDrawerAndDock: React.FC<MapStopDrawerAndDockProps> = ({
         </section>
       )}
 
-      <div className={cx(mapStyles, 'map-overlay map-playback-bar')}>
+      <div data-map-playback-bar="true" className={cx(mapStyles, 'map-overlay map-playback-bar')}>
         {stops.length === 0 ? (
           <div className={cx(mapStyles, 'map-empty-notice')} role="status">
             No geocoded stops match the active filter.

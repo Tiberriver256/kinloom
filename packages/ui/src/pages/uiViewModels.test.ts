@@ -20,7 +20,17 @@ import {
   filterMediaItems,
   parseInitialEvidenceTab,
 } from './evidence/evidenceViewModel.js';
-import { buildFamilyOverlay, computeDefaultMapBounds, routeArc, wantsLabel } from './map/mapOverlayData.js';
+import { computeEraOverflowLayout } from './map/MapToolbar.js';
+import { computeSafeFitPadding, getFitOptions } from './map/mapLibreLayers.js';
+import {
+  buildFamilyOverlay,
+  computeAntimeridianSafeBounds,
+  computeDefaultMapBounds,
+  normalizeLongitude,
+  routeArc,
+  unwrapSegmentLongitudes,
+  wantsLabel,
+} from './map/mapOverlayData.js';
 import {
   buildImmediateFamily,
   buildPersonSectionJumpItems,
@@ -309,6 +319,202 @@ describe('mapOverlayData', () => {
       [-91.5, 38.5],
       [-88.5, 41.5],
     ]);
+  });
+
+  it('unwraps antimeridian-crossing Pacific routes continuously and computes shortest-arc bounds', () => {
+    expect(normalizeLongitude(190)).toBe(-170);
+    expect(normalizeLongitude(-190)).toBe(170);
+    expect(normalizeLongitude(180)).toBe(180);
+
+    const [westStart, westEnd] = unwrapSegmentLongitudes(-157.86, 139.69);
+    expect(westStart).toBeCloseTo(-157.86, 6);
+    expect(westEnd).toBeCloseTo(-220.31, 6);
+    const [eastStart, eastEnd] = unwrapSegmentLongitudes(139.69, -157.86);
+    expect(eastStart).toBeCloseTo(139.69, 6);
+    expect(eastEnd).toBeCloseTo(202.14, 6);
+    expect(unwrapSegmentLongitudes(4.48, -74.0)).toEqual([4.48, -74.0]);
+
+    const honolulu = makePlace({
+      id: 'pl_hnl',
+      slug: 'honolulu',
+      name: 'Honolulu',
+      lat: 21.31,
+      lng: -157.86,
+    });
+    const tokyo = makePlace({ id: 'pl_tyo', slug: 'tokyo', name: 'Tokyo', lat: 35.68, lng: 139.69 });
+
+    const westbound = routeArc(honolulu, tokyo);
+    expect(westbound).toHaveLength(33);
+    expect(westbound[0]?.[0]).toBeCloseTo(-157.86, 4);
+    expect(westbound.at(-1)?.[0]).toBeCloseTo(-220.31, 4);
+    for (let i = 1; i < westbound.length; i += 1) {
+      expect(Math.abs(westbound[i][0] - westbound[i - 1][0])).toBeLessThan(3);
+    }
+    expect(westbound[16]?.[0]).toBeLessThan(-180);
+
+    const eastbound = routeArc(tokyo, honolulu);
+    expect(eastbound[0]?.[0]).toBeCloseTo(139.69, 4);
+    expect(eastbound.at(-1)?.[0]).toBeCloseTo(202.14, 4);
+    for (let i = 1; i < eastbound.length; i += 1) {
+      expect(Math.abs(eastbound[i][0] - eastbound[i - 1][0])).toBeLessThan(3);
+    }
+
+    const pacificStops: MigrationStop[] = [
+      {
+        id: 'stop_hnl',
+        eventId: 'evt_hnl',
+        year: 1900,
+        displayDate: '1900',
+        title: 'Honolulu',
+        place: honolulu,
+        lineageStage: 'pacific',
+        personNames: ['Clara Vance'],
+        personSlugs: ['clara-vance'],
+      },
+      {
+        id: 'stop_tyo',
+        eventId: 'evt_tyo',
+        year: 1905,
+        displayDate: '1905',
+        title: 'Tokyo',
+        place: tokyo,
+        lineageStage: 'pacific',
+        personNames: ['Clara Vance'],
+        personSlugs: ['clara-vance'],
+      },
+    ];
+    const pacificBounds = computeAntimeridianSafeBounds(pacificStops, {
+      centerLng: -160,
+      centerLat: 25,
+      zoom: 4,
+      minSpanDeg: 1.2,
+    });
+    expect(pacificBounds).not.toBeNull();
+    expect(pacificBounds?.[0][0]).toBeCloseTo(139.69, 2);
+    expect(pacificBounds?.[1][0]).toBeCloseTo(202.14, 2);
+    expect((pacificBounds?.[1][0] ?? 0) - (pacificBounds?.[0][0] ?? 0)).toBeCloseTo(62.45, 2);
+
+    const multiContinentStops: MigrationStop[] = [
+      ...pacificStops,
+      {
+        id: 'stop_sf',
+        eventId: 'evt_sf',
+        year: 1910,
+        displayDate: '1910',
+        title: 'San Francisco',
+        place: makePlace({ id: 'pl_sf', slug: 'sf', name: 'San Francisco', lat: 37.77, lng: -122.42 }),
+        lineageStage: 'america',
+        personNames: ['Clara Vance'],
+        personSlugs: ['clara-vance'],
+      },
+      {
+        id: 'stop_uk',
+        eventId: 'evt_uk',
+        year: 1880,
+        displayDate: '1880',
+        title: 'London',
+        place: makePlace({ id: 'pl_uk', slug: 'london', name: 'London', lat: 51.5, lng: -0.12 }),
+        lineageStage: 'europe',
+        personNames: ['Clara Vance'],
+        personSlugs: ['clara-vance'],
+      },
+    ];
+    const multiBounds = computeAntimeridianSafeBounds(multiContinentStops, {
+      centerLng: -90,
+      centerLat: 40,
+      zoom: 3,
+      minSpanDeg: 1.2,
+    });
+    expect(multiBounds?.[0][0]).toBeCloseTo(-220.31, 2);
+    expect(multiBounds?.[1][0]).toBeCloseTo(-0.12, 2);
+  });
+
+  it('computes safe fitBounds padding from measured toolbar and bottom dock heights and clamps on tight viewports', () => {
+    const desktop = computeSafeFitPadding({
+      viewportWidth: 1440,
+      viewportHeight: 900,
+      toolbarHeight: 48,
+      bottomDockHeight: 68,
+      hasSelectedStop: false,
+    });
+    expect(desktop).toEqual({ top: 80, right: 110, bottom: 112, left: 28 });
+
+    const mobile = computeSafeFitPadding({
+      viewportWidth: 390,
+      viewportHeight: 844,
+      toolbarHeight: 106,
+      bottomDockHeight: 132,
+      hasSelectedStop: false,
+    });
+    expect(mobile).toEqual({ top: 130, right: 76, bottom: 150, left: 20 });
+
+    const tight = computeSafeFitPadding({
+      viewportWidth: 320,
+      viewportHeight: 300,
+      toolbarHeight: 150,
+      bottomDockHeight: 200,
+      hasSelectedStop: true,
+    });
+    expect(tight.top + tight.bottom).toBeLessThanOrEqual(180);
+    expect(tight.left + tight.right).toBeLessThanOrEqual(200);
+
+    const opts = getFitOptions(true, 240, {
+      viewportWidth: 1280,
+      viewportHeight: 800,
+      toolbarHeight: 50,
+      bottomDockHeight: 80,
+    });
+    expect(opts.padding).toEqual({ top: 82, right: 344, bottom: 240, left: 28 });
+    expect(opts.absolutePadding).toBe(true);
+  });
+
+  it('collapses overflowing desktop era pills cleanly and promotes a selected overflow era in natural order', () => {
+    const eras = [
+      { id: 'e1', width: 150 },
+      { id: 'e2', width: 150 },
+      { id: 'e3', width: 180 },
+      { id: 'e4', width: 170 },
+      { id: 'e5', width: 170 },
+    ];
+
+    const allFit = computeEraOverflowLayout({
+      containerWidth: 1000,
+      allButtonWidth: 100,
+      moreButtonWidth: 96,
+      gapPx: 5,
+      eras,
+      selectedEraId: 'all',
+    });
+    expect(allFit).toEqual({
+      visibleEraIds: ['e1', 'e2', 'e3', 'e4', 'e5'],
+      overflowEraIds: [],
+    });
+
+    const tight = computeEraOverflowLayout({
+      containerWidth: 620,
+      allButtonWidth: 100,
+      moreButtonWidth: 96,
+      gapPx: 5,
+      eras,
+      selectedEraId: 'all',
+    });
+    expect(tight).toEqual({
+      visibleEraIds: ['e1', 'e2'],
+      overflowEraIds: ['e3', 'e4', 'e5'],
+    });
+
+    const selectedFromOverflow = computeEraOverflowLayout({
+      containerWidth: 620,
+      allButtonWidth: 100,
+      moreButtonWidth: 96,
+      gapPx: 5,
+      eras,
+      selectedEraId: 'e5',
+    });
+    expect(selectedFromOverflow).toEqual({
+      visibleEraIds: ['e1', 'e5'],
+      overflowEraIds: ['e2', 'e3', 'e4'],
+    });
   });
 });
 

@@ -1,5 +1,5 @@
 import type { ArchiveBundle, KinloomSiteConfig, MapJourneyState, MigrationStop, Place } from '@kinloom/core';
-import { computeStopsBounds, journeyNext, journeyPrev, journeyTick } from '@kinloom/core';
+import { journeyNext, journeyPrev, journeyTick } from '@kinloom/core';
 import { filterByDate } from '@openhistoricalmap/maplibre-gl-dates';
 import type { FeatureCollection } from 'geojson';
 import type { ErrorEvent, StyleSpecification } from 'maplibre-gl';
@@ -13,7 +13,7 @@ import {
   setPeriodBasemap,
   syncFamilyOverlay,
 } from './mapLibreLayers.js';
-import type { HistoricalMapStatus } from './mapOverlayData.js';
+import { computeAntimeridianSafeBounds, type HistoricalMapStatus } from './mapOverlayData.js';
 
 export interface UseMigrationMapControllerParams {
   readonly loading: boolean;
@@ -43,6 +43,7 @@ export interface UseMigrationMapControllerParams {
 
 export interface MigrationMapController {
   readonly mapHostRef: React.RefObject<(HTMLDivElement & { kinloomMigrationMap?: MapLibreMap }) | null>;
+  readonly toolbarRef: React.RefObject<HTMLDivElement | null>;
   readonly cardRef: React.RefObject<HTMLDivElement | null>;
   readonly dockRef: React.RefObject<HTMLDivElement | null>;
   readonly historicalMap: HistoricalMapStatus;
@@ -80,6 +81,7 @@ export function useMigrationMapController(params: UseMigrationMapControllerParam
   } = params;
 
   const mapHostRef = useRef<(HTMLDivElement & { kinloomMigrationMap?: MapLibreMap }) | null>(null);
+  const toolbarRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<MapLibreMap | null>(null);
   const styleLoadedRef = useRef(false);
   const historicalFailedRef = useRef(false);
@@ -108,6 +110,46 @@ export function useMigrationMapController(params: UseMigrationMapControllerParam
 
   const eraYear = selectedStop?.year ?? (stepIndex >= 0 ? stops[stepIndex]?.year : null);
 
+  const measureFitOptions = useCallback((hasSelectedStop: boolean, drawerBottomPx?: number) => {
+    const hostRect = mapHostRef.current?.getBoundingClientRect();
+    const viewportWidth =
+      hostRect && hostRect.width > 0
+        ? hostRect.width
+        : typeof window !== 'undefined'
+          ? window.innerWidth
+          : 1280;
+    const viewportHeight =
+      hostRect && hostRect.height > 0
+        ? hostRect.height
+        : typeof window !== 'undefined'
+          ? window.innerHeight
+          : undefined;
+    const toolbarHeight = toolbarRef.current?.getBoundingClientRect().height ?? 0;
+
+    let bottomDockHeight = 0;
+    const dockEl = dockRef.current;
+    if (dockEl) {
+      const dockRect = dockEl.getBoundingClientRect();
+      if (dockRect.height > 0) {
+        bottomDockHeight = dockRect.height;
+      } else {
+        const playbackBar = dockEl.querySelector<HTMLElement>('[data-map-playback-bar="true"]');
+        const barRect = playbackBar?.getBoundingClientRect();
+        if (barRect && barRect.height > 0) {
+          bottomDockHeight =
+            hostRect && hostRect.bottom > barRect.top ? hostRect.bottom - barRect.top : barRect.height + 18;
+        }
+      }
+    }
+
+    return getFitOptions(hasSelectedStop, drawerBottomPx, {
+      viewportWidth,
+      viewportHeight,
+      toolbarHeight: toolbarHeight > 0 ? toolbarHeight : undefined,
+      bottomDockHeight: bottomDockHeight > 0 ? bottomDockHeight : undefined,
+    });
+  }, []);
+
   const fitCameraBounds = useCallback(
     (bounds: [[number, number], [number, number]], hasSelectedStop: boolean) => {
       const map = mapRef.current;
@@ -117,13 +159,59 @@ export function useMigrationMapController(params: UseMigrationMapControllerParam
       }
       pendingBoundsRef.current = null;
       programmaticMoveRef.current = true;
-      map.fitBounds(bounds, getFitOptions(hasSelectedStop));
+      map.fitBounds(bounds, measureFitOptions(hasSelectedStop));
       window.setTimeout(() => {
         programmaticMoveRef.current = false;
       }, 60);
     },
-    []
+    [measureFitOptions]
   );
+
+  useEffect(() => {
+    if (loading || !bundle) {
+      return undefined;
+    }
+    const host = mapHostRef.current;
+    const toolbar = toolbarRef.current;
+    if (!host && !toolbar) {
+      return undefined;
+    }
+
+    const syncToolbarOffset = (): void => {
+      const pageEl = host?.parentElement;
+      const tbEl = toolbarRef.current;
+      if (!pageEl || !tbEl) {
+        return;
+      }
+      const pageRect = pageEl.getBoundingClientRect();
+      const tbRect = tbEl.getBoundingClientRect();
+      if (tbRect.height > 0) {
+        const bottomOffset = Math.max(56, Math.ceil(tbRect.bottom - pageRect.top));
+        pageEl.style.setProperty('--map-toolbar-bottom', `${bottomOffset}px`);
+      }
+    };
+
+    syncToolbarOffset();
+    if (typeof ResizeObserver === 'undefined') {
+      return undefined;
+    }
+    const observer = new ResizeObserver(() => {
+      syncToolbarOffset();
+      const active = mapRef.current;
+      if (active && typeof active.resize === 'function') {
+        active.resize();
+      }
+    });
+    if (host) {
+      observer.observe(host);
+    }
+    if (toolbar) {
+      observer.observe(toolbar);
+    }
+    return (): void => {
+      observer.disconnect();
+    };
+  }, [loading, bundle]);
 
   useEffect(() => {
     if (loading || !bundle) {
@@ -155,7 +243,7 @@ export function useMigrationMapController(params: UseMigrationMapControllerParam
           container: host,
           style: initialStyle,
           bounds: defaultBounds,
-          fitBoundsOptions: getFitOptions(false),
+          fitBoundsOptions: measureFitOptions(false),
           attributionControl: false,
           dragRotate: false,
           pitchWithRotate: false,
@@ -164,7 +252,7 @@ export function useMigrationMapController(params: UseMigrationMapControllerParam
           minZoom: 1.4,
           maxZoom: 12,
           maxTileCacheSize: 240,
-          renderWorldCopies: false,
+          renderWorldCopies: true,
           fadeDuration: 0,
         });
       } catch {
@@ -192,6 +280,9 @@ export function useMigrationMapController(params: UseMigrationMapControllerParam
           return;
         }
         styleLoadedRef.current = true;
+        if (typeof map.resize === 'function') {
+          map.resize();
+        }
         setPeriodBasemap(map);
         if (!historicalFailedRef.current) {
           lastAppliedDateRef.current = OVERVIEW_REFERENCE_YEAR;
@@ -228,7 +319,7 @@ export function useMigrationMapController(params: UseMigrationMapControllerParam
         const bounds = pendingBoundsRef.current;
         pendingBoundsRef.current = null;
         programmaticMoveRef.current = true;
-        map.fitBounds(bounds, getFitOptions(false));
+        map.fitBounds(bounds, measureFitOptions(false));
         window.setTimeout(() => {
           programmaticMoveRef.current = false;
         }, 60);
@@ -255,7 +346,7 @@ export function useMigrationMapController(params: UseMigrationMapControllerParam
       }
       mapRef.current = null;
     };
-  }, [loading, bundle, defaultBounds, siteConfig.site.familyName, setSelectedStopId]);
+  }, [loading, bundle, defaultBounds, siteConfig.site.familyName, setSelectedStopId, measureFitOptions]);
 
   useEffect(() => {
     const map = mapRef.current;
@@ -295,8 +386,10 @@ export function useMigrationMapController(params: UseMigrationMapControllerParam
     }
     const point = map.project([selectedStop.place.lng, selectedStop.place.lat]);
     const isMobile = window.innerWidth <= 767;
+    const toolbarHeight = toolbarRef.current?.getBoundingClientRect().height ?? 0;
     const dockHeight = isMobile ? (dockRef.current?.getBoundingClientRect().height ?? 0) : 0;
-    const marginTop = isMobile ? 72 : 76;
+    const marginTop =
+      toolbarHeight > 0 ? Math.ceil(toolbarHeight) + (isMobile ? 24 : 32) : isMobile ? 124 : 76;
     const marginBottom = isMobile ? Math.max(drawerExpanded ? 320 : 196, Math.ceil(dockHeight) + 28) : 108;
     const marginLeft = 28;
     const marginRight = isMobile ? 68 : 56;
@@ -311,13 +404,13 @@ export function useMigrationMapController(params: UseMigrationMapControllerParam
     programmaticMoveRef.current = true;
     map.easeTo({
       center: [selectedStop.place.lng, selectedStop.place.lat],
-      padding: getFitOptions(true, marginBottom).padding,
+      padding: measureFitOptions(true, marginBottom).padding,
       duration: playing ? 360 : 220,
     });
     window.setTimeout(() => {
       programmaticMoveRef.current = false;
     }, 420);
-  }, [selectedStop, playing, drawerExpanded]);
+  }, [selectedStop, playing, drawerExpanded, measureFitOptions]);
 
   // biome-ignore lint/correctness/useExhaustiveDependencies: re-measure map layout when cardSide or historicalMap toggles
   useLayoutEffect(() => {
@@ -401,7 +494,7 @@ export function useMigrationMapController(params: UseMigrationMapControllerParam
     setStepIndex(-1);
     setDrawerExpanded(false);
     setSelectedStopId(nextStopId);
-    const bounds = computeStopsBounds([...stops], siteConfig.mapDefaults) ?? defaultBounds;
+    const bounds = computeAntimeridianSafeBounds(stops, siteConfig.mapDefaults) ?? defaultBounds;
     fitCameraBounds(bounds, nextStopId !== null);
   }, [selectedPersonId, selectedEraId]);
 
@@ -510,12 +603,13 @@ export function useMigrationMapController(params: UseMigrationMapControllerParam
   }, []);
 
   const handleFitClick = useCallback(() => {
-    const bounds = computeStopsBounds([...stops], siteConfig.mapDefaults) ?? defaultBounds;
+    const bounds = computeAntimeridianSafeBounds(stops, siteConfig.mapDefaults) ?? defaultBounds;
     fitCameraBounds(bounds, selectedStopId !== null);
   }, [stops, siteConfig.mapDefaults, defaultBounds, fitCameraBounds, selectedStopId]);
 
   return {
     mapHostRef,
+    toolbarRef,
     cardRef,
     dockRef,
     historicalMap,
