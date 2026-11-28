@@ -1,7 +1,7 @@
 import type { Person, Place } from '@kinloom/core';
 import { buildFilteredGedcom7, buildGedcomExportFilename, buildPersonThumbMap } from '@kinloom/core';
 import type React from 'react';
-import { lazy, Suspense, useId, useMemo, useState } from 'react';
+import { lazy, Suspense, useEffect, useId, useMemo, useRef, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { ArchivalImage, EmptyStateNotice, PersonPortrait } from '../components/Atoms.js';
 import atomStyles from '../components/Atoms.module.css';
@@ -99,27 +99,84 @@ interface IndexJumpStripProps {
   readonly onSelectLiving: () => void;
 }
 
-const IndexJumpStrip: React.FC<IndexJumpStripProps> = ({ view, items, onSelectLiving }) => (
-  <div className={cx(indexStyles, 'index-jump-strip-wrap')}>
-    <nav
-      aria-label={view === 'era' ? 'Jump to era' : 'Jump to surname letter'}
-      className={cx(indexStyles, view === 'az' ? 'index-jump-strip is-az' : 'index-jump-strip')}
-    >
-      {items.map((item) => (
-        <a
-          key={item.id}
-          href={`#${item.id}`}
-          className={cx(indexStyles, 'index-jump-link')}
-          title={`${item.label} (${item.count})`}
-          onClick={item.isLiving ? onSelectLiving : undefined}
-        >
-          <span>{item.label}</span>
-          {view === 'era' && <span className={cx(indexStyles, 'index-jump-count')}>{item.count}</span>}
-        </a>
-      ))}
-    </nav>
-  </div>
-);
+const IndexJumpStrip: React.FC<IndexJumpStripProps> = ({ view, items, onSelectLiving }) => {
+  const navRef = useRef<HTMLElement | null>(null);
+  const firstItemId = items[0]?.id ?? null;
+  const lastItemId = items.at(-1)?.id ?? null;
+
+  useEffect(() => {
+    const scroller = navRef.current;
+    if (!scroller || !firstItemId || !lastItemId || typeof IntersectionObserver !== 'function') {
+      return;
+    }
+    const supportsScrollTimeline =
+      typeof CSS !== 'undefined' &&
+      typeof CSS.supports === 'function' &&
+      CSS.supports('animation-timeline', 'scroll()');
+    if (supportsScrollTimeline) {
+      return;
+    }
+
+    const first = scroller.firstElementChild;
+    const last = scroller.lastElementChild;
+    if (!first || !last) {
+      return;
+    }
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        for (const entry of entries) {
+          const hasOverflow = entry.intersectionRatio < 1;
+          if (entry.target === first) {
+            scroller.classList.toggle('is-scrollable-start', hasOverflow);
+          }
+          if (entry.target === last) {
+            scroller.classList.toggle('is-scrollable-end', hasOverflow);
+          }
+        }
+      },
+      { root: scroller, threshold: 1, rootMargin: '1px' }
+    );
+
+    observer.observe(first);
+    if (last !== first) {
+      observer.observe(last);
+    }
+
+    return () => {
+      observer.disconnect();
+      scroller.classList.remove('is-scrollable-start', 'is-scrollable-end');
+    };
+  }, [firstItemId, lastItemId]);
+
+  return (
+    <div className={cx(indexStyles, 'index-jump-strip-wrap')}>
+      <nav
+        ref={navRef}
+        aria-label={view === 'era' ? 'Jump to era' : 'Jump to surname letter'}
+        className={cx(indexStyles, view === 'az' ? 'index-jump-strip is-az' : 'index-jump-strip')}
+      >
+        {items.map((item) => (
+          <a
+            key={item.id}
+            href={`#${item.id}`}
+            className={cx(indexStyles, 'index-jump-link')}
+            title={`${item.label} (${item.count})`}
+            onClick={item.isLiving ? onSelectLiving : undefined}
+          >
+            <span>{item.label}</span>
+            {view === 'era' && (
+              <>
+                {' '}
+                <span className={cx(indexStyles, 'index-jump-count')}>({item.count})</span>
+              </>
+            )}
+          </a>
+        ))}
+      </nav>
+    </div>
+  );
+};
 
 interface LivingRelativesSectionProps {
   readonly people: readonly Person[];
@@ -420,7 +477,12 @@ export const IndexPage: React.FC = () => {
                   `index-filter-actions${capabilities.canEdit ? ' has-editor-actions' : ''}`
                 )}
               >
-                <div className={cx(indexStyles, 'index-filter-toggles')}>
+                <div
+                  className={cx(
+                    indexStyles,
+                    `index-filter-toggles${showBranchSelector ? ' has-branch-select' : ''}`
+                  )}
+                >
                   <div
                     role="group"
                     aria-label="Directory view"
@@ -475,29 +537,31 @@ export const IndexPage: React.FC = () => {
                     </select>
                   )}
 
-                  <button
-                    type="button"
-                    className={cx(
-                      controlStyles,
-                      `pill-btn index-media-filter-btn ${onlyWithPhotos ? 'active' : ''}`
-                    )}
-                    aria-pressed={onlyWithPhotos}
-                    onClick={() => {
-                      setOnlyWithPhotos((v) => !v);
-                    }}
-                  >
-                    With photos ({model.withPhotosCount})
-                  </button>
-
-                  {hasActiveFilters && (
+                  <div className={cx(indexStyles, 'index-filter-secondary-row')}>
                     <button
                       type="button"
-                      className={cx(controlStyles, 'pill-btn index-clear-btn')}
-                      onClick={handleClearFilters}
+                      className={cx(
+                        controlStyles,
+                        `pill-btn index-media-filter-btn ${onlyWithPhotos ? 'active' : ''}`
+                      )}
+                      aria-pressed={onlyWithPhotos}
+                      onClick={() => {
+                        setOnlyWithPhotos((v) => !v);
+                      }}
                     >
-                      Clear
+                      With photos ({model.withPhotosCount})
                     </button>
-                  )}
+
+                    {hasActiveFilters && (
+                      <button
+                        type="button"
+                        className={cx(controlStyles, 'pill-btn index-clear-btn')}
+                        onClick={handleClearFilters}
+                      >
+                        Clear
+                      </button>
+                    )}
+                  </div>
                 </div>
 
                 {capabilities.canEdit && (
@@ -584,12 +648,20 @@ export const IndexPage: React.FC = () => {
                           <span>{section.heading}</span>
                           <span className={cx(indexStyles, 'index-section-heading-meta')}>
                             {section.kind === 'historical' && section.snapshotYear !== null && (
-                              <Link
-                                to={`/time?year=${section.snapshotYear}`}
-                                className={cx(indexStyles, 'index-era-snapshot-link')}
-                              >
-                                See {section.snapshotYear} snapshot →
-                              </Link>
+                              <>
+                                <Link
+                                  to={`/time?year=${section.snapshotYear}`}
+                                  className={cx(indexStyles, 'index-era-snapshot-link')}
+                                >
+                                  See {section.snapshotYear} snapshot →
+                                </Link>
+                                <span
+                                  className={cx(indexStyles, 'index-section-meta-sep')}
+                                  aria-hidden="true"
+                                >
+                                  ·
+                                </span>
+                              </>
                             )}
                             <span className={cx(indexStyles, 'section-heading-count')}>
                               {section.people.length}

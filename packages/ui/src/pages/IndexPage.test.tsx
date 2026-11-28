@@ -1,3 +1,6 @@
+import { readFileSync } from 'node:fs';
+import { dirname, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import type { ArchiveBundle, KinloomSiteConfig, Person, Place } from '@kinloom/core';
 import { parseKinloomConfig } from '@kinloom/core';
 import type React from 'react';
@@ -437,5 +440,91 @@ describe('IndexPage People Directory (#65)', () => {
     const img = container.querySelector<HTMLImageElement>('.index-frontispiece-img');
     expect(img?.getAttribute('loading')).toBe('eager');
     expect(img?.getAttribute('alt')).toBe('Cedar Valley orchard survey');
+  });
+
+  it('formats Jump Strip counts with parentheses, separates era snapshot link from count with a middot, and configures mobile toolbar grid (#77)', () => {
+    const pre1700People: Person[] = Array.from({ length: 8 }, (_, idx) =>
+      makePerson({
+        id: `pre_${idx}`,
+        full_name: `Founder ${String(idx + 1).padStart(2, '0')} Alder`,
+        birth_year: 1640 + idx,
+        death_year: 1700 + idx,
+        branch: 'alder',
+      })
+    );
+    const late1800People: Person[] = Array.from({ length: 20 }, (_, idx) =>
+      makePerson({
+        id: `late_${idx}`,
+        full_name: `Heir ${String(idx + 1).padStart(2, '0')} Birch`,
+        birth_year: 1850 + idx,
+        death_year: 1920 + idx,
+        branch: 'birch',
+      })
+    );
+    const config = parseKinloomConfig({
+      site: { title: 'Alder & Birch Archive', familyName: 'Alder & Birch', gedcomSourceName: 'ALDER_77' },
+      branches: [
+        { id: 'alder', label: 'Alder Line' },
+        { id: 'birch', label: 'Birch Line' },
+      ],
+      defaultBranchId: 'alder',
+    });
+
+    const container = mountElement(
+      <MemoryRouter initialEntries={['/']}>
+        <ArchiveProvider
+          siteConfig={config}
+          initialBundle={makeBundle([...pre1700People, ...late1800People])}
+        >
+          <IndexPage />
+        </ArchiveProvider>
+      </MemoryRouter>
+    );
+
+    // 1. Mobile toolbar grid hooks: has-branch-select on toggles and secondary row for photo filter
+    const toggles = container.querySelector('.index-filter-toggles');
+    expect(toggles?.classList.contains('has-branch-select')).toBe(true);
+    const secondaryRow = toggles?.querySelector('.index-filter-secondary-row');
+    expect(secondaryRow?.querySelector('.index-media-filter-btn')?.textContent?.trim()).toBe(
+      'With photos (0)'
+    );
+
+    // 2. Jump Strip counts formatted with parentheses: "Before 1700 (8)", "1850–99 (20)"
+    const jumpLinks = [
+      ...container.querySelectorAll<HTMLAnchorElement>('.index-jump-strip .index-jump-link'),
+    ];
+    expect(jumpLinks).toHaveLength(2);
+    expect(jumpLinks[0].querySelector('.index-jump-count')?.textContent).toBe('(8)');
+    expect(jumpLinks[1].querySelector('.index-jump-count')?.textContent).toBe('(20)');
+    expect(jumpLinks[0].textContent).toBe('Before 1700 (8)');
+    expect(jumpLinks[1].textContent).toBe('1850–99 (20)');
+
+    // 3. Era section header separates snapshot link from trailing count with middot
+    const pre1700Meta = container.querySelector('#dir-sec-before-1700 .index-section-heading-meta');
+    expect(pre1700Meta?.querySelector('.index-era-snapshot-link')?.textContent).toBe('See 1665 snapshot →');
+    const sep = pre1700Meta?.querySelector('.index-section-meta-sep');
+    expect(sep?.textContent).toBe('·');
+    expect(sep?.getAttribute('aria-hidden')).toBe('true');
+    expect(pre1700Meta?.querySelector('.section-heading-count')?.textContent).toBe('8');
+
+    // Switch to A–Z: no snapshot link -> no stray middot, and Jump Strip omits counts
+    const azBtn = [...container.querySelectorAll<HTMLButtonElement>('button')].find(
+      (b) => b.textContent?.trim() === 'A–Z'
+    );
+    act(() => {
+      azBtn?.click();
+    });
+    expect(container.querySelector('.index-section-meta-sep')).toBeNull();
+    expect(container.querySelector('.index-jump-count')).toBeNull();
+
+    // 4. Verify IndexPage.module.css enforces mobile <= 640px grid, hidden scrollbar, and fade mask
+    const here = dirname(fileURLToPath(import.meta.url));
+    const css = readFileSync(resolve(here, 'IndexPage.module.css'), 'utf8');
+    expect(css).toContain('@media (max-width: 640px)');
+    expect(css).toContain('grid-template-columns: auto minmax(0, 1fr);');
+    expect(css).toContain('scrollbar-width: none;');
+    expect(css).toContain('.index-jump-strip::-webkit-scrollbar');
+    expect(css).toContain('@property --jump-fade-end');
+    expect(css).toContain('animation-timeline: scroll(self inline);');
   });
 });
