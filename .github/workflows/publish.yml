@@ -212,8 +212,9 @@ jobs:
       )
     runs-on: ubuntu-latest
     permissions:
-      contents: read
+      contents: write
       id-token: write
+      attestations: write
     steps:
       - name: Checkout repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -239,9 +240,8 @@ jobs:
       - name: Install tesseract and poppler
         run: sudo apt-get update && sudo apt-get install -y tesseract-ocr poppler-utils
 
-      - name: Ensure npm supports Trusted Publishing OIDC
+      - name: Verify Node.js and bundled npm versions (OIDC Trusted Publishing)
         run: |
-          npm install -g npm@latest
           node -v
           npm -v
 
@@ -294,3 +294,32 @@ jobs:
             echo "Publishing ${name}@${version}..."
             npm publish --workspace="${name}" --provenance --access public
           done
+
+      - name: Pack @kinloom/* release tarballs
+        if: inputs.dry_run != true && (github.ref_type == 'tag' || needs.release.outputs.should_release == 'true')
+        run: |
+          set -euo pipefail
+          pack_dir="${RUNNER_TEMP}/release-tarballs"
+          mkdir -p "${pack_dir}"
+          for pkg in @kinloom/tokens @kinloom/core @kinloom/server @kinloom/worker @kinloom/cli @kinloom/ui; do
+            npm pack --workspace="${pkg}" --pack-destination "${pack_dir}"
+          done
+          ls -la "${pack_dir}"
+
+      - name: Upload release tarballs to GitHub Release
+        if: inputs.dry_run != true && (github.ref_type == 'tag' || needs.release.outputs.should_release == 'true')
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.ref_type == 'tag' && github.ref_name || needs.release.outputs.tag }}
+        run: |
+          set -euo pipefail
+          if ! gh release view "${TAG}" >/dev/null 2>&1; then
+            gh release create "${TAG}" --title "${TAG}" --verify-tag --generate-notes
+          fi
+          gh release upload "${TAG}" "${RUNNER_TEMP}/release-tarballs"/*.tgz --clobber
+
+      - name: Attest build provenance for release tarballs
+        if: inputs.dry_run != true && (github.ref_type == 'tag' || needs.release.outputs.should_release == 'true')
+        uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
+        with:
+          subject-path: ${{ runner.temp }}/release-tarballs/*.tgz

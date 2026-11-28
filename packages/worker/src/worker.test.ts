@@ -1571,11 +1571,11 @@ describe('createCloudflareWorker full HTTP lifecycle (Miniflare)', () => {
     });
 
     const { mf } = await ensureSharedWorkerMiniflare();
-    const res = await mf.dispatchFetch('http://localhost/send', {
+    const res = (await mf.dispatchFetch('http://localhost/send', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify(payload),
-    });
+    } as Parameters<typeof mf.dispatchFetch>[1])) as unknown as Response;
     expect(res.status).toBe(200);
     const data = (await res.json()) as { messageId?: string };
     expect(data.messageId).toMatch(/^<[^@]+@familyloom\.org>$/);
