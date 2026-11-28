@@ -160,7 +160,7 @@ export const NarrativeAudioMarginBar: React.FC<{ readonly track: ActiveNarrative
               audio.seekTrack(track, inNotes ? 0 : notesStart, true);
             }}
           >
-            {inNotes ? labels.returnLabel : `Editor's notes ${notesStartLabel}`}
+            {inNotes ? labels.returnLabel : `↪ Editor's notes ${notesStartLabel}`}
           </button>
         )}
 

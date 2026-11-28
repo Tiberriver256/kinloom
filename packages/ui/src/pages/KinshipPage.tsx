@@ -261,7 +261,7 @@ export const KinshipPage: React.FC = () => {
 
                 <button
                   type="button"
-                  className={cx(controlStyles, 'pill-btn')}
+                  className={cx(controlStyles, 'cta-btn-secondary')}
                   onClick={() => {
                     setFromId(effectiveToId);
                     setToId(effectiveFromId);

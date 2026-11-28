@@ -15,8 +15,8 @@
   max-width: 68ch;
   margin: 10px 0 14px;
   padding: 10px 14px;
-  background: var(--surface-card);
-  border: 1px solid var(--border-decorative);
+  background: var(--surface-subtle);
+  border: none;
   border-radius: var(--radius-md);
 }
 
@@ -207,6 +207,11 @@
 }
 
 .narrative-audio-jump-btn:global(.is-notes) {
+  border-color: var(--border-decorative);
+  color: var(--text-primary);
+}
+
+.narrative-audio-jump-btn:global(.is-notes):hover {
   border-color: var(--accent-secondary);
   color: var(--accent-secondary);
 }

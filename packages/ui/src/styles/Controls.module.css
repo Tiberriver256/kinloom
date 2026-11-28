@@ -323,3 +323,59 @@ select.pill-btn option {
     display: none;
   }
 }
+
+.cta-btn-primary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 7px 14px;
+  border: 1px solid var(--accent-primary);
+  border-radius: var(--radius-md);
+  background: var(--accent-primary);
+  color: var(--text-inverse);
+  font-family: var(--font-ui);
+  font-size: 0.86rem;
+  font-weight: 600;
+  text-decoration: none;
+  cursor: pointer;
+  transition:
+    opacity 0.14s ease,
+    background-color 0.14s ease;
+}
+
+.cta-btn-primary:hover {
+  opacity: 0.92;
+}
+
+.cta-btn-secondary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border: 1px solid var(--border-control);
+  border-radius: var(--radius-md);
+  background: var(--surface-subtle);
+  color: var(--text-primary);
+  font-family: var(--font-ui);
+  font-size: 0.84rem;
+  font-weight: 500;
+  text-decoration: none;
+  cursor: pointer;
+  transition:
+    background-color 0.14s ease,
+    border-color 0.14s ease;
+}
+
+.cta-btn-secondary:hover {
+  background: var(--surface-linen);
+  border-color: var(--surface-header);
+}
+
+@media (max-width: 768px) {
+  .cta-btn-primary,
+  .cta-btn-secondary {
+    min-height: 44px;
+  }
+}

@@ -100,33 +100,34 @@
 }
 
 .place-historical-names-label {
-  font-family: var(--font-mono);
-  font-size: 0.72rem;
+  font-family: var(--font-ui);
+  font-size: 0.75rem;
+  font-weight: 600;
   text-transform: uppercase;
-  letter-spacing: 0.06em;
+  letter-spacing: 0.05em;
   color: var(--text-secondary);
 }
 
 .place-historical-names-list {
   display: flex;
   flex-wrap: wrap;
-  gap: 6px;
+  gap: 4px 12px;
 }
 
 .place-jurisdiction-chip {
-  font-family: var(--font-mono);
-  font-size: 0.75rem;
-  padding: 3px 8px;
-  border: 1px solid var(--border-decorative);
-  background: var(--surface-tint-hover);
-  color: var(--text-primary);
+  font-family: var(--font-ui);
+  font-size: 0.82rem;
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: var(--text-secondary);
 }
 
 .place-history-figure {
   margin: 0;
-  border: 1px solid var(--border-decorative);
-  background: var(--surface-overlay-soft);
-  padding: 8px;
+  border: none;
+  background: transparent;
+  padding: 0;
 }
 
 .place-history-figure img {

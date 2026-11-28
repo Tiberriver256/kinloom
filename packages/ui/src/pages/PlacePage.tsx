@@ -266,30 +266,27 @@ export const PlacePage: React.FC = () => {
               )}
             </div>
 
-            <div
-              className={cx(controlStyles, 'filter-bar place-scope-bar print-hide')}
-              style={{ margin: 0 }}
-              role="group"
-              aria-label="Map area filter"
-            >
-              {(
-                [
-                  ['exact', 'Exact Place'],
-                  ['radius15', '15-Mile Radius'],
-                  ['county', 'Historical County'],
-                ] as const
-              ).map(([mode, label]) => (
-                <button
-                  key={mode}
-                  type="button"
-                  className={cx(controlStyles, `pill-btn ${scopeMode === mode ? 'active' : ''}`)}
-                  onClick={() => {
-                    setScopeMode(mode);
-                  }}
-                >
-                  {label}
-                </button>
-              ))}
+            <div className={cx(controlStyles, 'filter-bar place-scope-bar print-hide')} style={{ margin: 0 }}>
+              <div className="kl-cluster" role="group" aria-label="Map area filter">
+                {(
+                  [
+                    ['exact', 'Exact Place'],
+                    ['radius15', '15-Mile Radius'],
+                    ['county', 'Historical County'],
+                  ] as const
+                ).map(([mode, label]) => (
+                  <button
+                    key={mode}
+                    type="button"
+                    className={cx(controlStyles, `pill-btn ${scopeMode === mode ? 'active' : ''}`)}
+                    onClick={() => {
+                      setScopeMode(mode);
+                    }}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
               <Link to={`/map?place=${place.slug}`} className={cx(atomStyles, 'ink-link-btn')}>
                 Migration Map →
               </Link>

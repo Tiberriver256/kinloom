@@ -400,7 +400,7 @@ export const AdminPage: React.FC<AdminPageProps> = ({ adminClient, extraSettings
               {canSignIn && (
                 <button
                   type="button"
-                  className={cx(controlStyles, 'pill-btn')}
+                  className={cx(controlStyles, 'cta-btn-primary')}
                   onClick={() => {
                     setSignInOpen(true);
                   }}

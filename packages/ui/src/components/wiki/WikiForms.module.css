@@ -203,8 +203,20 @@
 }
 
 .wiki-danger-btn {
+  padding: 5px 11px;
+  border: 1px solid var(--diff-del-fg);
+  border-radius: var(--radius-md);
+  background: var(--diff-del-bg);
   color: var(--diff-del-fg);
+  font-family: var(--font-ui);
+  font-weight: 600;
+}
+
+.wiki-danger-btn:hover {
   border-color: var(--diff-del-fg);
+  background: var(--diff-del-bg);
+  color: var(--diff-del-fg);
+  opacity: 0.9;
 }
 
 .wiki-inline-form {
