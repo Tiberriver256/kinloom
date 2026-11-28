@@ -25,6 +25,12 @@ Kinloom uses npm workspaces with six packages and one public-domain demo app:
 
 Kinloom requires Node.js 24+ and npm. To run OCR integration tests locally, also install `tesseract-ocr` and `poppler-utils`.
 
+For deep architecture explanations, hexagonal port contracts, and plugin authoring guides, read:
+
+- [Kinloom architecture](docs/developers/architecture.md)
+- [Kinloom plugin authoring guide](docs/developers/plugin-authoring.md)
+- [Testing and publishing Kinloom plugins](docs/developers/testing-and-publishing-plugins.md)
+
 ```bash
 npm ci
 npm run check
@@ -54,6 +60,7 @@ Every pull request must pass `npm run check` with zero errors and zero warnings.
 5. `npm test`: Runs the Vitest unit and property test suite.
 6. `npm run check:contrast`: Verifies WCAG 2.2 AA and AAA foreground-to-background contrast pairs across `@kinloom/tokens`.
 7. `npm run check:leaks`: Verifies zero forbidden filenames or private email leaks.
+8. `npm run check:docs`: Verifies relative Markdown links, `#heading-anchor` targets, and synthetic email domains across `README.md`, `CONTRIBUTING.md`, and `docs/`. Run `node scripts/check-docs.mjs --typecheck-snippets` after `npm run build` to typecheck `ts kinloom-check` plugin snippets.
 
 Run `npm run format` to format modified files with Biome.
 

@@ -75,6 +75,21 @@ npx kinloom seed --site https://archive.example.org --token "$KINLOOM_AGENT_TOKE
 npx wrangler deploy
 ```
 
+## Documentation
+
+Browse the full [documentation hub](docs/README.md) or jump directly to a guide:
+
+| Audience | Guide | Summary |
+| --- | --- | --- |
+| All readers | [Documentation hub](docs/README.md) | Central index of developer, plugin, operational, and historical docs. |
+| Contributors | [Architecture](docs/developers/architecture.md) | Six-package DAG, hexagonal ports, incremental bundle patching, XState v5, dark mode tokens, and CI invariants. |
+| Plugin authors | [Plugin authoring guide](docs/developers/plugin-authoring.md) | Build plugins across Server, Worker, UI, and CLI with settings schemas, scoped SQL migrations, and named UI slots. |
+| Plugin authors | [Testing and publishing plugins](docs/developers/testing-and-publishing-plugins.md) | InMemory and Miniflare D1/R2 parity tests, RBAC/CSRF/SQL checks, npm subpath exports, and privacy checklist. |
+| Plugin authors | [Declarative plugin settings](docs/plugin-settings.md) | Typed `settingsSchema` fields, write-only secrets, and Admin Settings HTTP API. |
+| Operators | [Observability and telemetry](docs/observability.md) | Workers telemetry, security events, WAF rules, `kinloom probe`, and Page Visit Stats. |
+| Operators | [Optional plugins and CLI guides](docs/README.md#operational-and-optional-plugin-guides) | [Open Finance](docs/open-finance.md), [Book Publishing](docs/book-publishing.md), [UI Screenshots](docs/ui-screenshots.md), and [Colab GPU TTS](docs/colab-gpu-tts.md). |
+| Designers & writers | [Design system](DESIGN.md) & [Ubiquitous language](docs/ubiquitous-language.md) | Paper & Ink AAA tokens and canonical archive vocabulary. |
+
 ## Backend modularity seam
 
 Kinloom separates the React explorer (`<KinloomApp />`) from storage and hosting through two boundaries:
