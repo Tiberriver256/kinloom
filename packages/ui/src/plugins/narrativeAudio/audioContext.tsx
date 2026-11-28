@@ -22,6 +22,7 @@ export interface NarrativeAudioTrackMeta {
 
 export interface ActiveNarrativeAudioTrack {
   readonly narrativeId: string;
+  readonly narrativeSlug?: string | null;
   readonly narrativeTitle: string;
   readonly narrativeKind: NarrativeAudioKind;
   readonly customLabel?: string | null;

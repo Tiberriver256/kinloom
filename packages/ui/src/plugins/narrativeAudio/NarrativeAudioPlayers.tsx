@@ -2,12 +2,33 @@ import type React from 'react';
 import { Link } from 'react-router-dom';
 import { formatDurationSeconds } from '../../components/MediaPlayer.js';
 import { cx } from '../../lib/cx.js';
+import { buildNarrativeAudioDownload } from '../../lib/narrativeAudioDownload.js';
 import audioPluginStyles from '../narrativeAudioPlugin.module.css';
 import {
   type ActiveNarrativeAudioTrack,
   resolveNarrativeAudioLabels,
   useNarrativeAudio,
 } from './audioContext.js';
+
+const DownloadIcon: React.FC = () => (
+  <svg
+    className={cx(audioPluginStyles, 'narrative-audio-download-icon')}
+    width="14"
+    height="14"
+    viewBox="0 0 16 16"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="1.75"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+    aria-hidden="true"
+    focusable="false"
+  >
+    <path d="M8 2.5v7.5" />
+    <path d="M4.75 7.25 8 10.5l3.25-3.25" />
+    <path d="M2.75 13h10.5" />
+  </svg>
+);
 
 export const NarrativeAudioMarginBar: React.FC<{ readonly track: ActiveNarrativeAudioTrack }> = ({
   track,
@@ -32,6 +53,7 @@ export const NarrativeAudioMarginBar: React.FC<{ readonly track: ActiveNarrative
   const currentLabel = formatDurationSeconds(currentSec) ?? '0:00';
   const totalLabel = totalSec > 0 ? formatDurationSeconds(totalSec) : null;
   const notesStartLabel = notesStart !== null ? formatDurationSeconds(notesStart) : null;
+  const download = buildNarrativeAudioDownload(track);
 
   return (
     <div
@@ -141,6 +163,19 @@ export const NarrativeAudioMarginBar: React.FC<{ readonly track: ActiveNarrative
             {inNotes ? labels.returnLabel : `Editor's notes ${notesStartLabel}`}
           </button>
         )}
+
+        {download.href && (
+          <a
+            href={download.href}
+            download={download.filename}
+            className={cx(audioPluginStyles, 'narrative-audio-pill narrative-audio-download-btn')}
+            data-testid="narrative-audio-download-link"
+            aria-label={`Download ${download.formatLabel} for ${track.narrativeTitle}`}
+          >
+            <DownloadIcon />
+            <span>Download {download.formatLabel}</span>
+          </a>
+        )}
       </div>
       {trackError && (
         <div
@@ -168,6 +203,7 @@ export const NarrativeAudioDock: React.FC = () => {
   const pct = duration > 0 ? Math.min(100, (currentTime / duration) * 100) : 0;
   const currentLabel = formatDurationSeconds(currentTime) ?? '0:00';
   const totalLabel = duration > 0 ? formatDurationSeconds(duration) : null;
+  const download = buildNarrativeAudioDownload(activeTrack);
 
   return (
     <aside
@@ -282,6 +318,18 @@ export const NarrativeAudioDock: React.FC = () => {
             >
               {inNotes ? labels.returnLabel : 'Notes'}
             </button>
+          )}
+          {download.href && (
+            <a
+              href={download.href}
+              download={download.filename}
+              className={cx(audioPluginStyles, 'narrative-audio-dock-btn narrative-audio-dock-download')}
+              data-testid="narrative-audio-dock-download-link"
+              aria-label={`Download ${download.formatLabel} for ${activeTrack.narrativeTitle}`}
+              title={`Download ${download.formatLabel}`}
+            >
+              <DownloadIcon />
+            </a>
           )}
           <button
             type="button"

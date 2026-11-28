@@ -16,6 +16,7 @@ import {
   createSyntheticSiteConfig,
 } from '../testing/adapterContractSuite.js';
 import { createKinloomServer } from './router.js';
+import { sanitizeDownloadFilename } from './routes/mediaAndTalkRoutes.js';
 import { signSessionToken } from './session.js';
 
 const ORIGIN = 'https://alder.example.test';
@@ -1308,5 +1309,120 @@ describe('createKinloomServer end-to-end HTTP transport', () => {
     expect(mediaRes.headers.get('x-content-type-options')).toBe('nosniff');
     expect(mediaRes.headers.get('x-frame-options')).toBe('DENY');
     expect(mediaRes.headers.get('strict-transport-security')).toBe('max-age=31536000; includeSubDomains');
+  });
+
+  it('serves GET /media/:key?download=1 as sanitized attachment while preserving range streaming and private 401 auth', async () => {
+    const siteConfig = createSyntheticSiteConfig();
+    const ports = createInMemoryServerPorts(siteConfig);
+    const server = createKinloomServer({
+      siteConfig,
+      ports,
+      sessionSecret: SECRET,
+      mode: 'private',
+    });
+
+    const adminCookie = await createSessionCookie(ports, {
+      email: 'admin@example.test',
+      display_name: 'Archive Admin',
+      role: 'admin',
+    });
+
+    const audioBytes = new TextEncoder().encode('ID3-SYNTHETIC-BIOGRAPHY-AUDIO-BYTES');
+    const audioForm = new FormData();
+    audioForm.append('file', new File([audioBytes], 'biography.mp3', { type: 'audio/mpeg' }));
+    audioForm.append(
+      'metadata',
+      JSON.stringify({ kind: 'audio_oral_history', caption: 'Synthetic biography narration' })
+    );
+    audioForm.append('summary', 'Upload synthetic biography MP3');
+
+    const uploadRes = await server.fetch(
+      new Request(`${ORIGIN}/api/media/upload`, {
+        method: 'POST',
+        headers: { origin: ORIGIN, cookie: adminCookie },
+        body: audioForm,
+      })
+    );
+    expect(uploadRes.status).toBe(201);
+    const { url: mediaUrl } = (await uploadRes.json()) as { url: string };
+    const storedKey = mediaUrl.slice('/media/'.length);
+
+    // Anonymous caller on private archive receives 401 on ?download=1
+    const anonDownloadRes = await server.fetch(
+      new Request(`${ORIGIN}${mediaUrl}?download=1&filename=arthur-alder-biography.mp3`)
+    );
+    expect(anonDownloadRes.status).toBe(401);
+    expect(((await anonDownloadRes.json()) as { error: { code: string } }).error.code).toBe('UNAUTHORIZED');
+
+    // Authenticated ?download=1 with safe filename sets Content-Disposition: attachment
+    const namedDownloadRes = await server.fetch(
+      new Request(`${ORIGIN}${mediaUrl}?download=1&filename=arthur-alder-biography.mp3`, {
+        headers: { cookie: adminCookie, range: 'bytes=0-3' },
+      })
+    );
+    expect(namedDownloadRes.status).toBe(200);
+    expect(namedDownloadRes.headers.get('content-disposition')).toBe(
+      'attachment; filename="arthur-alder-biography.mp3"'
+    );
+    expect(namedDownloadRes.headers.get('content-security-policy')).toBe("default-src 'none'; sandbox");
+    expect(await namedDownloadRes.text()).toBe('ID3-SYNTHETIC-BIOGRAPHY-AUDIO-BYTES');
+
+    // Authenticated ?download=1 without filename falls back to sanitized key
+    const fallbackDownloadRes = await server.fetch(
+      new Request(`${ORIGIN}${mediaUrl}?download=1`, {
+        headers: { cookie: adminCookie },
+      })
+    );
+    expect(fallbackDownloadRes.status).toBe(200);
+    expect(fallbackDownloadRes.headers.get('content-disposition')).toBe(
+      `attachment; filename="${storedKey}"`
+    );
+
+    // Header-injection and path-traversal defense: CR/LF, quotes, semicolons, ../
+    const crlfRes = await server.fetch(
+      new Request(
+        `${ORIGIN}${mediaUrl}?download=1&filename=${encodeURIComponent('evil.mp3\r\nX-Injected: pwned')}`,
+        { headers: { cookie: adminCookie } }
+      )
+    );
+    expect(crlfRes.status).toBe(200);
+    expect(crlfRes.headers.get('content-disposition')).toBe('attachment; filename="evil.mp3"');
+    expect(crlfRes.headers.get('x-injected')).toBeNull();
+
+    const quoteRes = await server.fetch(
+      new Request(`${ORIGIN}${mediaUrl}?download=1&filename=${encodeURIComponent('bio"quoted;evil.mp3')}`, {
+        headers: { cookie: adminCookie },
+      })
+    );
+    expect(quoteRes.headers.get('content-disposition')).toBe('attachment; filename="bioquotedevil.mp3"');
+
+    const traversalRes = await server.fetch(
+      new Request(`${ORIGIN}${mediaUrl}?download=1&filename=${encodeURIComponent('../../etc/passwd')}`, {
+        headers: { cookie: adminCookie },
+      })
+    );
+    expect(traversalRes.headers.get('content-disposition')).toBe('attachment; filename="passwd"');
+
+    const emptyAfterSanitizeRes = await server.fetch(
+      new Request(`${ORIGIN}${mediaUrl}?download=1&filename=${encodeURIComponent('../../../..')}`, {
+        headers: { cookie: adminCookie },
+      })
+    );
+    expect(emptyAfterSanitizeRes.headers.get('content-disposition')).toBe(
+      `attachment; filename="${storedKey}"`
+    );
+
+    expect(sanitizeDownloadFilename(null, '///...')).toBe('download');
+
+    // Normal streaming without download=1 preserves 206 Partial Content and Content-Disposition: inline
+    const rangeRes = await server.fetch(
+      new Request(`${ORIGIN}${mediaUrl}`, {
+        headers: { cookie: adminCookie, range: 'bytes=0-2' },
+      })
+    );
+    expect(rangeRes.status).toBe(206);
+    expect(rangeRes.headers.get('content-range')).toBe(`bytes 0-2/${audioBytes.byteLength}`);
+    expect(rangeRes.headers.get('content-disposition')).toBe('inline');
+    expect(await rangeRes.text()).toBe('ID3');
   });
 });

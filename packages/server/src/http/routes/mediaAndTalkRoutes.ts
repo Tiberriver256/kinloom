@@ -17,6 +17,30 @@ const TalkPostBodySchema = z.object({
   body_md: z.string(),
 });
 
+const MAX_DOWNLOAD_FILENAME_LENGTH = 120;
+
+function sanitizeFilenameCandidate(raw: string): string {
+  const firstLine = raw.split(/[\r\n]/, 1)[0] ?? '';
+  const basename = firstLine.split(/[/\\]/).pop() ?? '';
+  const cleaned = basename
+    .replaceAll(/[^A-Za-z0-9._-]/g, '')
+    .replace(/^\.+/, '')
+    .replace(/\.+$/, '')
+    .slice(0, MAX_DOWNLOAD_FILENAME_LENGTH);
+  return /[A-Za-z0-9]/.test(cleaned) ? cleaned : '';
+}
+
+export function sanitizeDownloadFilename(rawFilename: string | null, fallbackKey: string): string {
+  if (rawFilename) {
+    const safeRequested = sanitizeFilenameCandidate(rawFilename);
+    if (safeRequested) {
+      return safeRequested;
+    }
+  }
+  const safeKey = sanitizeFilenameCandidate(fallbackKey);
+  return safeKey || 'download';
+}
+
 export interface MediaAndTalkRouteHandlerDeps {
   readonly mediaService: MediaService;
   readonly talkService: TalkService;
@@ -123,11 +147,12 @@ export function createMediaAndTalkRouteHandler(deps: MediaAndTalkRouteHandlerDep
       });
       const prefix = segments[0];
       const key = segments.slice(1).map(decodeSegment).join('/');
+      const isDownload = prefix === 'media' && url.searchParams.get('download') === '1';
       const result = await timeSpan(telemetry, 'r2', () =>
         mediaService.getMedia({
           prefix,
           key,
-          rangeHeader: request.headers.get('range'),
+          rangeHeader: isDownload ? null : request.headers.get('range'),
         })
       );
 
@@ -137,6 +162,10 @@ export function createMediaAndTalkRouteHandler(deps: MediaAndTalkRouteHandlerDep
         'accept-ranges': 'bytes',
         'cache-control': 'private, max-age=31536000, immutable',
       });
+      if (isDownload) {
+        const safeName = sanitizeDownloadFilename(url.searchParams.get('filename'), key);
+        headers.set('content-disposition', `attachment; filename="${safeName}"`);
+      }
       const rawEtag = result.object.sha256 ?? result.object.etag;
       if (rawEtag) {
         headers.set('etag', rawEtag.startsWith('"') ? rawEtag : `"${rawEtag}"`);

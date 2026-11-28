@@ -1,6 +1,13 @@
 import type { Narrative, Person } from '@kinloom/core';
 import type React from 'react';
 import { initialsOf, resolveAssetUrl } from '../components/Atoms.js';
+import {
+  buildNarrativeAudioDownload,
+  extractAudioExtension,
+  type NarrativeAudioDownloadDescriptor,
+  type NarrativeAudioDownloadInput,
+  sanitizeAudioFilenameStem,
+} from '../lib/narrativeAudioDownload.js';
 import { KINLOOM_UI_VERSION } from '../version.js';
 import {
   type ActiveNarrativeAudioTrack,
@@ -21,12 +28,19 @@ import type {
 
 export type {
   ActiveNarrativeAudioTrack,
+  NarrativeAudioDownloadDescriptor,
+  NarrativeAudioDownloadInput,
   NarrativeAudioKind,
   NarrativeAudioLabels,
   NarrativeAudioPluginOptions,
   NarrativeAudioTrackMeta,
 };
-export { resolveNarrativeAudioLabels };
+export {
+  buildNarrativeAudioDownload,
+  extractAudioExtension,
+  resolveNarrativeAudioLabels,
+  sanitizeAudioFilenameStem,
+};
 
 function asPositiveFiniteNumber(value: unknown): number | undefined {
   if (typeof value === 'number' && Number.isFinite(value) && value >= 0) {
@@ -172,6 +186,7 @@ export function createNarrativeAudioPlugin(options: NarrativeAudioPluginOptions 
     }
     const track: ActiveNarrativeAudioTrack = {
       narrativeId: ctx.narrative.id,
+      narrativeSlug: ctx.narrative.slug,
       narrativeTitle: ctx.narrative.title,
       narrativeKind: resolveNarrativeAudioKind(ctx.narrative, ctx.person),
       customLabel: meta.label ?? null,

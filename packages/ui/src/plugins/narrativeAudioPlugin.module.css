@@ -165,8 +165,10 @@
 .narrative-audio-bar-controls {
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
   gap: 6px;
-  flex-shrink: 0;
+  min-width: 0;
+  max-width: 100%;
 }
 
 .narrative-audio-pill {
@@ -180,6 +182,19 @@
   color: var(--text-primary);
   cursor: pointer;
   transition: background 0.15s ease;
+}
+
+.narrative-audio-download-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  line-height: 1.2;
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.narrative-audio-download-icon {
+  flex: none;
 }
 
 .narrative-audio-pill:hover {
@@ -357,6 +372,14 @@
   cursor: pointer;
 }
 
+.narrative-audio-dock-download {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  text-decoration: none;
+  line-height: 1;
+}
+
 .narrative-audio-dock-btn:hover,
 .narrative-audio-dock-dismiss:hover {
   background: var(--surface-chrome-bar-hover);
@@ -383,14 +406,6 @@
     height: 44px;
     min-width: 44px;
     min-height: 44px;
-  }
-
-  .narrative-audio-pill {
-    min-width: 44px;
-    min-height: 44px;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
   }
 
   .narrative-audio-dock-inner {
@@ -434,12 +449,21 @@
 }
 
 @media (max-width: 480px) {
-  .narrative-audio-dock-badge {
+  .narrative-audio-dock-badge,
+  .narrative-audio-dock-download {
     display: none;
   }
 }
 
 @media (pointer: coarse), (max-width: 768px) {
+  .narrative-audio-pill {
+    min-width: 44px;
+    min-height: 44px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+  }
+
   :global(.archival-footnote-ref) {
     padding: 8px 6px;
     margin: -8px 0;

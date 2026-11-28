@@ -308,16 +308,21 @@ export {
 } from './plugins/bookPublishingPlugin.js';
 export type {
   ActiveNarrativeAudioTrack,
+  NarrativeAudioDownloadDescriptor,
+  NarrativeAudioDownloadInput,
   NarrativeAudioKind,
   NarrativeAudioLabels,
   NarrativeAudioPluginOptions,
   NarrativeAudioTrackMeta,
 } from './plugins/narrativeAudioPlugin.js';
 export {
+  buildNarrativeAudioDownload,
   createNarrativeAudioPlugin,
+  extractAudioExtension,
   readNarrativeAudioMeta,
   resolveNarrativeAudioKind,
   resolveNarrativeAudioLabels,
+  sanitizeAudioFilenameStem,
 } from './plugins/narrativeAudioPlugin.js';
 export type { ObservabilityStatsUiPluginOptions } from './plugins/observabilityStatsPlugin.js';
 export {

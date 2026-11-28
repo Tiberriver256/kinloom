@@ -1,4 +1,7 @@
 /** @vitest-environment jsdom */
+import { readFileSync } from 'node:fs';
+import { dirname, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import type { ArchiveBundle, KinloomSiteConfig, Narrative } from '@kinloom/core';
 import { compileArchive, parseKinloomConfig } from '@kinloom/core';
 import { act } from 'react';
@@ -6,10 +9,13 @@ import { createRoot } from 'react-dom/client';
 import { describe, expect, it } from 'vitest';
 import { KinloomApp } from '../KinloomApp.js';
 import {
+  buildNarrativeAudioDownload,
   createNarrativeAudioPlugin,
+  extractAudioExtension,
   readNarrativeAudioMeta,
   resolveNarrativeAudioKind,
   resolveNarrativeAudioLabels,
+  sanitizeAudioFilenameStem,
 } from './narrativeAudioPlugin.js';
 
 declare global {
@@ -156,6 +162,20 @@ describe('createNarrativeAudioPlugin (Idea 1 + Idea 4)', () => {
     expect(marginBar?.textContent).toContain('Listen to Biography · Charon');
     expect(marginBar?.textContent).toContain("Editor's notes 4:34");
 
+    // Biography download link points to server /media/ attachment URL with deterministic filename
+    const downloadLink = marginBar?.querySelector<HTMLAnchorElement>(
+      '[data-testid="narrative-audio-download-link"]'
+    );
+    expect(downloadLink?.getAttribute('href')).toBe(
+      '/media/audio/thomas-mercer.mp3?download=1&filename=thomas-mercer-biography.mp3'
+    );
+    expect(downloadLink?.getAttribute('download')).toBe('thomas-mercer-biography.mp3');
+    expect(downloadLink?.getAttribute('aria-label')).toBe(
+      'Download MP3 for Miller and Surveyor on Mercer Creek'
+    );
+    expect(downloadLink?.textContent).toBe('Download MP3');
+    expect(downloadLink?.querySelector('svg')?.getAttribute('aria-hidden')).toBe('true');
+
     // Dock stays hidden until playback begins
     expect(container.querySelector('[data-testid="narrative-audio-dock"]')).toBeNull();
 
@@ -172,6 +192,17 @@ describe('createNarrativeAudioPlugin (Idea 1 + Idea 4)', () => {
     expect(dock?.textContent).toContain('Thomas Mercer');
     expect(dock?.textContent).toContain('Miller and Surveyor on Mercer Creek');
     expect(dock?.textContent).toContain('Biography Narration (Charon)');
+
+    const dockDownloadLink = dock?.querySelector<HTMLAnchorElement>(
+      '[data-testid="narrative-audio-dock-download-link"]'
+    );
+    expect(dockDownloadLink?.getAttribute('href')).toBe(
+      '/media/audio/thomas-mercer.mp3?download=1&filename=thomas-mercer-biography.mp3'
+    );
+    expect(dockDownloadLink?.getAttribute('download')).toBe('thomas-mercer-biography.mp3');
+    expect(dockDownloadLink?.getAttribute('aria-label')).toBe(
+      'Download MP3 for Miller and Surveyor on Mercer Creek'
+    );
 
     // Jump to Editor's Notes switches voice indicator in both bar and dock
     const jumpBtn = marginBar?.querySelector<HTMLButtonElement>('.narrative-audio-jump-btn');
@@ -481,6 +512,240 @@ describe('createNarrativeAudioPlugin (Idea 1 + Idea 4)', () => {
       bioJumpBtn?.click();
     });
     expect(dock?.textContent).toContain("Editor's Notes (Kore)");
+
+    act(() => {
+      root.unmount();
+    });
+    container.remove();
+  });
+
+  it('builds deterministic download filenames, preserves extensions, and scopes ?download=1 strictly to /media/ URLs', () => {
+    expect(
+      buildNarrativeAudioDownload({
+        src: '/media/audio/thomas-mercer.mp3',
+        narrativeSlug: 'thomas-mercer-biography',
+        narrativeTitle: 'Miller and Surveyor on Mercer Creek',
+        narrativeKind: 'biography',
+        personSlug: 'thomas-mercer',
+      })
+    ).toEqual({
+      href: '/media/audio/thomas-mercer.mp3?download=1&filename=thomas-mercer-biography.mp3',
+      filename: 'thomas-mercer-biography.mp3',
+      extension: 'mp3',
+      formatLabel: 'MP3',
+    });
+
+    expect(
+      buildNarrativeAudioDownload({
+        src: '/media/audio/thomas-mercer.wav?v=2#t=10',
+        narrativeSlug: null,
+        narrativeTitle: 'Miller and Surveyor',
+        narrativeKind: 'biography',
+        personSlug: 'thomas-mercer',
+      })
+    ).toEqual({
+      href: '/media/audio/thomas-mercer.wav?v=2&download=1&filename=thomas-mercer-biography.wav#t=10',
+      filename: 'thomas-mercer-biography.wav',
+      extension: 'wav',
+      formatLabel: 'WAV',
+    });
+
+    expect(
+      buildNarrativeAudioDownload({
+        src: 'https://archive.example.test/media/abc123.ogg',
+        narrativeSlug: null,
+        narrativeTitle: 'Biography',
+        narrativeKind: 'biography',
+        personSlug: 'thomas-mercer-biography',
+      })
+    ).toEqual({
+      href: 'https://archive.example.test/media/abc123.ogg?download=1&filename=thomas-mercer-biography.ogg',
+      filename: 'thomas-mercer-biography.ogg',
+      extension: 'ogg',
+      formatLabel: 'OGG',
+    });
+
+    // Non-/media/ static demo, relative, data, and external CDN URLs remain untouched
+    expect(
+      buildNarrativeAudioDownload({
+        src: '/demo/audio/mercer-creek.m4a',
+        narrativeSlug: null,
+        narrativeTitle: 'Éclair & Creek: 1798 Flood!',
+        narrativeKind: 'family_story',
+        personSlug: 'thomas-mercer',
+      })
+    ).toEqual({
+      href: '/demo/audio/mercer-creek.m4a',
+      filename: 'eclair-creek-1798-flood.m4a',
+      extension: 'm4a',
+      formatLabel: 'M4A',
+    });
+
+    expect(
+      buildNarrativeAudioDownload({
+        src: 'https://cdn.example.test/static/story.mp3',
+        narrativeSlug: 'creek-story',
+        narrativeTitle: 'Creek Story',
+        narrativeKind: 'family_story',
+      }).href
+    ).toBe('https://cdn.example.test/static/story.mp3');
+
+    expect(
+      buildNarrativeAudioDownload({
+        src: 'data:audio/mpeg;base64,AA==',
+        narrativeSlug: null,
+        narrativeTitle: '!!!',
+        narrativeKind: 'family_story',
+        personSlug: 'hannah-mercer',
+      })
+    ).toEqual({
+      href: 'data:audio/mpeg;base64,AA==',
+      filename: 'hannah-mercer.mp3',
+      extension: 'mp3',
+      formatLabel: 'MP3',
+    });
+
+    expect(
+      buildNarrativeAudioDownload({
+        src: '',
+        narrativeSlug: '',
+        narrativeTitle: '   ',
+        narrativeKind: 'memoir',
+        personSlug: null,
+      })
+    ).toEqual({
+      href: '',
+      filename: 'narrative-audio.mp3',
+      extension: 'mp3',
+      formatLabel: 'MP3',
+    });
+
+    expect(extractAudioExtension('/media/audio/unknown.bin')).toBe('mp3');
+    expect(extractAudioExtension('/media/audio/noext')).toBe('mp3');
+    expect(sanitizeAudioFilenameStem('a'.repeat(120))).toBe('a'.repeat(80));
+    expect(sanitizeAudioFilenameStem(undefined)).toBe('');
+  });
+
+  it('renders format-aware download links for both family stories and static demo tracks with mobile-safe CSS rules', async () => {
+    const wavStory: Narrative = {
+      id: 'nar_wav_story',
+      slug: 'mercer-mill-flood',
+      kind: 'family_story',
+      title: 'The Mercer Mill Flood',
+      body_md: 'Shared story of the mill flood.',
+      person_ids: ['p_thomas', 'p_hannah'],
+      place_ids: [],
+      event_ids: [],
+      source_ids: [],
+      extensions: {
+        narrative_audio: {
+          file: '/media/audio/mill-flood.wav',
+          duration_seconds: 120,
+          story_voice: 'Aoede',
+        },
+      },
+    };
+    const staticDemoBio: Narrative = {
+      id: 'nar_static_bio',
+      slug: 'thomas-mercer-static',
+      kind: 'biography',
+      subject_person_id: 'p_thomas',
+      title: 'Static Demo Recording',
+      body_md: 'Static demo audio track.',
+      person_ids: ['p_thomas'],
+      place_ids: [],
+      event_ids: [],
+      source_ids: [],
+      extensions: {
+        narrative_audio: {
+          file: '/audio/thomas-mercer-demo.m4a',
+          duration_seconds: 90,
+          story_voice: 'Charon',
+        },
+      },
+    };
+
+    const { bundle: downloadBundle } = compileArchive({
+      siteConfig,
+      mode: 'public',
+      people: [
+        {
+          id: 'p_thomas',
+          slug: 'thomas-mercer',
+          full_name: 'Thomas Mercer',
+          given_name: 'Thomas',
+          surname: 'Mercer',
+          alt_names: [],
+          sex: 'M',
+          is_living: false,
+          lineage_group: 'pivot_ancestor',
+          birth_edtf: '1742',
+          death_edtf: '1811',
+          portrait_url: null,
+        },
+        {
+          id: 'p_hannah',
+          slug: 'hannah-mercer',
+          full_name: 'Hannah Caldwell Mercer',
+          given_name: 'Hannah',
+          surname: 'Mercer',
+          alt_names: [],
+          sex: 'F',
+          is_living: false,
+          lineage_group: 'pivot_ancestor',
+          birth_edtf: '1748',
+          death_edtf: '1824',
+          portrait_url: null,
+        },
+      ],
+      places: [],
+      events: [],
+      sources: [],
+      kinship: [],
+      narratives: [staticDemoBio, wavStory],
+    });
+
+    const plugin = createNarrativeAudioPlugin();
+    const container = document.createElement('div');
+    document.body.append(container);
+    const root = createRoot(container);
+
+    await act(async () => {
+      root.render(
+        <KinloomApp
+          siteConfig={siteConfig}
+          initialBundle={downloadBundle}
+          initialReadings={{ version: 1, documents: {}, event_page_map: {} }}
+          plugins={[plugin]}
+          initialEntries={['/person/thomas-mercer']}
+        />
+      );
+    });
+
+    await waitForCondition(
+      () => container.querySelectorAll('[data-testid="narrative-audio-download-link"]').length >= 2
+    );
+
+    const downloadLinks = Array.from(
+      container.querySelectorAll<HTMLAnchorElement>('[data-testid="narrative-audio-download-link"]')
+    );
+    const staticLink = downloadLinks.find((a) => a.getAttribute('download') === 'thomas-mercer-static.m4a');
+    expect(staticLink?.getAttribute('href')).toBe('/audio/thomas-mercer-demo.m4a');
+    expect(staticLink?.getAttribute('aria-label')).toBe('Download M4A for Static Demo Recording');
+    expect(staticLink?.textContent).toBe('Download M4A');
+
+    const wavLink = downloadLinks.find((a) => a.getAttribute('download') === 'mercer-mill-flood.wav');
+    expect(wavLink?.getAttribute('href')).toBe(
+      '/media/audio/mill-flood.wav?download=1&filename=mercer-mill-flood.wav'
+    );
+    expect(wavLink?.getAttribute('aria-label')).toBe('Download WAV for The Mercer Mill Flood');
+    expect(wavLink?.textContent).toBe('Download WAV');
+
+    const cssPath = resolve(dirname(fileURLToPath(import.meta.url)), 'narrativeAudioPlugin.module.css');
+    const css = readFileSync(cssPath, 'utf8');
+    expect(css).toContain('flex-wrap: wrap;');
+    expect(css).toContain('@media (pointer: coarse), (max-width: 768px)');
+    expect(css).toContain('.narrative-audio-dock-download');
 
     act(() => {
       root.unmount();
