@@ -353,6 +353,7 @@ export async function runVerify(rest: readonly string[], ctx: CliDispatchContext
       'strict-pronunciation': { type: 'boolean', default: false },
       'strict-external-media': { type: 'boolean', default: false },
       'strict-tracked-media': { type: 'boolean', default: false },
+      'strict-brandkit': { type: 'boolean', default: false },
       strict: { type: 'boolean', default: false },
       json: { type: 'boolean', default: false },
     },
@@ -376,6 +377,7 @@ export async function runVerify(rest: readonly string[], ctx: CliDispatchContext
         strictPronunciation: values['strict-pronunciation'] || values.strict,
         strictExternalMedia: values['strict-external-media'] || values.strict,
         strictTrackedMedia: values['strict-tracked-media'] || values.strict,
+        strictBrandkit: values['strict-brandkit'] || values.strict,
         json: values.json,
         ...(ctx.plugins ? { plugins: ctx.plugins } : {}),
       })

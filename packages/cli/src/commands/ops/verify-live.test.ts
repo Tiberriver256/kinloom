@@ -795,4 +795,117 @@ describe('runVerifyLiveCommand and kinloom verify-live CLI', () => {
     });
     expect(formattedNullBefore).toContain('backupBefore=n/a');
   });
+
+  it('validates live /site.webmanifest title and /favicon-light.svg + /sw.js accents against local kinloom.config.yaml when --check-pwa is enabled', async () => {
+    const repoDir = await makeTempDir('kinloom-verify-live-pwa-drift-');
+    await writeFile(
+      path.join(repoDir, 'kinloom.config.yaml'),
+      `schemaVersion: 1
+site:
+  title: Cedar Valley Archive
+  familyName: Cedar
+  gedcomSourceName: CEDAR_ARCHIVE
+  footerCredit: Built with Kinloom
+theme:
+  accent: "#2F5245"
+`,
+      'utf8'
+    );
+
+    // Passing run: manifest title, favicon-light accent, and sw.js accent all match kinloom.config.yaml
+    const alignedRes = await runVerifyLiveCommand({
+      repoDir,
+      url: 'https://cedar.example.org',
+      token: 'tok_pwa_ok',
+      checkPwa: true,
+      fetchImpl: makeLiveArchiveFetch({
+        pwaOverrides: {
+          '/site.webmanifest': {
+            status: 200,
+            body: JSON.stringify({
+              name: 'Cedar Valley Archive',
+              short_name: 'Cedar Valley',
+              icons: [{ src: '/icon-192.png', sizes: '192x192', type: 'image/png' }],
+            }),
+            contentType: 'application/manifest+json',
+          },
+          '/sw.js': {
+            status: 200,
+            body: 'const OFFLINE_HTML = ":root{--bg:#F5EFE2;--accent:#2F5245}";',
+            contentType: 'application/javascript',
+          },
+          '/favicon-light.svg': {
+            status: 200,
+            body: '<svg xmlns="http://www.w3.org/2000/svg"><style>.kl-accent { stroke: #2F5245; }</style></svg>',
+            contentType: 'image/svg+xml',
+          },
+        },
+      }),
+      clock: deterministicClock,
+    });
+    expect(alignedRes.ok).toBe(true);
+    expect(alignedRes.pwa.status).toBe('pass');
+    expect(alignedRes.pwa.violations).toEqual([]);
+
+    // Failing run: live manifest serves generic "Kinloom" and favicon-light + sw.js serve drifted ochre accent
+    const driftedRes = await runVerifyLiveCommand({
+      repoDir,
+      url: 'https://cedar.example.org',
+      token: 'tok_pwa_drift',
+      checkPwa: true,
+      fetchImpl: makeLiveArchiveFetch({
+        pwaOverrides: {
+          '/site.webmanifest': {
+            status: 200,
+            body: JSON.stringify({
+              name: 'Kinloom',
+              short_name: 'Kinloom',
+              icons: [{ src: '/icon-192.png', sizes: '192x192', type: 'image/png' }],
+            }),
+            contentType: 'application/manifest+json',
+          },
+          '/sw.js': {
+            status: 200,
+            body: 'const OFFLINE_HTML = ":root{--bg:#F5EFE2;--accent:#7A4612}";',
+            contentType: 'application/javascript',
+          },
+          '/favicon-light.svg': {
+            status: 200,
+            body: '<svg xmlns="http://www.w3.org/2000/svg"><style>.kl-accent { stroke: #7A4612; }</style></svg>',
+            contentType: 'image/svg+xml',
+          },
+        },
+      }),
+      clock: deterministicClock,
+    });
+    expect(driftedRes.ok).toBe(false);
+    expect(driftedRes.pwa.status).toBe('fail');
+    expect(driftedRes.pwa.assets.find((a) => a.path === '/site.webmanifest')).toMatchObject({
+      ok: false,
+      httpStatus: 200,
+    });
+    expect(driftedRes.pwa.assets.find((a) => a.path === '/site.webmanifest')?.detail).toContain(
+      'kinloom brandkit --out public'
+    );
+    expect(driftedRes.pwa.assets.find((a) => a.path === '/sw.js')?.detail).toContain(
+      'sw.js offline notice uses accent #7A4612'
+    );
+    expect(driftedRes.pwa.assets.find((a) => a.path === '/favicon-light.svg')?.detail).toContain(
+      'favicon-light.svg uses accent #7A4612'
+    );
+
+    // Invalid local kinloom.config.yaml does not crash --check-pwa
+    const badCfgDir = await makeTempDir('kinloom-verify-live-bad-cfg-');
+    await writeFile(path.join(badCfgDir, 'kinloom.config.yaml'), 'site:\n  title: [broken', 'utf8');
+    const badCfgRes = await runVerifyLiveCommand({
+      repoDir: badCfgDir,
+      url: 'https://cedar.example.org',
+      token: 'tok_bad_cfg',
+      checkPwa: true,
+      fetchImpl: makeLiveArchiveFetch(),
+      clock: deterministicClock,
+    });
+    expect(badCfgRes.ok).toBe(true);
+    expect(badCfgRes.pwa.status).toBe('pass');
+  });
 });

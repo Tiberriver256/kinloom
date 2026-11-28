@@ -3,6 +3,7 @@ import type { DesignAuditArchetypeId, DesignAuditUiState, DesignAuditViewport } 
 
 export interface DesignAuditArchetypeMetrics {
   readonly aboveFoldContentMinRatio: number;
+  readonly maxFirstContentYPx: number;
   readonly maxTopLevelNavLinks: number;
   readonly maxPrimaryCtasAboveFold: number;
   readonly proseMeasureChMin: number;
@@ -94,6 +95,7 @@ export const DESIGN_AUDIT_ARCHETYPES: Readonly<Record<DesignAuditArchetypeId, De
       ],
       metrics: {
         aboveFoldContentMinRatio: 0.5,
+        maxFirstContentYPx: 360,
         maxTopLevelNavLinks: 7,
         maxPrimaryCtasAboveFold: 1,
         proseMeasureChMin: 45,
@@ -125,6 +127,7 @@ export const DESIGN_AUDIT_ARCHETYPES: Readonly<Record<DesignAuditArchetypeId, De
       ],
       metrics: {
         aboveFoldContentMinRatio: 0.55,
+        maxFirstContentYPx: 280,
         maxTopLevelNavLinks: 9,
         maxPrimaryCtasAboveFold: 2,
         proseMeasureChMin: 40,
@@ -156,6 +159,7 @@ export const DESIGN_AUDIT_ARCHETYPES: Readonly<Record<DesignAuditArchetypeId, De
       ],
       metrics: {
         aboveFoldContentMinRatio: 0.55,
+        maxFirstContentYPx: 320,
         maxTopLevelNavLinks: 8,
         maxPrimaryCtasAboveFold: 1,
         proseMeasureChMin: 40,
@@ -186,6 +190,7 @@ export const DESIGN_AUDIT_ARCHETYPES: Readonly<Record<DesignAuditArchetypeId, De
       ],
       metrics: {
         aboveFoldContentMinRatio: 0.6,
+        maxFirstContentYPx: 240,
         maxTopLevelNavLinks: 5,
         maxPrimaryCtasAboveFold: 1,
         proseMeasureChMin: 35,

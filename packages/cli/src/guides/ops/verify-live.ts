@@ -22,7 +22,7 @@ kinloom verify-live --repo . --expect-plugins kinloom-workers-observability,kinl
 2. **Authenticated Synthetic Probe & Plugins:** Runs \`probe --plugins\` (HTML TTFB, security headers, cold/warm \`/api/bundle\` 304, R2 media 206 Range, and every plugin listed in \`--expect-plugins\`).
 3. **Live Bundle Living Privacy Rule Audit:** Verifies \`0\` Living person portraits, \`0\` exact \`YYYY-MM-DD\` Living birth dates, \`0\` Living residence spans, and \`0\` Living media or narratives.
 4. **Headless Browser Smoke (\`--browser\`):** Redeems an ephemeral viewer invite, loads \`/\`, confirms a visible \`<h1>\`, \`0\` \`pageerror\` events, and \`0\` failed \`/assets/*\` or \`/api/*\` requests.
-5. **PWA & Brandkit Assets (\`--check-pwa\`):** Verifies \`/site.webmanifest\`, \`/sw.js\`, \`/favicon-light.svg\`, and \`/favicon-dark.svg\`.
+5. **PWA & Brandkit Assets (\`--check-pwa\`):** Verifies \`/site.webmanifest\`, \`/sw.js\`, \`/favicon-light.svg\`, and \`/favicon-dark.svg\`, and flags title or accent drift against local \`kinloom.config.yaml\` when present.
 6. **Guaranteed Ephemeral D1 Cleanup:** Revokes every minted \`tmp_cli_*\` token and \`tmp_inv_*\` invite in \`finally\` and on \`SIGINT\`/\`SIGTERM\`, asserting \`backupCount === 1\` (for \`github-actions-nightly-backup\`) and \`remainingTmpCount === 0\`.
 
 ## Privacy

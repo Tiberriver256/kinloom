@@ -170,7 +170,8 @@ Run full-archive invariants across local data/*.yaml files:
   8. Pronunciation audit (living-person pronunciation leaks fail; coverage gaps warn unless --strict-pronunciation or --strict is set)
   9. External media/audio URL CSP check (flags non-local audio_url, token_audio_urls, portrait_url, or media asset URLs pointing to external hosts; ignores sources.yaml citation URLs; warns unless --strict-external-media or --strict is set)
   10. Tracked binary media check (flags .mp3, .wav, or .mp4 files tracked in Git via git ls-files; warns unless --strict-tracked-media or --strict is set)
-  11. Site plugin verifyChecks (auto-discovered from extensions/*/cli.{mjs,js} and kinloom.config.yaml plugins)
+  11. Brandkit manifest & asset check (warns when public/site.webmanifest uses generic "Kinloom" defaults or drifts from kinloom.config.yaml site.title, or when public/favicon-light.svg or public/sw.js accent drifts; fails under --strict-brandkit or --strict)
+  12. Site plugin verifyChecks (auto-discovered from extensions/*/cli.{mjs,js} and kinloom.config.yaml plugins)
 
 Options:
   --repo <dir>              Archive repository root (default: current working directory)
@@ -178,8 +179,9 @@ Options:
   --strict-pronunciation    Fail verification (exit 1) when any pronunciation coverage or provenance warning is found
   --strict-external-media   Fail verification (exit 1) when any rendered media/audio asset points to an external host
   --strict-tracked-media    Fail verification (exit 1) when any .mp3, .wav, or .mp4 binary is tracked in Git
-  --strict                  Enable --strict-hygiene, --strict-pronunciation, --strict-external-media, --strict-tracked-media, and plugin strictFailures
-  --json                    Emit structured JSON scorecard (includes hygiene.warnings, externalMedia.hits, trackedMedia.files)
+  --strict-brandkit         Fail verification (exit 1) when public/site.webmanifest, public/favicon-light.svg, or public/sw.js drifts from kinloom.config.yaml
+  --strict                  Enable --strict-hygiene, --strict-pronunciation, --strict-external-media, --strict-tracked-media, --strict-brandkit, and plugin strictFailures
+  --json                    Emit structured JSON scorecard (includes hygiene.warnings, externalMedia.hits, trackedMedia.files, brandkitManifest.warnings)
   -h, --help                Show this help message`;
 
 export const SYNC_HELP = `Usage: kinloom sync [options]
@@ -373,6 +375,7 @@ Options:
   --repo <dir>         Repository root for CSS and DTCG token discovery (default: cwd)
   --archetype <id>     UI archetype: editorial (default), saas, ecommerce, or mobile-app
   --routes <csv>       Comma-separated or repeatable route paths (default: /)
+  --auto-routes        Discover core, deceased /person/<slug>, /place/<slug>, and enabled plugin routes from /api/bundle
   --themes <csv>       Color schemes: light, dark, more-contrast (default: light,dark)
   --states <csv>       UI Stack states: ideal, loading, empty-first, empty-zero, partial, error
   --css <path>         Explicit CSS file path(s) to audit (repeatable or comma-separated)
@@ -381,6 +384,7 @@ Options:
   --baseline <sarif>   Baseline SARIF 2.1.0 file for ratchet regression diffing
   --auth-cookie <str>  Optional Cookie header for authenticated private-archive audits (never saved)
   --auth-header <hdr>  Optional HTTP header (\`Name: value\`, repeatable, never saved)
+  --invite-token <tok> Redeem a viewer invite token into a session cookie before route discovery and capture (never saved)
   --with-temp-auth     Mint and auto-revoke a temporary D1 viewer invite via Wrangler
   --static-only        Skip browser capture and run static CSS/DTCG checks only
   --fail-on-error      Exit with code 1 when any blocking error finding is detected
@@ -396,7 +400,7 @@ Verify a live Kinloom deployment end to end with automatic ephemeral Cloudflare 
   2. Authenticated synthetic probe + plugin health checks (--expect-plugins)
   3. Live /api/bundle living-person privacy invariants (0 living portraits, 0 exact YYYY-MM-DD living birthdates, 0 living residence spans, 0 living media/narratives)
   4. Optional headless Playwright smoke check (--browser: visible H1, 0 pageerror, 0 failed /assets/* or /api/* requests)
-  5. Optional PWA & brandkit asset checks (--check-pwa: /site.webmanifest, /sw.js, /favicon-light.svg, /favicon-dark.svg)
+  5. Optional PWA & brandkit asset checks (--check-pwa: /site.webmanifest, /sw.js, /favicon-light.svg, /favicon-dark.svg; validates manifest title and accent against local kinloom.config.yaml when present)
   6. Guaranteed ephemeral D1 cleanup (backupCount === 1 before/after and remainingTmpCount === 0)
 
 Options:
@@ -406,7 +410,7 @@ Options:
   --with-temp-auth        Require ephemeral D1 auth (default when --token is omitted and wrangler config exists)
   --expect-plugins <csv>  Comma-separated server plugin IDs required to be active and healthy
   --browser               Run headless Playwright smoke check against / using an ephemeral viewer invite
-  --check-pwa             Verify /site.webmanifest, /sw.js, /favicon-light.svg, and /favicon-dark.svg
+  --check-pwa             Verify /site.webmanifest, /sw.js, /favicon-light.svg, and /favicon-dark.svg (and compare title/accent against local kinloom.config.yaml if present)
   --timeout-ms <ms>       Per-request/check timeout in milliseconds (default: 15000)
   --json                  Emit machine-readable JSON verification report
   --guide                 Show the embedded verify-live workflow guide

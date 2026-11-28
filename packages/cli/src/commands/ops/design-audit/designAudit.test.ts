@@ -10,6 +10,7 @@ import {
   auditTokensAndCss,
   calcApcaLc,
   calcWcag2Contrast,
+  DESIGN_AUDIT_CORE_ROUTES,
   type DesignAuditBrowser,
   type DesignAuditBrowserPage,
   type DesignAuditFinding,
@@ -17,16 +18,20 @@ import {
   type DesignAuditPlan,
   type DesignAuditTelemetry,
   dedupeFindings,
+  discoverDesignAuditAutoRoutes,
   emitSarifAndDossier,
   evaluateBundleDeterministic,
   initDesignAuditPlan,
   isPlaywrightLauncher,
+  mergeUniqueRoutes,
   parseCssRgbTuple,
   resolveDesignAuditArchetype,
   runDesignAuditCaptureMatrix,
   runDesignAuditCommand,
   slugifyRoute,
 } from '../design-audit.js';
+import { extractEnabledPluginRoutesFromBundle } from '../shared/routeDiscovery.js';
+import type { WranglerExecutor } from '../shared/wrangler.js';
 
 const tempDirs: string[] = [];
 
@@ -149,6 +154,9 @@ describe('design-audit deterministic probes, capture matrix & SARIF 2.1.0', () =
       docOverflowX: 24,
       aboveFoldMainRatio: 0.3,
       aboveFoldChromeRatio: 0.5,
+      aboveFoldContentYieldRatio: 0.375,
+      firstContentY: 420,
+      firstContentSelector: 'article.story-card',
       navLinkCount: 12,
       title: 'Archive',
       h1Text: 'Very Long Archival Heading That Clips',
@@ -244,6 +252,7 @@ describe('design-audit deterministic probes, capture matrix & SARIF 2.1.0', () =
     const findings = evaluateBundleDeterministic(manifest, tmp);
     const rules = findings.map((f) => f.ruleId);
     expect(rules).toContain('DA-01-LOW-ABOVE-FOLD-YIELD');
+    expect(rules).toContain('DA-01-ABOVE-THE-FOLD-YIELD');
     expect(rules).toContain('DA-02-NAV-OVERFLOW');
     expect(rules).toContain('DA-10-HORIZONTAL-OVERFLOW');
     expect(rules).toContain('DA-10-H1-TRUNCATED');
@@ -253,7 +262,7 @@ describe('design-audit deterministic probes, capture matrix & SARIF 2.1.0', () =
     expect(rules).toContain('DA-07-FOCUS-INDICATOR-MISSING');
     expect(rules).toContain('DA-05-TEXT-SPACING-CLIP');
     expect(rules).toContain('DA-09-CONTRAST-BELOW-FLOOR');
-    expect(rules).toContain('DA-09-DARK-MODE-HALATION');
+    expect(rules).toContain('DA-09-DARK-HALATION');
     expect(rules).toContain('DA-12-REDUCED-MOTION-ACTIVE');
 
     // Add a VLM finding on the same target to verify deterministic supersession & SARIF baseline ratchet
@@ -855,5 +864,667 @@ describe('kinloom design-audit CLI subcommand dispatch', () => {
     expect(noUrlRun.degradedReason).toContain('no --url');
     const emptyCssRes = auditTokensAndCss({ repoRoot: path.join(tmp, 'does-not-exist'), writeOutput: false });
     expect(emptyCssRes.cssStats).toBeNull();
+  });
+});
+
+function makeMockD1Wrangler(sqlLog: string[]): WranglerExecutor {
+  return async (_bin, args) => {
+    const sql = args[args.indexOf('--command') + 1] ?? '';
+    sqlLog.push(sql);
+    if (sql.startsWith('SELECT COUNT(*) AS count FROM agent_tokens')) {
+      return { stdout: JSON.stringify([{ success: true, results: [{ count: 1 }] }]), stderr: '' };
+    }
+    if (sql.includes('DELETE FROM')) {
+      const inviteDeletes = (sql.match(/DELETE FROM invites/g) ?? []).length;
+      const statements: Array<{ success: true; results: Array<Record<string, unknown>> }> = [];
+      for (let i = 0; i < inviteDeletes; i += 1) {
+        statements.push({ success: true, results: [] });
+      }
+      statements.push({ success: true, results: [{ count: 1 }] });
+      if (inviteDeletes > 0) {
+        statements.push({ success: true, results: [{ count: 0 }] });
+      }
+      return { stdout: JSON.stringify(statements), stderr: '' };
+    }
+    return { stdout: JSON.stringify([{ success: true, results: [] }]), stderr: '' };
+  };
+}
+
+describe('design-audit Issue #115 auth modes, --auto-routes discovery, and fold/halation telemetry', () => {
+  it('discovers core routes, deceased-only person, place, and enabled plugin routes from /api/bundle with graceful fallback', async () => {
+    expect(DESIGN_AUDIT_CORE_ROUTES).toEqual([
+      '/',
+      '/places',
+      '/evidence',
+      '/time',
+      '/tree',
+      '/map',
+      '/kinship',
+      '/changes',
+    ]);
+    expect(mergeUniqueRoutes(['/', '/tree'], ['/tree', 'map', '/'])).toEqual(['/', '/tree', '/map']);
+
+    expect(extractEnabledPluginRoutesFromBundle(null)).toEqual([]);
+    expect(
+      extractEnabledPluginRoutesFromBundle({
+        plugins: [
+          'recipes',
+          { id: 'open-finance', enabled: true },
+          { id: 'disabled-plugin', enabled: false, route: '/hidden' },
+          { id: 'custom-ext', route: '/stories' },
+          { id: 'bad-core', path: '/tree' },
+          { id: 'bad-api', path: '/api/secret' },
+          { id: 'bad-url', path: 'http://evil.example/x' },
+          '',
+          123,
+        ],
+        meta: {
+          enabled_plugins: ['support'],
+          pluginRoutes: ['/chronicle', '/api/ignore', '/invite/secret', '/media/x', '/data/x'],
+          extensions: {
+            recipes: { enabled: true },
+            disabled_ext: false,
+            disabled_obj: { enabled: false, route: '/nope' },
+            custom_map: { enabled: true, navPath: '/oral-history' },
+            null_entry: null,
+          },
+        },
+      })
+    ).toEqual(['/recipes', '/support', '/stories', '/chronicle', '/oral-history']);
+
+    const seenHeaders: Array<{ url: string; cookie: string | null; header: string | null }> = [];
+    const fetchBundle: typeof fetch = async (input, init) => {
+      const url = typeof input === 'string' ? input : input instanceof URL ? input.href : input.url;
+      const headers = new Headers(init?.headers);
+      seenHeaders.push({
+        url,
+        cookie: headers.get('cookie'),
+        header: headers.get('x-archive-test'),
+      });
+      if (url === 'https://archive.example/api/bundle') {
+        return new Response(
+          JSON.stringify({
+            people: [
+              { id: 'p_live_1', slug: 'living-person', full_name: 'Private Living', is_living: true },
+              { id: 'p_live_2', slug: 'living-flag', full_name: 'Flagged Living', living: true },
+              { id: 'p_live_3', slug: 'eff-living', full_name: 'Effective Living', effective_living: true },
+              { id: 'p_live_4', slug: 'redacted-one', full_name: 'Living', is_living: false },
+              { id: 'p_live_5', slug: 'living', full_name: 'Slug Living', is_living: false },
+              {
+                id: 'p_dec_1',
+                slug: 'ada-lovelace',
+                full_name: 'Ada Lovelace',
+                is_living: false,
+                event_count: 8,
+              },
+            ],
+            places: [{ id: 'pl_1', slug: 'london-england', name: 'London, England', lat: 51.5, lng: -0.12 }],
+            plugins: ['recipes', { id: 'open-finance', enabled: true }],
+          }),
+          { status: 200, headers: { 'content-type': 'application/json' } }
+        );
+      }
+      return new Response('not found', { status: 404 });
+    };
+
+    const auto = await discoverDesignAuditAutoRoutes({
+      baseUrl: 'https://archive.example/',
+      explicitRoutes: ['/custom-extra'],
+      authCookie: '__Host-kinloom_session=sess123',
+      authHeaders: { 'X-Archive-Test': 'ok' },
+      fetchImpl: fetchBundle,
+    });
+
+    expect(auto.source).toBe('api-bundle');
+    expect(auto.personRoute).toBe('/person/ada-lovelace');
+    expect(auto.placeRoute).toBe('/place/london-england');
+    expect(auto.pluginRoutes).toEqual(['/recipes', '/support']);
+    expect(auto.routes).toEqual([
+      '/',
+      '/places',
+      '/evidence',
+      '/time',
+      '/tree',
+      '/map',
+      '/kinship',
+      '/changes',
+      '/person/ada-lovelace',
+      '/place/london-england',
+      '/recipes',
+      '/support',
+      '/custom-extra',
+    ]);
+    expect(auto.routes.some((r) => r.includes('living'))).toBe(false);
+    expect(seenHeaders[0]).toEqual({
+      url: 'https://archive.example/api/bundle',
+      cookie: '__Host-kinloom_session=sess123',
+      header: 'ok',
+    });
+
+    // Graceful fallback when /api/bundle returns 401
+    const unauthFetch: typeof fetch = async () => new Response('unauthorized', { status: 401 });
+    const fallbackDefault = await discoverDesignAuditAutoRoutes({
+      baseUrl: 'https://archive.example',
+      fetchImpl: unauthFetch,
+    });
+    expect(fallbackDefault.source).toBe('none');
+    expect(fallbackDefault.routes).toEqual(['/']);
+    expect(fallbackDefault.fallbackReason).toContain('/api/bundle');
+
+    const fallbackExplicit = await discoverDesignAuditAutoRoutes({
+      baseUrl: 'https://archive.example',
+      explicitRoutes: ['/places'],
+      fetchImpl: unauthFetch,
+    });
+    expect(fallbackExplicit.routes).toEqual(['/places']);
+
+    // Empty bundle with zero deceased people and zero places returns only core routes
+    const emptyBundleFetch: typeof fetch = async () =>
+      new Response(
+        JSON.stringify({
+          people: [{ id: 'p_l', slug: 'l', full_name: 'Living', is_living: true }],
+          places: [],
+        }),
+        {
+          status: 200,
+          headers: { 'content-type': 'application/json' },
+        }
+      );
+    const emptyAuto = await discoverDesignAuditAutoRoutes({
+      baseUrl: 'https://archive.example',
+      fetchImpl: emptyBundleFetch,
+    });
+    expect(emptyAuto.source).toBe('api-bundle');
+    expect(emptyAuto.personRoute).toBeNull();
+    expect(emptyAuto.placeRoute).toBeNull();
+    expect(emptyAuto.routes).toEqual([...DESIGN_AUDIT_CORE_ROUTES]);
+  });
+
+  it('supports --invite-token redemption, --with-temp-auth + --auto-routes, live DOM plugin nav discovery, and auth validation', async () => {
+    const tmp = await makeTempDir('kinloom-da-115-auth-');
+    process.env['KINLOOM_TELEMETRY_FILE'] = path.join(tmp, 'calls.jsonl');
+    fs.writeFileSync(
+      path.join(tmp, 'wrangler.jsonc'),
+      JSON.stringify({
+        d1_databases: [{ database_name: 'alder-db' }],
+        routes: [{ pattern: 'alder.example.org/*' }],
+      }),
+      'utf8'
+    );
+
+    const visitedRoutes: string[] = [];
+    const seenContextCookies: Array<{ name: string; value: string; url: string }> = [];
+    const seenContextHeaders: Array<Readonly<Record<string, string>> | undefined> = [];
+
+    const makeAuthBrowser = (): DesignAuditBrowser => ({
+      newContext: async (opts) => {
+        seenContextHeaders.push(opts.extraHTTPHeaders);
+        return {
+          addCookies: async (cookies) => {
+            seenContextCookies.push(...cookies);
+          },
+          newPage: async (): Promise<DesignAuditBrowserPage> => {
+            let currentPath = '/';
+            return {
+              emulateMedia: async () => undefined,
+              goto: async (url) => {
+                currentPath = new URL(url).pathname;
+                visitedRoutes.push(currentPath);
+              },
+              waitForTimeout: async () => undefined,
+              addStyleTag: async () => undefined,
+              screenshot: async (opts) => {
+                fs.writeFileSync(opts.path, Buffer.from([0x89, 0x50, 0x4e, 0x47]));
+              },
+              evaluate: async <T = unknown>(expr: string | ((...args: never[]) => T)): Promise<T> => {
+                const src = String(expr);
+                if (src.includes('aboveFoldMainRatio')) {
+                  return {
+                    viewport: '1440x900',
+                    docOverflowX: 0,
+                    aboveFoldMainRatio: 0.72,
+                    aboveFoldChromeRatio: 0.12,
+                    aboveFoldContentYieldRatio: 0.8571,
+                    firstContentY: currentPath === '/recipes' ? 410 : 120,
+                    firstContentSelector: currentPath === '/recipes' ? 'article.recipe-card' : 'main h1',
+                    navLinkCount: 5,
+                    title: 'Alder Archive',
+                    h1Text: 'Alder Archive',
+                    h1Truncated: false,
+                    h1Rect: [24, 96, 300, 42],
+                    viewportMeta: 'width=device-width, initial-scale=1',
+                    interactives: [],
+                    textSamples: [],
+                    displayTextSamples:
+                      currentPath === '/recipes'
+                        ? [
+                            {
+                              tag: 'div',
+                              text: 'Bright White Hero Display',
+                              fontSizePx: 36,
+                              fontWeight: 700,
+                              color: 'rgb(255, 255, 255)',
+                              backgroundColor: 'rgb(12, 12, 12)',
+                              rect: [24, 410, 400, 44],
+                            },
+                          ]
+                        : [],
+                    stylesheets: [],
+                    navLinks:
+                      currentPath === '/'
+                        ? [
+                            { href: '/places', text: 'Places' },
+                            { href: '/recipes', text: 'Recipes' },
+                            { href: '/support', text: 'Support' },
+                          ]
+                        : [],
+                  } as T;
+                }
+                if (src.includes('playState')) {
+                  return 0 as T;
+                }
+                return [] as T;
+              },
+            };
+          },
+          close: async () => undefined,
+        };
+      },
+      close: async () => undefined,
+    });
+
+    const redeemedUrls: string[] = [];
+    const bundleAuthCookies: Array<string | null> = [];
+    const fetchImpl: typeof fetch = async (input, init) => {
+      const url = typeof input === 'string' ? input : input instanceof URL ? input.href : input.url;
+      if (url.includes('/api/auth/invite/')) {
+        redeemedUrls.push(url);
+        return new Response(null, {
+          status: 302,
+          headers: {
+            location: '/',
+            'set-cookie': '__Host-kinloom_session=redeemed_sess_115; Path=/; HttpOnly; Secure',
+          },
+        });
+      }
+      if (url.endsWith('/api/bundle')) {
+        bundleAuthCookies.push(new Headers(init?.headers).get('cookie'));
+        return new Response(
+          JSON.stringify({
+            people: [
+              { id: 'p1', slug: 'living-skip', full_name: 'Living Person', is_living: true },
+              { id: 'p2', slug: 'grace-hopper', full_name: 'Grace Hopper', is_living: false },
+            ],
+            places: [{ id: 'pl1', slug: 'new-york-ny', name: 'New York, NY' }],
+          }),
+          { status: 200, headers: { 'content-type': 'application/json' } }
+        );
+      }
+      return new Response('not found', { status: 404 });
+    };
+
+    // 1. --invite-token + --auto-routes (with live DOM nav plugin discovery for /recipes & /support)
+    const inviteOut = path.join(tmp, 'invite-out');
+    const inviteRun = await runDesignAuditCommand({
+      url: 'https://alder.example.org',
+      outDir: inviteOut,
+      repoRoot: tmp,
+      archetype: 'mobile-app',
+      themes: ['dark'],
+      inviteToken: 'inv_viewer_secret_115',
+      authHeaders: { 'X-Audit-Client': 'issue-115' },
+      autoRoutes: true,
+      fetchImpl,
+      browserFactory: async () => makeAuthBrowser(),
+    });
+
+    expect(inviteRun.deterministicRuntime).toBe(true);
+    expect(redeemedUrls).toEqual(['https://alder.example.org/api/auth/invite/inv_viewer_secret_115']);
+    expect(bundleAuthCookies).toEqual(['__Host-kinloom_session=redeemed_sess_115']);
+    expect(seenContextCookies.every((c) => c.value === 'redeemed_sess_115')).toBe(true);
+    expect(seenContextHeaders.every((h) => h?.['X-Audit-Client'] === 'issue-115')).toBe(true);
+    expect(inviteRun.discoveredRoutes).toContain('/person/grace-hopper');
+    expect(inviteRun.discoveredRoutes).toContain('/place/new-york-ny');
+    expect(inviteRun.discoveredRoutes).toContain('/recipes');
+    expect(inviteRun.discoveredRoutes).toContain('/support');
+    expect(inviteRun.discoveredRoutes).not.toContain('/person/living-skip');
+    expect(inviteRun.rendered).toContain('Routes:');
+    expect(inviteRun.rendered).not.toContain('inv_viewer_secret_115');
+    expect(inviteRun.rendered).not.toContain('redeemed_sess_115');
+    expect(fs.readFileSync(path.join(inviteOut, 'plan.json'), 'utf8')).not.toContain('redeemed_sess_115');
+
+    const detFindings = JSON.parse(
+      fs.readFileSync(path.join(inviteOut, 'track-a-deterministic.json'), 'utf8')
+    ) as DesignAuditFinding[];
+    const detRules = detFindings.map((f) => f.ruleId);
+    expect(detRules).toContain('DA-01-ABOVE-THE-FOLD-YIELD');
+    expect(detRules).toContain('DA-09-DARK-HALATION');
+    const sarifRaw = JSON.parse(fs.readFileSync(inviteRun.sarifPath, 'utf8')) as {
+      runs: Array<{ results: Array<{ ruleId: string }> }>;
+    };
+    const sarifRuleIds = sarifRaw.runs.flatMap((r) => r.results.map((res) => res.ruleId));
+    expect(sarifRuleIds).toContain('DA-01-ABOVE-THE-FOLD-YIELD');
+    expect(sarifRuleIds).toContain('DA-09-DARK-HALATION');
+
+    // 2. --with-temp-auth + --auto-routes end-to-end with guaranteed D1 cleanup
+    const sqlLog: string[] = [];
+    const execWrangler = makeMockD1Wrangler(sqlLog);
+    const tempAuthRun = await runDesignAuditCommand({
+      repoRoot: tmp,
+      outDir: path.join(tmp, 'temp-auth-out'),
+      archetype: 'mobile-app',
+      themes: ['light'],
+      withTempAuth: true,
+      autoRoutes: true,
+      fetchImpl,
+      execWrangler,
+      browserFactory: async () => makeAuthBrowser(),
+    });
+    expect(tempAuthRun.deterministicRuntime).toBe(true);
+    expect(tempAuthRun.discoveredRoutes).toContain('/person/grace-hopper');
+    expect(sqlLog.some((s) => s.includes('INSERT INTO invites'))).toBe(true);
+    expect(sqlLog.some((s) => s.includes('DELETE FROM invites'))).toBe(true);
+
+    // 3. --plan + --auto-routes + --invite-token (resolves baseUrl from plan.json)
+    const planPath = path.join(tmp, 'existing-plan.json');
+    fs.writeFileSync(
+      planPath,
+      JSON.stringify({
+        runId: 'plan-auto-run',
+        baseUrl: 'https://alder.example.org',
+        mode: 'audit-only',
+        repoRoot: tmp,
+        themes: ['light'],
+        routes: [{ path: '/custom-from-plan', archetype: 'mobile-app', uiStates: ['ideal'] }],
+      }),
+      'utf8'
+    );
+    const planAutoRun = await runDesignAuditCommand({
+      planPath,
+      outDir: path.join(tmp, 'plan-auto-out'),
+      inviteToken: 'inv_plan_token',
+      autoRoutes: true,
+      fetchImpl,
+      browserFactory: async () => makeAuthBrowser(),
+    });
+    expect(planAutoRun.discoveredRoutes).toContain('/custom-from-plan');
+    expect(planAutoRun.discoveredRoutes).toContain('/person/grace-hopper');
+
+    // 4. CLI init --auto-routes --invite-token
+    const autoPlanOut = path.join(tmp, 'auto-init.plan.json');
+    const initIo = createCaptureIo();
+    expect(
+      await runCli(
+        [
+          'design-audit',
+          'init',
+          '--out',
+          autoPlanOut,
+          '--url',
+          'https://alder.example.org',
+          '--invite-token',
+          'inv_init_tok',
+          '--auto-routes',
+          '--json',
+        ],
+        { cwd: tmp, io: initIo.io, fetchImpl }
+      )
+    ).toBe(EXIT_OK);
+    const initParsed = JSON.parse(initIo.stdout.join('\n')) as { plan: DesignAuditPlan };
+    expect(initParsed.plan.routes.map((r) => r.path)).toContain('/person/grace-hopper');
+
+    // 5. Auth validation & error paths
+    await expect(
+      runDesignAuditCommand({
+        url: 'https://alder.example.org',
+        authCookie: 'kinloom_session=a',
+        inviteToken: 'inv_1',
+      })
+    ).rejects.toThrow(/Specify at most one/);
+
+    await expect(
+      runDesignAuditCommand({
+        url: 'https://alder.example.org',
+        inviteToken: 'bad\ntoken',
+      })
+    ).rejects.toThrow(/CR or LF/);
+
+    await expect(
+      runDesignAuditCommand({
+        url: 'https://alder.example.org',
+        inviteToken: '   ',
+      })
+    ).rejects.toThrow(/must not be empty/);
+
+    await expect(
+      runDesignAuditCommand({
+        inviteToken: 'inv_no_url',
+      })
+    ).rejects.toThrow(/requires `--url <baseUrl>` or `--plan <path>`/);
+
+    // CLI boundary conflicts and validation
+    const cliConflict = createCaptureIo();
+    expect(
+      await runCli(['design-audit', 'run', '--invite-token', 'inv_a', '--with-temp-auth', '--static-only'], {
+        cwd: tmp,
+        io: cliConflict.io,
+      })
+    ).toBe(EXIT_USAGE);
+
+    const initConflict = createCaptureIo();
+    expect(
+      await runCli(
+        [
+          'design-audit',
+          'init',
+          '--url',
+          'https://alder.example.org',
+          '--auto-routes',
+          '--auth-cookie',
+          'k=1',
+          '--invite-token',
+          'inv_a',
+        ],
+        { cwd: tmp, io: initConflict.io }
+      )
+    ).toBe(EXIT_USAGE);
+
+    const initBadInvite = createCaptureIo();
+    expect(
+      await runCli(
+        [
+          'design-audit',
+          'init',
+          '--url',
+          'https://alder.example.org',
+          '--auto-routes',
+          '--invite-token',
+          '   ',
+        ],
+        { cwd: tmp, io: initBadInvite.io }
+      )
+    ).toBe(EXIT_USAGE);
+
+    const badHeaderCrLf = createCaptureIo();
+    expect(
+      await runCli(['design-audit', '--auth-header', 'X-Bad: val\nnext', '--static-only'], {
+        cwd: tmp,
+        io: badHeaderCrLf.io,
+      })
+    ).toBe(EXIT_USAGE);
+
+    const badHeaderName = createCaptureIo();
+    expect(
+      await runCli(['design-audit', '--auth-header', 'Bad Name: val', '--static-only'], {
+        cwd: tmp,
+        io: badHeaderName.io,
+      })
+    ).toBe(EXIT_USAGE);
+  });
+
+  it('evaluates firstContentY thresholds and dark-mode displayTextSamples halation/contrast accurately across themes', async () => {
+    const tmp = await makeTempDir('kinloom-da-115-probes-');
+    fs.mkdirSync(path.join(tmp, 'dom'), { recursive: true });
+
+    // Light theme + clean firstContentY + softened dark display ink -> 0 fold/halation findings
+    const cleanLightTel: DesignAuditTelemetry = {
+      viewport: '1440x900',
+      docOverflowX: 0,
+      aboveFoldMainRatio: 0.72,
+      aboveFoldChromeRatio: 0.12,
+      aboveFoldContentYieldRatio: 0.86,
+      firstContentY: 140,
+      firstContentSelector: 'main h1',
+      navLinkCount: 5,
+      title: 'Clean',
+      h1Text: 'Archive',
+      h1Truncated: false,
+      h1Rect: [24, 140, 300, 40],
+      viewportMeta: 'width=device-width, initial-scale=1',
+      interactives: [],
+      textSamples: [],
+      displayTextSamples: [
+        {
+          tag: 'h1',
+          text: 'Pure white ignored in light mode',
+          fontSizePx: 36,
+          fontWeight: 700,
+          color: 'rgb(255, 255, 255)',
+          backgroundColor: 'rgb(0, 0, 0)',
+          rect: [24, 140, 300, 40],
+        },
+      ],
+    };
+
+    // Dark theme with softened off-white display text (|Lc| <= 90) and low-contrast display text + bad color + duplicate
+    const darkTel: DesignAuditTelemetry = {
+      viewport: '1440x900',
+      docOverflowX: 0,
+      aboveFoldMainRatio: 0.65,
+      aboveFoldChromeRatio: 0.2,
+      firstContentY: 310, // exceeds saas maxFirstContentYPx (280) without yield ratio or selector
+      navLinkCount: 6,
+      title: 'Workbench',
+      h1Text: 'Workbench',
+      h1Truncated: false,
+      h1Rect: [24, 310, 300, 40],
+      viewportMeta: 'width=device-width, initial-scale=1',
+      interactives: [],
+      textSamples: [
+        {
+          tag: 'h1',
+          text: 'Duplicate display heading',
+          fontSizePx: 28,
+          fontWeight: 700,
+          fontStyle: 'normal',
+          lineHeight: '34px',
+          textDecorationLine: 'none',
+          textTransform: 'none',
+          fontFamily: 'serif',
+          color: 'rgb(245, 245, 245)',
+          backgroundColor: 'rgb(15, 15, 15)',
+          rect: [24, 310, 300, 34],
+        },
+      ],
+      displayTextSamples: [
+        {
+          tag: 'h1',
+          text: 'Duplicate display heading',
+          fontSizePx: 28,
+          fontWeight: 700,
+          color: 'rgb(245, 245, 245)',
+          backgroundColor: 'rgb(15, 15, 15)',
+          rect: [24, 310, 300, 34],
+        },
+        {
+          tag: 'div',
+          text: 'Softened dark display',
+          fontSizePx: 32,
+          fontWeight: 600,
+          color: 'rgb(214, 210, 200)',
+          backgroundColor: 'rgb(24, 26, 29)',
+          rect: [24, 360, 280, 36],
+        },
+        {
+          tag: 'div',
+          text: 'Pure white worst halation',
+          fontSizePx: 40,
+          fontWeight: 700,
+          color: 'rgb(255, 255, 255)',
+          backgroundColor: 'rgb(0, 0, 0)',
+          rect: [24, 410, 340, 44],
+        },
+        {
+          tag: 'div',
+          text: 'Muddy low-contrast display',
+          fontSizePx: 26,
+          fontWeight: 600,
+          color: 'rgb(52, 52, 52)',
+          backgroundColor: 'rgb(34, 34, 34)',
+          rect: [24, 470, 280, 32],
+        },
+        {
+          tag: 'span',
+          text: 'Invalid color skipped',
+          fontSizePx: 28,
+          fontWeight: 600,
+          color: 'currentcolor',
+          backgroundColor: 'transparent',
+          rect: [24, 510, 120, 32],
+        },
+      ],
+    };
+
+    fs.writeFileSync(path.join(tmp, 'dom', 'light.telemetry.json'), JSON.stringify(cleanLightTel), 'utf8');
+    fs.writeFileSync(path.join(tmp, 'dom', 'dark.telemetry.json'), JSON.stringify(darkTel), 'utf8');
+
+    const manifest: DesignAuditManifest = {
+      runId: 'probes-115',
+      sealedAtUtc: '2026-11-28T00:00:00.000Z',
+      baseUrl: 'http://127.0.0.1:4173',
+      mode: 'audit-only',
+      deterministicRuntime: true,
+      coverage: 'full',
+      captureCount: 2,
+      cssFiles: [],
+      captures: [
+        {
+          id: 'light',
+          route: '/',
+          archetype: 'editorial',
+          viewport: '1440x900',
+          theme: 'light',
+          uiState: 'ideal',
+          screenshotUri: 'screenshots/light.png',
+          screenshotSha256: 'l1',
+          telemetryUri: 'dom/light.telemetry.json',
+        },
+        {
+          id: 'dark',
+          route: '/workbench',
+          archetype: 'saas',
+          viewport: '1440x900',
+          theme: 'dark',
+          uiState: 'ideal',
+          screenshotUri: 'screenshots/dark.png',
+          screenshotSha256: 'd1',
+          telemetryUri: 'dom/dark.telemetry.json',
+        },
+      ],
+    };
+
+    const findings = evaluateBundleDeterministic(manifest, tmp);
+    expect(findings.filter((f) => f.theme === 'light')).toEqual([]);
+
+    const foldFinding = findings.find((f) => f.ruleId === 'DA-01-ABOVE-THE-FOLD-YIELD');
+    expect(foldFinding?.measuredValue).toBe(310);
+    expect(foldFinding?.thresholdValue).toBe(280);
+
+    const halationFinding = findings.find((f) => f.ruleId === 'DA-09-DARK-HALATION');
+    expect(halationFinding?.message).toContain('Pure white worst halation');
+    expect(Number(halationFinding?.measuredValue)).toBeGreaterThan(100);
+
+    const contrastFinding = findings.find((f) => f.ruleId === 'DA-09-CONTRAST-BELOW-FLOOR');
+    expect(contrastFinding?.message).toContain('Muddy low-contrast display');
   });
 });

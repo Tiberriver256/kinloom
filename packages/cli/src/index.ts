@@ -29,6 +29,7 @@ export {
 export {
   type BrandkitCommandOptions,
   type BrandkitCommandResult,
+  type BrandkitConfigResolution,
   type BrandkitFileArtifact,
   encodeIcoFromPngs,
   type IcoPngFrame,

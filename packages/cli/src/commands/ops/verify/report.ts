@@ -1,6 +1,7 @@
 import type { ExecutedPluginCheckResult } from '../../../plugins.js';
 import { TREE_HYGIENE_CATEGORIES, type TreeHygieneSummary } from '../tree-hygiene.js';
 import type {
+  VerifyBrandkitManifestResult,
   VerifyCitationsResult,
   VerifyCommandResult,
   VerifyCompileResult,
@@ -23,12 +24,14 @@ export function collectVerifyDiagnostics(input: {
   pronunciation: ExecutedPluginCheckResult;
   externalMedia: VerifyExternalMediaResult;
   trackedMedia: VerifyTrackedMediaResult;
+  brandkitManifest: VerifyBrandkitManifestResult;
   pluginDiscoveryWarnings: readonly string[];
   pluginChecks: readonly ExecutedPluginCheckResult[];
   strictHygiene: boolean;
   strictPronunciation: boolean;
   strictExternalMedia: boolean;
   strictTrackedMedia: boolean;
+  strictBrandkit: boolean;
 }): { warnings: string[]; errors: string[] } {
   const warnings = [
     ...input.hygiene.warnings.map((warning) => `[${warning.category}] ${warning.message}`),
@@ -41,6 +44,7 @@ export function collectVerifyDiagnostics(input: {
       (file) =>
         `[tracked-media] ${file.path} (${file.extension}) is tracked in Git; host audio/video binaries in R2 instead of committing them.`
     ),
+    ...input.brandkitManifest.warnings.map((w) => `[brandkit-manifest] ${w}`),
     ...input.pluginDiscoveryWarnings.map((w) => `[plugin] ${w}`),
     ...input.pluginChecks.flatMap((pc) => pc.warnings.map((w) => `[plugin:${pc.id}] ${w}`)),
   ];
@@ -79,6 +83,7 @@ export function collectVerifyDiagnostics(input: {
           (file) => `tracked-media: ${file.path} (${file.extension}) is tracked in Git`
         )
       : []),
+    ...(input.strictBrandkit ? input.brandkitManifest.warnings.map((w) => `brandkit-manifest: ${w}`) : []),
     ...(input.strictHygiene || input.strictPronunciation
       ? input.pluginChecks.flatMap((pc) => pc.strictFailures.map((f) => `plugin(${pc.id}): ${f}`))
       : []),
@@ -99,6 +104,11 @@ export function formatVerifyTextReport(report: Omit<VerifyCommandResult, 'render
     report.checks.externalMedia.hits.length === 0 ? 'PASS' : report.strictExternalMedia ? 'FAIL' : 'WARN';
   const trackedMediaStatus =
     report.checks.trackedMedia.files.length === 0 ? 'PASS' : report.strictTrackedMedia ? 'FAIL' : 'WARN';
+  const brandkitManifestStatus = report.checks.brandkitManifest.ok
+    ? 'PASS'
+    : report.strictBrandkit
+      ? 'FAIL'
+      : 'WARN';
 
   const lines: string[] = [
     `Verify [${status}] ${report.repo} (${report.duration_ms} ms)`,
@@ -120,6 +130,7 @@ export function formatVerifyTextReport(report: Omit<VerifyCommandResult, 'render
     } | errors=${report.checks.pronunciation.errors.length} warnings=${report.checks.pronunciation.warnings.length}`,
     `  9. External media CSP: ${externalMediaStatus} | checked=${report.checks.externalMedia.checkedCount} hits=${report.checks.externalMedia.hits.length}`,
     `  10. Tracked binary media: ${trackedMediaStatus} | git=${report.checks.trackedMedia.isGitRepo ? 'yes' : 'no'} tracked=${report.checks.trackedMedia.trackedCount} hits=${report.checks.trackedMedia.files.length}`,
+    `  11. Brandkit manifest: ${brandkitManifestStatus} | present=${report.checks.brandkitManifest.manifestExists ? 'yes' : 'no'} name=${report.checks.brandkitManifest.manifestName ?? 'none'} warnings=${report.checks.brandkitManifest.warnings.length}`,
     ...report.pluginChecks.map((pc) => {
       const pcStatus = !pc.ok ? 'FAIL' : pc.warnings.length > 0 || !pc.strictOk ? 'WARN' : 'PASS';
       return `  Plugin [${pc.pluginId}/${pc.id}] ${pc.name}: ${pcStatus} (${pc.durationMs} ms) | errors=${pc.errors.length} warnings=${pc.warnings.length}`;

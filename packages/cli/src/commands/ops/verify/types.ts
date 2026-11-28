@@ -21,6 +21,7 @@ export interface VerifyCommandOptions {
   strictPronunciation?: boolean;
   strictExternalMedia?: boolean;
   strictTrackedMedia?: boolean;
+  strictBrandkit?: boolean;
   plugins?: readonly KinloomCliPlugin[];
 }
 
@@ -117,6 +118,19 @@ export interface VerifyTrackedMediaResult {
   files: VerifyTrackedMediaFile[];
 }
 
+export interface VerifyBrandkitManifestResult {
+  ok: boolean;
+  manifestPath: string;
+  manifestExists: boolean;
+  configuredTitle: string;
+  expectedAccent: string;
+  manifestName: string | null;
+  manifestShortName: string | null;
+  faviconLightAccent: string | null;
+  swAccent: string | null;
+  warnings: string[];
+}
+
 export interface VerifyCommandResult {
   ok: boolean;
   repo: string;
@@ -125,6 +139,7 @@ export interface VerifyCommandResult {
   strictPronunciation: boolean;
   strictExternalMedia: boolean;
   strictTrackedMedia: boolean;
+  strictBrandkit: boolean;
   checks: {
     citations: VerifyCitationsResult;
     places: VerifyPlacesResult;
@@ -135,6 +150,7 @@ export interface VerifyCommandResult {
     pronunciation: ExecutedPluginCheckResult;
     externalMedia: VerifyExternalMediaResult;
     trackedMedia: VerifyTrackedMediaResult;
+    brandkitManifest: VerifyBrandkitManifestResult;
   };
   pluginChecks: ExecutedPluginCheckResult[];
   hygiene: TreeHygieneSummary;

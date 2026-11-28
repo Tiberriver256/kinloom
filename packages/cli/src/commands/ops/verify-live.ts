@@ -7,6 +7,13 @@ import {
   type SyntheticProbeReport,
 } from '../../plugins/syntheticProbe.js';
 import {
+  checkFaviconLightAccentDrift,
+  checkServiceWorkerAccentDrift,
+  checkWebManifestDrift,
+  type ExpectedBrandkitProfile,
+  tryLoadExpectedBrandkitProfile,
+} from './shared/brandkitDrift.js';
+import {
   type EphemeralAuthCleanupSummary,
   type EphemeralSignalTarget,
   hasWranglerConfig,
@@ -664,6 +671,7 @@ async function runPwaChecks(input: {
   readonly sessionCookie?: string | undefined;
   readonly fetchImpl: typeof fetch;
   readonly timeoutMs: number;
+  readonly expectedBrandkit?: ExpectedBrandkitProfile | null | undefined;
 }): Promise<VerifyLivePwaCheckResult> {
   const headers: Record<string, string> = {};
   if (input.bearerToken) {
@@ -710,20 +718,16 @@ async function runPwaChecks(input: {
   };
 
   await fetchAsset('/site.webmanifest', (body) => {
-    let parsed: unknown;
-    try {
-      parsed = JSON.parse(body);
-    } catch {
-      return 'invalid JSON manifest';
+    const manifestCheck = checkWebManifestDrift(body, input.expectedBrandkit);
+    if (manifestCheck.parseError) {
+      return manifestCheck.parseError;
     }
-    if (!isRecord(parsed)) {
-      return 'manifest must be a JSON object';
-    }
-    const hasName =
-      readTrimmedString(parsed, 'name').length > 0 || readTrimmedString(parsed, 'short_name').length > 0;
-    const hasIcons = Array.isArray(parsed['icons']) && parsed['icons'].length > 0;
-    if (!hasName || !hasIcons) {
+    const hasName = manifestCheck.manifestName !== null || manifestCheck.manifestShortName !== null;
+    if (!hasName || !manifestCheck.hasIcons) {
       return 'manifest missing required name or non-empty icons array';
+    }
+    if (manifestCheck.driftMessage) {
+      return manifestCheck.driftMessage;
     }
     return null;
   });
@@ -736,6 +740,12 @@ async function runPwaChecks(input: {
     if (/^<!doctype\s+html|^<html\b/i.test(trimmed)) {
       return 'received HTML fallback instead of JavaScript service worker';
     }
+    if (input.expectedBrandkit) {
+      const swDrift = checkServiceWorkerAccentDrift(body, input.expectedBrandkit);
+      if (swDrift.driftMessage) {
+        return swDrift.driftMessage;
+      }
+    }
     return null;
   });
 
@@ -743,6 +753,12 @@ async function runPwaChecks(input: {
     await fetchAsset(faviconPath, (body) => {
       if (!body.toLowerCase().includes('<svg')) {
         return 'response body does not contain an SVG document';
+      }
+      if (faviconPath === '/favicon-light.svg' && input.expectedBrandkit) {
+        const faviconDrift = checkFaviconLightAccentDrift(body, input.expectedBrandkit);
+        if (faviconDrift.driftMessage) {
+          return faviconDrift.driftMessage;
+        }
       }
       return null;
     });
@@ -845,6 +861,7 @@ export async function runVerifyLiveCommand(
           violations: [],
         };
 
+    const expectedBrandkit = options.checkPwa ? tryLoadExpectedBrandkitProfile(repoDir) : null;
     const pwa: VerifyLivePwaCheckResult = options.checkPwa
       ? await runPwaChecks({
           baseUrl: params.baseUrl,
@@ -852,6 +869,7 @@ export async function runVerifyLiveCommand(
           sessionCookie: params.sessionCookie,
           fetchImpl,
           timeoutMs,
+          expectedBrandkit,
         })
       : {
           status: 'skipped',

@@ -74,9 +74,15 @@ export interface BrandkitFileArtifact {
   readonly skipped: boolean;
 }
 
+export type BrandkitConfigResolution =
+  | { readonly kind: 'explicit'; readonly configPath: string }
+  | { readonly kind: 'auto-detected'; readonly configPath: string }
+  | { readonly kind: 'none'; readonly reason: 'no-config-flag' | 'not-found' };
+
 export interface BrandkitCommandOptions {
   readonly outDir: string;
   readonly configPath?: string | undefined;
+  readonly noConfig?: boolean | undefined;
   readonly title?: string | undefined;
   readonly subtitle?: string | undefined;
   readonly metadataLine?: string | undefined;
@@ -95,6 +101,7 @@ export interface BrandkitCommandResult {
   readonly headTags: string;
   readonly ogBytes: number;
   readonly totalBytes: number;
+  readonly configResolution: BrandkitConfigResolution;
 }
 
 const HEX_COLOR_RE = /^#[0-9a-fA-F]{6}$/;
@@ -138,6 +145,16 @@ async function rasterizeSvgToPng(
     .toBuffer();
 }
 
+async function loadSiteConfigFile(resolvedConfig: string): Promise<KinloomSiteConfig> {
+  const rawYaml = await readFile(resolvedConfig, 'utf8');
+  try {
+    return parseKinloomConfigYaml(rawYaml);
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : String(err);
+    throw new CliValidationError(`Invalid kinloom.config.yaml at ${resolvedConfig}: ${msg}`);
+  }
+}
+
 export async function runBrandkitCommand(options: BrandkitCommandOptions): Promise<BrandkitCommandResult> {
   const cwd = options.cwd ?? process.cwd();
   const outDirRaw = options.outDir.trim();
@@ -151,19 +168,31 @@ export async function runBrandkitCommand(options: BrandkitCommandOptions): Promi
     throw new CliValidationError('Option `--surface` must be `parchment` or `navy`.');
   }
 
+  const explicitConfigPath = options.configPath?.trim();
+  if (explicitConfigPath && options.noConfig) {
+    throw new CliValidationError('Cannot combine `--config` with `--no-config`.');
+  }
+
   let siteConfig: KinloomSiteConfig | null = null;
   let configBaseDir = cwd;
+  let configResolution: BrandkitConfigResolution;
 
-  if (options.configPath) {
-    const resolvedConfig = path.resolve(cwd, options.configPath);
-    const rawYaml = await readFile(resolvedConfig, 'utf8');
-    try {
-      siteConfig = parseKinloomConfigYaml(rawYaml);
-    } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : String(err);
-      throw new CliValidationError(`Invalid kinloom.config.yaml at ${resolvedConfig}: ${msg}`);
-    }
+  if (explicitConfigPath) {
+    const resolvedConfig = path.resolve(cwd, explicitConfigPath);
+    siteConfig = await loadSiteConfigFile(resolvedConfig);
     configBaseDir = path.dirname(resolvedConfig);
+    configResolution = { kind: 'explicit', configPath: resolvedConfig };
+  } else if (options.noConfig) {
+    configResolution = { kind: 'none', reason: 'no-config-flag' };
+  } else {
+    const defaultConfigPath = path.resolve(cwd, 'kinloom.config.yaml');
+    if (await fileExists(defaultConfigPath)) {
+      siteConfig = await loadSiteConfigFile(defaultConfigPath);
+      configBaseDir = path.dirname(defaultConfigPath);
+      configResolution = { kind: 'auto-detected', configPath: defaultConfigPath };
+    } else {
+      configResolution = { kind: 'none', reason: 'not-found' };
+    }
   }
 
   const markPathRaw = options.markSvgPath ?? siteConfig?.brand?.markSvg;
@@ -302,6 +331,8 @@ export async function runBrandkitCommand(options: BrandkitCommandOptions): Promi
   const serviceWorkerScript = renderPrivacySafeServiceWorkerScript({
     ...(options.baseUrl !== undefined ? { baseUrl: options.baseUrl } : {}),
     siteTitle: spec.title,
+    accent: spec.accent,
+    ...accentDarkOpt,
   });
 
   const resolvedOutDir = path.resolve(cwd, outDirRaw);
@@ -345,5 +376,6 @@ export async function runBrandkitCommand(options: BrandkitCommandOptions): Promi
     headTags: renderBrandkitHeadTags(siteConfig, overrides),
     ogBytes: ogDefaultPng.length,
     totalBytes: files.reduce((sum, f) => sum + f.bytes, 0),
+    configResolution,
   };
 }

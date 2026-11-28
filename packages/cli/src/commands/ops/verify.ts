@@ -18,6 +18,7 @@ import {
   type TreeHygieneWarning,
 } from './tree-hygiene.js';
 import {
+  checkBrandkitManifest,
   extractExternalAssetHost,
   scanExternalMediaUrls,
   scanTrackedBinaryMedia,
@@ -37,6 +38,7 @@ import type { VerifyCitationsResult, VerifyCommandOptions, VerifyCommandResult }
 
 export { VERIFY_HELP } from './help.js';
 export type {
+  VerifyBrandkitManifestResult,
   VerifyCitationsResult,
   VerifyCommandOptions,
   VerifyCommandResult,
@@ -57,6 +59,7 @@ export type {
 } from './verify/types.js';
 export {
   analyzeTreeHygiene,
+  checkBrandkitManifest,
   diffTreeHygieneWarnings,
   extractExternalAssetHost,
   findDuplicateNormalizedMediaFiles,
@@ -134,6 +137,7 @@ export async function runVerifyCommand(options: VerifyCommandOptions = {}): Prom
   const strictPronunciation = Boolean(options.strictPronunciation);
   const strictExternalMedia = Boolean(options.strictExternalMedia);
   const strictTrackedMedia = Boolean(options.strictTrackedMedia);
+  const strictBrandkit = Boolean(options.strictBrandkit);
   const hygiene = analyzeTreeHygiene({ people, events, kinship });
 
   // 8. Built-in pronunciation check + site plugin verifyChecks.
@@ -163,6 +167,9 @@ export async function runVerifyCommand(options: VerifyCommandOptions = {}): Prom
   // 10. Tracked Git binary audio/video check (warnings by default; fail with --strict-tracked-media or --strict).
   const trackedMedia = scanTrackedBinaryMedia(repoDir);
 
+  // 11. Brandkit manifest and asset drift check (warnings by default; fail with --strict-brandkit or --strict).
+  const brandkitManifest = checkBrandkitManifest(repoDir, siteConfig);
+
   let pluginDiscoveryWarnings: string[] = [];
   let resolvedPluginVerifyChecks = resolvePluginCommands(options.plugins ?? []);
   if (options.plugins === undefined) {
@@ -186,12 +193,14 @@ export async function runVerifyCommand(options: VerifyCommandOptions = {}): Prom
     pronunciation: pronunciationCheck,
     externalMedia,
     trackedMedia,
+    brandkitManifest,
     pluginDiscoveryWarnings,
     pluginChecks,
     strictHygiene,
     strictPronunciation,
     strictExternalMedia,
     strictTrackedMedia,
+    strictBrandkit,
   });
 
   const durationMs = Math.round(performance.now() - t0);
@@ -203,6 +212,7 @@ export async function runVerifyCommand(options: VerifyCommandOptions = {}): Prom
     strictPronunciation,
     strictExternalMedia,
     strictTrackedMedia,
+    strictBrandkit,
     checks: {
       citations,
       places: placesCheck,
@@ -213,6 +223,7 @@ export async function runVerifyCommand(options: VerifyCommandOptions = {}): Prom
       pronunciation: pronunciationCheck,
       externalMedia,
       trackedMedia,
+      brandkitManifest,
     },
     pluginChecks,
     hygiene,

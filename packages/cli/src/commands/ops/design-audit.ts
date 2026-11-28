@@ -9,6 +9,7 @@ import {
 } from './design-audit/archetypes.js';
 import { type DesignAuditBrowserFactory, runDesignAuditCaptureMatrix } from './design-audit/capture.js';
 import { evaluateBundleDeterministic } from './design-audit/deterministic.js';
+import { discoverDesignAuditAutoRoutes, mergeUniqueRoutes } from './design-audit/discovery.js';
 import { emitSarifAndDossier } from './design-audit/sarif.js';
 import { auditTokensAndCss } from './design-audit/tokensCss.js';
 import type {
@@ -27,6 +28,7 @@ export * from './design-audit/apca.js';
 export * from './design-audit/archetypes.js';
 export * from './design-audit/capture.js';
 export * from './design-audit/deterministic.js';
+export * from './design-audit/discovery.js';
 export * from './design-audit/sarif.js';
 export * from './design-audit/tokensCss.js';
 export type * from './design-audit/types.js';
@@ -67,7 +69,9 @@ export interface DesignAuditRunOptions {
   readonly loadingDelayMs?: number | undefined;
   readonly withTempAuth?: boolean | undefined;
   readonly authCookie?: string | undefined;
+  readonly inviteToken?: string | undefined;
   readonly authHeaders?: Readonly<Record<string, string>> | undefined;
+  readonly autoRoutes?: boolean | undefined;
   readonly fetchImpl?: typeof fetch | undefined;
   readonly execWrangler?: WranglerExecutor | undefined;
   readonly backupTokenLabel?: string | undefined;
@@ -87,6 +91,7 @@ export interface DesignAuditRunResult {
   readonly cssStats: DesignAuditCssResult['cssStats'];
   readonly summary: DesignAuditSarifSummary;
   readonly degradedReason?: string;
+  readonly discoveredRoutes?: readonly string[] | undefined;
   readonly rendered: string;
 }
 
@@ -136,6 +141,9 @@ export function formatDesignAuditTextReport(result: Omit<DesignAuditRunResult, '
     `Bundle: ${result.bundleDir}`,
     `Captures: ${result.captureCount}`,
   ];
+  if (result.discoveredRoutes && result.discoveredRoutes.length > 0) {
+    lines.push(`Routes: ${result.discoveredRoutes.join(', ')}`);
+  }
   if (result.degradedReason) {
     lines.push(`Note: Degraded to static-only mode (${result.degradedReason})`);
   }
@@ -152,10 +160,41 @@ export function formatDesignAuditTextReport(result: Omit<DesignAuditRunResult, '
   return lines.join('\n');
 }
 
-export async function runDesignAuditCommand(options: DesignAuditRunOptions): Promise<DesignAuditRunResult> {
-  if (options.withTempAuth && options.authCookie?.trim()) {
-    throw new CliValidationError('Specify either `--auth-cookie` or `--with-temp-auth`, not both.');
+function assertValidDesignAuditAuthOptions(options: {
+  readonly withTempAuth?: boolean | undefined;
+  readonly authCookie?: string | undefined;
+  readonly inviteToken?: string | undefined;
+}): void {
+  const hasTempAuth = Boolean(options.withTempAuth);
+  const hasCookie = Boolean(options.authCookie?.trim());
+  const hasInvite = Boolean(options.inviteToken?.trim());
+  const count = Number(hasTempAuth) + Number(hasCookie) + Number(hasInvite);
+  if (count > 1) {
+    throw new CliValidationError(
+      'Specify at most one of `--auth-cookie`, `--invite-token`, or `--with-temp-auth`.'
+    );
   }
+  if (options.inviteToken !== undefined) {
+    if (/[\r\n]/.test(options.inviteToken)) {
+      throw new CliValidationError('Option `--invite-token` must not contain CR or LF characters.');
+    }
+    if (!options.inviteToken.trim()) {
+      throw new CliValidationError('Option `--invite-token` must not be empty.');
+    }
+  }
+}
+
+function resolveTargetBaseUrlFromPlan(planPath: string): string {
+  const resolvedPlan = path.resolve(planPath);
+  if (!fs.existsSync(resolvedPlan)) {
+    throw new CliValidationError(`Design-audit plan file not found: ${resolvedPlan}`);
+  }
+  const planData = JSON.parse(fs.readFileSync(resolvedPlan, 'utf8')) as DesignAuditPlan;
+  return planData.baseUrl;
+}
+
+export async function runDesignAuditCommand(options: DesignAuditRunOptions): Promise<DesignAuditRunResult> {
+  assertValidDesignAuditAuthOptions(options);
 
   if (options.withTempAuth && !options.staticOnly) {
     const repoDir = path.resolve(options.repoRoot ?? process.cwd());
@@ -179,15 +218,8 @@ export async function runDesignAuditCommand(options: DesignAuditRunOptions): Pro
         if (!auth.invite) {
           throw new Error('Ephemeral D1 auth did not mint a viewer invite.');
         }
-        let targetBaseUrl = resolvedUrl;
-        if (!targetBaseUrl && options.planPath) {
-          const resolvedPlan = path.resolve(options.planPath);
-          if (!fs.existsSync(resolvedPlan)) {
-            throw new CliValidationError(`Design-audit plan file not found: ${resolvedPlan}`);
-          }
-          const planData = JSON.parse(fs.readFileSync(resolvedPlan, 'utf8')) as DesignAuditPlan;
-          targetBaseUrl = planData.baseUrl;
-        }
+        const targetBaseUrl =
+          resolvedUrl || (options.planPath ? resolveTargetBaseUrlFromPlan(options.planPath) : '');
         const sessionCookie = await redeemEphemeralInviteSession({
           baseUrl: targetBaseUrl,
           inviteToken: auth.invite.token,
@@ -197,11 +229,33 @@ export async function runDesignAuditCommand(options: DesignAuditRunOptions): Pro
           ...options,
           ...(resolvedUrl ? { url: resolvedUrl } : {}),
           authCookie: sessionCookie,
+          inviteToken: undefined,
           withTempAuth: false,
         });
       }
     );
     return value;
+  }
+
+  const trimmedInvite = options.inviteToken?.trim();
+  if (trimmedInvite && !options.staticOnly) {
+    const targetBaseUrl =
+      options.url?.trim() || (options.planPath ? resolveTargetBaseUrlFromPlan(options.planPath) : '');
+    if (!targetBaseUrl) {
+      throw new CliValidationError(
+        'Option `--invite-token` requires `--url <baseUrl>` or `--plan <path>` with a baseUrl.'
+      );
+    }
+    const sessionCookie = await redeemEphemeralInviteSession({
+      baseUrl: targetBaseUrl,
+      inviteToken: trimmedInvite,
+      fetchImpl: options.fetchImpl,
+    });
+    return executeDesignAuditCommand({
+      ...options,
+      authCookie: sessionCookie,
+      inviteToken: undefined,
+    });
   }
 
   return executeDesignAuditCommand(options);
@@ -210,6 +264,7 @@ export async function runDesignAuditCommand(options: DesignAuditRunOptions): Pro
 async function executeDesignAuditCommand(options: DesignAuditRunOptions): Promise<DesignAuditRunResult> {
   let plan: DesignAuditPlan;
   let bundleDir: string;
+  let discoveredRoutes: readonly string[] | undefined;
 
   if (options.planPath) {
     const resolvedPlan = path.resolve(options.planPath);
@@ -218,16 +273,51 @@ async function executeDesignAuditCommand(options: DesignAuditRunOptions): Promis
     }
     plan = JSON.parse(fs.readFileSync(resolvedPlan, 'utf8')) as DesignAuditPlan;
     bundleDir = options.outDir ? path.resolve(options.outDir) : path.dirname(resolvedPlan);
+    if (options.autoRoutes && !options.staticOnly && plan.baseUrl) {
+      const auto = await discoverDesignAuditAutoRoutes({
+        baseUrl: plan.baseUrl,
+        explicitRoutes: plan.routes.map((r) => r.path),
+        authCookie: options.authCookie,
+        authHeaders: options.authHeaders,
+        fetchImpl: options.fetchImpl,
+      });
+      discoveredRoutes = auto.routes;
+      const defaultArchetype = options.archetype ?? plan.routes[0]?.archetype ?? 'editorial';
+      const defaultStates = options.states ?? plan.routes[0]?.uiStates ?? (['ideal'] as const);
+      const existingByPath = new Map(plan.routes.map((r) => [r.path, r]));
+      plan = {
+        ...plan,
+        routes: auto.routes.map(
+          (routePath) =>
+            existingByPath.get(routePath) ?? {
+              path: routePath,
+              archetype: defaultArchetype,
+              uiStates: defaultStates,
+            }
+        ),
+      };
+    }
   } else {
     const arch = resolveDesignAuditArchetype(options.archetype ?? 'editorial');
     const runId = defaultRunId();
-    const routes = (options.routes && options.routes.length > 0 ? options.routes : ['/']).map(
-      (routePath) => ({
-        path: routePath.startsWith('/') ? routePath : `/${routePath}`,
-        archetype: arch.id,
-        uiStates: options.states && options.states.length > 0 ? options.states : (['ideal'] as const),
-      })
-    );
+    let routePaths: readonly string[] =
+      options.routes && options.routes.length > 0 ? mergeUniqueRoutes(options.routes) : ['/'];
+    if (options.autoRoutes && !options.staticOnly && options.url) {
+      const auto = await discoverDesignAuditAutoRoutes({
+        baseUrl: options.url,
+        explicitRoutes: options.routes,
+        authCookie: options.authCookie,
+        authHeaders: options.authHeaders,
+        fetchImpl: options.fetchImpl,
+      });
+      routePaths = auto.routes;
+      discoveredRoutes = auto.routes;
+    }
+    const routes = routePaths.map((routePath) => ({
+      path: routePath.startsWith('/') ? routePath : `/${routePath}`,
+      archetype: arch.id,
+      uiStates: options.states && options.states.length > 0 ? options.states : (['ideal'] as const),
+    }));
     plan = {
       runId,
       baseUrl: options.url ?? 'http://127.0.0.1:4173',
@@ -273,7 +363,15 @@ async function executeDesignAuditCommand(options: DesignAuditRunOptions): Promis
         loadingDelayMs: options.loadingDelayMs,
         authCookie: options.authCookie,
         authHeaders: options.authHeaders,
+        autoDiscoverPluginRoutes: options.autoRoutes,
       });
+      if (options.autoRoutes) {
+        const capturedRoutes = mergeUniqueRoutes(
+          discoveredRoutes,
+          manifest.captures.map((cap) => cap.route)
+        );
+        discoveredRoutes = capturedRoutes;
+      }
     } catch (err: unknown) {
       degradedReason = err instanceof Error ? err.message : String(err);
       manifest = {
@@ -324,6 +422,7 @@ async function executeDesignAuditCommand(options: DesignAuditRunOptions): Promis
     cssStats: cssResult.cssStats,
     summary,
     ...(degradedReason ? { degradedReason } : {}),
+    ...(discoveredRoutes ? { discoveredRoutes } : {}),
   };
 
   const rendered = options.json
@@ -343,7 +442,7 @@ export function formatArchetypesOutput(archetype: string | undefined, json: bool
       `${spec.id} — ${spec.label}`,
       spec.description,
       `Viewports: ${spec.viewports.map((v) => `${v.name} (${v.width}x${v.height})`).join(', ')}`,
-      `Caps: maxNav=${spec.metrics.maxTopLevelNavLinks}, maxColors=${spec.metrics.maxUniqueColors}, maxFontSizes=${spec.metrics.maxUniqueFontSizes}, touchTarget=${spec.metrics.touchTargetRecommendedPx}px`,
+      `Caps: maxNav=${spec.metrics.maxTopLevelNavLinks}, maxFirstContentY=${spec.metrics.maxFirstContentYPx}px, maxColors=${spec.metrics.maxUniqueColors}, maxFontSizes=${spec.metrics.maxUniqueFontSizes}, touchTarget=${spec.metrics.touchTargetRecommendedPx}px`,
     ].join('\n');
   }
   if (json) {

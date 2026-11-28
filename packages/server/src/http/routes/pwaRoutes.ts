@@ -65,9 +65,11 @@ export function buildPublicPwaFallbackResponse(
       body = `${JSON.stringify(buildWebManifest(siteConfig), null, 2)}\n`;
       break;
     case 'service_worker':
-      body = renderPrivacySafeServiceWorkerScript(
-        siteConfig?.site.title !== undefined ? { siteTitle: siteConfig.site.title } : {}
-      );
+      body = renderPrivacySafeServiceWorkerScript({
+        ...(siteConfig?.site.title !== undefined ? { siteTitle: siteConfig.site.title } : {}),
+        ...(accent !== undefined ? { accent } : {}),
+        ...(accentDark !== undefined ? { accentDark } : {}),
+      });
       break;
     case 'theme_init':
       body = renderThemeInitScriptSource();

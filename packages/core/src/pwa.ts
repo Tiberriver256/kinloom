@@ -1,4 +1,9 @@
-import { escapeXml } from './brandkitSvg.js';
+import {
+  deriveDarkModeFaviconAccent,
+  escapeXml,
+  KINLOOM_BRAND_PALETTE,
+  normalizeHex,
+} from './brandkitSvg.js';
 
 export type PublicPwaAssetPath =
   | '/site.webmanifest'
@@ -134,13 +139,29 @@ export function joinPwaBasePath(baseUrl: string | undefined, assetPath: string):
   return `${base}${relative}`;
 }
 
+const DEFAULT_OFFLINE_ACCENT_LIGHT = KINLOOM_BRAND_PALETTE.ochre;
+const DEFAULT_OFFLINE_ACCENT_DARK = '#D89C56';
+const OFFLINE_DARK_CARD_BG = '#1F1D1A';
+
 export interface RenderPrivacySafeServiceWorkerOptions {
   readonly baseUrl?: string;
   readonly siteTitle?: string;
+  readonly accent?: string;
+  readonly accentDark?: string;
 }
 
-function buildOfflineNoticeHtml(siteTitle: string): string {
-  const escapedTitle = escapeXml(siteTitle.trim() || 'Kinloom');
+function buildOfflineNoticeHtml(options: {
+  readonly siteTitle: string;
+  readonly accent?: string | undefined;
+  readonly accentDark?: string | undefined;
+}): string {
+  const escapedTitle = escapeXml(options.siteTitle.trim() || 'Kinloom');
+  const accentLight = normalizeHex(options.accent, DEFAULT_OFFLINE_ACCENT_LIGHT);
+  const fallbackDark =
+    accentLight === DEFAULT_OFFLINE_ACCENT_LIGHT
+      ? DEFAULT_OFFLINE_ACCENT_DARK
+      : deriveDarkModeFaviconAccent(accentLight, OFFLINE_DARK_CARD_BG);
+  const accentDark = normalizeHex(options.accentDark, fallbackDark);
   return [
     '<!doctype html>',
     '<html lang="en">',
@@ -149,8 +170,8 @@ function buildOfflineNoticeHtml(siteTitle: string): string {
     '<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">',
     `<title>Offline | ${escapedTitle}</title>`,
     '<style>',
-    ':root{color-scheme:light dark;--bg:#F5EFE2;--card:#FCF9F2;--ink:#1B2A41;--muted:#554E45;--rule:#D6CEBE;--accent:#7A4612}',
-    '@media(prefers-color-scheme:dark){:root{--bg:#171614;--card:#1F1D1A;--ink:#EDE6D9;--muted:#BDB3A3;--rule:#3D3832;--accent:#D89C56}}',
+    `:root{color-scheme:light dark;--bg:#F5EFE2;--card:#FCF9F2;--ink:#1B2A41;--muted:#554E45;--rule:#D6CEBE;--accent:${accentLight}}`,
+    `@media(prefers-color-scheme:dark){:root{--bg:#171614;--card:#1F1D1A;--ink:#EDE6D9;--muted:#BDB3A3;--rule:#3D3832;--accent:${accentDark}}}`,
     '*{box-sizing:border-box}body{margin:0;min-height:100vh;display:grid;place-items:center;padding:1.5rem;background:var(--bg);color:var(--ink);font-family:Georgia,serif;line-height:1.6}',
     'main{max-width:30rem;width:100%;padding:2rem 1.75rem;background:var(--card);border:1px solid var(--rule);border-radius:6px}',
     'h1{margin:0 0 .75rem;font-size:1.5rem;line-height:1.25}p{margin:0 0 1rem;color:var(--muted)}',
@@ -180,7 +201,11 @@ export function renderPrivacySafeServiceWorkerScript(
   options?: RenderPrivacySafeServiceWorkerOptions
 ): string {
   const basePath = normalizePwaBaseUrl(options?.baseUrl);
-  const offlineHtml = buildOfflineNoticeHtml(options?.siteTitle ?? 'Kinloom');
+  const offlineHtml = buildOfflineNoticeHtml({
+    siteTitle: options?.siteTitle ?? 'Kinloom',
+    accent: options?.accent,
+    accentDark: options?.accentDark,
+  });
   const excludedPrefixes = JSON.stringify(PWA_NEVER_CACHE_PATH_PREFIXES);
 
   return `// Kinloom Privacy-Safe Service Worker (network-only; never caches private records)

@@ -479,6 +479,7 @@ export {
 } from './telemetry.js';
 export {
   analyzeTreeHygiene,
+  checkBrandkitManifest,
   diffTreeHygieneWarnings,
   extractExternalAssetHost,
   findDuplicateResidenceSpans,
@@ -493,6 +494,7 @@ export {
   type TreeHygieneSummary,
   type TreeHygieneWarning,
   VERIFY_HELP,
+  type VerifyBrandkitManifestResult,
   type VerifyCitationsResult,
   type VerifyCommandOptions,
   type VerifyCommandResult,

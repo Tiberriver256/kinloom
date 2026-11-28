@@ -4,10 +4,10 @@ import { calcApcaLc, calcWcag2Contrast, parseCssRgbTuple } from './apca.js';
 import { DESIGN_AUDIT_INVARIANTS, resolveDesignAuditArchetype } from './archetypes.js';
 import type {
   DesignAuditCaptureRecord,
+  DesignAuditDisplayTextSample,
   DesignAuditFinding,
   DesignAuditManifest,
   DesignAuditTelemetry,
-  DesignAuditTextSample,
 } from './types.js';
 
 export function evaluateCaptureTelemetry(
@@ -18,7 +18,7 @@ export function evaluateCaptureTelemetry(
   const arch = resolveDesignAuditArchetype(cap.archetype).metrics;
   const inv = DESIGN_AUDIT_INVARIANTS;
 
-  // Metric 01: Above-the-fold yield
+  // Metric 01: Above-the-fold yield & firstContentY placement
   if (
     cap.uiState === 'ideal' &&
     tel.aboveFoldMainRatio > 0 &&
@@ -42,6 +42,38 @@ export function evaluateCaptureTelemetry(
       masterCitations: ['Luke Wroblewski — Mobile First', 'Jakob Nielsen — Scrolling and Attention'],
       remediationHint:
         'Collapse stacked header/filter chrome or shorten hero intro height so primary content owns the first screen.',
+    });
+  }
+
+  if (
+    cap.uiState === 'ideal' &&
+    typeof tel.firstContentY === 'number' &&
+    Number.isFinite(tel.firstContentY) &&
+    tel.firstContentY > arch.maxFirstContentYPx
+  ) {
+    const yieldPct =
+      typeof tel.aboveFoldContentYieldRatio === 'number' && Number.isFinite(tel.aboveFoldContentYieldRatio)
+        ? ` (content-to-chrome yield ${(tel.aboveFoldContentYieldRatio * 100).toFixed(1)}%)`
+        : '';
+    findings.push({
+      ruleId: 'DA-01-ABOVE-THE-FOLD-YIELD',
+      metricId: '01',
+      pillar: 'I',
+      provenance: 'deterministic',
+      severity: 'warning',
+      confidence: 1.0,
+      route: cap.route,
+      viewport: cap.viewport,
+      theme: cap.theme,
+      uiState: cap.uiState,
+      message: `Primary content starts at y=${tel.firstContentY}px, exceeding the ${arch.maxFirstContentYPx}px ${cap.archetype} firstContentY cap${yieldPct}.`,
+      measuredValue: tel.firstContentY,
+      thresholdValue: arch.maxFirstContentYPx,
+      ...(tel.firstContentSelector ? { physicalLocation: { selector: tel.firstContentSelector } } : {}),
+      evidence: { screenshotUri: cap.screenshotUri, pairwiseVerdict: 'n/a' },
+      masterCitations: ['Luke Wroblewski — Mobile First', 'Jakob Nielsen — Scrolling and Attention'],
+      remediationHint:
+        'Reduce top chrome, hero padding, or stacked filter bars so primary content starts above the archetype firstContentY threshold.',
     });
   }
 
@@ -226,10 +258,22 @@ export function evaluateCaptureTelemetry(
   // Metric 09: APCA Perceptual Contrast + Dark Mode Halation + WCAG 2 check
   let contrastViolations = 0;
   let halationViolations = 0;
-  let firstContrastSample: (DesignAuditTextSample & { absLc: number; wcagRatio: number }) | null = null;
-  let firstHalationSample: (DesignAuditTextSample & { absLc: number }) | null = null;
+  let firstContrastSample: (DesignAuditDisplayTextSample & { absLc: number; wcagRatio: number }) | null =
+    null;
+  let worstHalationSample: (DesignAuditDisplayTextSample & { absLc: number }) | null = null;
 
-  for (const s of tel.textSamples) {
+  const seenTextSampleKeys = new Set<string>();
+  const combinedSamples: readonly DesignAuditDisplayTextSample[] = [
+    ...tel.textSamples,
+    ...(tel.displayTextSamples ?? []),
+  ];
+
+  for (const s of combinedSamples) {
+    const key = `${s.tag}|${s.text}|${s.rect[0]},${s.rect[1]},${s.rect[2]},${s.rect[3]}`;
+    if (seenTextSampleKeys.has(key)) {
+      continue;
+    }
+    seenTextSampleKeys.add(key);
     const fg = parseCssRgbTuple(s.color);
     const bg = parseCssRgbTuple(s.backgroundColor);
     if (!fg || !bg) {
@@ -244,7 +288,13 @@ export function evaluateCaptureTelemetry(
       contrastViolations += 1;
       if (!firstContrastSample) {
         firstContrastSample = {
-          ...s,
+          tag: s.tag,
+          text: s.text,
+          fontSizePx: s.fontSizePx,
+          fontWeight: s.fontWeight,
+          color: s.color,
+          backgroundColor: s.backgroundColor,
+          rect: s.rect,
           absLc: Number(absLc.toFixed(1)),
           wcagRatio: Number(wcagRatio.toFixed(2)),
         };
@@ -253,8 +303,18 @@ export function evaluateCaptureTelemetry(
 
     if (cap.theme === 'dark' && isLarge && absLc > inv.apca.darkModeLargeTextMaxLc) {
       halationViolations += 1;
-      if (!firstHalationSample) {
-        firstHalationSample = { ...s, absLc: Number(absLc.toFixed(1)) };
+      const roundedLc = Number(absLc.toFixed(1));
+      if (!worstHalationSample || roundedLc > worstHalationSample.absLc) {
+        worstHalationSample = {
+          tag: s.tag,
+          text: s.text,
+          fontSizePx: s.fontSizePx,
+          fontWeight: s.fontWeight,
+          color: s.color,
+          backgroundColor: s.backgroundColor,
+          rect: s.rect,
+          absLc: roundedLc,
+        };
       }
     }
   }
@@ -284,9 +344,9 @@ export function evaluateCaptureTelemetry(
     });
   }
 
-  if (halationViolations > 0 && firstHalationSample) {
+  if (halationViolations > 0 && worstHalationSample) {
     findings.push({
-      ruleId: 'DA-09-DARK-MODE-HALATION',
+      ruleId: 'DA-09-DARK-HALATION',
       metricId: '09',
       pillar: 'III',
       provenance: 'deterministic',
@@ -296,12 +356,12 @@ export function evaluateCaptureTelemetry(
       viewport: cap.viewport,
       theme: cap.theme,
       uiState: cap.uiState,
-      message: `${halationViolations} large dark-mode text nodes exceed APCA Lc ${inv.apca.darkModeLargeTextMaxLc} (sample Lc ${firstHalationSample.absLc}), risking halation fatigue.`,
-      measuredValue: firstHalationSample.absLc,
+      message: `${halationViolations} large dark-mode display text nodes (>= ${inv.apca.darkModeLargeTextMinPx}px) exceed APCA |Lc| ${inv.apca.darkModeLargeTextMaxLc} (worst "${worstHalationSample.text.slice(0, 32)}" at ${worstHalationSample.fontSizePx}px: |Lc| ${worstHalationSample.absLc}), risking halation fatigue.`,
+      measuredValue: worstHalationSample.absLc,
       thresholdValue: `<= Lc ${inv.apca.darkModeLargeTextMaxLc}`,
       evidence: {
         screenshotUri: cap.screenshotUri,
-        boundingBoxPx: firstHalationSample.rect,
+        boundingBoxPx: worstHalationSample.rect,
         pairwiseVerdict: 'n/a',
       },
       masterCitations: ['Andrew Somers — Realities and Myths of Contrast'],

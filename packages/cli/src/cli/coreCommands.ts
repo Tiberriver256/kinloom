@@ -41,6 +41,7 @@ export async function runBrandkit(rest: readonly string[], ctx: CliDispatchConte
     allowPositionals: false,
     options: {
       config: { type: 'string' },
+      'no-config': { type: 'boolean', default: false },
       out: { type: 'string' },
       title: { type: 'string' },
       subtitle: { type: 'string' },
@@ -61,6 +62,7 @@ export async function runBrandkit(rest: readonly string[], ctx: CliDispatchConte
   const { runBrandkitCommand } = await import('../commands/brandkit.js');
   const result = await runBrandkitCommand({
     configPath: values.config,
+    noConfig: values['no-config'],
     outDir: values.out?.trim() || 'public',
     title: values.title,
     subtitle: values.subtitle,
@@ -73,6 +75,25 @@ export async function runBrandkit(rest: readonly string[], ctx: CliDispatchConte
     force: !values['no-force'],
     cwd: ctx.cwd,
   });
+  switch (result.configResolution.kind) {
+    case 'explicit':
+      ctx.io.stdout(`Loaded brandkit config from ${result.configResolution.configPath}.`);
+      break;
+    case 'auto-detected':
+      ctx.io.stdout(`Auto-detected brandkit config at ${result.configResolution.configPath}.`);
+      break;
+    case 'none':
+      ctx.io.stdout(
+        result.configResolution.reason === 'no-config-flag'
+          ? 'Skipped config loading (--no-config); using default Kinloom brandkit settings.'
+          : 'No ./kinloom.config.yaml found; using default Kinloom brandkit settings.'
+      );
+      break;
+    default: {
+      const _exhaustive: never = result.configResolution;
+      return _exhaustive;
+    }
+  }
   const writtenCount = result.files.filter((f) => !f.skipped).length;
   const skippedCount = result.files.length - writtenCount;
   ctx.io.stdout(
