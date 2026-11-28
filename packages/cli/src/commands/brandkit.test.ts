@@ -45,13 +45,15 @@ describe('kinloom brandkit command', () => {
     expect(ico.readUInt8(22)).toBe(32); // second frame width
   });
 
-  it('generates all 8 all-device brandkit assets with exact dimensions and < 300 KB OG budget', async () => {
+  it('generates all 10 all-device brandkit assets with light/dark favicons and < 300 KB OG budget', async () => {
     const dir = await makeTempDir('kinloom-brandkit-default-');
     const outDir = path.join(dir, 'public');
 
     const result = await runBrandkitCommand({ outDir, cwd: dir });
     expect(result.files.map((f) => f.fileName)).toEqual([
       'favicon.svg',
+      'favicon-light.svg',
+      'favicon-dark.svg',
       'favicon.ico',
       'apple-touch-icon.png',
       'icon-192.png',
@@ -61,6 +63,14 @@ describe('kinloom brandkit command', () => {
       'og-default.png',
     ]);
     expect(result.ogBytes).toBeLessThan(KINLOOM_OG_DIMENSIONS.recommendedMaxBytes);
+
+    const lightSvg = await readFile(path.join(outDir, 'favicon-light.svg'), 'utf8');
+    expect(lightSvg).not.toContain('@media (prefers-color-scheme: dark)');
+    expect(lightSvg).toContain('#F5EFE2');
+
+    const darkSvg = await readFile(path.join(outDir, 'favicon-dark.svg'), 'utf8');
+    expect(darkSvg).not.toContain('@media (prefers-color-scheme: dark)');
+    expect(darkSvg).toContain('#20324D');
 
     const appleMeta = await sharp(path.join(outDir, 'apple-touch-icon.png')).metadata();
     expect(appleMeta.width).toBe(180);

@@ -94,9 +94,7 @@
   color: var(--text-primary);
   border: 1px solid var(--border-control);
   border-radius: var(--radius-md);
-  box-shadow:
-    0 10px 28px rgba(27, 42, 65, 0.18),
-    0 2px 6px rgba(27, 42, 65, 0.08);
+  box-shadow: var(--shadow-active);
   padding: 12px 13px;
   display: flex;
   flex-direction: column;

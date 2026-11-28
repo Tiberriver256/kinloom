@@ -176,7 +176,7 @@
 
 @media (hover: hover) and (pointer: fine) {
   .time-person-item:hover {
-    background: rgba(234, 225, 206, 0.52);
+    background: var(--surface-tint-hover);
   }
 }
 
@@ -300,7 +300,7 @@
 
 @media (hover: hover) and (pointer: fine) {
   .time-unlocated-row:hover {
-    background: rgba(234, 225, 206, 0.45);
+    background: var(--surface-tint-hover);
   }
 }
 

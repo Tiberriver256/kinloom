@@ -191,8 +191,24 @@ export async function runBrandkitCommand(options: BrandkitCommandOptions): Promi
 
   const faviconSvg = renderFaviconSvg({
     accent: spec.accent,
+    accentDark: siteConfig?.theme?.accentDark,
     label: `${spec.title} icon`,
     customMarkInnerSvg,
+    mode: 'adaptive',
+  });
+  const faviconLightSvg = renderFaviconSvg({
+    accent: spec.accent,
+    accentDark: siteConfig?.theme?.accentDark,
+    label: `${spec.title} icon`,
+    customMarkInnerSvg,
+    mode: 'light',
+  });
+  const faviconDarkSvg = renderFaviconSvg({
+    accent: spec.accent,
+    accentDark: siteConfig?.theme?.accentDark,
+    label: `${spec.title} icon`,
+    customMarkInnerSvg,
+    mode: 'dark',
   });
 
   const icoFrames: IcoPngFrame[] = await Promise.all(
@@ -281,6 +297,8 @@ export async function runBrandkitCommand(options: BrandkitCommandOptions): Promi
   const force = options.force ?? true;
   const outputs: Array<[string, Buffer | string]> = [
     ['favicon.svg', faviconSvg],
+    ['favicon-light.svg', faviconLightSvg],
+    ['favicon-dark.svg', faviconDarkSvg],
     ['favicon.ico', faviconIco],
     ['apple-touch-icon.png', appleTouchPng],
     ['icon-192.png', icon192Png],

@@ -146,9 +146,11 @@ test('KinloomApp applies white-label title, theme accent, custom loader, and qui
   assert.equal(brandLink?.textContent, 'Barton & Adams Family Archive');
   assert.equal(document.title, 'Barton & Adams Family Archive');
 
-  // Theme accent override applied on root container
+  // Theme accent override is scoped to --site-accent-light so dark mode retains AAA warm brass
   const appEl = container.querySelector<HTMLElement>('.kinloom-app');
-  assert.equal(appEl?.style.getPropertyValue('--accent-primary'), '#2F5245');
+  assert.equal(appEl?.style.getPropertyValue('--site-accent-light'), '#2F5245');
+  assert.equal(appEl?.style.getPropertyValue('--accent-primary'), '');
+  assert.equal(appEl?.style.getPropertyValue('--radar-copresence'), '');
 
   // By Era section and person card rendered (while customSiteConfig.lineageSections stays backwards-compatible)
   assert.match(container.textContent ?? '', /1800–1849/);
@@ -159,6 +161,102 @@ test('KinloomApp applies white-label title, theme accent, custom loader, and qui
   assert.ok(footer);
   assert.match(footer?.textContent ?? '', /Built with Kinloom/);
   assert.ok(footer?.querySelector('svg[aria-label="Kinloom mark"]'));
+
+  act(() => {
+    root.unmount();
+  });
+  container.remove();
+});
+
+test('KinloomApp scopes optional theme.accentDark to --site-accent-dark without clobbering --accent-primary', async () => {
+  const darkAccentConfig: KinloomSiteConfig = parseKinloomConfig({
+    ...customSiteConfig,
+    theme: {
+      accent: '#2F5245',
+      accentDark: '#7CC2A6',
+    },
+  });
+  const container = document.createElement('div');
+  document.body.append(container);
+  const root = createRoot(container);
+
+  await act(async () => {
+    root.render(
+      <KinloomApp
+        siteConfig={darkAccentConfig}
+        initialEntries={['/']}
+        loader={{
+          loadArchive: async () => testBundle,
+          loadReadings: async () => testReadings,
+        }}
+      />
+    );
+    await new Promise((resolve) => setTimeout(resolve, 40));
+  });
+
+  const appEl = container.querySelector<HTMLElement>('.kinloom-app');
+  assert.equal(appEl?.style.getPropertyValue('--site-accent-light'), '#2F5245');
+  assert.equal(appEl?.style.getPropertyValue('--site-accent-dark'), '#7CC2A6');
+  assert.equal(appEl?.style.getPropertyValue('--accent-primary'), '');
+
+  act(() => {
+    root.unmount();
+  });
+  container.remove();
+});
+
+test('KinloomApp handles accentDark-only config and omitted theme config cleanly', async () => {
+  const accentDarkOnlyConfig: KinloomSiteConfig = parseKinloomConfig({
+    site: {
+      title: 'Alder Dark Accent Only',
+      familyName: 'Alder',
+      gedcomSourceName: 'ALDER_DARK_ONLY',
+    },
+    theme: {
+      accentDark: '#7CC2A6',
+    },
+  });
+  const container = document.createElement('div');
+  document.body.append(container);
+  const root = createRoot(container);
+
+  await act(async () => {
+    root.render(
+      <KinloomApp
+        siteConfig={accentDarkOnlyConfig}
+        initialEntries={['/']}
+        initialBundle={testBundle}
+        initialReadings={testReadings}
+      />
+    );
+  });
+
+  const appEl = container.querySelector<HTMLElement>('.kinloom-app');
+  assert.equal(appEl?.style.getPropertyValue('--site-accent-light'), '');
+  assert.equal(appEl?.style.getPropertyValue('--site-accent-dark'), '#7CC2A6');
+
+  const noThemeConfig: KinloomSiteConfig = parseKinloomConfig({
+    site: {
+      title: 'Alder Default Theme',
+      familyName: 'Alder',
+      gedcomSourceName: 'ALDER_NO_THEME',
+    },
+  });
+
+  await act(async () => {
+    root.render(
+      <KinloomApp
+        siteConfig={noThemeConfig}
+        initialEntries={['/']}
+        initialBundle={testBundle}
+        initialReadings={testReadings}
+      />
+    );
+  });
+
+  const appElDefault = container.querySelector<HTMLElement>('.kinloom-app');
+  assert.equal(appElDefault?.style.getPropertyValue('--site-accent-light'), '');
+  assert.equal(appElDefault?.style.getPropertyValue('--site-accent-dark'), '');
 
   act(() => {
     root.unmount();

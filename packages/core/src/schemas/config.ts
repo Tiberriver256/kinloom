@@ -22,6 +22,7 @@ export const SiteMetadataSchema = z.object({
 
 export const SiteThemeConfigSchema = z.object({
   accent: HexColorSchema.optional(),
+  accentDark: HexColorSchema.optional(),
 });
 
 export const SiteBrandConfigSchema = z.object({
@@ -32,7 +33,7 @@ export const SiteBrandConfigSchema = z.object({
   accent: HexColorSchema.optional(),
   surface: z.enum(['parchment', 'navy']).default('parchment'),
   themeColorLight: HexColorSchema.default('#F5EFE2'),
-  themeColorDark: HexColorSchema.default('#1B2A41'),
+  themeColorDark: HexColorSchema.default('#171614'),
   ogImage: z.string().min(1).optional(),
   ogImageAlt: z.string().min(1).optional(),
   markSvg: z.string().min(1).optional(),

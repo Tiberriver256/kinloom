@@ -775,6 +775,20 @@ describe('R2MediaStore, R2IncrementalPatchBundleCache, and CloudflareAssetHandle
     expect(svgText).toContain('#8FA6C4');
     expect(svgText).toContain('#E7A35E');
 
+    const lightFaviconRes = await noAssetsHandler.fetch(new Request('https://alder.test/favicon-light.svg'));
+    expect(lightFaviconRes.status).toBe(200);
+    expect(lightFaviconRes.headers.get('content-type')).toContain('image/svg+xml');
+    const lightFaviconText = await lightFaviconRes.text();
+    expect(lightFaviconText).not.toContain('@media (prefers-color-scheme: dark)');
+    expect(lightFaviconText).toContain('#F5EFE2');
+
+    const darkFaviconRes = await noAssetsHandler.fetch(new Request('https://alder.test/favicon-dark.svg'));
+    expect(darkFaviconRes.status).toBe(200);
+    expect(darkFaviconRes.headers.get('content-type')).toContain('image/svg+xml');
+    const darkFaviconText = await darkFaviconRes.text();
+    expect(darkFaviconText).not.toContain('@media (prefers-color-scheme: dark)');
+    expect(darkFaviconText).toContain('#20324D');
+
     const icoRes = await noAssetsHandler.fetch(new Request('https://alder.test/favicon.ico'));
     expect(icoRes.status).toBe(404);
 

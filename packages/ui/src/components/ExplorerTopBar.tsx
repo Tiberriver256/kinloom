@@ -2,6 +2,7 @@ import React, { useEffect, useId, useRef, useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { useArchiveData } from '../context/ArchiveDataContext.js';
 import { useArchiveUi } from '../context/ArchiveUiContext.js';
+import { useThemePreference } from '../hooks/useThemePreference.js';
 import { cx, joinClasses } from '../lib/cx.js';
 import { isPluginNavRouteActive, selectVisiblePluginNavRoutes } from '../lib/pluginNav.js';
 import { KINLOOM_VOCABULARY } from '../lib/vocabulary.js';
@@ -18,6 +19,7 @@ export const ExplorerTopBar: React.FC = () => {
   const authActorRef = AuthSessionActorContext.useActorRef();
   const signingOut = AuthSessionActorContext.useSelector((state) => state.matches('signingOut'));
   const { activeYear, pivotTrail, openSourceReader, openSearch } = useArchiveUi();
+  const { preference, systemTheme, isDark, setPreference, toggleQuickTheme } = useThemePreference();
   const { routes: pluginRoutes } = useKinloomPlugins();
   const location = useLocation();
   const navPluginRoutes = selectVisiblePluginNavRoutes(pluginRoutes, session, capabilities);
@@ -250,6 +252,45 @@ export const ExplorerTopBar: React.FC = () => {
             title={KINLOOM_VOCABULARY.nav.searchTooltip}
           >
             <span>Search</span> <kbd className="kl-kbd">/</kbd>
+          </button>
+
+          <button
+            type="button"
+            className={cx(topBarStyles, 'topbar-theme-btn')}
+            onClick={toggleQuickTheme}
+            aria-label={isDark ? 'Switch to light theme' : 'Switch to dark theme'}
+            title={isDark ? 'Switch to light theme' : 'Switch to dark theme'}
+          >
+            {isDark ? (
+              <svg
+                width="17"
+                height="17"
+                viewBox="0 0 20 20"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="1.65"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                aria-hidden="true"
+              >
+                <circle cx="10" cy="10" r="3.5" />
+                <path d="M10 2.5V4.2M10 15.8V17.5M2.5 10H4.2M15.8 10H17.5M4.7 4.7L5.9 5.9M14.1 14.1L15.3 15.3M15.3 4.7L14.1 5.9M5.9 14.1L4.7 15.3" />
+              </svg>
+            ) : (
+              <svg
+                width="17"
+                height="17"
+                viewBox="0 0 20 20"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="1.65"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                aria-hidden="true"
+              >
+                <path d="M16.2 12.6A6.5 6.5 0 0 1 7.4 3.8a6.5 6.5 0 1 0 8.8 8.8Z" />
+              </svg>
+            )}
           </button>
 
           {isInviteViewer && (
@@ -503,6 +544,50 @@ export const ExplorerTopBar: React.FC = () => {
                       </Link>
                     </li>
                   )}
+
+                  <li>
+                    <div className={cx(wikiChromeStyles, 'topbar-account-divider')} role="separator" />
+                    <div
+                      className={cx(wikiChromeStyles, 'topbar-theme-group')}
+                      role="radiogroup"
+                      aria-label="Appearance"
+                    >
+                      <div className={cx(wikiChromeStyles, 'topbar-theme-group-label')} aria-hidden="true">
+                        Appearance
+                      </div>
+                      {(
+                        [
+                          { value: 'light', label: 'Light', ariaLabel: 'Light theme' },
+                          { value: 'dark', label: 'Dark', ariaLabel: 'Dark theme' },
+                          {
+                            value: 'system',
+                            label: `System (${systemTheme})`,
+                            ariaLabel: `System theme (currently ${systemTheme})`,
+                          },
+                        ] as const
+                      ).map((option) => (
+                        <button
+                          key={option.value}
+                          type="button"
+                          role="radio"
+                          aria-checked={preference === option.value}
+                          aria-label={option.ariaLabel}
+                          className={cx(
+                            wikiChromeStyles,
+                            `topbar-account-item topbar-theme-option ${preference === option.value ? 'active' : ''}`
+                          )}
+                          onClick={() => {
+                            setPreference(option.value);
+                          }}
+                        >
+                          <span className={cx(wikiChromeStyles, 'topbar-theme-check')} aria-hidden="true">
+                            {preference === option.value ? '●' : '○'}
+                          </span>
+                          <span>{option.label}</span>
+                        </button>
+                      ))}
+                    </div>
+                  </li>
 
                   {isSignedInMember && dataSource.logout && (
                     <li className={cx(topBarStyles, 'topbar-disclosure-danger-item')}>

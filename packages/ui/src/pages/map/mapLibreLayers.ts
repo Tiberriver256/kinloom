@@ -3,7 +3,7 @@ import type { GeoJSONSource, Map as MapLibreMap, Source, StyleSpecification } fr
 import { setMaxParallelImageRequests, setWorkerCount, setWorkerUrl } from 'maplibre-gl';
 import maplibreWorkerUrl from 'maplibre-gl/dist/maplibre-gl-worker.mjs?url';
 import { PAPER_LAND_LAYER_ID } from '../../browser/ohmStyle.js';
-import { KINLOOM_COLOR_TOKENS } from '../../lib/tokens.js';
+import { getResolvedThemeColorTokens } from '../../lib/tokens.js';
 import { SOURCE_ID, STOP_LAYER_ID } from './mapOverlayData.js';
 
 let maplibreConfigured = false;
@@ -21,28 +21,40 @@ export function ensureMapLibreConfigured(): void {
   setMaxParallelImageRequests(16);
 }
 
-export const PAPER_STYLE = {
-  version: 8,
-  name: 'paper',
-  glyphs: 'https://www.openhistoricalmap.org/map-styles/fonts/{fontstack}/{range}.pbf',
-  sources: {},
-  layers: [
-    {
-      id: 'paper',
-      type: 'background',
-      paint: { 'background-color': KINLOOM_COLOR_TOKENS.warmLinen },
-    },
-  ],
-} satisfies StyleSpecification;
+export function buildPaperStyle(isDark = false): StyleSpecification {
+  const palette = getResolvedThemeColorTokens(isDark);
+  return {
+    version: 8,
+    name: 'paper',
+    glyphs: 'https://www.openhistoricalmap.org/map-styles/fonts/{fontstack}/{range}.pbf',
+    sources: {},
+    layers: [
+      {
+        id: 'paper',
+        type: 'background',
+        paint: { 'background-color': palette.land },
+      },
+    ],
+  };
+}
 
-export function setPeriodBasemap(map: MapLibreMap): void {
+export const PAPER_STYLE: StyleSpecification = buildPaperStyle(false);
+
+export function setPeriodBasemap(map: MapLibreMap, isDark = false): void {
+  const palette = getResolvedThemeColorTokens(isDark);
   for (const layerId of MODERN_BASEMAP_LAYERS) {
     if (!map.getLayer(layerId)) {
       continue;
     }
     map.setLayoutProperty(layerId, 'visibility', 'none');
   }
-  if (map.getLayer(PAPER_LAND_LAYER_ID) || !map.getSource('osm_land')) {
+  if (map.getLayer(PAPER_LAND_LAYER_ID)) {
+    if (typeof map.setPaintProperty === 'function') {
+      map.setPaintProperty(PAPER_LAND_LAYER_ID, 'fill-color', palette.land);
+    }
+    return;
+  }
+  if (!map.getSource('osm_land')) {
     return;
   }
   const beforeId = map.getLayer('water_areas_ne') ? 'water_areas_ne' : undefined;
@@ -52,7 +64,7 @@ export function setPeriodBasemap(map: MapLibreMap): void {
       type: 'fill',
       source: 'osm_land',
       'source-layer': 'land',
-      paint: { 'fill-color': KINLOOM_COLOR_TOKENS.warmLinen },
+      paint: { 'fill-color': palette.land },
     },
     beforeId
   );
@@ -175,7 +187,8 @@ function bindStopClicks(map: MapLibreMap, onSelect: (id: string | null) => void)
   });
 }
 
-function addFamilyLayers(map: MapLibreMap): void {
+function addFamilyLayers(map: MapLibreMap, isDark = false): void {
+  const palette = getResolvedThemeColorTokens(isDark);
   map.addLayer({
     id: 'migration-guide',
     type: 'line',
@@ -183,7 +196,7 @@ function addFamilyLayers(map: MapLibreMap): void {
     filter: ['==', ['get', 'kind'], 'guide'],
     layout: { 'line-cap': 'round', 'line-join': 'round' },
     paint: {
-      'line-color': KINLOOM_COLOR_TOKENS.loomOchre,
+      'line-color': palette.route,
       'line-width': 1.2,
       'line-opacity': 0.32,
       'line-dasharray': [1.4, 1.2],
@@ -197,10 +210,10 @@ function addFamilyLayers(map: MapLibreMap): void {
     filter: ['==', ['get', 'kind'], 'future'],
     paint: {
       'circle-radius': 3.8,
-      'circle-color': KINLOOM_COLOR_TOKENS.slateTaupe,
+      'circle-color': palette.futureStop,
       'circle-opacity': 0.78,
       'circle-stroke-width': 1,
-      'circle-stroke-color': KINLOOM_COLOR_TOKENS.warmSepia,
+      'circle-stroke-color': palette.futureStopStroke,
     },
   });
 
@@ -216,7 +229,7 @@ function addFamilyLayers(map: MapLibreMap): void {
     ],
     layout: { 'line-cap': 'round', 'line-join': 'round' },
     paint: {
-      'line-color': KINLOOM_COLOR_TOKENS.loomOchre,
+      'line-color': palette.route,
       'line-width': 1.8,
       'line-opacity': 0.78,
     },
@@ -234,7 +247,7 @@ function addFamilyLayers(map: MapLibreMap): void {
     ],
     layout: { 'line-cap': 'round', 'line-join': 'round' },
     paint: {
-      'line-color': KINLOOM_COLOR_TOKENS.sealCrimson,
+      'line-color': palette.routeLatest,
       'line-width': 2.6,
       'line-opacity': 0.95,
     },
@@ -252,7 +265,7 @@ function addFamilyLayers(map: MapLibreMap): void {
     ],
     layout: { 'line-cap': 'round', 'line-join': 'round' },
     paint: {
-      'line-color': KINLOOM_COLOR_TOKENS.loomOchre,
+      'line-color': palette.route,
       'line-width': 1.8,
       'line-opacity': 0.78,
       'line-dasharray': [2, 1.4],
@@ -271,7 +284,7 @@ function addFamilyLayers(map: MapLibreMap): void {
     ],
     layout: { 'line-cap': 'round', 'line-join': 'round' },
     paint: {
-      'line-color': KINLOOM_COLOR_TOKENS.sealCrimson,
+      'line-color': palette.routeLatest,
       'line-width': 2.6,
       'line-opacity': 0.95,
       'line-dasharray': [2, 1.4],
@@ -285,10 +298,10 @@ function addFamilyLayers(map: MapLibreMap): void {
     filter: ['all', ['==', ['get', 'kind'], 'stop'], ['==', ['get', 'selected'], true]],
     paint: {
       'circle-radius': 18,
-      'circle-color': KINLOOM_COLOR_TOKENS.loomOchre,
+      'circle-color': palette.haloFill,
       'circle-opacity': 0.55,
       'circle-stroke-width': 2,
-      'circle-stroke-color': KINLOOM_COLOR_TOKENS.amberWash,
+      'circle-stroke-color': palette.haloStroke,
     },
   });
 
@@ -299,9 +312,9 @@ function addFamilyLayers(map: MapLibreMap): void {
     filter: ['==', ['get', 'kind'], 'stop'],
     paint: {
       'circle-radius': ['case', ['==', ['get', 'selected'], true], 9, 5],
-      'circle-color': ['coalesce', ['get', 'color'], KINLOOM_COLOR_TOKENS.archivalIndigo],
+      'circle-color': ['coalesce', ['get', 'color'], palette.stopDefault],
       'circle-stroke-width': 1.5,
-      'circle-stroke-color': KINLOOM_COLOR_TOKENS.ragCard,
+      'circle-stroke-color': palette.stopStroke,
     },
   });
 
@@ -326,9 +339,9 @@ function addFamilyLayers(map: MapLibreMap): void {
       'text-optional': true,
     },
     paint: {
-      'text-color': KINLOOM_COLOR_TOKENS.archivalIndigo,
-      'text-halo-color': KINLOOM_COLOR_TOKENS.ragCard,
-      'text-halo-width': 1.4,
+      'text-color': palette.labelColor,
+      'text-halo-color': palette.labelHalo,
+      'text-halo-width': isDark ? 1.6 : 1.4,
     },
   });
 
@@ -348,11 +361,57 @@ function addFamilyLayers(map: MapLibreMap): void {
       'text-padding': 4,
     },
     paint: {
-      'text-color': KINLOOM_COLOR_TOKENS.archivalIndigo,
-      'text-halo-color': KINLOOM_COLOR_TOKENS.ragCard,
+      'text-color': palette.labelColor,
+      'text-halo-color': palette.labelHalo,
       'text-halo-width': 1.6,
     },
   });
+}
+
+export function applyMapThemeToLayers(map: MapLibreMap, isDark: boolean): void {
+  if (typeof map.setPaintProperty !== 'function') {
+    return;
+  }
+  const palette = getResolvedThemeColorTokens(isDark);
+  const paintIfPresent = (
+    layerId: string,
+    prop: Parameters<MapLibreMap['setPaintProperty']>[1],
+    value: Parameters<MapLibreMap['setPaintProperty']>[2]
+  ): void => {
+    if (map.getLayer(layerId)) {
+      map.setPaintProperty(layerId, prop, value);
+    }
+  };
+
+  paintIfPresent('paper', 'background-color', palette.land);
+  paintIfPresent(PAPER_LAND_LAYER_ID, 'fill-color', palette.land);
+
+  const styleLayers = typeof map.getStyle === 'function' ? (map.getStyle()?.layers ?? []) : [];
+  for (const layer of styleLayers) {
+    if (layer.type === 'background') {
+      paintIfPresent(layer.id, 'background-color', palette.land);
+    } else if (layer.type === 'fill' && 'source-layer' in layer && layer['source-layer'] === 'water_areas') {
+      paintIfPresent(layer.id, 'fill-color', palette.water);
+    }
+  }
+
+  paintIfPresent('migration-guide', 'line-color', palette.route);
+  paintIfPresent('migration-future', 'circle-color', palette.futureStop);
+  paintIfPresent('migration-future', 'circle-stroke-color', palette.futureStopStroke);
+  paintIfPresent('migration-route', 'line-color', palette.route);
+  paintIfPresent('migration-route-latest', 'line-color', palette.routeLatest);
+  paintIfPresent('migration-route-dash', 'line-color', palette.route);
+  paintIfPresent('migration-route-dash-latest', 'line-color', palette.routeLatest);
+  paintIfPresent('migration-stop-halo', 'circle-color', palette.haloFill);
+  paintIfPresent('migration-stop-halo', 'circle-stroke-color', palette.haloStroke);
+  paintIfPresent(STOP_LAYER_ID, 'circle-color', ['coalesce', ['get', 'color'], palette.stopDefault]);
+  paintIfPresent(STOP_LAYER_ID, 'circle-stroke-color', palette.stopStroke);
+  paintIfPresent('migration-labels', 'text-color', palette.labelColor);
+  paintIfPresent('migration-labels', 'text-halo-color', palette.labelHalo);
+  paintIfPresent('migration-labels', 'text-halo-width', isDark ? 1.6 : 1.4);
+  paintIfPresent('migration-label-selected', 'text-color', palette.labelColor);
+  paintIfPresent('migration-label-selected', 'text-halo-color', palette.labelHalo);
+  paintIfPresent('migration-label-selected', 'text-halo-width', 1.6);
 }
 
 function isGeoJsonSource(source: Source | undefined): source is GeoJSONSource {
@@ -362,7 +421,8 @@ function isGeoJsonSource(source: Source | undefined): source is GeoJSONSource {
 export function syncFamilyOverlay(
   map: MapLibreMap,
   data: FeatureCollection,
-  onSelect: (id: string | null) => void
+  onSelect: (id: string | null) => void,
+  isDark = false
 ): void {
   const source = map.getSource(SOURCE_ID);
   if (isGeoJsonSource(source)) {
@@ -370,6 +430,6 @@ export function syncFamilyOverlay(
     return;
   }
   map.addSource(SOURCE_ID, { type: 'geojson', data });
-  addFamilyLayers(map);
+  addFamilyLayers(map, isDark);
   bindStopClicks(map, onSelect);
 }

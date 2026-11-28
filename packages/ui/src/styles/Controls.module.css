@@ -109,12 +109,12 @@ dialog[open] {
   .pill-btn:hover {
     color: var(--surface-header);
     border-bottom-color: var(--border-control);
-    background: rgba(234, 225, 206, 0.45);
+    background: var(--surface-tint-hover);
   }
 }
 
 .pill-btn:global(.active) {
-  background: rgba(234, 225, 206, 0.72);
+  background: var(--surface-tint-active);
   color: var(--radar-copresence);
   border-bottom: 2px solid var(--radar-copresence);
   font-weight: 600;

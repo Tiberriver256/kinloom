@@ -4,14 +4,18 @@ import {
   contrastRatio,
   deriveDarkModeFaviconAccent,
   escapeXml,
+  type FaviconColorMode,
   KINLOOM_BRAND_PALETTE,
   KINLOOM_ICON_SIZES,
   KINLOOM_OG_DIMENSIONS,
   normalizeHex,
+  type RenderFaviconSvgOptions,
   relativeLuminance,
+  renderDarkFaviconSvg,
   renderFaviconSvg,
   renderIconSvg,
   renderKinloomMarkPaths,
+  renderLightFaviconSvg,
   renderOgCardSvg,
 } from './brandkitSvg.js';
 import { edtfYear } from './edtf.js';
@@ -25,13 +29,17 @@ export {
   contrastRatio,
   deriveDarkModeFaviconAccent,
   escapeXml,
+  type FaviconColorMode,
   KINLOOM_BRAND_PALETTE,
   KINLOOM_ICON_SIZES,
   KINLOOM_OG_DIMENSIONS,
+  type RenderFaviconSvgOptions,
   relativeLuminance,
+  renderDarkFaviconSvg,
   renderFaviconSvg,
   renderIconSvg,
   renderKinloomMarkPaths,
+  renderLightFaviconSvg,
   renderOgCardSvg,
 };
 
@@ -134,7 +142,7 @@ export function resolveBrandSpec(
   );
   const surface: BrandSurface = overrides?.surface ?? brand?.surface ?? 'parchment';
   const themeColorLight = normalizeHex(brand?.themeColorLight, KINLOOM_BRAND_PALETTE.parchment);
-  const themeColorDark = normalizeHex(brand?.themeColorDark, KINLOOM_BRAND_PALETTE.navy);
+  const themeColorDark = normalizeHex(brand?.themeColorDark, KINLOOM_BRAND_PALETTE.charcoalFolio);
   const showFooterCredit = brand?.showFooterCredit ?? true;
   const rawFooter =
     overrides?.footerCredit !== undefined
@@ -200,6 +208,10 @@ export function buildWebManifest(
   };
 }
 
+export function renderThemeInitScript(): string {
+  return `<script>try{var t=localStorage.getItem('kinloom-theme');if(t==='light'||t==='dark'){document.documentElement.dataset.theme=t;var m=document.querySelector('meta[name="color-scheme"]');if(m)m.content=t;}}catch(e){}</script>`;
+}
+
 export function renderBrandkitHeadTags(
   config?: KinloomSiteConfig | null,
   overrides?: BrandOverrides
@@ -213,6 +225,8 @@ export function renderBrandkitHeadTags(
 
   return [
     `<meta name="description" content="${description}" />`,
+    `<meta name="color-scheme" content="light dark" />`,
+    renderThemeInitScript(),
     `<meta name="theme-color" content="${spec.themeColorLight}" media="(prefers-color-scheme: light)" />`,
     `<meta name="theme-color" content="${spec.themeColorDark}" media="(prefers-color-scheme: dark)" />`,
     `<meta property="og:site_name" content="${siteName}" />`,
@@ -229,6 +243,8 @@ export function renderBrandkitHeadTags(
     `<meta name="twitter:image" content="${ogImage}" />`,
     `<meta name="twitter:image:alt" content="${ogAlt}" />`,
     `<link rel="icon" href="/favicon.ico" sizes="48x48" />`,
+    `<link rel="icon" type="image/svg+xml" media="(prefers-color-scheme: light)" href="/favicon-light.svg" />`,
+    `<link rel="icon" type="image/svg+xml" media="(prefers-color-scheme: dark)" href="/favicon-dark.svg" />`,
     `<link rel="icon" type="image/svg+xml" href="/favicon.svg" />`,
     `<link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />`,
     `<link rel="manifest" href="/site.webmanifest" />`,

@@ -92,14 +92,14 @@
   font-size: 0.75rem;
   padding: 3px 8px;
   border: 1px solid var(--border-decorative);
-  background: rgba(234, 225, 206, 0.45);
+  background: var(--surface-tint-hover);
   color: var(--text-primary);
 }
 
 .place-history-figure {
   margin: 0;
   border: 1px solid var(--border-decorative);
-  background: rgba(252, 249, 242, 0.78);
+  background: var(--surface-overlay-soft);
   padding: 8px;
 }
 
@@ -205,7 +205,7 @@
   position: relative;
   height: 16px;
   overflow: hidden;
-  background: rgba(234, 225, 206, 0.6);
+  background: var(--surface-linen);
   border-bottom: 1px solid var(--border-decorative);
   border-radius: 2px;
 }
@@ -252,7 +252,7 @@
   }
 
   .occupancy-row:hover {
-    background: rgba(234, 225, 206, 0.45);
+    background: var(--surface-tint-hover);
   }
 
   .occupancy-row:hover .occupancy-person-name {

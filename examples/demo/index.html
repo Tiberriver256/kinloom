@@ -8,8 +8,19 @@
       name="description"
       content="Explore ten generations of the Lincoln, Hanks, Todd, and Harlan families (1622–1985) with cited NARA &amp; Library of Congress records, maps, and trees."
     />
+    <meta name="color-scheme" content="light dark" />
+    <script>
+      try {
+        var t = localStorage.getItem('kinloom-theme');
+        if (t === 'light' || t === 'dark') {
+          document.documentElement.dataset.theme = t;
+          var m = document.querySelector('meta[name="color-scheme"]');
+          if (m) m.content = t;
+        }
+      } catch (e) {}
+    </script>
     <meta name="theme-color" content="#F5EFE2" media="(prefers-color-scheme: light)" />
-    <meta name="theme-color" content="#1B2A41" media="(prefers-color-scheme: dark)" />
+    <meta name="theme-color" content="#171614" media="(prefers-color-scheme: dark)" />
     <meta property="og:site_name" content="Kinloom" />
     <meta property="og:title" content="Lincoln &amp; Todd Historical Archive" />
     <meta
@@ -36,6 +47,8 @@
       content="Lincoln &amp; Todd Historical Archive — Archival Family History Explorer"
     />
     <link rel="icon" href="/favicon.ico" sizes="48x48" />
+    <link rel="icon" type="image/svg+xml" media="(prefers-color-scheme: light)" href="/favicon-light.svg" />
+    <link rel="icon" type="image/svg+xml" media="(prefers-color-scheme: dark)" href="/favicon-dark.svg" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />
     <link rel="manifest" href="/site.webmanifest" />

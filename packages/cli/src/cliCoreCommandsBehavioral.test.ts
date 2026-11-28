@@ -1433,7 +1433,7 @@ describe('commands/brandkit.ts custom SVG marks, ICO edge cases, and validation'
       'utf8'
     );
     const customRes = await runBrandkitCommand({ outDir, markSvgPath: validMark, cwd: dir });
-    expect(customRes.files).toHaveLength(8);
+    expect(customRes.files).toHaveLength(10);
     const generatedSvg = await readFile(path.join(outDir, 'favicon.svg'), 'utf8');
     expect(generatedSvg).toContain('<circle cx="32" cy="32" r="20" fill="currentColor"/>');
   });

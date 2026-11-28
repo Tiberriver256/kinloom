@@ -239,6 +239,15 @@ export type { ArchiveProviderProps } from './context/ArchiveProvider.js';
 export { ArchiveProvider } from './context/ArchiveProvider.js';
 export type { ArchiveUiContextValue, PivotCrumb } from './context/ArchiveUiContext.js';
 export { ArchiveUiProvider, useArchiveUi } from './context/ArchiveUiContext.js';
+export type { ThemePreferenceState } from './hooks/useThemePreference.js';
+export {
+  applyThemeToDocument,
+  readResolvedDarkMode,
+  readStoredThemePreference,
+  readSystemPrefersDark,
+  subscribeResolvedDarkMode,
+  useThemePreference,
+} from './hooks/useThemePreference.js';
 export type { KinloomAppProps } from './KinloomApp.js';
 export { KinloomApp } from './KinloomApp.js';
 export * from './lib/adminDiagnostics.js';
@@ -253,7 +262,9 @@ export * from './lib/recipesModel.js';
 export * from './lib/scrollMemory.js';
 export * from './lib/searchNavigation.js';
 export * from './lib/sourceReaderNav.js';
+export * from './lib/themeModel.js';
 export * from './lib/timelineScroll.js';
+export * from './lib/tokens.js';
 export * from './lib/treeGestures.js';
 export * from './lib/treeNodeDisplay.js';
 // UI-Only Helpers & Canonical Vocabulary

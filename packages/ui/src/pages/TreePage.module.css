@@ -93,7 +93,7 @@ html.tree-viewport-lock body {
   bottom: 18px;
   z-index: 20;
   width: 204px;
-  background: rgba(252, 249, 242, 0.96);
+  background: var(--surface-overlay-card);
   border: 1px solid var(--border-control);
   border-radius: var(--radius-sm);
   padding: 7px;

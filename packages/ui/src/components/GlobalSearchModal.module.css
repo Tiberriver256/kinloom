@@ -5,7 +5,7 @@
   position: fixed;
   inset: 0;
   z-index: 120;
-  background: rgba(27, 42, 65, 0.52);
+  background: var(--backdrop-modal);
   backdrop-filter: blur(2px);
   display: flex;
   justify-content: center;
@@ -22,7 +22,7 @@
   background: var(--surface-card);
   border: 1px solid var(--border-control);
   border-radius: var(--radius-sm);
-  box-shadow: 0 22px 54px rgba(27, 42, 65, 0.32);
+  box-shadow: var(--shadow-modal);
   overflow: hidden;
   transition: width 0.14s ease;
 }
@@ -303,10 +303,11 @@
 }
 
 .global-search-mark {
-  background: rgba(182, 134, 44, 0.24);
-  color: inherit;
-  padding: 0 1px;
-  border-radius: 2px;
+  background: var(--badge-memory-bg);
+  color: var(--badge-memory-fg);
+  padding: 0 2px;
+  border-radius: var(--radius-sm);
+  font-weight: 600;
 }
 
 .global-search-suggestion-chip {

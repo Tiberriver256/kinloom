@@ -6,10 +6,12 @@ import type { ErrorEvent, StyleSpecification } from 'maplibre-gl';
 import { AttributionControl, Map as MapLibreMap } from 'maplibre-gl';
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { loadArchivalOhmStyle, OHM_STYLE_URL, OVERVIEW_REFERENCE_YEAR } from '../../browser/ohmStyle.js';
+import { readResolvedDarkMode, subscribeResolvedDarkMode } from '../../hooks/useThemePreference.js';
 import {
+  applyMapThemeToLayers,
+  buildPaperStyle,
   ensureMapLibreConfigured,
   getFitOptions,
-  PAPER_STYLE,
   setPeriodBasemap,
   syncFamilyOverlay,
 } from './mapLibreLayers.js';
@@ -280,19 +282,26 @@ export function useMigrationMapController(params: UseMigrationMapControllerParam
           return;
         }
         styleLoadedRef.current = true;
+        const darkNow = readResolvedDarkMode();
         if (typeof map.resize === 'function') {
           map.resize();
         }
-        setPeriodBasemap(map);
+        setPeriodBasemap(map, darkNow);
         if (!historicalFailedRef.current) {
           lastAppliedDateRef.current = OVERVIEW_REFERENCE_YEAR;
         }
         setHistoricalMap(historicalFailedRef.current ? { kind: 'failed' } : { kind: 'ready' });
-        syncFamilyOverlay(map, overlayRef.current, (id) => {
-          if (!cancelled) {
-            setSelectedStopId(id);
-          }
-        });
+        syncFamilyOverlay(
+          map,
+          overlayRef.current,
+          (id) => {
+            if (!cancelled) {
+              setSelectedStopId(id);
+            }
+          },
+          darkNow
+        );
+        applyMapThemeToLayers(map, darkNow);
       };
 
       const onError = (event: ErrorEvent): void => {
@@ -308,7 +317,7 @@ export function useMigrationMapController(params: UseMigrationMapControllerParam
           if (cancelled || mapRef.current !== map || styleLoadedRef.current) {
             return;
           }
-          map.setStyle(PAPER_STYLE);
+          map.setStyle(buildPaperStyle(readResolvedDarkMode()));
         }, 0);
       };
 
@@ -326,16 +335,25 @@ export function useMigrationMapController(params: UseMigrationMapControllerParam
       }
     };
 
-    void loadArchivalOhmStyle(OVERVIEW_REFERENCE_YEAR)
+    const initialIsDark = readResolvedDarkMode();
+    const unsubscribeTheme = subscribeResolvedDarkMode((isDark) => {
+      const map = mapRef.current;
+      if (map && styleLoadedRef.current) {
+        applyMapThemeToLayers(map, isDark);
+      }
+    });
+
+    void loadArchivalOhmStyle(OVERVIEW_REFERENCE_YEAR, fetch, initialIsDark)
       .then((archivalStyle) => {
         mountMap(archivalStyle, false);
       })
       .catch(() => {
-        mountMap(PAPER_STYLE, true);
+        mountMap(buildPaperStyle(readResolvedDarkMode()), true);
       });
 
     return (): void => {
       cancelled = true;
+      unsubscribeTheme();
       styleLoadedRef.current = false;
       historicalFailedRef.current = false;
       lastAppliedDateRef.current = null;
@@ -353,9 +371,14 @@ export function useMigrationMapController(params: UseMigrationMapControllerParam
     if (!map || !styleLoadedRef.current) {
       return;
     }
-    syncFamilyOverlay(map, overlay, (id) => {
-      setSelectedStopId(id);
-    });
+    syncFamilyOverlay(
+      map,
+      overlay,
+      (id) => {
+        setSelectedStopId(id);
+      },
+      readResolvedDarkMode()
+    );
   }, [overlay, setSelectedStopId]);
 
   useEffect(() => {
@@ -363,7 +386,7 @@ export function useMigrationMapController(params: UseMigrationMapControllerParam
     if (!map || historicalMap.kind !== 'ready') {
       return;
     }
-    setPeriodBasemap(map);
+    setPeriodBasemap(map, readResolvedDarkMode());
     let targetDate = OVERVIEW_REFERENCE_YEAR;
     if (eraYear !== null) {
       targetDate = playing ? String(Math.floor(eraYear / 10) * 10) : String(eraYear);

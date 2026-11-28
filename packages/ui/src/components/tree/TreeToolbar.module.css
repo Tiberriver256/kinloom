@@ -23,7 +23,7 @@
   gap: 8px;
   overflow: visible;
   scrollbar-width: none;
-  background: rgba(252, 249, 242, 0.96);
+  background: var(--surface-overlay-card);
   border: 1px solid var(--border-control);
   border-radius: var(--radius-md);
   padding: 5px 8px;

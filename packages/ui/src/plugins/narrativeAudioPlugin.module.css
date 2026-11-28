@@ -209,15 +209,16 @@
   right: 0;
   bottom: 0;
   z-index: 45;
-  background: var(--surface-header);
-  color: var(--text-inverse);
-  box-shadow: 0 -4px 18px rgba(27, 42, 65, 0.28);
+  color-scheme: dark;
+  background: var(--surface-chrome-bar);
+  color: var(--text-chrome-bar);
+  box-shadow: var(--shadow-dock);
 }
 
 .narrative-audio-dock-progress {
   height: 3px;
   width: 100%;
-  background: rgba(252, 249, 242, 0.16);
+  background: var(--surface-chrome-bar-hover);
 }
 
 .narrative-audio-dock-progress-fill {
@@ -284,7 +285,7 @@
 }
 
 .narrative-audio-dock-link {
-  color: var(--text-inverse);
+  color: var(--text-chrome-bar);
   font-weight: 600;
   text-decoration: underline;
   text-underline-offset: 2px;
@@ -316,8 +317,8 @@
   height: 34px;
   border: none;
   border-radius: 9999px;
-  background: var(--text-inverse);
-  color: var(--surface-header);
+  background: var(--text-chrome-bar);
+  color: var(--surface-chrome-bar);
   font-size: 0.78rem;
   font-weight: 700;
   cursor: pointer;
@@ -329,22 +330,22 @@
   font-variant-numeric: tabular-nums;
   font-size: 0.72rem;
   padding: 5px 9px;
-  border: 1px solid rgba(252, 249, 242, 0.28);
+  border: 1px solid var(--border-chrome-bar);
   border-radius: var(--radius-sm);
-  background: rgba(252, 249, 242, 0.08);
-  color: var(--text-inverse);
+  background: transparent;
+  color: var(--text-chrome-bar);
   cursor: pointer;
 }
 
 .narrative-audio-dock-btn:hover,
 .narrative-audio-dock-dismiss:hover {
-  background: rgba(252, 249, 242, 0.18);
+  background: var(--surface-chrome-bar-hover);
 }
 
 .narrative-audio-dock-play:focus-visible,
 .narrative-audio-dock-btn:focus-visible,
 .narrative-audio-dock-dismiss:focus-visible {
-  outline: 2px solid var(--text-inverse);
+  outline: 2px solid var(--text-chrome-bar);
   outline-offset: 2px;
 }
 

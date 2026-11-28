@@ -4,7 +4,7 @@
 .drawer-backdrop {
   position: fixed;
   inset: 0;
-  background: rgba(35, 39, 46, 0.42);
+  background: var(--backdrop-drawer);
   z-index: 60;
   display: flex;
   justify-content: flex-end;
@@ -23,7 +23,7 @@
   display: flex;
   flex-direction: column;
   gap: 14px;
-  box-shadow: -8px 0 28px rgba(35, 39, 46, 0.18);
+  box-shadow: var(--shadow-drawer);
 }
 
 .drawer-top {
@@ -45,7 +45,7 @@
 .lightbox-backdrop {
   position: fixed;
   inset: 0;
-  background: rgba(27, 42, 65, 0.78);
+  background: var(--backdrop-lightbox);
   z-index: 80;
   display: flex;
   align-items: center;
@@ -86,7 +86,7 @@ dialog:global(.global-search-backdrop) {
   overflow-y: auto;
   overscroll-behavior: contain;
   padding: 20px;
-  box-shadow: 0 18px 44px rgba(27, 42, 65, 0.35);
+  box-shadow: var(--shadow-modal);
 }
 
 .scan-lightbox-card {
@@ -99,7 +99,7 @@ dialog:global(.global-search-backdrop) {
   border: 1px solid var(--border-control);
   border-radius: var(--radius-sm);
   overflow: hidden;
-  box-shadow: 0 18px 44px rgba(27, 42, 65, 0.45);
+  box-shadow: var(--shadow-modal);
 }
 
 .scan-lightbox-header {
@@ -108,19 +108,20 @@ dialog:global(.global-search-backdrop) {
   align-items: center;
   gap: 10px;
   padding: 10px 16px;
-  background: var(--surface-header);
-  color: var(--text-inverse);
+  color-scheme: dark;
+  background: var(--surface-chrome-bar);
+  color: var(--text-chrome-bar);
 }
 
 .scan-lightbox-header :global(.pill-btn) {
-  color: var(--text-inverse);
-  border-bottom-color: rgba(252, 249, 242, 0.45);
+  color: var(--text-chrome-bar);
+  border-bottom-color: var(--border-chrome-bar);
 }
 
 .scan-lightbox-header :global(.pill-btn):hover {
-  background: rgba(252, 249, 242, 0.14);
-  color: var(--text-inverse);
-  border-bottom-color: var(--text-inverse);
+  background: var(--surface-chrome-bar-hover);
+  color: var(--text-chrome-bar);
+  border-bottom-color: var(--text-chrome-bar);
 }
 
 .scan-lightbox-scroll {
@@ -139,5 +140,5 @@ dialog:global(.global-search-backdrop) {
   padding: 6px;
   background: var(--surface-card);
   border: 1px solid var(--border-control);
-  box-shadow: 0 4px 18px rgba(35, 39, 46, 0.22);
+  box-shadow: var(--shadow-active);
 }

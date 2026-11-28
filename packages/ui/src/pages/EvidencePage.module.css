@@ -84,7 +84,7 @@
   object-fit: cover;
   padding: 5px;
   background: var(--surface-card);
-  border: 1px solid rgba(130, 122, 106, 0.42);
+  border: 1px solid var(--border-mat);
   box-shadow: var(--shadow-print);
   filter: sepia(0.08) contrast(1.03);
   border-radius: 1px;

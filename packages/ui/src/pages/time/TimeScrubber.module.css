@@ -110,7 +110,7 @@
   border-radius: 50%;
   background: var(--radar-copresence);
   border: 2px solid var(--surface-card);
-  box-shadow: 0 1px 4px rgba(35, 39, 46, 0.35);
+  box-shadow: var(--shadow-card);
   cursor: pointer;
 }
 
@@ -127,7 +127,7 @@
   border-radius: 50%;
   background: var(--radar-copresence);
   border: 2px solid var(--surface-card);
-  box-shadow: 0 1px 4px rgba(35, 39, 46, 0.35);
+  box-shadow: var(--shadow-card);
   cursor: pointer;
 }
 
@@ -203,7 +203,7 @@
     position: fixed;
     inset: 0;
     z-index: 31;
-    background: rgba(27, 42, 65, 0.24);
+    background: var(--backdrop-drawer);
     border: none;
     padding: 0;
     cursor: pointer;
@@ -217,11 +217,11 @@
     gap: 0;
     margin: 0 -26px 12px;
     padding: 4px 14px;
-    background: rgba(252, 249, 242, 0.97);
+    background: var(--surface-overlay-card);
     backdrop-filter: blur(8px);
     border-top: 1px solid var(--border-decorative);
     border-bottom: 1px solid var(--border-decorative);
-    box-shadow: 0 2px 10px rgba(27, 42, 65, 0.08);
+    box-shadow: var(--shadow-print);
   }
 
   .time-mobile-dock-bar {

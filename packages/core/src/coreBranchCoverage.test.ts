@@ -2564,7 +2564,7 @@ describe('brandkit and brandkitSvg branch coverage', () => {
     const spec = resolveBrandSpec(config);
     expect(spec.shortName).toBe('Supercalifragili');
     expect(spec.footerCredit).toBeNull();
-    expect(buildWebManifest(config).background_color).toBe('#1B2A41');
+    expect(buildWebManifest(config).background_color).toBe('#171614');
     expect(buildWebManifest(null).background_color).toBe('#F5EFE2');
     expect(renderBrandkitHeadTags(config, { footerCredit: 'Custom' })).toContain('og:title');
 

@@ -1,16 +1,20 @@
 :root {
+  color-scheme: light dark;
+
   --surface-canvas: #f5efe2;
   --surface-card: #fcf9f2;
   --surface-linen: #eae1ce;
   --surface-radar: var(--surface-linen);
   --surface-muted: #e5dac5;
   --surface-header: #1b2a41;
+  --surface-chrome-bar: #1b2a41;
 
   --text-primary: #23272e;
   --text-secondary: #4e4a42;
   --text-inverse: #fcf9f2;
+  --text-chrome-bar: #fcf9f2;
 
-  --accent-primary: #7a4612;
+  --accent-primary: var(--site-accent-light, #7a4612);
   --accent-secondary: #2f5245;
   --radar-copresence: var(--accent-primary);
   --radar-local: var(--accent-secondary);
@@ -32,6 +36,25 @@
   --badge-cited-bg: #dfece6;
   --badge-cited-fg: #244a3c;
 
+  --surface-topbar: rgba(245, 239, 226, 0.95);
+  --surface-overlay-card: rgba(252, 249, 242, 0.96);
+  --surface-overlay-soft: rgba(252, 249, 242, 0.8);
+  --surface-tint-subtle: rgba(234, 225, 206, 0.34);
+  --surface-tint-hover: rgba(234, 225, 206, 0.5);
+  --surface-tint-active: rgba(234, 225, 206, 0.72);
+  --surface-canvas-fade: rgba(245, 239, 226, 0);
+  --surface-survey-ring-fill: rgba(47, 82, 69, 0.08);
+  --backdrop-drawer: rgba(35, 39, 46, 0.42);
+  --backdrop-modal: rgba(27, 42, 65, 0.52);
+  --backdrop-lightbox: rgba(20, 29, 44, 0.78);
+  --border-mat: rgba(130, 122, 106, 0.38);
+  --border-chrome-bar: rgba(252, 249, 242, 0.28);
+  --surface-chrome-bar-hover: rgba(252, 249, 242, 0.16);
+  --badge-photo-default: rgba(27, 42, 65, 0.9);
+  --badge-photo-portrait: rgba(47, 82, 69, 0.92);
+  --badge-photo-headstone: rgba(78, 74, 66, 0.9);
+  --badge-photo-scan: rgba(122, 70, 18, 0.92);
+
   --font-serif: 'Newsreader', Georgia, 'Times New Roman', serif;
   --font-mono: 'IBM Plex Mono', ui-monospace, 'SFMono-Regular', Menlo, monospace;
 
@@ -41,4 +64,135 @@
   --shadow-print: 0 2px 10px rgba(35, 39, 46, 0.14), 0 1px 2px rgba(35, 39, 46, 0.08);
   --shadow-card: 0 1px 3px rgba(35, 39, 46, 0.07);
   --shadow-active: 0 6px 22px rgba(35, 39, 46, 0.13);
+  --shadow-modal: 0 22px 54px rgba(27, 42, 65, 0.32);
+  --shadow-dock: 0 -6px 20px rgba(27, 42, 65, 0.14);
+  --shadow-drawer: -8px 0 28px rgba(35, 39, 46, 0.18);
+}
+
+:root[data-theme='light'] {
+  color-scheme: light;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) {
+    color-scheme: dark;
+
+    --surface-canvas: #171614;
+    --surface-card: #1f1d1a;
+    --surface-linen: #2a2723;
+    --surface-muted: #34302b;
+    --surface-header: #ede6d9;
+    --surface-chrome-bar: #11100e;
+
+    --text-primary: #eae3d5;
+    --text-secondary: #bdb3a3;
+    --text-inverse: #171614;
+    --text-chrome-bar: #eae3d5;
+
+    --accent-primary: var(--site-accent-dark, #d89c56);
+    --accent-secondary: #7cc2a6;
+
+    --action-focus: #7db6f2;
+    --status-conflict: #f39287;
+
+    --border-strong: #eae3d5;
+    --border-control: #8e8577;
+    --border-decorative: #3d3832;
+
+    --diff-add-bg: #182d24;
+    --diff-add-fg: #a8e2c8;
+    --diff-del-bg: #361b19;
+    --diff-del-fg: #f7b3aa;
+    --badge-memory-bg: #332615;
+    --badge-memory-fg: #efc083;
+    --badge-cited-bg: #192d26;
+    --badge-cited-fg: #a6dfc7;
+
+    --surface-topbar: rgba(23, 22, 20, 0.94);
+    --surface-overlay-card: rgba(31, 29, 26, 0.96);
+    --surface-overlay-soft: rgba(31, 29, 26, 0.84);
+    --surface-tint-subtle: rgba(42, 39, 35, 0.55);
+    --surface-tint-hover: rgba(52, 48, 43, 0.72);
+    --surface-tint-active: rgba(52, 48, 43, 0.92);
+    --surface-canvas-fade: rgba(23, 22, 20, 0);
+    --surface-survey-ring-fill: rgba(124, 194, 166, 0.12);
+    --backdrop-drawer: rgba(8, 8, 7, 0.64);
+    --backdrop-modal: rgba(8, 8, 7, 0.72);
+    --backdrop-lightbox: rgba(6, 6, 5, 0.88);
+    --border-mat: rgba(142, 133, 119, 0.35);
+    --border-chrome-bar: rgba(234, 227, 213, 0.24);
+    --surface-chrome-bar-hover: rgba(234, 227, 213, 0.14);
+    --badge-photo-default: rgba(17, 16, 14, 0.88);
+    --badge-photo-portrait: rgba(25, 45, 38, 0.92);
+    --badge-photo-headstone: rgba(42, 39, 35, 0.92);
+    --badge-photo-scan: rgba(72, 46, 16, 0.92);
+
+    --shadow-print: 0 2px 12px rgba(0, 0, 0, 0.45), 0 1px 3px rgba(0, 0, 0, 0.32);
+    --shadow-card: 0 1px 4px rgba(0, 0, 0, 0.35);
+    --shadow-active: 0 8px 28px rgba(0, 0, 0, 0.55);
+    --shadow-modal: 0 24px 60px rgba(0, 0, 0, 0.7);
+    --shadow-dock: 0 -6px 24px rgba(0, 0, 0, 0.52);
+    --shadow-drawer: -8px 0 32px rgba(0, 0, 0, 0.6);
+  }
+}
+
+:root[data-theme='dark'] {
+  color-scheme: dark;
+
+  --surface-canvas: #171614;
+  --surface-card: #1f1d1a;
+  --surface-linen: #2a2723;
+  --surface-muted: #34302b;
+  --surface-header: #ede6d9;
+  --surface-chrome-bar: #11100e;
+
+  --text-primary: #eae3d5;
+  --text-secondary: #bdb3a3;
+  --text-inverse: #171614;
+  --text-chrome-bar: #eae3d5;
+
+  --accent-primary: var(--site-accent-dark, #d89c56);
+  --accent-secondary: #7cc2a6;
+
+  --action-focus: #7db6f2;
+  --status-conflict: #f39287;
+
+  --border-strong: #eae3d5;
+  --border-control: #8e8577;
+  --border-decorative: #3d3832;
+
+  --diff-add-bg: #182d24;
+  --diff-add-fg: #a8e2c8;
+  --diff-del-bg: #361b19;
+  --diff-del-fg: #f7b3aa;
+  --badge-memory-bg: #332615;
+  --badge-memory-fg: #efc083;
+  --badge-cited-bg: #192d26;
+  --badge-cited-fg: #a6dfc7;
+
+  --surface-topbar: rgba(23, 22, 20, 0.94);
+  --surface-overlay-card: rgba(31, 29, 26, 0.96);
+  --surface-overlay-soft: rgba(31, 29, 26, 0.84);
+  --surface-tint-subtle: rgba(42, 39, 35, 0.55);
+  --surface-tint-hover: rgba(52, 48, 43, 0.72);
+  --surface-tint-active: rgba(52, 48, 43, 0.92);
+  --surface-canvas-fade: rgba(23, 22, 20, 0);
+  --surface-survey-ring-fill: rgba(124, 194, 166, 0.12);
+  --backdrop-drawer: rgba(8, 8, 7, 0.64);
+  --backdrop-modal: rgba(8, 8, 7, 0.72);
+  --backdrop-lightbox: rgba(6, 6, 5, 0.88);
+  --border-mat: rgba(142, 133, 119, 0.35);
+  --border-chrome-bar: rgba(234, 227, 213, 0.24);
+  --surface-chrome-bar-hover: rgba(234, 227, 213, 0.14);
+  --badge-photo-default: rgba(17, 16, 14, 0.88);
+  --badge-photo-portrait: rgba(25, 45, 38, 0.92);
+  --badge-photo-headstone: rgba(42, 39, 35, 0.92);
+  --badge-photo-scan: rgba(72, 46, 16, 0.92);
+
+  --shadow-print: 0 2px 12px rgba(0, 0, 0, 0.45), 0 1px 3px rgba(0, 0, 0, 0.32);
+  --shadow-card: 0 1px 4px rgba(0, 0, 0, 0.35);
+  --shadow-active: 0 8px 28px rgba(0, 0, 0, 0.55);
+  --shadow-modal: 0 24px 60px rgba(0, 0, 0, 0.7);
+  --shadow-dock: 0 -6px 24px rgba(0, 0, 0, 0.52);
+  --shadow-drawer: -8px 0 32px rgba(0, 0, 0, 0.6);
 }

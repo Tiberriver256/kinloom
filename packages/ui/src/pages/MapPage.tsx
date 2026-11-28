@@ -14,18 +14,21 @@ import statusShellStyles from '../components/ArchiveStatusShell.module.css';
 import canvasSurfaceStyles from '../components/CanvasSurfacePrimitives.module.css';
 import { ExplorerTopBar } from '../components/ExplorerTopBar.js';
 import { useArchiveData } from '../context/ArchiveDataContext.js';
+import { useThemePreference } from '../hooks/useThemePreference.js';
 import { cx, joinClasses } from '../lib/cx.js';
+import { getResolvedThemeColorTokens } from '../lib/tokens.js';
 import { KINLOOM_VOCABULARY } from '../lib/vocabulary.js';
 import controlStyles from '../styles/Controls.module.css';
 import layoutStyles from '../styles/Layout.module.css';
 import mapStyles from './MapPage.module.css';
 import { MapStageLegend, MapStopDrawerAndDock, MapZoomControls } from './map/MapStopDrawerAndDock.js';
 import { MapToolbar } from './map/MapToolbar.js';
-import { buildFamilyOverlay, computeDefaultMapBounds, FALLBACK_ERA_COLORS } from './map/mapOverlayData.js';
+import { buildFamilyOverlay, computeDefaultMapBounds } from './map/mapOverlayData.js';
 import { useMigrationMapController } from './map/useMigrationMapController.js';
 
 export const MapPage: React.FC = () => {
   const { siteConfig, bundle, peopleById, placesById, placesBySlug, loading, error } = useArchiveData();
+  const { isDark } = useThemePreference();
   const [searchParams] = useSearchParams();
 
   const [selectedPersonId, setSelectedPersonId] = useState<string>('all');
@@ -42,12 +45,13 @@ export const MapPage: React.FC = () => {
   );
 
   const stageColorMap = useMemo(() => {
+    const eraPalette = getResolvedThemeColorTokens(isDark).eraPalette;
     const map = new Map<string, string>();
     migrationEras.forEach((era, idx) => {
-      map.set(era.id, era.color ?? FALLBACK_ERA_COLORS[idx % FALLBACK_ERA_COLORS.length]);
+      map.set(era.id, !isDark && era.color ? era.color : eraPalette[idx % eraPalette.length]);
     });
     return map;
-  }, [migrationEras]);
+  }, [migrationEras, isDark]);
 
   const stageLabelMap = useMemo(() => {
     const map = new Map<string, string>();

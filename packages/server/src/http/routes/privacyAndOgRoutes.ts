@@ -61,19 +61,33 @@ export function renderPrivacyPolicyHtml(
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Privacy Policy | ${title}</title>
+  <meta name="color-scheme" content="light dark">
   <meta name="theme-color" content="#F5EFE2" media="(prefers-color-scheme: light)">
-  <meta name="theme-color" content="#1B2A41" media="(prefers-color-scheme: dark)">
+  <meta name="theme-color" content="#171614" media="(prefers-color-scheme: dark)">
   <link rel="icon" href="/favicon.ico" sizes="48x48">
+  <link rel="icon" type="image/svg+xml" media="(prefers-color-scheme: light)" href="/favicon-light.svg">
+  <link rel="icon" type="image/svg+xml" media="(prefers-color-scheme: dark)" href="/favicon-dark.svg">
   <link rel="icon" type="image/svg+xml" href="/favicon.svg">
   <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png">
   <style>
     :root {
+      color-scheme: light dark;
       --paper: #F5EFE2;
       --card: #FCF9F2;
       --ink: #1B2A41;
       --muted: #554E45;
       --rule: #D6CEBE;
       --accent: ${accent};
+    }
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --paper: #171614;
+        --card: #1F1D1A;
+        --ink: #EDE6D9;
+        --muted: #BDB3A3;
+        --rule: #3D3832;
+        --accent: #D89C56;
+      }
     }
     * { box-sizing: border-box; }
     body {

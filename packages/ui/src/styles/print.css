@@ -2,6 +2,10 @@
    Print-Friendly Archival Folio
    ========================================================================== */
 @media print {
+  :root {
+    color-scheme: light;
+  }
+
   html,
   body {
     background: #ffffff;

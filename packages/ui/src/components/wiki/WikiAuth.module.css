@@ -21,7 +21,7 @@
   background: var(--surface-card);
   border: 1px solid var(--border-control);
   border-radius: var(--radius-md);
-  box-shadow: 0 12px 32px rgba(27, 42, 65, 0.08);
+  box-shadow: var(--shadow-active);
   padding: clamp(1.35rem, 4vw, 2rem);
 }
 

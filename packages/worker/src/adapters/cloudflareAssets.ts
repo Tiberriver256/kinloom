@@ -1,8 +1,17 @@
-import { type AssetHandler, renderFaviconSvg } from '@kinloom/core';
+import {
+  type AssetHandler,
+  renderDarkFaviconSvg,
+  renderFaviconSvg,
+  renderLightFaviconSvg,
+} from '@kinloom/core';
 import { applySecurityHeaders } from '@kinloom/server';
 import type { Fetcher } from '../types.js';
 
-const KINLOOM_FAVICON_SVG = renderFaviconSvg();
+const KINLOOM_FAVICON_FALLBACKS: Readonly<Record<string, string>> = {
+  '/favicon.svg': renderFaviconSvg(),
+  '/favicon-light.svg': renderLightFaviconSvg(),
+  '/favicon-dark.svg': renderDarkFaviconSvg(),
+};
 
 const STATIC_ASSET_EXTENSION_PATTERN = /\.[a-z0-9]{1,8}$/i;
 
@@ -44,14 +53,15 @@ export function createCloudflareAssetHandler(assets?: Fetcher): AssetHandler {
       return notFoundPlainResponse();
     }
 
-    if (pathname === '/favicon.svg') {
+    const fallbackFaviconSvg = KINLOOM_FAVICON_FALLBACKS[pathname];
+    if (fallbackFaviconSvg !== undefined) {
       if (assets) {
         const assetRes = await assets.fetch(request);
         if (isValidStaticAssetResponse(assetRes)) {
           return assetRes;
         }
       }
-      return new Response(KINLOOM_FAVICON_SVG, {
+      return new Response(fallbackFaviconSvg, {
         status: 200,
         headers: {
           'content-type': 'image/svg+xml; charset=utf-8',

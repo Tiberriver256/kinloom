@@ -255,7 +255,7 @@ button.archival-tag-pill:focus-visible,
   max-inline-size: none;
   max-block-size: none;
   border: none;
-  background: rgba(27, 42, 65, 0.56);
+  background: var(--backdrop-modal);
   display: flex;
   align-items: center;
   justify-content: center;

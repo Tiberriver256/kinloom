@@ -133,7 +133,7 @@
 .ink-link-btn:hover {
   color: var(--radar-copresence);
   border-bottom-color: var(--radar-copresence);
-  background: rgba(234, 225, 206, 0.45);
+  background: var(--surface-tint-hover);
 }
 
 .ink-link-btn:global(.active) {
@@ -187,11 +187,11 @@
   color: var(--radar-local);
 }
 
-/* Photographic Print Styling — Crisp #FCF9F2 Print Mat + Soft Contact Shadow */
+/* Photographic Print Styling — Crisp Print Mat + Soft Contact Shadow */
 .photo-print {
   background: var(--surface-card);
   padding: 4px;
-  border: 1px solid rgba(130, 122, 106, 0.35);
+  border: 1px solid var(--border-mat);
   box-shadow: var(--shadow-print);
   display: flex;
   align-items: center;
@@ -228,7 +228,7 @@
   border-bottom: 1px solid var(--border-decorative);
   border-left: 0;
   border-right: 0;
-  background: rgba(234, 225, 206, 0.32);
+  background: var(--surface-tint-subtle);
   padding: 14px 12px;
   margin: 14px 0;
   display: flex;
@@ -243,7 +243,7 @@
 }
 
 .wireframe-photo:hover {
-  background: rgba(234, 225, 206, 0.65);
+  background: var(--surface-tint-hover);
 }
 
 .wireframe-photo-label {
@@ -267,7 +267,7 @@
   align-items: center;
   gap: 7px;
   padding: 4px 10px 4px 5px;
-  background: rgba(252, 249, 242, 0.8);
+  background: var(--surface-overlay-soft);
   border-radius: 2px;
   font-family: var(--font-serif);
   font-size: 0.88rem;
@@ -392,7 +392,7 @@
   object-fit: cover;
   padding: 4px;
   background: var(--surface-card);
-  border: 1px solid rgba(130, 122, 106, 0.42);
+  border: 1px solid var(--border-mat);
   box-shadow: var(--shadow-print);
   filter: sepia(0.12) contrast(1.03);
   border-radius: 1px;
@@ -432,7 +432,7 @@
   object-fit: contain;
   padding: 6px;
   background: var(--surface-card);
-  border: 1px solid rgba(130, 122, 106, 0.42);
+  border: 1px solid var(--border-mat);
   box-shadow: var(--shadow-print);
   filter: sepia(0.1) contrast(1.03);
   border-radius: 1px;

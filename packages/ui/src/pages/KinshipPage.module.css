@@ -129,7 +129,7 @@
   align-items: center;
   gap: 8px;
   padding: 7px 11px;
-  background: rgba(252, 249, 242, 0.75);
+  background: var(--surface-overlay-soft);
   border: 1px solid var(--border-control);
   border-radius: var(--radius-sm);
   color: var(--text-primary);

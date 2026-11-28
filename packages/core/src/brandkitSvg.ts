@@ -1,10 +1,12 @@
 export type BrandSurface = 'parchment' | 'navy';
 export type BrandIconVariant = 'any' | 'apple' | 'maskable';
+export type FaviconColorMode = 'adaptive' | 'light' | 'dark';
 
 export const KINLOOM_BRAND_PALETTE = {
   parchment: '#F5EFE2',
   ivory: '#FCF9F2',
   linen: '#EAE1CE',
+  charcoalFolio: '#171614',
   navy: '#1B2A41',
   navyElevated: '#20324D',
   ochre: '#7A4612',
@@ -181,13 +183,23 @@ export function renderKinloomMarkPaths(primaryColor: string, accentColor: string
   ].join('\n    ');
 }
 
-export function renderFaviconSvg(options?: {
-  accent?: string;
-  label?: string;
-  customMarkInnerSvg?: string;
-}): string {
+export interface RenderFaviconSvgOptions {
+  readonly accent?: string;
+  readonly accentDark?: string;
+  readonly label?: string;
+  readonly customMarkInnerSvg?: string;
+  readonly mode?: FaviconColorMode;
+}
+
+export function renderFaviconSvg(options?: RenderFaviconSvgOptions): string {
+  const mode: FaviconColorMode = options?.mode ?? 'adaptive';
   const accent = normalizeHex(options?.accent, KINLOOM_BRAND_PALETTE.ochre);
-  const darkAccent = deriveDarkModeFaviconAccent(accent, KINLOOM_BRAND_PALETTE.navyElevated);
+  const darkAccent = options?.accentDark
+    ? normalizeHex(
+        options.accentDark,
+        deriveDarkModeFaviconAccent(accent, KINLOOM_BRAND_PALETTE.navyElevated)
+      )
+    : deriveDarkModeFaviconAccent(accent, KINLOOM_BRAND_PALETTE.navyElevated);
   const label = escapeXml(options?.label?.trim() || 'Kinloom icon');
   const markContent = options?.customMarkInnerSvg
     ? options.customMarkInnerSvg
@@ -198,16 +210,35 @@ export function renderFaviconSvg(options?: {
         '<path class="kl-warp" d="M2.5 16H13.5M18.5 16H21.5" stroke-width="2.5" stroke-linecap="round"/>',
       ].join('\n    ');
 
+  let styleRules: string;
+  if (mode === 'light') {
+    styleRules = [
+      `    .kl-bg { fill: ${KINLOOM_BRAND_PALETTE.parchment}; stroke: ${KINLOOM_BRAND_PALETTE.ruleLight}; }`,
+      `    .kl-warp { stroke: ${KINLOOM_BRAND_PALETTE.navy}; }`,
+      `    .kl-accent { stroke: ${accent}; }`,
+    ].join('\n');
+  } else if (mode === 'dark') {
+    styleRules = [
+      `    .kl-bg { fill: ${KINLOOM_BRAND_PALETTE.navyElevated}; stroke: ${KINLOOM_BRAND_PALETTE.ruleDarkChrome}; }`,
+      `    .kl-warp { stroke: ${KINLOOM_BRAND_PALETTE.ivory}; }`,
+      `    .kl-accent { stroke: ${darkAccent}; }`,
+    ].join('\n');
+  } else {
+    styleRules = [
+      `    .kl-bg { fill: ${KINLOOM_BRAND_PALETTE.parchment}; stroke: ${KINLOOM_BRAND_PALETTE.ruleLight}; }`,
+      `    .kl-warp { stroke: ${KINLOOM_BRAND_PALETTE.navy}; }`,
+      `    .kl-accent { stroke: ${accent}; }`,
+      '    @media (prefers-color-scheme: dark) {',
+      `      .kl-bg { fill: ${KINLOOM_BRAND_PALETTE.navyElevated}; stroke: ${KINLOOM_BRAND_PALETTE.ruleDarkChrome}; }`,
+      `      .kl-warp { stroke: ${KINLOOM_BRAND_PALETTE.ivory}; }`,
+      `      .kl-accent { stroke: ${darkAccent}; }`,
+      '    }',
+    ].join('\n');
+  }
+
   return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="32" height="32" fill="none" role="img" aria-label="${label}">
   <style>
-    .kl-bg { fill: ${KINLOOM_BRAND_PALETTE.parchment}; stroke: ${KINLOOM_BRAND_PALETTE.ruleLight}; }
-    .kl-warp { stroke: ${KINLOOM_BRAND_PALETTE.navy}; }
-    .kl-accent { stroke: ${accent}; }
-    @media (prefers-color-scheme: dark) {
-      .kl-bg { fill: ${KINLOOM_BRAND_PALETTE.navyElevated}; stroke: ${KINLOOM_BRAND_PALETTE.ruleDarkChrome}; }
-      .kl-warp { stroke: ${KINLOOM_BRAND_PALETTE.ivory}; }
-      .kl-accent { stroke: ${darkAccent}; }
-    }
+${styleRules}
   </style>
   <rect class="kl-bg" x="0.75" y="0.75" width="30.5" height="30.5" rx="6" stroke-width="1.5"/>
   <g transform="translate(4, 4)">
@@ -215,6 +246,14 @@ export function renderFaviconSvg(options?: {
   </g>
 </svg>
 `;
+}
+
+export function renderLightFaviconSvg(options?: Omit<RenderFaviconSvgOptions, 'mode'>): string {
+  return renderFaviconSvg({ ...options, mode: 'light' });
+}
+
+export function renderDarkFaviconSvg(options?: Omit<RenderFaviconSvgOptions, 'mode'>): string {
+  return renderFaviconSvg({ ...options, mode: 'dark' });
 }
 
 export function renderIconSvg(options: {

@@ -210,6 +210,32 @@
   background: var(--border-decorative);
 }
 
+.topbar-theme-group {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.topbar-theme-group-label {
+  padding: 4px 10px 2px;
+  font-family: var(--font-mono);
+  font-size: 0.7rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-secondary);
+}
+
+.topbar-theme-option {
+  gap: 8px;
+}
+
+.topbar-theme-check {
+  font-size: 0.72rem;
+  line-height: 1;
+  color: var(--accent-primary);
+}
+
 /* Primary & Secondary Archival Buttons (Clear Affordance for Grandma & Grandpa) */
 .wiki-btn-primary,
 .wiki-btn-secondary {

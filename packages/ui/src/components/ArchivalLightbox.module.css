@@ -28,7 +28,7 @@
 }
 
 .archival-lightbox-dialog::backdrop {
-  background: rgba(20, 29, 44, 0.78);
+  background: var(--backdrop-lightbox);
   backdrop-filter: blur(2px);
   overflow: hidden;
   overscroll-behavior: contain;

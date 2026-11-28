@@ -58,7 +58,7 @@
 .index-frontispiece-frame {
   padding: 5px;
   background: var(--surface-card);
-  border: 1px solid rgba(130, 122, 106, 0.38);
+  border: 1px solid var(--border-mat);
   box-shadow: var(--shadow-print);
   border-radius: 1px;
 }
@@ -337,7 +337,7 @@
 }
 
 .person-card:hover {
-  background: rgba(234, 225, 206, 0.45);
+  background: var(--surface-tint-hover);
   border-bottom-color: var(--radar-copresence);
 }
 
@@ -348,7 +348,7 @@
   flex-shrink: 0;
   padding: 4px;
   background: var(--surface-card);
-  border: 1px solid rgba(130, 122, 106, 0.38);
+  border: 1px solid var(--border-mat);
   box-shadow: var(--shadow-print);
   color: var(--radar-copresence);
   display: flex;
@@ -467,7 +467,7 @@
 }
 
 .living-row-link:hover {
-  background: rgba(234, 225, 206, 0.45);
+  background: var(--surface-tint-hover);
 }
 
 .living-row-main {

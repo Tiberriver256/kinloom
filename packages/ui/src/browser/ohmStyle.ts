@@ -1,6 +1,6 @@
 import { constrainLayerToDateRange, dateRangeFromDate } from '@openhistoricalmap/maplibre-gl-dates';
 import type { FilterSpecification, LayerSpecification, StyleSpecification } from 'maplibre-gl';
-import { KINLOOM_COLOR_TOKENS } from '../lib/tokens.js';
+import { getResolvedThemeColorTokens } from '../lib/tokens.js';
 
 export const OHM_STYLE_URL = 'https://www.openhistoricalmap.org/map-styles/main/main.json';
 export const PAPER_LAND_LAYER_ID = 'kinloom-paper-land';
@@ -62,12 +62,19 @@ function hasSourceLayer(layer: LayerSpecification): layer is LayerSpecification 
   return 'source' in layer && typeof layer.source === 'string';
 }
 
-function transformLayer(layer: LayerSpecification): LayerSpecification | null {
+function transformLayer(layer: LayerSpecification, isDark: boolean): LayerSpecification | null {
+  const palette = getResolvedThemeColorTokens(isDark);
   if (DROPPED_LAYER_IDS.has(layer.id)) {
     return null;
   }
   if (layer.type === 'background') {
-    return layer;
+    if (!isDark) {
+      return layer;
+    }
+    return {
+      ...layer,
+      paint: { ...layer.paint, 'background-color': palette.land },
+    };
   }
   if (typeof layer.minzoom === 'number' && layer.minzoom > MAP_MAX_ZOOM) {
     return null;
@@ -84,11 +91,18 @@ function transformLayer(layer: LayerSpecification): LayerSpecification | null {
     return {
       ...layer,
       id: PAPER_LAND_LAYER_ID,
-      paint: { 'fill-color': KINLOOM_COLOR_TOKENS.warmLinen },
+      paint: { 'fill-color': palette.land },
     };
   }
 
   let next: LayerSpecification = layer;
+
+  if (isDark && next.type === 'fill' && sourceLayer === 'water_areas') {
+    next = {
+      ...next,
+      paint: { ...next.paint, 'fill-color': palette.water },
+    };
+  }
 
   if (next.type === 'symbol' && next.layout) {
     const nextLayout: Record<string, unknown> = { ...next.layout };
@@ -121,7 +135,8 @@ function transformLayer(layer: LayerSpecification): LayerSpecification | null {
  */
 export function buildArchivalOhmStyle(
   rawStyle: StyleSpecification,
-  initialYear = OVERVIEW_REFERENCE_YEAR
+  initialYear = OVERVIEW_REFERENCE_YEAR,
+  isDark = false
 ): StyleSpecification {
   const nextSources = Object.fromEntries(
     Object.entries(rawStyle.sources).filter(([sourceId]) => !UNUSED_SOURCE_IDS.has(sourceId))
@@ -129,7 +144,7 @@ export function buildArchivalOhmStyle(
 
   const nextLayers: LayerSpecification[] = [];
   for (const layer of rawStyle.layers) {
-    const transformed = transformLayer(layer);
+    const transformed = transformLayer(layer, isDark);
     if (transformed) {
       nextLayers.push(transformed);
     }
@@ -172,18 +187,23 @@ function isMapLibreStyleDocument(value: unknown): value is StyleSpecification {
   );
 }
 
-let cachedStylePromise: Promise<StyleSpecification> | null = null;
+let cachedRawStylePromise: Promise<StyleSpecification> | null = null;
+let cachedDefaultLightStyle: StyleSpecification | null = null;
+let cachedDefaultDarkStyle: StyleSpecification | null = null;
 
 export function resetCachedOhmStyle(): void {
-  cachedStylePromise = null;
+  cachedRawStylePromise = null;
+  cachedDefaultLightStyle = null;
+  cachedDefaultDarkStyle = null;
 }
 
 export async function loadArchivalOhmStyle(
   initialYear = OVERVIEW_REFERENCE_YEAR,
-  fetchFn: typeof fetch = fetch
+  fetchFn: typeof fetch = fetch,
+  isDark = false
 ): Promise<StyleSpecification> {
-  if (!cachedStylePromise) {
-    cachedStylePromise = fetchFn(OHM_STYLE_URL)
+  if (!cachedRawStylePromise) {
+    cachedRawStylePromise = fetchFn(OHM_STYLE_URL)
       .then(async (res) => {
         if (!res.ok) {
           throw new Error(`HTTP ${res.status} loading ${OHM_STYLE_URL}`);
@@ -192,22 +212,25 @@ export async function loadArchivalOhmStyle(
         if (!isMapLibreStyleDocument(raw)) {
           throw new Error(`Invalid MapLibre style JSON loaded from ${OHM_STYLE_URL}`);
         }
-        return buildArchivalOhmStyle(raw, initialYear);
+        return raw;
       })
       .catch((error: unknown) => {
-        cachedStylePromise = null;
+        cachedRawStylePromise = null;
         throw error;
       });
   }
-  const baseStyle = await cachedStylePromise;
+  const rawStyle = await cachedRawStylePromise;
   if (initialYear === OVERVIEW_REFERENCE_YEAR) {
-    return baseStyle;
+    if (isDark) {
+      if (!cachedDefaultDarkStyle) {
+        cachedDefaultDarkStyle = buildArchivalOhmStyle(rawStyle, initialYear, true);
+      }
+      return cachedDefaultDarkStyle;
+    }
+    if (!cachedDefaultLightStyle) {
+      cachedDefaultLightStyle = buildArchivalOhmStyle(rawStyle, initialYear, false);
+    }
+    return cachedDefaultLightStyle;
   }
-  return {
-    ...baseStyle,
-    state: {
-      ...baseStyle.state,
-      ...buildInitialDateState(initialYear),
-    },
-  };
+  return buildArchivalOhmStyle(rawStyle, initialYear, isDark);
 }

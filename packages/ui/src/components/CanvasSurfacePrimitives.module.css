@@ -19,7 +19,7 @@
   min-width: 40px;
   min-height: 38px;
   text-align: center;
-  background: rgba(252, 249, 242, 0.96);
+  background: var(--surface-overlay-card);
   border: 1px solid var(--border-control);
   border-radius: var(--radius-sm);
   box-shadow: var(--shadow-card);
@@ -46,7 +46,7 @@
   border: 1px solid var(--border-decorative);
   border-radius: var(--radius-sm);
   padding: 4px 9px;
-  background: rgba(245, 239, 226, 0.55);
+  background: var(--surface-tint-subtle);
 }
 
 .map-bordered-btn:hover {

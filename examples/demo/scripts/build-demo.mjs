@@ -105,11 +105,10 @@ function verifyAllReferencedMedia(bundle, readings) {
   return refs.size;
 }
 
-// 1. Copy canonical Kinloom favicon from repo brand/
-fs.copyFileSync(
-  path.join(repoRoot, 'brand', 'favicon.svg'),
-  path.join(publicDir, 'favicon.svg'),
-);
+// 1. Copy canonical Kinloom favicons (adaptive + explicit light/dark for Android Chrome) from repo brand/
+for (const faviconFile of ['favicon.svg', 'favicon-light.svg', 'favicon-dark.svg']) {
+  fs.copyFileSync(path.join(repoRoot, 'brand', faviconFile), path.join(publicDir, faviconFile));
+}
 
 // 2. Parse YAML inputs via @kinloom/core and compile archive.json
 const siteConfig = parseKinloomConfigYaml(readText('kinloom.config.yaml'));

@@ -115,7 +115,7 @@
 
 .scrubber-tick:hover {
   color: var(--surface-header);
-  background: rgba(234, 225, 206, 0.55);
+  background: var(--surface-tint-hover);
   border-color: var(--border-decorative);
 }
 

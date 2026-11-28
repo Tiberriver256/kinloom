@@ -7,9 +7,12 @@ import {
   KINLOOM_OG_DIMENSIONS,
   relativeLuminance,
   renderBrandkitHeadTags,
+  renderDarkFaviconSvg,
   renderFaviconSvg,
   renderIconSvg,
+  renderLightFaviconSvg,
   renderOgCardSvg,
+  renderThemeInitScript,
   resolveBrandSpec,
   resolveRouteOgMetadata,
 } from './brandkit.js';
@@ -91,6 +94,28 @@ describe('brandkit core primitives', () => {
     expect(svg).toContain('aria-label="Alder &amp; Co"');
   });
 
+  it('renders explicit light-only and dark-only favicon SVG variants for Android Chrome', () => {
+    const lightSvg = renderLightFaviconSvg({ accent: '#2F5245', label: 'Alder Light' });
+    expect(lightSvg).not.toContain('@media (prefers-color-scheme: dark)');
+    expect(lightSvg).toContain(`fill: ${KINLOOM_BRAND_PALETTE.parchment}`);
+    expect(lightSvg).toContain('stroke: #2F5245;');
+    expect(lightSvg).toContain('aria-label="Alder Light"');
+
+    const darkSvg = renderDarkFaviconSvg({ accent: '#2F5245', label: 'Alder Dark' });
+    expect(darkSvg).not.toContain('@media (prefers-color-scheme: dark)');
+    expect(darkSvg).toContain(`fill: ${KINLOOM_BRAND_PALETTE.navyElevated}`);
+    expect(darkSvg).toContain(`stroke: ${KINLOOM_BRAND_PALETTE.ivory}`);
+    expect(darkSvg).not.toContain('stroke: #2F5245;');
+    expect(darkSvg).toContain('aria-label="Alder Dark"');
+
+    const customDarkAccentSvg = renderFaviconSvg({
+      accent: '#2F5245',
+      accentDark: '#7CC2A6',
+      mode: 'dark',
+    });
+    expect(customDarkAccentSvg).toContain('stroke: #7CC2A6;');
+  });
+
   it('meets WCAG contrast thresholds in both light and dark favicon themes across dark accents', () => {
     const darkChromeHex = '#181818';
     const accents = ['#7A4612', '#2F5245', '#1B2A41', '#8A2B2B'] as const;
@@ -147,6 +172,14 @@ describe('brandkit core primitives', () => {
     expect(maskable).toContain('viewBox="0 0 512 512"');
     expect(maskable).toContain('fill="#1B2A41"');
     expect(maskable).toContain('translate(122.88, 122.88)');
+
+    const transparentAny = renderIconSvg({
+      size: 192,
+      variant: 'any',
+      transparentBackground: true,
+    });
+    expect(transparentAny).not.toContain('<rect');
+    expect(transparentAny).toContain('translate(19.20, 19.20)');
   });
 
   it('renders 1200x630 centered and split-vignette OG SVGs with XML escaping', () => {
@@ -162,6 +195,16 @@ describe('brandkit core primitives', () => {
     expect(centered).toContain('Alder &amp; Oak');
     expect(centered).toContain('&lt;Archive&gt;');
     expect(centered).toContain('OHIO &amp; OREGON');
+
+    const threeWordWrap = renderOgCardSvg({
+      title: 'Alder Family Historical Records Archive',
+      subtitle: 'Five Generations Across Four States',
+      surface: 'navy',
+      footerCredit: 'Built with Kinloom',
+    });
+    expect(threeWordWrap).toContain('Alder Family');
+    expect(threeWordWrap).toContain('Historical Records…');
+    expect(threeWordWrap).toContain('BUILT WITH KINLOOM');
 
     const split = renderOgCardSvg({
       title: 'Alder Family Archive',
@@ -184,8 +227,17 @@ describe('brandkit core primitives', () => {
     ]);
   });
 
-  it('renders complete head tags with summary_large_image, raster apple-touch-icon, and manifest', () => {
+  it('renders complete head tags with color-scheme, pre-paint init, light/dark favicons, OG tags, and manifest', () => {
     const tags = renderBrandkitHeadTags(makeSampleConfig());
+    expect(tags).toContain('<meta name="color-scheme" content="light dark" />');
+    expect(tags).toContain(renderThemeInitScript());
+    expect(tags).toContain('name="theme-color" content="#171614" media="(prefers-color-scheme: dark)"');
+    expect(tags).toContain(
+      '<link rel="icon" type="image/svg+xml" media="(prefers-color-scheme: light)" href="/favicon-light.svg" />'
+    );
+    expect(tags).toContain(
+      '<link rel="icon" type="image/svg+xml" media="(prefers-color-scheme: dark)" href="/favicon-dark.svg" />'
+    );
     expect(tags).toContain('property="og:site_name" content="Alder Family Archive"');
     expect(tags).toContain('name="twitter:card" content="summary_large_image"');
     expect(tags).toContain('property="og:image:width" content="1200"');

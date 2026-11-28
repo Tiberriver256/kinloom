@@ -188,12 +188,13 @@ export const KinloomApp: React.FC<KinloomAppProps> = ({
     }
   }, [siteConfig.site.title]);
 
-  const rootStyle: React.CSSProperties | undefined = siteConfig.theme?.accent
-    ? ({
-        '--accent-primary': siteConfig.theme.accent,
-        '--radar-copresence': siteConfig.theme.accent,
-      } as React.CSSProperties)
-    : undefined;
+  const rootStyle: React.CSSProperties | undefined =
+    siteConfig.theme?.accent || siteConfig.theme?.accentDark
+      ? ({
+          ...(siteConfig.theme.accent ? { '--site-accent-light': siteConfig.theme.accent } : {}),
+          ...(siteConfig.theme.accentDark ? { '--site-accent-dark': siteConfig.theme.accentDark } : {}),
+        } as React.CSSProperties)
+      : undefined;
 
   const shell = <RoutedAppShell siteTitle={siteConfig.site.title} baseUrl={resolvedBase} />;
 

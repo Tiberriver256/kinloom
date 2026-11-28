@@ -158,6 +158,8 @@ const EXACT_STATIC_ROUTES = new Set<string>([
   '/data/bundle.json',
   '/favicon.ico',
   '/favicon.svg',
+  '/favicon-light.svg',
+  '/favicon-dark.svg',
   '/apple-touch-icon.png',
   '/site.webmanifest',
   '/index.html',

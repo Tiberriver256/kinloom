@@ -43,7 +43,7 @@
 
 .person-biography-entry + .person-biography-entry {
   padding-top: 18px;
-  border-top: 1px solid rgba(130, 122, 106, 0.24);
+  border-top: 1px solid var(--border-decorative);
 }
 
 .person-biography-entry-head {
@@ -94,7 +94,7 @@
   right: 0;
   bottom: 0;
   height: 3.4em;
-  background: linear-gradient(to bottom, rgba(245, 239, 226, 0), var(--surface-canvas) 90%);
+  background: linear-gradient(to bottom, var(--surface-canvas-fade), var(--surface-canvas) 90%);
   pointer-events: none;
 }
 
@@ -165,7 +165,7 @@
   width: 100%;
   background: transparent;
   border: none;
-  border-bottom: 1px solid rgba(130, 122, 106, 0.25);
+  border-bottom: 1px solid var(--border-decorative);
   border-radius: 0;
   padding: 3px 0 5px;
   color: var(--radar-copresence);
@@ -182,7 +182,7 @@
 }
 
 .person-biography-source-btn:hover {
-  background: rgba(234, 225, 206, 0.55);
+  background: var(--surface-tint-hover);
   border-bottom-color: var(--radar-copresence);
 }
 

@@ -52,7 +52,7 @@
   width: 100%;
   padding: 5px;
   background: var(--surface-card);
-  border: 1px solid rgba(130, 122, 106, 0.42);
+  border: 1px solid var(--border-mat);
   box-shadow: var(--shadow-print);
   border-radius: 1px;
 }
@@ -76,20 +76,20 @@
   font-weight: 600;
   letter-spacing: 0.03em;
   border-radius: var(--radius-sm);
-  background: rgba(27, 42, 65, 0.9);
-  color: var(--text-inverse);
+  background: var(--badge-photo-default);
+  color: var(--text-chrome-bar);
 }
 
 .media-kind-badge:global(.kind-portrait) {
-  background: rgba(47, 82, 69, 0.92);
+  background: var(--badge-photo-portrait);
 }
 
 .media-kind-badge:global(.kind-headstone) {
-  background: rgba(78, 74, 66, 0.9);
+  background: var(--badge-photo-headstone);
 }
 
 .media-kind-badge:global(.kind-record_scan) {
-  background: rgba(122, 70, 18, 0.92);
+  background: var(--badge-photo-scan);
 }
 
 .person-media-caption {
@@ -121,7 +121,8 @@
 .media-player-video-el {
   width: 100%;
   max-height: 70vh;
-  background: var(--surface-header);
+  color-scheme: dark;
+  background: var(--surface-chrome-bar);
   border-radius: var(--radius-sm);
   border: 1px solid var(--border-control);
 }
@@ -167,8 +168,8 @@
   position: absolute;
   bottom: 8px;
   right: 8px;
-  background: var(--surface-header);
-  color: var(--text-inverse);
+  background: var(--surface-chrome-bar);
+  color: var(--text-chrome-bar);
   font-family: var(--font-mono);
   font-size: 0.72rem;
   padding: 3px 8px;
