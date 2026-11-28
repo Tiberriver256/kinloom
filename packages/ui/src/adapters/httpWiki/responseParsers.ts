@@ -192,6 +192,11 @@ export function parseSessionResponse(raw: unknown): {
     hasRevisionHistory: expectBoolean(capsObj.hasRevisionHistory, 'capabilities.hasRevisionHistory'),
     hasTalk: expectBoolean(capsObj.hasTalk, 'capabilities.hasTalk'),
     canManageSite: expectBoolean(capsObj.canManageSite, 'capabilities.canManageSite'),
+    ...(typeof capsObj.canReadArchive === 'boolean' ? { canReadArchive: capsObj.canReadArchive } : {}),
+    ...(typeof capsObj.hasReadings === 'boolean' ? { hasReadings: capsObj.hasReadings } : {}),
+    ...(typeof capsObj.hasMediaChecklist === 'boolean'
+      ? { hasMediaChecklist: capsObj.hasMediaChecklist }
+      : {}),
   };
   let authProviders: ArchiveAuthProviders | undefined;
   if (obj.authProviders !== undefined) {

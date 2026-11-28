@@ -74,12 +74,17 @@ export class HttpWikiDataSource implements ArchiveDataSource {
   private readonly apiBase: string;
   private readonly assetBase: string;
   private readonly fetchImpl: typeof fetch;
+  private readonly hasReadingsOption?: boolean;
+  private readonly hasMediaChecklistOption?: boolean;
+  private cachedCapabilities: ArchiveCapabilities | null = null;
   private cachedBundle: ArchiveBundle | null = null;
   private cachedEtag: string | null = null;
 
   constructor(options: HttpWikiDataSourceOptions = {}) {
     this.apiBase = stripTrailingSlash(options.apiBaseUrl ?? '');
     this.assetBase = normalizeAssetBase(options.assetBaseUrl);
+    this.hasReadingsOption = options.hasReadings;
+    this.hasMediaChecklistOption = options.hasMediaChecklist;
     this.fetchImpl = options.fetchImpl ?? ((...args) => fetch(...args));
     this.admin = createHttpAdminDataSource({
       apiUrl: (path) => this.apiUrl(path),
@@ -166,6 +171,12 @@ export class HttpWikiDataSource implements ArchiveDataSource {
   }
 
   async loadReadings(): Promise<ReadingsBundle | null> {
+    if (
+      this.hasReadingsOption === false ||
+      (this.hasReadingsOption === undefined && this.cachedCapabilities?.hasReadings === false)
+    ) {
+      return null;
+    }
     const res = await this.fetchImpl(`${this.assetBase}data/readings.json`, {
       credentials: 'same-origin',
     });
@@ -185,6 +196,12 @@ export class HttpWikiDataSource implements ArchiveDataSource {
   }
 
   async loadMediaChecklist(): Promise<MediaChecklistItem[]> {
+    if (
+      this.hasMediaChecklistOption === false ||
+      (this.hasMediaChecklistOption === undefined && this.cachedCapabilities?.hasMediaChecklist === false)
+    ) {
+      return [];
+    }
     let res: Response;
     try {
       res = await this.fetchImpl(`${this.assetBase}data/media-checklist.json`, {
@@ -225,7 +242,11 @@ export class HttpWikiDataSource implements ArchiveDataSource {
     capabilities: ArchiveCapabilities;
     authProviders?: ArchiveAuthProviders;
   }> {
-    return this.requestJson('/api/auth/me', parseSessionResponse, { signal: options?.signal });
+    const result = await this.requestJson('/api/auth/me', parseSessionResponse, {
+      signal: options?.signal,
+    });
+    this.cachedCapabilities = result.capabilities;
+    return result;
   }
 
   async getOnboardingState(options?: { signal?: AbortSignal }): Promise<OnboardingSessionResponse> {

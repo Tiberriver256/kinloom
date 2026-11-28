@@ -410,9 +410,9 @@ describe('createCloudflareWorker optional Workers Observability plugin', () => {
     const expectedScopedCsp = [
       "default-src 'self'",
       `script-src 'self' ${CLOUDFLARE_WEB_ANALYTICS_SCRIPT_ORIGIN}`,
-      "style-src 'self' 'unsafe-inline'",
+      "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
       "img-src 'self' data: blob: https:",
-      "font-src 'self' data: https://www.openhistoricalmap.org https://*.openhistoricalmap.org",
+      "font-src 'self' data: https://fonts.gstatic.com https://www.openhistoricalmap.org https://*.openhistoricalmap.org",
       `connect-src 'self' https://www.openhistoricalmap.org https://*.openhistoricalmap.org ${CLOUDFLARE_WEB_ANALYTICS_CONNECT_ORIGIN}`,
       "media-src 'self' blob:",
       "worker-src 'self' blob:",

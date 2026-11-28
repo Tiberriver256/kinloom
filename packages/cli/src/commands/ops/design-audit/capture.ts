@@ -409,7 +409,7 @@ export async function runDesignAuditCaptureMatrix(options: {
               }
               await page
                 .evaluate(
-                  `(() => { try { window.localStorage?.removeItem('kinloom:theme'); } catch {} const root = document.documentElement; if (root && root.hasAttribute('data-theme')) { root.setAttribute('data-theme', '${theme === 'dark' ? 'dark' : 'light'}'); } })()`
+                  `(() => { try { window.localStorage?.removeItem('kinloom-theme'); } catch {} const root = document.documentElement; if (root && root.hasAttribute('data-theme')) { root.setAttribute('data-theme', '${theme === 'dark' ? 'dark' : 'light'}'); } })()`
                 )
                 .catch(() => undefined);
 

@@ -13,6 +13,7 @@ import {
   renderIconSvg,
   renderOgCardSvg,
   renderPrivacySafeServiceWorkerScript,
+  renderThemeInitScriptSource,
   resolveBrandSpec,
 } from '@kinloom/core';
 import sharp from 'sharp';
@@ -313,6 +314,7 @@ export async function runBrandkitCommand(options: BrandkitCommandOptions): Promi
     ['icon-maskable-512.png', iconMaskable512Png],
     ['site.webmanifest', webManifest],
     ['sw.js', serviceWorkerScript],
+    ['theme-init.js', renderThemeInitScriptSource()],
     ['og-default.png', ogDefaultPng],
   ];
 

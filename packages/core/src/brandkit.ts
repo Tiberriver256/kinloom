@@ -218,8 +218,15 @@ export function buildWebManifest(
   };
 }
 
-export function renderThemeInitScript(): string {
-  return `<script>try{var t=localStorage.getItem('kinloom-theme');if(t==='light'||t==='dark'){document.documentElement.dataset.theme=t;var m=document.querySelector('meta[name="color-scheme"]');if(m)m.content=t;}}catch(e){}</script>`;
+export const THEME_INIT_SCRIPT_PATH = '/theme-init.js';
+
+export function renderThemeInitScriptSource(): string {
+  return `try{var t=localStorage.getItem('kinloom-theme');if(t==='light'||t==='dark'){document.documentElement.dataset.theme=t;var m=document.querySelector('meta[name="color-scheme"]');if(m)m.content=t;}}catch(e){}\n`;
+}
+
+export function renderThemeInitScript(baseUrl?: string): string {
+  const src = escapeXml(joinPwaBasePath(baseUrl, 'theme-init.js'));
+  return `<script src="${src}"></script>`;
 }
 
 export function renderBrandkitHeadTags(
@@ -238,7 +245,7 @@ export function renderBrandkitHeadTags(
   return [
     `<meta name="description" content="${description}" />`,
     `<meta name="color-scheme" content="light dark" />`,
-    renderThemeInitScript(),
+    renderThemeInitScript(baseUrl),
     `<meta name="theme-color" content="${spec.themeColorLight}" media="(prefers-color-scheme: light)" />`,
     `<meta name="theme-color" content="${spec.themeColorDark}" media="(prefers-color-scheme: dark)" />`,
     `<meta name="mobile-web-app-capable" content="yes" />`,

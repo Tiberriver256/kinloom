@@ -63,10 +63,11 @@ describe('standalone PWA primitives and privacy-safe service worker', () => {
     expect(joinPwaBasePath('/kinloom/', 'site.webmanifest')).toBe('/kinloom/site.webmanifest');
   });
 
-  it('defines canonical MIME types and headers for all 10 public PWA assets and rejects non-PWA paths', () => {
+  it('defines canonical MIME types and headers for all 11 public PWA assets and rejects non-PWA paths', () => {
     expect(PUBLIC_PWA_STATIC_ASSET_PATHS).toEqual([
       '/site.webmanifest',
       '/sw.js',
+      '/theme-init.js',
       '/icon-192.png',
       '/icon-512.png',
       '/icon-maskable-512.png',
@@ -86,6 +87,11 @@ describe('standalone PWA primitives and privacy-safe service worker', () => {
       cacheControl: 'no-cache',
       serviceWorkerAllowed: '/',
       fallbackKind: 'service_worker',
+    });
+    expect(getPublicPwaAssetSpec('/theme-init.js')).toMatchObject({
+      contentType: 'application/javascript; charset=utf-8',
+      cacheControl: 'public, max-age=86400',
+      fallbackKind: 'theme_init',
     });
     expect(getPublicPwaAssetSpec('/icon-192.png')?.contentType).toBe('image/png');
     expect(getPublicPwaAssetSpec('/favicon.ico')?.contentType).toBe('image/x-icon');

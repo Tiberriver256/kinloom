@@ -3,6 +3,7 @@ import { escapeXml } from './brandkitSvg.js';
 export type PublicPwaAssetPath =
   | '/site.webmanifest'
   | '/sw.js'
+  | '/theme-init.js'
   | '/icon-192.png'
   | '/icon-512.png'
   | '/icon-maskable-512.png'
@@ -15,6 +16,7 @@ export type PublicPwaAssetPath =
 export type PublicPwaAssetFallbackKind =
   | 'manifest'
   | 'service_worker'
+  | 'theme_init'
   | 'favicon_adaptive'
   | 'favicon_light'
   | 'favicon_dark'
@@ -41,6 +43,12 @@ export const PUBLIC_PWA_STATIC_ASSET_SPECS: Readonly<Record<PublicPwaAssetPath, 
     cacheControl: 'no-cache',
     serviceWorkerAllowed: '/',
     fallbackKind: 'service_worker',
+  },
+  '/theme-init.js': {
+    path: '/theme-init.js',
+    contentType: 'application/javascript; charset=utf-8',
+    cacheControl: 'public, max-age=86400',
+    fallbackKind: 'theme_init',
   },
   '/icon-192.png': {
     path: '/icon-192.png',

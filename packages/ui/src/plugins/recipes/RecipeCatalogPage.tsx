@@ -13,6 +13,7 @@ import {
 import { ArchivalImage } from '../../components/Atoms.js';
 import { ExplorerTopBar } from '../../components/ExplorerTopBar.js';
 import { KinloomFooter } from '../../components/KinloomFooter.js';
+import { useOptionalArchiveData } from '../../context/ArchiveDataContext.js';
 import { cx } from '../../lib/cx.js';
 import {
   computeOptimisticStarState,
@@ -39,6 +40,10 @@ export interface RecipeCatalogPageProps {
 
 export const RecipeCatalogPage: React.FC<RecipeCatalogPageProps> = ({ initialTab = 'all' }) => {
   const { client, basePath, pageTitle, pageDescription } = useRecipesPlugin();
+  const archiveData = useOptionalArchiveData();
+  const hasSessionLoader = Boolean(archiveData?.dataSource.getSession);
+  const session = archiveData?.session ?? null;
+  const canReadArchive = archiveData?.capabilities.canReadArchive;
   const { searchDeceasedPeople } = useKinloomPluginContext();
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
@@ -142,6 +147,15 @@ export const RecipeCatalogPage: React.FC<RecipeCatalogPageProps> = ({ initialTab
 
   // biome-ignore lint/correctness/useExhaustiveDependencies: reloadTick triggers explicit retry
   useEffect(() => {
+    if (hasSessionLoader && session === null) {
+      return undefined;
+    }
+    if (hasSessionLoader && session?.principal_kind === 'anonymous' && canReadArchive === false) {
+      setData(null);
+      setError(null);
+      setLoading(false);
+      return undefined;
+    }
     const controller = new AbortController();
     let cancelled = false;
     setLoading(true);
@@ -186,7 +200,20 @@ export const RecipeCatalogPage: React.FC<RecipeCatalogPageProps> = ({ initialTab
       cancelled = true;
       controller.abort();
     };
-  }, [client, query, course, tag, ancestorId, activeTab, sort, offset, reloadTick]);
+  }, [
+    client,
+    query,
+    course,
+    tag,
+    ancestorId,
+    activeTab,
+    sort,
+    offset,
+    reloadTick,
+    hasSessionLoader,
+    session,
+    canReadArchive,
+  ]);
 
   const hasActiveFilters = Boolean(query.trim() || course || tag || ancestorId);
 

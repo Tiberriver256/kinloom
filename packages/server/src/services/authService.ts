@@ -36,6 +36,9 @@ export interface AuthServiceDeps {
   authProvider?: AuthProvider;
   clock: Clock;
   siteConfig: KinloomSiteConfig;
+  mode?: 'private' | 'public';
+  hasReadings?: boolean;
+  hasMediaChecklist?: boolean;
   bootstrapAdminEmail?: string;
   magicLinkTtlMinutes?: number;
   magicLinkMaxPerWindow?: number;
@@ -95,6 +98,9 @@ export class AuthService {
   private readonly authProvider?: AuthProvider;
   private readonly clock: Clock;
   private readonly siteConfig: KinloomSiteConfig;
+  private readonly mode: 'private' | 'public';
+  private readonly hasReadingsOverride?: boolean;
+  private readonly hasMediaChecklistOverride?: boolean;
   private readonly bootstrapAdminEmail: string | null;
   private readonly magicLinkTtlMinutes: number;
   private readonly magicLinkMaxPerWindow: number;
@@ -107,6 +113,9 @@ export class AuthService {
     this.authProvider = deps.authProvider;
     this.clock = deps.clock;
     this.siteConfig = deps.siteConfig;
+    this.mode = deps.mode ?? 'private';
+    this.hasReadingsOverride = deps.hasReadings;
+    this.hasMediaChecklistOverride = deps.hasMediaChecklist;
     this.bootstrapAdminEmail = deps.bootstrapAdminEmail
       ? deps.bootstrapAdminEmail.trim().toLowerCase()
       : null;
@@ -157,10 +166,17 @@ export class AuthService {
       }
     }
 
-    const capabilities = resolveCapabilities(session, {
+    const baseCapabilities = resolveCapabilities(session, {
       allowTalk: this.siteConfig.wiki?.allowTalk ?? true,
       hasRevisionHistory: true,
     });
+    const capabilities: ArchiveCapabilities = {
+      ...baseCapabilities,
+      canReadArchive:
+        this.mode === 'public' || principal.kind === 'user' || principal.kind === 'invite_viewer',
+      hasReadings: this.hasReadingsOverride ?? Boolean(this.siteConfig.featuredDocumentId),
+      hasMediaChecklist: this.hasMediaChecklistOverride ?? false,
+    };
 
     return {
       session,

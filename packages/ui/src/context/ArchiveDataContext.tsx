@@ -243,8 +243,21 @@ const ArchiveDataProviderInner: React.FC<ArchiveDataProviderInnerProps> = ({
       });
   }, [resolvedDataSource]);
 
+  const hasSessionLoader = Boolean(resolvedDataSource.getSession);
+  const sessionHydrating = hasSessionLoader && sessionProp === undefined && authSnapshot.matches('hydrating');
+  const blockedByPrivateGate =
+    hasSessionLoader && session?.principal_kind === 'anonymous' && capabilities.canReadArchive === false;
+
   useEffect(() => {
     if (initialBundle !== null && reloadTick === 0) {
+      return;
+    }
+    if (sessionHydrating) {
+      return;
+    }
+    if (blockedByPrivateGate) {
+      setLoading(false);
+      setError(null);
       return;
     }
     let cancelled = false;
@@ -276,15 +289,19 @@ const ArchiveDataProviderInner: React.FC<ArchiveDataProviderInnerProps> = ({
     return (): void => {
       cancelled = true;
     };
-  }, [resolvedDataSource, initialBundle, reloadTick]);
+  }, [resolvedDataSource, initialBundle, reloadTick, sessionHydrating, blockedByPrivateGate]);
 
   // Quietly load readings once archive is ready so dynamic readableSourceIds
   // populate without hardcoding any source IDs in code.
   useEffect(() => {
     if (!loading && bundle && !readingsFetchedRef.current) {
+      if (capabilities.hasReadings === false) {
+        readingsFetchedRef.current = true;
+        return;
+      }
       ensureReadings();
     }
-  }, [loading, bundle, ensureReadings]);
+  }, [loading, bundle, capabilities.hasReadings, ensureReadings]);
 
   // Fetch live pronunciation overrides through the ArchiveDataSource port when available.
   // Fails silently in static/offline mode.
@@ -378,11 +395,11 @@ const ArchiveDataProviderInner: React.FC<ArchiveDataProviderInnerProps> = ({
   }, [readings, siteConfig.featuredDocumentId]);
 
   const loadMediaChecklist = useCallback(async (): Promise<MediaChecklistItem[]> => {
-    if (!resolvedDataSource.loadMediaChecklist) {
+    if (!resolvedDataSource.loadMediaChecklist || capabilities.hasMediaChecklist === false) {
       return [];
     }
     return resolvedDataSource.loadMediaChecklist();
-  }, [resolvedDataSource]);
+  }, [resolvedDataSource, capabilities.hasMediaChecklist]);
 
   const adminDataSource = resolvedDataSource.admin ?? null;
 

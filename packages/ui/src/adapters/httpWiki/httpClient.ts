@@ -13,6 +13,10 @@ export interface HttpWikiDataSourceOptions {
   apiBaseUrl?: string;
   /** Optional static asset base URL for readings.json fallback. */
   assetBaseUrl?: string;
+  /** Optional explicit manifest/capability gate for /data/readings.json fetches. */
+  hasReadings?: boolean;
+  /** Optional explicit manifest/capability gate for /data/media-checklist.json fetches. */
+  hasMediaChecklist?: boolean;
   fetchImpl?: typeof fetch;
 }
 
