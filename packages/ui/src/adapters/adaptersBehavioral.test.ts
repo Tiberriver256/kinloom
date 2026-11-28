@@ -483,4 +483,34 @@ describe('StaticDemoDataSource behavioral contract', () => {
     );
     await expect(badChecklistDs.loadMediaChecklist()).rejects.toThrow();
   });
+
+  it('falls back to baseUrl archive.json when __KINLOOM_ARCHIVE_PROMISE__ 404s or rejects', async () => {
+    const requestedUrls: string[] = [];
+    const fallbackFetch: typeof fetch = async (input) => {
+      requestedUrls.push(String(input));
+      return jsonRes(SAMPLE_BUNDLE, 200, { etag: '"fallback-ok"' });
+    };
+
+    const ds = new StaticDemoDataSource('/kinloom', fallbackFetch);
+
+    // 1. Preloaded response returns 404 (e.g. mismatched root path) -> falls back to /kinloom/data/archive.json
+    globalThis.__KINLOOM_ARCHIVE_PROMISE__ = Promise.resolve(new Response('Not Found', { status: 404 }));
+    const resFrom404 = await ds.loadArchive();
+    expect(resFrom404.etag).toBe('"fallback-ok"');
+    expect(requestedUrls).toEqual(['/kinloom/data/archive.json']);
+
+    // 2. Preloaded promise rejects -> falls back cleanly
+    globalThis.__KINLOOM_ARCHIVE_PROMISE__ = Promise.reject(new Error('network error'));
+    const resFromReject = await ds.loadArchive();
+    expect(resFromReject.etag).toBe('"fallback-ok"');
+    expect(requestedUrls).toEqual(['/kinloom/data/archive.json', '/kinloom/data/archive.json']);
+
+    // 3. Preloaded response succeeds (200) -> consumed directly without extra fetch
+    globalThis.__KINLOOM_ARCHIVE_PROMISE__ = Promise.resolve(
+      jsonRes(SAMPLE_BUNDLE, 200, { etag: '"preload-hit"' })
+    );
+    const resFromHit = await ds.loadArchive();
+    expect(resFromHit.etag).toBe('"preload-hit"');
+    expect(requestedUrls).toHaveLength(2);
+  });
 });

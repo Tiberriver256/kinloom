@@ -139,7 +139,7 @@ const RoutedAppShell: React.FC<{ siteTitle: string; baseUrl: string }> = ({ site
   const location = useLocation();
   const navigate = useNavigate();
   const { routes: pluginRoutes } = useKinloomPlugins();
-  const { bundle, loading, session } = useArchiveData();
+  const { bundle, loading, session, authProviders, dataSource } = useArchiveData();
   const { searchOpen } = useArchiveUi();
   const onboarding = useOptionalOnboarding();
   const recordSignal = onboarding?.recordSignal;
@@ -213,7 +213,10 @@ const RoutedAppShell: React.FC<{ siteTitle: string; baseUrl: string }> = ({ site
     }
   }, [tutorialOpen, location.pathname, location.search, location.hash, navigate]);
 
-  if (!loading && bundle === null && session?.principal_kind === 'anonymous') {
+  const supportsPrivateAuth = Boolean(
+    dataSource.requestMagicLink || authProviders.google || authProviders.magicLink
+  );
+  if (!loading && bundle === null && session?.principal_kind === 'anonymous' && supportsPrivateAuth) {
     return (
       <>
         <BlankScreenWatchdog />

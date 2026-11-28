@@ -55,10 +55,21 @@ export class StaticDemoDataSource implements ArchiveDataSource {
     notModified: boolean;
   }> {
     const preloaded = globalThis.__KINLOOM_ARCHIVE_PROMISE__;
+    let res: Response | null = null;
     if (preloaded) {
       globalThis.__KINLOOM_ARCHIVE_PROMISE__ = null;
+      try {
+        const candidate = await preloaded;
+        if (candidate.ok) {
+          res = candidate;
+        }
+      } catch {
+        res = null;
+      }
     }
-    const res = preloaded ? await preloaded : await this.fetchImpl(`${this.baseUrl}data/archive.json`);
+    if (!res) {
+      res = await this.fetchImpl(`${this.baseUrl}data/archive.json`);
+    }
     if (!res.ok) {
       throw new Error(`HTTP ${res.status} loading archive.json`);
     }
