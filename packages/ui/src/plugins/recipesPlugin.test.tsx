@@ -535,8 +535,15 @@ describe('KinloomUiPlugin seams, ArchivalPrimitives, and Family Recipes UI (#47)
     expect(container.querySelector('[data-slot="indexWidgets"]')?.textContent).toContain(
       'Oatmeal Honey Biscuits'
     );
-    const desktopNavRecipes = [...container.querySelectorAll<HTMLAnchorElement>('.nav-links a')].find((a) =>
-      a.textContent?.includes('Recipes')
+    const moreMenuBtn = container.querySelector<HTMLButtonElement>(
+      'button[aria-label="More archive sections"]'
+    );
+    expect(moreMenuBtn).not.toBeNull();
+    act(() => {
+      moreMenuBtn?.click();
+    });
+    const desktopNavRecipes = [...container.querySelectorAll<HTMLAnchorElement>('.topbar-more-menu a')].find(
+      (a) => a.textContent?.includes('Recipes')
     );
     expect(desktopNavRecipes).toBeDefined();
 
@@ -603,8 +610,15 @@ describe('KinloomUiPlugin seams, ArchivalPrimitives, and Family Recipes UI (#47)
     await flushUi();
 
     expect(container.querySelector('h1')?.textContent).toBe('Family Recipe Box');
-    const activeCatalogLink = [...container.querySelectorAll<HTMLAnchorElement>('.nav-links a')].find((a) =>
-      a.textContent?.includes('Recipes')
+    const catalogMoreBtn = container.querySelector<HTMLButtonElement>(
+      'button[aria-label="More archive sections"]'
+    );
+    expect(catalogMoreBtn?.className).toContain('active');
+    act(() => {
+      catalogMoreBtn?.click();
+    });
+    const activeCatalogLink = [...container.querySelectorAll<HTMLAnchorElement>('.topbar-more-menu a')].find(
+      (a) => a.textContent?.includes('Recipes')
     );
     expect(activeCatalogLink?.getAttribute('aria-current')).toBe('page');
 
@@ -728,8 +742,15 @@ describe('KinloomUiPlugin seams, ArchivalPrimitives, and Family Recipes UI (#47)
     });
     await flushUi();
 
-    const activeDetailLink = [...container.querySelectorAll<HTMLAnchorElement>('.nav-links a')].find((a) =>
-      a.textContent?.includes('Recipes')
+    const detailMoreBtn = container.querySelector<HTMLButtonElement>(
+      'button[aria-label="More archive sections"]'
+    );
+    expect(detailMoreBtn?.className).toContain('active');
+    act(() => {
+      detailMoreBtn?.click();
+    });
+    const activeDetailLink = [...container.querySelectorAll<HTMLAnchorElement>('.topbar-more-menu a')].find(
+      (a) => a.textContent?.includes('Recipes')
     );
     expect(activeDetailLink?.getAttribute('aria-current')).toBe('page');
     expect(container.querySelector('h1')?.textContent).toBe('Oatmeal Honey Biscuits');

@@ -1,6 +1,7 @@
 import type React from 'react';
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { useArchiveData } from '../../context/ArchiveDataContext.js';
+import { useOptionalArchiveUi } from '../../context/ArchiveUiContext.js';
 import { cx } from '../../lib/cx.js';
 import { type AuthUrlError, consumeAuthErrorFromWindow, resolveAuthFeedback } from './authErrorCopy.js';
 import { SignInModal } from './SignInModal.js';
@@ -36,6 +37,8 @@ function writeDismissedState(storageKey: string): void {
  */
 export const AuthStatusBanner: React.FC = () => {
   const { session, authProviders } = useArchiveData();
+  const archiveUi = useOptionalArchiveUi();
+  const setInviteBannerVisible = archiveUi?.setInviteBannerVisible;
   const [signInOpen, setSignInOpen] = useState(false);
   const [dismissedKey, setDismissedKey] = useState<string | null>(null);
   const [urlAuthError, setUrlAuthError] = useState<AuthUrlError | null>(null);
@@ -58,9 +61,18 @@ export const AuthStatusBanner: React.FC = () => {
   const inviteStorageKey = isInviteViewer ? getInviteStripDismissKey(session.inviteLabel) : null;
   const isInviteDismissed =
     inviteStorageKey !== null && (dismissedKey === inviteStorageKey || readDismissedState(inviteStorageKey));
-  const hasVisibleBanner = Boolean(
-    session && ((isInviteViewer && !isInviteDismissed) || (!isInviteViewer && urlAuthError !== null))
-  );
+  const showInviteStrip = Boolean(session && isInviteViewer && !isInviteDismissed);
+  const hasVisibleBanner = Boolean(showInviteStrip || (session && !isInviteViewer && urlAuthError !== null));
+
+  useEffect(() => {
+    if (!setInviteBannerVisible) {
+      return undefined;
+    }
+    setInviteBannerVisible(showInviteStrip);
+    return (): void => {
+      setInviteBannerVisible(false);
+    };
+  }, [setInviteBannerVisible, showInviteStrip]);
 
   // Sync rendered banner height into --auth-banner-height so --shell-chrome-offset
   // dynamically accounts for the invite/notice strip on full-viewport /map and /tree routes.

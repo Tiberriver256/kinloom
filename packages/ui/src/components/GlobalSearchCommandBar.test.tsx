@@ -690,7 +690,8 @@ describe('GlobalSearchModal Archival Command Bar (#71)', () => {
     act(() => {
       window.dispatchEvent(new KeyboardEvent('keydown', { key: '/', bubbles: true }));
     });
-    expect(container.querySelector('dialog')?.textContent).toContain('Archive ready');
+    expect(container.querySelector('dialog')?.textContent).not.toContain('Archive ready');
+    expect(container.querySelector('dialog')?.textContent).toContain('Type to search · Esc to close');
 
     // Click a suggestion chip to populate query
     const suggestionBtn = [...container.querySelectorAll<HTMLButtonElement>('dialog button')].find(
@@ -738,6 +739,7 @@ describe('GlobalSearchModal Archival Command Bar (#71)', () => {
     setInputValue(input2!, 'Mercer');
     const options = container.querySelectorAll<HTMLButtonElement>('[role="option"]');
     expect(options.length).toBeGreaterThan(1);
+    expect(container.querySelector('dialog')?.textContent).toContain(`${options.length} results`);
     act(() => {
       options[1]?.dispatchEvent(new MouseEvent('mouseover', { bubbles: true }));
     });

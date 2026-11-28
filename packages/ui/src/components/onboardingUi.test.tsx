@@ -489,22 +489,30 @@ describe('OnboardingChecklistCard, Guide menu, persistence, and contextual empty
     expect(reopenedCard).toBeTruthy();
     expect(reopenedCard?.textContent).toContain('Explore this family archive');
 
+    // While inline checklist is visible, topbar Guide trigger is deduplicated
+    expect(findButtonByText(secondMount.container, 'Guide')).toBeUndefined();
+
     // Also cover Dismiss checklist button in expanded state, then reopen via Guide menu
     await act(async () => {
       findButtonByText(secondMount.container, 'Dismiss checklist')?.click();
     });
     expect(secondMount.container.querySelector('[data-testid="onboarding-checklist-card"]')).toBeNull();
     await act(async () => {
-      guideBtn?.click();
+      findButtonByText(secondMount.container, 'Guide')?.click();
     });
     await act(async () => {
       findButtonByText(secondMount.container, 'Getting Started Checklist')?.click();
     });
     expect(secondMount.container.querySelector('[data-testid="onboarding-checklist-card"]')).toBeTruthy();
 
+    // Dismiss inline banner so topbar Guide menu is active for Shortcuts, Tutorials, and Reset checks
+    await act(async () => {
+      findButtonByText(secondMount.container, 'Dismiss checklist')?.click();
+    });
+
     // Open Keyboard Shortcuts dialog via Guide menu
     await act(async () => {
-      guideBtn?.click();
+      findButtonByText(secondMount.container, 'Guide')?.click();
     });
     await act(async () => {
       findButtonByText(secondMount.container, 'Keyboard Shortcuts')?.click();
@@ -520,7 +528,7 @@ describe('OnboardingChecklistCard, Guide menu, persistence, and contextual empty
 
     // Open Interactive Tutorials modal via Guide menu and mark chapter complete
     await act(async () => {
-      guideBtn?.click();
+      findButtonByText(secondMount.container, 'Guide')?.click();
     });
     await act(async () => {
       findButtonByText(secondMount.container, 'Interactive Tutorials')?.click();
@@ -537,14 +545,16 @@ describe('OnboardingChecklistCard, Guide menu, persistence, and contextual empty
       findButtonByText(secondMount.container, 'Close')?.click();
     });
 
-    // Reset Tutorial & Onboarding Progress clears completed steps
+    // Reset Tutorial & Onboarding Progress clears completed steps and restores the inline guide
     await act(async () => {
-      guideBtn?.click();
+      findButtonByText(secondMount.container, 'Guide')?.click();
     });
     await act(async () => {
       findButtonByText(secondMount.container, 'Reset Tutorial & Onboarding Progress')?.click();
     });
-    expect(secondMount.container.textContent).toContain('0 of 6 steps completed');
+    expect(
+      secondMount.container.querySelector('[data-testid="onboarding-checklist-card"]')?.textContent
+    ).toContain('0 of 6 steps completed');
     await secondMount.unmount();
   });
 
@@ -561,7 +571,9 @@ describe('OnboardingChecklistCard, Guide menu, persistence, and contextual empty
         ...storedResponse,
         state: {
           ...storedResponse.state,
-          checklist_visibility: patch.checklist_visibility ?? storedResponse.state.checklist_visibility,
+          checklist_visibility: patch.dismiss_checklist
+            ? 'dismissed'
+            : (patch.checklist_visibility ?? storedResponse.state.checklist_visibility),
           completed_step_ids: [
             ...new Set([...storedResponse.state.completed_step_ids, ...(patch.complete_step_ids ?? [])]),
           ],
@@ -610,6 +622,12 @@ describe('OnboardingChecklistCard, Guide menu, persistence, and contextual empty
     });
     expect(mounted.container.textContent).toContain('Make your first archival contribution');
 
+    // Topbar Guide is deduplicated while inline Contributor guide is visible; dismiss to test Guide menu launcher
+    expect(findButtonByText(mounted.container, 'Guide')).toBeUndefined();
+    await act(async () => {
+      findButtonByText(mounted.container, 'Dismiss checklist')?.click();
+      await Promise.resolve();
+    });
     await act(async () => {
       findButtonByText(mounted.container, 'Guide')?.click();
     });
@@ -617,6 +635,13 @@ describe('OnboardingChecklistCard, Guide menu, persistence, and contextual empty
       findButtonByText(mounted.container, 'Interactive Tutorials')?.click();
     });
     expect(launcherSpy).toHaveBeenCalledTimes(1);
+    await act(async () => {
+      findButtonByText(mounted.container, 'Guide')?.click();
+    });
+    await act(async () => {
+      findButtonByText(mounted.container, 'Getting Started Checklist')?.click();
+      await Promise.resolve();
+    });
 
     await act(async () => {
       findButtonByText(mounted.container, 'Mark "Inspect revision history" as completed')?.click();

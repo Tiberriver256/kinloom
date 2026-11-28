@@ -118,8 +118,17 @@ describe('KinloomUiPlugin seam and MediaPlayer', () => {
     expect(container.querySelector('[data-testid="hero-slot"]')?.textContent).toBe(
       'Featured Story for Test Family'
     );
-    const navLinks = [...container.querySelectorAll('.nav-links a')].map((a) => a.textContent);
-    expect(navLinks).toContain('Stories');
+    const topLevelItems = container.querySelectorAll(
+      '.nav-links > a, .nav-links > .topbar-more-wrap > button'
+    );
+    expect(topLevelItems.length).toBeLessThanOrEqual(7);
+    const moreBtn = container.querySelector<HTMLButtonElement>('button[aria-label="More archive sections"]');
+    expect(moreBtn).not.toBeNull();
+    act(() => {
+      moreBtn?.click();
+    });
+    const moreLinks = [...container.querySelectorAll('.topbar-more-menu a')].map((a) => a.textContent);
+    expect(moreLinks).toContain('Stories');
 
     // 2. Navigating directly to custom plugin route renders CustomStoryPage
     await act(async () => {

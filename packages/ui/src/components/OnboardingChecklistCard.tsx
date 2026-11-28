@@ -1,6 +1,7 @@
 import type React from 'react';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
+import { useOptionalArchiveUi } from '../context/ArchiveUiContext.js';
 import { useOptionalOnboarding } from '../context/OnboardingContext.js';
 import { cx } from '../lib/cx.js';
 import type { ResolvedOnboardingStep } from '../lib/onboardingModel.js';
@@ -39,9 +40,30 @@ export const OnboardingChecklistCard: React.FC<OnboardingChecklistCardProps> = (
   onRequestSignIn,
 }) => {
   const onboarding = useOptionalOnboarding();
+  const archiveUi = useOptionalArchiveUi();
+  const setInlineGuideBannerVisible = archiveUi?.setInlineGuideBannerVisible;
   const [showOverflowPlugins, setShowOverflowPlugins] = useState(false);
 
-  if (!onboarding) {
+  const isVisible = Boolean(
+    onboarding &&
+      (surface === 'admin'
+        ? onboarding.role === 'admin'
+        : onboarding.role === 'viewer' || onboarding.role === 'editor') &&
+      onboarding.state.checklist_visibility !== 'dismissed' &&
+      onboarding.checklist.totalCount > 0
+  );
+
+  useEffect(() => {
+    if (!setInlineGuideBannerVisible) {
+      return undefined;
+    }
+    setInlineGuideBannerVisible(isVisible);
+    return (): void => {
+      setInlineGuideBannerVisible(false);
+    };
+  }, [setInlineGuideBannerVisible, isVisible]);
+
+  if (!onboarding || !isVisible) {
     return null;
   }
 
@@ -57,11 +79,6 @@ export const OnboardingChecklistCard: React.FC<OnboardingChecklistCardProps> = (
     resetProgress,
     openGuide,
   } = onboarding;
-
-  const matchesSurface = surface === 'admin' ? role === 'admin' : role === 'viewer' || role === 'editor';
-  if (!matchesSurface || state.checklist_visibility === 'dismissed' || checklist.totalCount === 0) {
-    return null;
-  }
 
   const copy = ROLE_COPY[role];
   const isCollapsed = state.checklist_visibility === 'collapsed';

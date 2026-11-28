@@ -205,8 +205,8 @@
   gap: 8px 12px;
   min-height: 32px;
   padding: 4px 26px;
-  font-family: var(--font-mono);
-  font-size: 0.75rem;
+  font-family: var(--font-ui);
+  font-size: 0.78rem;
   line-height: 1.3;
   border-bottom: 1px solid var(--border-decorative);
 }
@@ -320,13 +320,27 @@
 
 @media (max-width: 768px) {
   .wiki-auth-banner {
-    min-height: 44px;
-    padding: 0 12px;
-    font-size: 0.75rem;
+    min-height: var(--control-height-touch);
+    padding: 4px 12px;
+    font-size: 0.78rem;
+  }
+
+  .wiki-auth-banner-copy {
+    flex-wrap: wrap;
+    white-space: normal;
+    overflow: visible;
+    gap: 2px 6px;
+  }
+
+  .wiki-auth-banner-label {
+    white-space: normal;
+    overflow: visible;
+    text-overflow: clip;
+    overflow-wrap: break-word;
   }
 
   .wiki-auth-banner-link {
-    min-height: 44px;
+    min-height: var(--control-height-touch);
     display: inline-flex;
     align-items: center;
     padding: 0 4px;
