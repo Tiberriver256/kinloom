@@ -1,4 +1,7 @@
 import { execFile } from 'node:child_process';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
 import { promisify } from 'node:util';
 import type { WranglerExecOptions, WranglerExecutor } from '../shared/wrangler.js';
 import {
@@ -6,6 +9,7 @@ import {
   type D1SchemaSnapshot,
   type D1StatementResult,
   type DiscoveredMigration,
+  type DiscoveredPluginMigration,
   isPlainRecord,
   type MigrateExecContext,
 } from './types.js';
@@ -94,6 +98,27 @@ export async function executeD1File(ctx: MigrateExecContext, filePath: string): 
     }
   );
   return parseD1JsonOutput(stdout, ctx.binding.dbName);
+}
+
+/**
+ * Executes a plugin SQL migration against D1. Built-in `@kinloom/server` migrations are
+ * materialized to a temporary `.sql` file for `--file` execution and cleaned up afterward.
+ */
+export async function executePluginMigrationFile(
+  ctx: MigrateExecContext,
+  migration: DiscoveredPluginMigration
+): Promise<D1StatementResult[]> {
+  if (migration.source !== 'builtin') {
+    return executeD1File(ctx, migration.filePath);
+  }
+  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'kinloom-plugin-migrate-'));
+  const tempFile = path.join(tempDir, `${migration.namespace}_${migration.migrationId}.sql`);
+  try {
+    fs.writeFileSync(tempFile, migration.sql, 'utf8');
+    return await executeD1File(ctx, tempFile);
+  } finally {
+    fs.rmSync(tempDir, { recursive: true, force: true });
+  }
 }
 
 export async function inspectD1Schema(

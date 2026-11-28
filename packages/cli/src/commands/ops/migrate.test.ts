@@ -1,14 +1,30 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { RECIPES_INITIAL_MIGRATION_SQL } from '@kinloom/server';
+import {
+  type AppliedPluginMigrationRecord,
+  BOOK_PUBLISHING_INITIAL_MIGRATION_SQL,
+  BOOK_PUBLISHING_PLUGIN_ID,
+  computeMigrationChecksum,
+  createBookPublishingServerPlugin,
+  createRecipesServerPlugin,
+  FixedClock,
+  RECIPES_INITIAL_MIGRATION_SQL,
+  RECIPES_PLUGIN_ID,
+  runPluginMigrations,
+  splitPluginSqlStatements,
+} from '@kinloom/server';
+import { Miniflare } from 'miniflare';
 import { afterEach, describe, expect, it } from 'vitest';
 import { runCli } from '../../cli.js';
 import { CliValidationError, EXIT_OK, EXIT_USAGE } from '../../errors.js';
 import { isBuiltInCliCommand } from '../../plugins.js';
 import {
+  detectEnabledBuiltInPlugins,
+  discoverBuiltInPluginMigrations,
   discoverMigrations,
   discoverPluginMigrations,
+  mergePluginMigrations,
   parseMigrationSchemaRequirements,
   resolveD1DatabaseBinding,
   resolveMigrationsDir,
@@ -167,6 +183,34 @@ function createMockD1Executor(
   };
 
   return { executor, calls };
+}
+
+function createFullyMigratedCoreState(): MockD1State {
+  return {
+    tables: new Set([
+      'revisions',
+      'pronunciation_lexicon',
+      'plugin_settings',
+      'plugin_setting_secrets',
+      'page_visit_daily',
+      'observability_cache_daily',
+      'plugin_migrations',
+      'steward_reviews',
+      'user_onboarding_state',
+    ]),
+    indexes: new Set([
+      'idx_plugin_setting_secrets_plugin_id',
+      'idx_page_visit_daily_day_utc',
+      'idx_page_visit_daily_kind_day',
+      'idx_plugin_migrations_namespace',
+      'idx_steward_reviews_reviewed_at',
+    ]),
+    columnsByTable: new Map([
+      ['pronunciation_lexicon', new Set(['source_url', 'source_label', 'region', 'variants_json'])],
+    ]),
+    trackedMigrations: new Set(),
+    pluginLedger: [],
+  };
 }
 
 describe('kinloom migrate', () => {
@@ -487,12 +531,25 @@ database_name = "example-toml-db" # archive database
     expect(helpCode).toBe(EXIT_OK);
     expect(stdout.join('\n')).toContain('Usage: kinloom migrate [options]');
     expect(stdout.join('\n')).toContain('--dry-run');
+    expect(stdout.join('\n')).toContain('--include-enabled-plugins');
+    expect(stdout.join('\n')).toContain('--no-include-enabled-plugins');
 
     stdout.length = 0;
     stderr.length = 0;
     const conflictCode = await runCli(['migrate', '--remote', '--local'], { io });
     expect(conflictCode).toBe(EXIT_USAGE);
     expect(stderr.join('\n')).toContain('either `--remote` or `--local`, not both');
+
+    stdout.length = 0;
+    stderr.length = 0;
+    const pluginConflictCode = await runCli(
+      ['migrate', '--include-enabled-plugins', '--no-include-enabled-plugins'],
+      { io }
+    );
+    expect(pluginConflictCode).toBe(EXIT_USAGE);
+    expect(stderr.join('\n')).toContain(
+      'either `--include-enabled-plugins` or `--no-include-enabled-plugins`, not both'
+    );
   });
 
   it('discovers, validates, applies idempotently, and detects checksum drift for namespaced plugin migrations', async () => {
@@ -515,6 +572,7 @@ database_name = "example-toml-db" # archive database
       namespace: 'recipes',
       version: 1,
       migrationId: '0001_recipes_initial',
+      source: 'filesystem',
     });
 
     const state: MockD1State = {
@@ -647,5 +705,350 @@ database_name = "example-toml-db" # archive database
     const invalidNsDir = path.join(repoDir, 'invalid-ns-plugins');
     fs.mkdirSync(path.join(invalidNsDir, 'BAD-NS'), { recursive: true });
     await expect(discoverPluginMigrations(invalidNsDir)).rejects.toBeInstanceOf(CliValidationError);
+  });
+
+  it('auto-discovers enabled built-in @kinloom/server plugins from kinloom.config.yaml and worker sources', () => {
+    // 1. Array of string aliases in kinloom.config.yaml (ignores non-SQL plugins like open-finance)
+    const arrayConfigDir = createTempDir('kinloom-builtin-yaml-array-');
+    fs.writeFileSync(
+      path.join(arrayConfigDir, 'kinloom.config.yaml'),
+      `site:
+  title: Family Archive
+plugins:
+  - recipes
+  - open-finance
+  - "@kinloom/book-publishing"
+`,
+      'utf8'
+    );
+    expect(detectEnabledBuiltInPlugins(arrayConfigDir).map((p) => p.pluginId)).toEqual([
+      BOOK_PUBLISHING_PLUGIN_ID,
+      RECIPES_PLUGIN_ID,
+    ]);
+
+    // 2. Object entries in array and map formats under data/kinloom.config.yaml respecting enabled: false
+    const objectConfigDir = createTempDir('kinloom-builtin-yaml-obj-');
+    fs.mkdirSync(path.join(objectConfigDir, 'data'), { recursive: true });
+    fs.writeFileSync(
+      path.join(objectConfigDir, 'kinloom.config.yaml'),
+      `plugins:
+  - id: recipes
+    enabled: false
+  - name: book-publishing
+    enabled: true
+  - id: unknown-plugin
+  - enabled: true
+  - 42
+`,
+      'utf8'
+    );
+    fs.writeFileSync(
+      path.join(objectConfigDir, 'data', 'kinloom.config.yaml'),
+      `plugins:
+  recipes: true
+  unknown-plugin: true
+  book_publishing:
+    enabled: false
+`,
+      'utf8'
+    );
+    expect(detectEnabledBuiltInPlugins(objectConfigDir).map((p) => p.pluginId)).toEqual([
+      BOOK_PUBLISHING_PLUGIN_ID,
+      RECIPES_PLUGIN_ID,
+    ]);
+
+    // 3. Map format with enabled object vs disabled boolean
+    const mapConfigDir = createTempDir('kinloom-builtin-yaml-map-');
+    fs.writeFileSync(
+      path.join(mapConfigDir, 'kinloom.config.yaml'),
+      `plugins:
+  recipes:
+    enabled: true
+  book-publishing: false
+`,
+      'utf8'
+    );
+    expect(detectEnabledBuiltInPlugins(mapConfigDir).map((p) => p.pluginId)).toEqual([RECIPES_PLUGIN_ID]);
+
+    // 4. Malformed or non-record YAML is ignored cleanly
+    const badYamlDir = createTempDir('kinloom-builtin-yaml-bad-');
+    fs.writeFileSync(path.join(badYamlDir, 'kinloom.config.yaml'), ':::invalid: [yaml', 'utf8');
+    fs.mkdirSync(path.join(badYamlDir, 'data'), { recursive: true });
+    fs.writeFileSync(path.join(badYamlDir, 'data', 'kinloom.config.yaml'), '- just-a-list\n', 'utf8');
+    expect(detectEnabledBuiltInPlugins(badYamlDir)).toEqual([]);
+
+    // 5. Worker entry file detection: ignores comments, unused imports, and enabled: false, handles nested parens
+    const workerDir = createTempDir('kinloom-builtin-worker-');
+    fs.mkdirSync(path.join(workerDir, 'src'), { recursive: true });
+    fs.writeFileSync(
+      path.join(workerDir, 'src', 'worker.ts'),
+      `import {
+  createRecipesServerPlugin,
+  createBookPublishingServerPlugin,
+} from '@kinloom/server';
+
+// createBookPublishingServerPlugin()
+/*
+ * createBookPublishingServerPlugin({ enabled: true })
+ */
+export const plugins = [
+  createRecipesServerPlugin(buildOpts({ title: "Grandma's (best) recipes \\")", readMinRole: 'member' })),
+  createBookPublishingServerPlugin({ enabled: false }),
+];
+`,
+      'utf8'
+    );
+    expect(detectEnabledBuiltInPlugins(workerDir).map((p) => p.pluginId)).toEqual([RECIPES_PLUGIN_ID]);
+
+    // 6. Unclosed call paren and worker.ts at root
+    const rootWorkerDir = createTempDir('kinloom-builtin-root-worker-');
+    fs.writeFileSync(
+      path.join(rootWorkerDir, 'worker.ts'),
+      `const p = createBookPublishingServerPlugin({ sandbox: true`,
+      'utf8'
+    );
+    expect(detectEnabledBuiltInPlugins(rootWorkerDir).map((p) => p.pluginId)).toEqual([
+      BOOK_PUBLISHING_PLUGIN_ID,
+    ]);
+  });
+
+  it('auto-discovers, applies idempotently, and matches @kinloom/server computeMigrationChecksum parity for built-in plugins', async () => {
+    const repoDir = createTempDir('kinloom-migrate-builtin-live-');
+    fs.writeFileSync(
+      path.join(repoDir, 'wrangler.jsonc'),
+      JSON.stringify({ d1_databases: [{ binding: 'DB', database_name: 'family-archive-db' }] }),
+      'utf8'
+    );
+    fs.mkdirSync(path.join(repoDir, 'src'), { recursive: true });
+    fs.writeFileSync(
+      path.join(repoDir, 'src', 'worker.ts'),
+      `import { createRecipesServerPlugin, createBookPublishingServerPlugin } from '@kinloom/server';
+export const plugins = [createRecipesServerPlugin(), createBookPublishingServerPlugin()];
+`,
+      'utf8'
+    );
+
+    const state = createFullyMigratedCoreState();
+    const { executor, calls } = createMockD1Executor(state);
+
+    // Dry-run auto-discovers built-in plugins without any migrations/plugins directory
+    const dry = await runMigrateCommand({
+      repoDir,
+      target: 'remote',
+      dryRun: true,
+      execWrangler: executor,
+    });
+    expect(dry.ok).toBe(true);
+    expect(dry.verified).toBe(false);
+    expect(dry.pluginMigrationsDir).toBeUndefined();
+    expect(dry.enabledBuiltInPlugins).toEqual([BOOK_PUBLISHING_PLUGIN_ID, RECIPES_PLUGIN_ID]);
+    expect(dry.pluginPending?.map((p) => `${p.namespace}/${p.migrationId}`)).toEqual([
+      'book_publishing/0001_book_publishing_initial',
+      'recipes/0001_recipes_initial',
+    ]);
+    expect(dry.rendered).toContain(`Built-in plugins: ${BOOK_PUBLISHING_PLUGIN_ID}, ${RECIPES_PLUGIN_ID}`);
+    expect(dry.rendered).toContain('Plugin pending:');
+
+    // --no-include-enabled-plugins (includeEnabledPlugins: false) skips built-in discovery
+    const skipped = await runMigrateCommand({
+      repoDir,
+      target: 'remote',
+      dryRun: true,
+      includeEnabledPlugins: false,
+      execWrangler: executor,
+    });
+    expect(skipped.ok).toBe(true);
+    expect(skipped.verified).toBe(true);
+    expect(skipped.enabledBuiltInPlugins).toBeUndefined();
+    expect(skipped.pluginPending).toBeUndefined();
+    expect(skipped.rendered).toContain('All migrations are already satisfied. No writes needed.');
+
+    // Live run applies both built-in plugin SQL migrations and writes checksummed ledger rows
+    const live = await runMigrateCommand({
+      repoDir,
+      target: 'remote',
+      dryRun: false,
+      includeEnabledPlugins: true,
+      execWrangler: executor,
+    });
+    expect(live.ok).toBe(true);
+    expect(live.verified).toBe(true);
+    expect(live.executed).toEqual([]);
+    expect(live.pluginExecuted).toEqual([
+      'book_publishing/0001_book_publishing_initial',
+      'recipes/0001_recipes_initial',
+    ]);
+    expect(live.pluginApplied?.map((p) => [p.namespace, p.satisfiedBy])).toEqual([
+      ['book_publishing', 'applied_now'],
+      ['recipes', 'applied_now'],
+    ]);
+    expect(live.rendered).toContain('Plugin applied:');
+    expect(state.tables.has('plugin_recipes_items')).toBe(true);
+    expect(state.tables.has('plugin_book_publishing_jobs')).toBe(true);
+
+    // Verify exact checksum parity with @kinloom/server's computeMigrationChecksum and runPluginMigrations
+    const expectedRecipesChecksum = await computeMigrationChecksum(RECIPES_INITIAL_MIGRATION_SQL);
+    const expectedBookChecksum = await computeMigrationChecksum(BOOK_PUBLISHING_INITIAL_MIGRATION_SQL);
+    const ledgerByPlugin = new Map((state.pluginLedger ?? []).map((row) => [row.plugin_id, row]));
+    expect(ledgerByPlugin.get(RECIPES_PLUGIN_ID)?.checksum_sha256).toBe(expectedRecipesChecksum);
+    expect(ledgerByPlugin.get(BOOK_PUBLISHING_PLUGIN_ID)?.checksum_sha256).toBe(expectedBookChecksum);
+
+    // Feeding the CLI-written ledger directly into @kinloom/server's runPluginMigrations skips all migrations cleanly
+    const serverRun = await runPluginMigrations(
+      {
+        async listAppliedMigrations(): Promise<readonly AppliedPluginMigrationRecord[]> {
+          return state.pluginLedger ?? [];
+        },
+        async applyMigration(): Promise<void> {
+          throw new Error('Expected runPluginMigrations to skip already-applied CLI migrations');
+        },
+      },
+      [createRecipesServerPlugin(), createBookPublishingServerPlugin()],
+      new FixedClock('2026-11-28T16:00:00.000Z')
+    );
+    expect(serverRun.applied).toEqual([]);
+    expect(serverRun.skipped.map((r) => r.plugin_id)).toEqual([RECIPES_PLUGIN_ID, BOOK_PUBLISHING_PLUGIN_ID]);
+
+    // Second live run is strictly idempotent with zero file executions
+    const callsBeforeSecond = calls.length;
+    const second = await runMigrateCommand({
+      repoDir,
+      target: 'remote',
+      dryRun: false,
+      execWrangler: executor,
+    });
+    expect(second.ok).toBe(true);
+    expect(second.verified).toBe(true);
+    expect(second.pluginExecuted).toEqual([]);
+    expect(second.pluginApplied?.map((p) => p.satisfiedBy)).toEqual([
+      'plugin_migrations',
+      'plugin_migrations',
+    ]);
+    expect(calls.slice(callsBeforeSecond).every((c) => !c.args.includes('--file'))).toBe(true);
+  });
+
+  it('deduplicates filesystem and built-in plugin migrations with filesystem taking precedence', async () => {
+    const repoDir = createTempDir('kinloom-migrate-merge-');
+    fs.writeFileSync(
+      path.join(repoDir, 'kinloom.config.yaml'),
+      'plugins:\n  - recipes\n  - book-publishing\n',
+      'utf8'
+    );
+    const recipesDir = path.join(repoDir, 'migrations', 'plugins', 'recipes');
+    fs.mkdirSync(recipesDir, { recursive: true });
+    fs.writeFileSync(
+      path.join(recipesDir, '0001_recipes_initial.sql'),
+      RECIPES_INITIAL_MIGRATION_SQL,
+      'utf8'
+    );
+
+    const fsMigrations = await discoverPluginMigrations(path.join(repoDir, 'migrations', 'plugins'));
+    const builtIn = await discoverBuiltInPluginMigrations(repoDir);
+    const merged = mergePluginMigrations(fsMigrations, builtIn.migrations);
+
+    expect(merged).toHaveLength(2);
+    const recipesEntry = merged.find((m) => m.pluginId === RECIPES_PLUGIN_ID);
+    const bookEntry = merged.find((m) => m.pluginId === BOOK_PUBLISHING_PLUGIN_ID);
+    expect(recipesEntry?.source).toBe('filesystem');
+    expect(bookEntry?.source).toBe('builtin');
+  });
+
+  it('applies core + auto-discovered built-in plugin migrations idempotently against a real Miniflare D1 database', async () => {
+    const repoDir = createTempDir('kinloom-migrate-miniflare-');
+    fs.writeFileSync(
+      path.join(repoDir, 'wrangler.jsonc'),
+      JSON.stringify({ d1_databases: [{ binding: 'DB', database_name: 'miniflare-archive-db' }] }),
+      'utf8'
+    );
+    fs.mkdirSync(path.join(repoDir, 'src'), { recursive: true });
+    fs.writeFileSync(
+      path.join(repoDir, 'src', 'worker.ts'),
+      `import { createRecipesServerPlugin, createBookPublishingServerPlugin } from '@kinloom/server';
+export const plugins = [createRecipesServerPlugin(), createBookPublishingServerPlugin()];
+`,
+      'utf8'
+    );
+
+    const mf = new Miniflare({
+      modules: true,
+      script: 'export default { fetch() { return new Response("ok"); } };',
+      d1Databases: ['DB'],
+    });
+    try {
+      const db = await mf.getD1Database('DB');
+      let fileExecCount = 0;
+
+      const miniflareExecutor: WranglerExecutor = async (_bin, args) => {
+        const fileIdx = args.indexOf('--file');
+        const cmdIdx = args.indexOf('--command');
+        if (fileIdx !== -1) {
+          fileExecCount += 1;
+          const sql = fs.readFileSync(args[fileIdx + 1]!, 'utf8');
+          for (const stmt of splitPluginSqlStatements(sql)) {
+            await db.prepare(stmt).run();
+          }
+          return { stdout: JSON.stringify([{ success: true, results: [] }]), stderr: '' };
+        }
+        const sql = cmdIdx !== -1 ? (args[cmdIdx + 1] ?? '') : '';
+        const statements = splitPluginSqlStatements(sql);
+        const outputs: Array<{ success: true; results: readonly Record<string, unknown>[] }> = [];
+        for (const stmt of statements) {
+          const res = await db.prepare(stmt).all<Record<string, unknown>>();
+          outputs.push({ success: true, results: res.results });
+        }
+        return { stdout: JSON.stringify(outputs), stderr: '' };
+      };
+
+      const first = await runMigrateCommand({
+        repoDir,
+        target: 'local',
+        dryRun: false,
+        execWrangler: miniflareExecutor,
+      });
+      expect(first.ok).toBe(true);
+      expect(first.verified).toBe(true);
+      expect(first.executed).toHaveLength(8);
+      expect(first.pluginExecuted).toEqual([
+        'book_publishing/0001_book_publishing_initial',
+        'recipes/0001_recipes_initial',
+      ]);
+
+      const ledgerRes = await db
+        .prepare(
+          'SELECT plugin_id, namespace, version, migration_id, checksum_sha256, applied_at FROM plugin_migrations ORDER BY plugin_id ASC;'
+        )
+        .all<AppliedPluginMigrationRecord>();
+      expect(ledgerRes.results).toHaveLength(2);
+
+      const serverRun = await runPluginMigrations(
+        {
+          async listAppliedMigrations() {
+            return ledgerRes.results;
+          },
+          async applyMigration() {
+            throw new Error('Expected Miniflare D1 ledger to satisfy runPluginMigrations');
+          },
+        },
+        [createRecipesServerPlugin(), createBookPublishingServerPlugin()],
+        new FixedClock('2026-11-28T16:00:00.000Z')
+      );
+      expect(serverRun.applied).toEqual([]);
+      expect(serverRun.skipped).toHaveLength(2);
+
+      const execsBeforeSecond = fileExecCount;
+      const second = await runMigrateCommand({
+        repoDir,
+        target: 'local',
+        dryRun: false,
+        execWrangler: miniflareExecutor,
+      });
+      expect(second.ok).toBe(true);
+      expect(second.verified).toBe(true);
+      expect(second.executed).toEqual([]);
+      expect(second.pluginExecuted).toEqual([]);
+      expect(fileExecCount).toBe(execsBeforeSecond);
+    } finally {
+      await mf.dispose();
+    }
   });
 });
