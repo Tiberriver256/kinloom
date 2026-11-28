@@ -27,8 +27,9 @@ const SEARCH_OPTIONS: readonly OptionSpec[] = [
     key: 'nameOpt',
     kind: 'string',
     flags: ['--name', '--query', '-q'],
+    multiple: true,
     metavar: 'NAME',
-    help: "Person name query (may include '&' for two names).",
+    help: "Person name query (repeatable for batch lookups; may include '&' for two names).",
   },
   {
     key: 'firstName',
@@ -77,7 +78,7 @@ const SEARCH_OPTIONS: readonly OptionSpec[] = [
     kind: 'string',
     flags: ['--year'],
     metavar: 'YEAR',
-    help: 'Year or year range (e.g. 1853 or 1850-1860), appended to the name query.',
+    help: 'Year or year range (e.g. 1853 or 1850-1860), appended to each name query.',
   },
   {
     key: 'archive',
@@ -115,7 +116,7 @@ const SEARCH_OPTIONS: readonly OptionSpec[] = [
     flags: ['--limit', '-n', '--rows'],
     default: 10,
     metavar: 'N',
-    help: 'Results to return (default: 10, max 100).',
+    help: 'Results to return per query (default: 10, max 100).',
   },
   {
     key: 'start',
@@ -137,7 +138,7 @@ const SEARCH_OPTIONS: readonly OptionSpec[] = [
     key: 'asJson',
     kind: 'boolean',
     flags: ['--json'],
-    help: 'Emit raw API JSON output.',
+    help: 'Emit structured API JSON output.',
   },
   ...CACHE_OPTIONS,
 ];
@@ -145,7 +146,6 @@ const SEARCH_OPTIONS: readonly OptionSpec[] = [
 export const SEARCH_PARSE_SPEC: CommandParseSpec = {
   options: SEARCH_OPTIONS,
   allowPositionals: true,
-  maxPositionals: 1,
 };
 
 const SHOW_OPTIONS: readonly OptionSpec[] = [
@@ -277,7 +277,7 @@ export function renderRootHelp(): string {
     usage: 'kinloom openarchieven <command> [options]',
     summary: 'Search and inspect Dutch and Belgian archive records on OpenArchieven.',
     subcommands: [
-      { name: 'search', summary: 'Search OpenArchieven records.' },
+      { name: 'search', summary: 'Search OpenArchieven records (single or multi-query batch).' },
       {
         name: 'show',
         summary: 'Fetch full A2A details for one record (alias: get).',
@@ -293,12 +293,14 @@ export function renderRootHelp(): string {
 
 export function renderSearchHelp(): string {
   return formatCommandUsage({
-    usage: 'kinloom openarchieven search [NAME] [options]',
-    summary: 'Search OpenArchieven records.',
+    usage: 'kinloom openarchieven search [NAME...] [options]',
+    summary: 'Search OpenArchieven records (supports repeatable --name/-q or multiple positional names).',
     options: SEARCH_OPTIONS,
     notes: [
-      'Example:',
+      'Examples:',
       '  kinloom openarchieven search --name "Vincent van Gogh" --place Zundert --year 1853',
+      '  kinloom openarchieven search "Jan Jansen" "Pieter Bakker" --place Rotterdam --json',
+      '  kinloom openarchieven search -q "Jan Jansen" -q "Maria Bakker" --json',
     ],
   });
 }

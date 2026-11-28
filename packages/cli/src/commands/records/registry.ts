@@ -46,7 +46,7 @@ export const RECORD_COMMAND_SPECS: readonly RecordCommandSpec[] = [
     aliases: [],
     category: 'federal-general',
     loadHandler: () => import('./clients/nara.js').then((mod) => mod.runNaraCommand),
-    summary: 'Search, inspect, and download National Archives Catalog records (NARA)',
+    summary: 'Search, inspect, and download National Archives Catalog, 1950 Census, and AAD records (NARA)',
   },
   {
     kind: 'native',
@@ -178,7 +178,7 @@ export const RECORD_COMMAND_SPECS: readonly RecordCommandSpec[] = [
     aliases: [],
     category: 'international',
     loadHandler: () => import('./clients/fi-archives.js').then((mod) => mod.runFiArchivesCommand),
-    summary: 'Search Finnish HisKi parish registers and National Archives Digihakemisto index',
+    summary: 'Search Finnish HisKi parish registers, Digihakemisto index, and Astia folder scans',
   },
   {
     kind: 'native',
@@ -221,7 +221,7 @@ export const RECORD_COMMAND_SPECS: readonly RecordCommandSpec[] = [
     summary: "Research guide for Cyndi's List county and topic genealogy directories",
   },
 
-  // Media, scan prep & OCR (3)
+  // Media, scan prep & OCR (4)
   {
     kind: 'native',
     command: 'narrative-audio',
@@ -245,6 +245,14 @@ export const RECORD_COMMAND_SPECS: readonly RecordCommandSpec[] = [
     category: 'media-ocr',
     loadHandler: () => import('./clients/ocr.js').then((mod) => mod.runOcrCommand),
     summary: 'Run SHA-256 cached OCR for printed (tesseract) or cursive scans',
+  },
+  {
+    kind: 'native',
+    command: 'pdf-grep',
+    aliases: [],
+    category: 'media-ocr',
+    loadHandler: () => import('./clients/pdf-grep.js').then((mod) => mod.runPdfGrepCommand),
+    summary: 'Download or read PDFs with SHA-256 disk caching and grep extracted pdftotext output',
   },
 ];
 

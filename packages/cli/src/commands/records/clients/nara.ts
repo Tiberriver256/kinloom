@@ -7,11 +7,21 @@ import {
   type RecordHandler,
   RecordRuntimeError,
 } from '../runtime/types.js';
+import { runAad } from './nara/aad.js';
 import { runDownload, runGet, runSearch, runUrl } from './nara/catalogCommands.js';
 import { runCensus1950, runCensus1950Image } from './nara/censusCommands.js';
 import { renderRootHelp, SUBCOMMAND_ALIASES } from './nara/cliSpecs.js';
 import type { NaraBrowserOverrides } from './nara/types.js';
 
+export {
+  AAD_DATABASE_PRESETS,
+  buildAadRecordUrl,
+  buildAadSearchUrl,
+  parseAadRecordHtml,
+  parseAadSearchHtml,
+  resolveAadDatabase,
+  validateAadUrl,
+} from './nara/aad.js';
 export { defaultBrowserGetRecords, defaultBrowserSearchMany } from './nara/browserFallback.js';
 export { apiGetJson } from './nara/catalogTransport.js';
 export {
@@ -111,6 +121,8 @@ export function createNaraCommand(overrides: NaraBrowserOverrides = {}): RecordH
           return await runCensus1950(rest, ctx);
         case 'census1950-image':
           return await runCensus1950Image(rest, ctx);
+        case 'aad':
+          return await runAad(rest, ctx);
         default:
           throw new CliValidationError(`No such command '${rawSubcmd}'. Run 'kinloom nara --script-help'.`);
       }

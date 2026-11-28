@@ -138,6 +138,45 @@ export const ARCHIVE_OPTIONS: readonly OptionSpec[] = [
   ...CACHE_OPTIONS,
 ];
 
+export const ASTIA_OPTIONS: readonly OptionSpec[] = [
+  {
+    key: 'listOnly',
+    kind: 'boolean',
+    flags: ['--list'],
+    help: 'List folder scans without downloading (default when --out-dir is omitted).',
+  },
+  {
+    key: 'pages',
+    kind: 'string',
+    flags: ['--pages'],
+    default: 'all',
+    metavar: 'SPEC',
+    help: "1-based page selection for download (e.g. '1-5,10' or 'all').",
+  },
+  {
+    key: 'outDir',
+    kind: 'string',
+    flags: ['-o', '--out', '--out-dir', '--output-dir'],
+    metavar: 'DIR',
+    help: 'Output directory for downloaded scans.',
+  },
+  {
+    key: 'limit',
+    kind: 'integer',
+    flags: ['--limit'],
+    min: 1,
+    metavar: 'N',
+    help: 'Maximum scans to list when --list is active.',
+  },
+  {
+    key: 'asJson',
+    kind: 'boolean',
+    flags: ['--json'],
+    help: 'Emit deterministic JSON with boolean cache_hit.',
+  },
+  ...CACHE_OPTIONS,
+];
+
 export const URL_OPTIONS: readonly OptionSpec[] = [
   {
     key: 'finna',
@@ -189,6 +228,13 @@ export const ARCHIVE_SPEC: CommandParseSpec = {
   maxPositionals: 1,
   positionalLabel: 'archive_id',
 };
+export const ASTIA_SPEC: CommandParseSpec = {
+  options: ASTIA_OPTIONS,
+  allowPositionals: true,
+  minPositionals: 1,
+  maxPositionals: 1,
+  positionalLabel: 'folder_id_or_url',
+};
 export const URL_SPEC: CommandParseSpec = { options: URL_OPTIONS, allowPositionals: false };
 
 export function renderRootHelp(): string {
@@ -201,6 +247,7 @@ export function renderRootHelp(): string {
       { name: 'event', summary: 'Inspect one HisKi event detail page (with SSHY scan link).' },
       { name: 'archives', summary: 'Search National Archives of Finland (Astia) via Digihakemisto.' },
       { name: 'archive', summary: 'Inspect one Digihakemisto/Astia archive series or volume list.' },
+      { name: 'astia', summary: 'List Astia folder scans and download cached scan images.' },
       {
         name: 'url',
         summary: 'Build verified browser URLs for Finna, Astia, HisKi, Digihakemisto, Digi, SSHY.',

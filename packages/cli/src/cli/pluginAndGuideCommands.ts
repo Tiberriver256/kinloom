@@ -73,6 +73,22 @@ export async function tryDispatchRecordCommand(
   rest: readonly string[],
   ctx: CliDispatchContext
 ): Promise<CliExitCode | undefined> {
+  if (command === 'records' && rest.length > 0 && rest[0] !== undefined && !rest[0].startsWith('-')) {
+    try {
+      const { runRecordCommand } = await import('../commands/records/dispatch.js');
+      const result = await runRecordCommand('records', rest, {
+        io: ctx.rawIo,
+        fetchImpl: ctx.fetchImpl,
+        cwd: ctx.cwd,
+      });
+      return normalizeExitCode(result.exitCode);
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : String(err);
+      ctx.io.stderr(`Error: ${message}`);
+      return EXIT_ERROR;
+    }
+  }
+
   const recordSpec = resolveRecordCommand(command);
   if (!recordSpec) {
     return undefined;

@@ -1,8 +1,19 @@
 import { performance } from 'node:perf_hooks';
 import { isTelemetrySuppressedByParent, type OpsIo, recordTelemetryEvent } from '../ops/telemetry.js';
-import { classifyRecordCommandIntent, renderRecordCommandHelp } from './help.js';
-import { type RecordCommandSpec, resolveRecordCommand } from './registry.js';
-import { createRecordContext, DEFAULT_RECORD_IO, type ExecFileFn } from './runtime/types.js';
+import { classifyRecordCommandIntent, formatRecordCommandsHelp, renderRecordCommandHelp } from './help.js';
+import {
+  RECORD_COMMAND_CATEGORIES,
+  RECORD_COMMAND_SPECS,
+  type RecordCommandSpec,
+  resolveRecordCommand,
+} from './registry.js';
+import {
+  createRecordContext,
+  DEFAULT_RECORD_IO,
+  type ExecFileFn,
+  emitJsonStdout,
+  emitStdout,
+} from './runtime/types.js';
 
 const SAFE_SUBCMD_TOKEN_RE = /^[a-z][a-z0-9_-]*$/i;
 
@@ -53,6 +64,47 @@ export function buildTelemetrySubcmd(
   return spec.command;
 }
 
+export function formatRecordsDiscoveryHelp(): string {
+  return `Usage: kinloom records [command] [args...]
+
+Discover or invoke all federal, state, international, directory, and media/OCR record commands.
+
+${formatRecordCommandsHelp()}
+
+Examples:
+  kinloom records                                List all record commands by category
+  kinloom records --help                         Show this usage and command catalog
+  kinloom records --json                         Emit the record command catalog as JSON
+  kinloom records nara aad --help                Forward directly to \`kinloom nara aad --help\`
+  kinloom records openarchieven search --help    Forward directly to \`kinloom openarchieven search --help\`
+
+Options:
+  --json      Emit the grouped record command catalog as JSON
+  -h, --help  Show this help message`;
+}
+
+export function buildRecordsCatalogJson(): {
+  readonly categories: readonly { readonly id: string; readonly heading: string }[];
+  readonly commands: readonly {
+    readonly command: string;
+    readonly aliases: readonly string[];
+    readonly category: string;
+    readonly kind: 'native' | 'guide-only';
+    readonly summary: string;
+  }[];
+} {
+  return {
+    categories: RECORD_COMMAND_CATEGORIES.map((cat) => ({ id: cat.id, heading: cat.heading })),
+    commands: RECORD_COMMAND_SPECS.map((spec) => ({
+      command: spec.command,
+      aliases: [...spec.aliases],
+      category: spec.category,
+      kind: spec.kind,
+      summary: spec.summary,
+    })),
+  };
+}
+
 export interface RunRecordCommandOptions {
   io?: OpsIo | undefined;
   fetchImpl?: typeof fetch | undefined;
@@ -77,8 +129,25 @@ export async function runRecordCommand(
   args: readonly string[],
   options?: RunRecordCommandOptions
 ): Promise<RunRecordCommandResult> {
-  const spec = resolveRecordCommand(commandName);
   const io = options?.io ?? DEFAULT_RECORD_IO;
+  if (commandName.trim() === 'records') {
+    if (args.length === 0 || args[0] === '--help' || args[0] === '-h') {
+      const bytesOut = emitStdout(io, formatRecordsDiscoveryHelp());
+      return { command: 'records', mode: 'guide', exitCode: 0, bytesOut };
+    }
+    if (args.length === 1 && args[0] === '--json') {
+      const bytesOut = emitJsonStdout(io, buildRecordsCatalogJson());
+      return { command: 'records', mode: 'native', exitCode: 0, bytesOut };
+    }
+    const target = args[0];
+    if (target !== undefined && !target.startsWith('-')) {
+      return runRecordCommand(target, args.slice(1), options);
+    }
+    io.stderr(`Unknown option '${target ?? ''}'. Run \`kinloom records --help\` for available commands.`);
+    return { command: 'records', mode: 'guide', exitCode: 2, bytesOut: 0 };
+  }
+
+  const spec = resolveRecordCommand(commandName);
   if (!spec) {
     io.stderr(`Unknown record command '${commandName}'.`);
     return {
