@@ -16,7 +16,7 @@ import {
 import { cx } from '../../lib/cx.js';
 import { formatTreeCardName } from '../../lib/treeNodeDisplay.js';
 import { KINLOOM_VOCABULARY } from '../../lib/vocabulary.js';
-import { initialsOf, resolveAssetUrl } from '../Atoms.js';
+import { PersonPortrait, resolveAssetUrl } from '../Atoms.js';
 import pedigreeRollStyles from './TreePedigreeRoll.module.css';
 
 export interface TreePedigreeRollProps {
@@ -78,15 +78,15 @@ const RollPersonCard: React.FC<RollPersonCardProps> = ({
         onSelect(person);
       }}
     >
-      <span className={cx(pedigreeRollStyles, 'tree-roll-avatar')} aria-hidden="true">
-        {thumbUrl ? (
-          <img src={thumbUrl} alt="" className={cx(pedigreeRollStyles, 'tree-roll-avatar-img')} />
-        ) : (
-          <span className={cx(pedigreeRollStyles, 'tree-roll-avatar-initials')}>
-            {initialsOf(person.full_name)}
-          </span>
-        )}
-      </span>
+      <PersonPortrait
+        name={person.full_name}
+        src={thumbUrl}
+        variant="circle"
+        size="md"
+        selected={isSelected}
+        loading="lazy"
+        className={cx(pedigreeRollStyles, 'tree-roll-avatar')}
+      />
       <span className={cx(pedigreeRollStyles, 'tree-roll-card-copy')}>
         <span className={cx(pedigreeRollStyles, 'tree-roll-card-name')}>{person.full_name}</span>
         <span className={cx(pedigreeRollStyles, 'tree-roll-card-dates')}>

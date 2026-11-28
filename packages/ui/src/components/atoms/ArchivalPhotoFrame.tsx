@@ -5,6 +5,7 @@ import { cx } from '../../lib/cx.js';
 import controlStyles from '../../styles/Controls.module.css';
 import overlayStyles from '../../styles/Overlays.module.css';
 import atomStyles from '../Atoms.module.css';
+import { ArchivalImage } from './ArchivalImage.js';
 import { resolveAssetUrl } from './formatters.js';
 
 export const ArchivalPhotoFrame: React.FC<{ caption: string; photoUrl?: string | null }> = ({
@@ -38,11 +39,12 @@ export const ArchivalPhotoFrame: React.FC<{ caption: string; photoUrl?: string |
       >
         {resolvedUrl ? (
           <>
-            <img
+            <ArchivalImage
               src={resolvedUrl}
               alt={caption}
               className={cx(atomStyles, 'milestone-photo-img')}
               loading="lazy"
+              fallbackCaption={caption}
             />
             <span className={cx(atomStyles, 'wireframe-photo-caption')}>{caption}</span>
           </>
@@ -103,9 +105,12 @@ export const ArchivalPhotoFrame: React.FC<{ caption: string; photoUrl?: string |
             </div>
             {resolvedUrl ? (
               <figure style={{ margin: 0 }}>
-                <img
+                <ArchivalImage
                   src={resolvedUrl}
                   alt={caption}
+                  loading="eager"
+                  frameStyle={{ width: '100%' }}
+                  fallbackCaption={caption}
                   style={{
                     width: '100%',
                     maxHeight: '72vh',

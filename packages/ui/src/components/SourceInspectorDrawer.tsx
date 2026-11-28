@@ -10,7 +10,7 @@ import { KINLOOM_VOCABULARY } from '../lib/vocabulary.js';
 import citationStyles from '../styles/Citations.module.css';
 import controlStyles from '../styles/Controls.module.css';
 import overlayStyles from '../styles/Overlays.module.css';
-import { DateStamp, resolveAssetUrl } from './Atoms.js';
+import { ArchivalImage, DateStamp, resolveAssetUrl } from './Atoms.js';
 import inspectorStyles from './SourceInspectorDrawer.module.css';
 
 export const SourceInspectorDrawer: React.FC = () => {
@@ -283,10 +283,13 @@ export const SourceInspectorDrawer: React.FC = () => {
 
         {scanExpanded && previewScanUrl && (
           <figure className={cx(inspectorStyles, 'inspector-scan-figure')}>
-            <img
+            <ArchivalImage
               src={resolveAssetUrl(previewScanUrl, baseUrl)}
               alt={previewScanCaption}
+              loading="eager"
+              frameStyle={{ width: '100%' }}
               className={cx(inspectorStyles, 'inspector-scan-img')}
+              fallbackCaption={previewScanCaption}
             />
             <figcaption className={cx(inspectorStyles, 'inspector-scan-caption')}>
               {previewScanCaption}

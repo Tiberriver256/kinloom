@@ -3,7 +3,7 @@ import { buildFilteredGedcom7, buildGedcomExportFilename, buildPersonThumbMap } 
 import type React from 'react';
 import { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { EmptyStateNotice, initialsOf, resolveAssetUrl } from '../components/Atoms.js';
+import { EmptyStateNotice, PersonPortrait } from '../components/Atoms.js';
 import atomStyles from '../components/Atoms.module.css';
 import { ExplorerTopBar } from '../components/ExplorerTopBar.js';
 import { KinloomFooter } from '../components/KinloomFooter.js';
@@ -345,28 +345,24 @@ export const IndexPage: React.FC = () => {
                     <span className={cx(indexStyles, 'section-heading-count')}>{section.people.length}</span>
                   </h2>
                   <div className={cx(indexStyles, 'person-grid')}>
-                    {section.people.map((p) => {
+                    {section.people.map((p, personIdx) => {
                       const primaryPlace = p.primary_place_id
                         ? placesById.get(p.primary_place_id)
                         : undefined;
                       const mediaCount = p.media_count || 0;
                       const thumbUrl = personThumbMap.get(p.id) || p.portrait_url;
+                      const eagerPortrait = idx === 0 && personIdx < 6;
                       return (
                         <Link key={p.id} to={`/person/${p.slug}`} className={cx(indexStyles, 'person-card')}>
-                          <div className={cx(indexStyles, 'person-card-portrait')} aria-hidden="true">
-                            {thumbUrl ? (
-                              <img
-                                src={resolveAssetUrl(thumbUrl, baseUrl)}
-                                alt=""
-                                loading="lazy"
-                                className={cx(atomStyles, 'person-card-portrait-img')}
-                              />
-                            ) : (
-                              <span className={cx(atomStyles, 'photo-print-monogram')}>
-                                {initialsOf(p.full_name)}
-                              </span>
-                            )}
-                          </div>
+                          <PersonPortrait
+                            name={p.full_name}
+                            src={thumbUrl}
+                            baseUrl={baseUrl}
+                            variant="print"
+                            size="card"
+                            loading={eagerPortrait ? 'eager' : 'lazy'}
+                            className={cx(indexStyles, 'person-card-portrait')}
+                          />
                           <div className={cx(indexStyles, 'person-card-body')}>
                             <h3>{p.full_name}</h3>
                             <div className={cx(indexStyles, 'person-card-meta')}>

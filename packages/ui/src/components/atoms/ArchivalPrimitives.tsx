@@ -4,7 +4,7 @@ import { Link } from 'react-router-dom';
 import { cx } from '../../lib/cx.js';
 import controlStyles from '../../styles/Controls.module.css';
 import atomStyles from '../Atoms.module.css';
-import { initialsOf } from './formatters.js';
+import { PersonPortrait } from './PersonPortrait.js';
 
 export const EmptyStateNotice: React.FC<{
   title: string;
@@ -148,7 +148,9 @@ export const RelativeAvatarChip: React.FC<{
   tier: ConfidenceTier;
   distanceMiles: number | null;
   onClick: () => void;
-}> = ({ name, relationship, tier, distanceMiles, onClick }) => {
+  portraitUrl?: string | null;
+  baseUrl?: string;
+}> = ({ name, relationship, tier, distanceMiles, onClick, portraitUrl, baseUrl }) => {
   let tierClass = 'tier-possible';
   if (tier === 'Confirmed') {
     tierClass = 'tier-confirmed';
@@ -169,7 +171,14 @@ export const RelativeAvatarChip: React.FC<{
       onClick={onClick}
       title={`${name} (${relationship}) — ${tier}${distLabel}. Open Person Profile.`}
     >
-      <span className={cx(atomStyles, 'avatar-circle')}>{initialsOf(name)}</span>
+      <PersonPortrait
+        name={name}
+        src={portraitUrl}
+        baseUrl={baseUrl}
+        variant="circle"
+        size="xs"
+        className={cx(atomStyles, 'avatar-circle')}
+      />
       <span>
         <strong>{name}</strong>{' '}
         <span style={{ color: 'var(--text-secondary)', fontSize: '0.78rem' }}>

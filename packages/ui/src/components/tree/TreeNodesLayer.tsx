@@ -1,5 +1,5 @@
 import type { Person } from '@kinloom/core';
-import React from 'react';
+import React, { useState } from 'react';
 import type {
   DiagramEarlyLossStrip,
   DiagramPlacedNode,
@@ -37,6 +37,13 @@ export const DiagramNodeCard: React.FC<{
     onSelect,
   }) => {
     const { person } = node;
+    const [prevThumbUrl, setPrevThumbUrl] = useState(thumbUrl);
+    const [thumbFailed, setThumbFailed] = useState(false);
+    if (thumbUrl !== prevThumbUrl) {
+      setPrevThumbUrl(thumbUrl);
+      setThumbFailed(false);
+    }
+    const showSvgPortrait = Boolean(thumbUrl && !thumbFailed);
     let stroke = 'var(--border-control)';
     let strokeWidth = 1.15;
     if (isSelected) {
@@ -89,7 +96,7 @@ export const DiagramNodeCard: React.FC<{
           <clipPath id={cardClipId}>
             <rect x={2} y={2} width={node.width - 4} height={node.height - 4} rx={2} />
           </clipPath>
-          {semanticZoom === 'detail' && thumbUrl && (
+          {semanticZoom === 'detail' && showSvgPortrait && (
             <clipPath id={clipId}>
               <circle cx={24} cy={26} r={13} />
             </clipPath>
@@ -155,7 +162,7 @@ export const DiagramNodeCard: React.FC<{
               stroke={node.isDirect || isLit ? 'var(--accent-primary)' : 'var(--border-control)'}
               strokeWidth="1.2"
             />
-            {thumbUrl ? (
+            {showSvgPortrait && thumbUrl ? (
               <image
                 href={thumbUrl}
                 x={11}
@@ -164,6 +171,9 @@ export const DiagramNodeCard: React.FC<{
                 height={26}
                 preserveAspectRatio="xMidYMid slice"
                 clipPath={`url(#${clipId})`}
+                onError={() => {
+                  setThumbFailed(true);
+                }}
               />
             ) : (
               <text

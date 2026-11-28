@@ -10,6 +10,7 @@ import {
   ArchivalTagPill,
   ArchivalToast,
 } from '../../components/ArchivalPrimitives.js';
+import { ArchivalImage } from '../../components/Atoms.js';
 import { ExplorerTopBar } from '../../components/ExplorerTopBar.js';
 import { KinloomFooter } from '../../components/KinloomFooter.js';
 import { cx } from '../../lib/cx.js';
@@ -618,20 +619,20 @@ export const RecipeCatalogPage: React.FC<RecipeCatalogPageProps> = ({ initialTab
                 return (
                   <article key={recipe.id} className={cx(recipeStyles, 'recipe-card')}>
                     <Link to={recipeHref} className={cx(recipeStyles, 'recipe-card-media')}>
-                      {recipe.cover_photo_url ? (
-                        <img
-                          src={recipe.cover_photo_url}
-                          alt={`Recipe card for ${recipe.title}`}
-                          loading="lazy"
-                          className={cx(recipeStyles, 'recipe-card-img')}
-                        />
-                      ) : (
-                        <div className={cx(recipeStyles, 'recipe-card-emblem')} aria-hidden="true">
-                          <span className={cx(recipeStyles, 'recipe-card-emblem-course')}>
-                            {formatRecipeCourseLabel(recipe.course)}
-                          </span>
-                        </div>
-                      )}
+                      <ArchivalImage
+                        src={recipe.cover_photo_url}
+                        alt={`Recipe card for ${recipe.title}`}
+                        loading="lazy"
+                        frameStyle={{ width: '100%', height: '100%' }}
+                        className={cx(recipeStyles, 'recipe-card-img')}
+                        fallback={
+                          <div className={cx(recipeStyles, 'recipe-card-emblem')} aria-hidden="true">
+                            <span className={cx(recipeStyles, 'recipe-card-emblem-course')}>
+                              {formatRecipeCourseLabel(recipe.course)}
+                            </span>
+                          </div>
+                        }
+                      />
                     </Link>
 
                     <div className={cx(recipeStyles, 'recipe-card-body')}>

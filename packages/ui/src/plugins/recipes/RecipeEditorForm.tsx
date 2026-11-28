@@ -9,6 +9,7 @@ import {
   ArchivalTagPill,
   ArchivalToast,
 } from '../../components/ArchivalPrimitives.js';
+import { ArchivalImage } from '../../components/Atoms.js';
 import { cx } from '../../lib/cx.js';
 import { formatArchivalTimestamp } from '../../lib/formatTimestamp.js';
 import {
@@ -399,10 +400,13 @@ export const RecipeEditorForm: React.FC<RecipeEditorFormProps> = ({
             setLightboxIndex(safeRefPhotoIdx);
           }}
         >
-          <img
+          <ArchivalImage
             src={activeRefPhoto.url}
             alt={activeRefPhoto.caption || `${draft.title || 'Recipe card'} (${sideLabel})`}
+            loading="eager"
+            frameStyle={{ width: '100%' }}
             className={cx(recipeStyles, 'recipe-ref-image')}
+            fallbackCaption={activeRefPhoto.caption || sideLabel}
           />
         </button>
 

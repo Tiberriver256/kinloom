@@ -94,10 +94,18 @@
 
 .occupancy-row-header {
   display: flex;
-  align-items: baseline;
+  align-items: center;
   justify-content: space-between;
   gap: 10px;
   min-width: 0;
+}
+
+.occupancy-person-identity {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  overflow: hidden;
 }
 
 .occupancy-person-name {
@@ -105,6 +113,8 @@
   font-weight: 600;
   color: var(--surface-header);
   min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .occupancy-row:hover .occupancy-person-name {

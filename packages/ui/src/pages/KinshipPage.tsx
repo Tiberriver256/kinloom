@@ -1,8 +1,7 @@
-import { findKinshipPath } from '@kinloom/core';
+import { buildPersonThumbMap, findKinshipPath } from '@kinloom/core';
 import React, { useMemo, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
-import { EmptyStateNotice, initialsOf } from '../components/Atoms.js';
-import atomStyles from '../components/Atoms.module.css';
+import { EmptyStateNotice, PersonPortrait } from '../components/Atoms.js';
 import { ExplorerTopBar } from '../components/ExplorerTopBar.js';
 import { KinloomFooter } from '../components/KinloomFooter.js';
 import { useArchiveData } from '../context/ArchiveDataContext.js';
@@ -27,8 +26,13 @@ function formatKinshipPersonOption(person: {
 }
 
 export const KinshipPage: React.FC = () => {
-  const { siteConfig, bundle, peopleById, peopleBySlug, placesById, loading } = useArchiveData();
+  const { siteConfig, baseUrl, bundle, peopleById, peopleBySlug, placesById, loading } = useArchiveData();
   const [searchParams] = useSearchParams();
+
+  const personThumbMap = useMemo(
+    () => (bundle ? buildPersonThumbMap(bundle) : new Map<string, string>()),
+    [bundle]
+  );
 
   const selectablePeople = useMemo(() => {
     if (!bundle) {
@@ -304,12 +308,14 @@ export const KinshipPage: React.FC = () => {
                               <span className={cx(kinshipStyles, 'kinship-edge-badge')}>{edgeLabel}</span>
                             )}
                             <Link to={`/person/${p.slug}`} className={cx(kinshipStyles, 'kinship-node-pill')}>
-                              <span
-                                className={cx(atomStyles, 'avatar-circle')}
-                                style={{ width: 28, height: 28, fontSize: '0.75rem' }}
-                              >
-                                {initialsOf(p.full_name)}
-                              </span>
+                              <PersonPortrait
+                                name={p.full_name}
+                                src={personThumbMap.get(p.id) || p.portrait_url}
+                                baseUrl={baseUrl}
+                                variant="circle"
+                                size="sm"
+                                loading="eager"
+                              />
                               <span>
                                 <strong>{p.full_name}</strong>
                                 <span

@@ -7,7 +7,7 @@ import { cx, joinClasses } from '../../lib/cx.js';
 import { formatLineageGroupLabel } from '../../lib/treeNodeDisplay.js';
 import { formatPhotoDocumentCount, KINLOOM_VOCABULARY } from '../../lib/vocabulary.js';
 import controlStyles from '../../styles/Controls.module.css';
-import { initialsOf, resolveAssetUrl } from '../Atoms.js';
+import { PersonPortrait, resolveAssetUrl } from '../Atoms.js';
 import canvasSurfaceStyles from '../CanvasSurfacePrimitives.module.css';
 import treeFocusStyles from './TreeFocusDrawer.module.css';
 
@@ -128,17 +128,15 @@ export const TreeFocusDrawer: React.FC<TreeFocusDrawerProps> = ({
       )}
 
       <div className={cx(treeFocusStyles, 'tree-focus-identity')}>
-        {resolvedThumb ? (
-          <img
-            src={resolvedThumb}
-            alt={person.full_name}
-            className={cx(treeFocusStyles, 'tree-focus-portrait')}
-          />
-        ) : (
-          <div className={cx(treeFocusStyles, 'tree-focus-monogram')} aria-hidden="true">
-            {initialsOf(person.full_name)}
-          </div>
-        )}
+        <PersonPortrait
+          name={person.full_name}
+          src={resolvedThumb}
+          alt={person.full_name}
+          variant="print"
+          size="sm"
+          loading="eager"
+          decorative={false}
+        />
         <div className={cx(treeFocusStyles, 'tree-focus-identity-copy')}>
           <h2 className={cx(treeFocusStyles, 'tree-focus-name')}>{person.full_name}</h2>
           <div className={cx(treeFocusStyles, 'tree-focus-dates')}>{vitalDates}</div>

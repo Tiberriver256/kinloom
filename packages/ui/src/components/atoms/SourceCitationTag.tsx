@@ -16,6 +16,7 @@ import citationStyles from '../../styles/Citations.module.css';
 import controlStyles from '../../styles/Controls.module.css';
 import overlayStyles from '../../styles/Overlays.module.css';
 import atomStyles from '../Atoms.module.css';
+import { ArchivalImage } from './ArchivalImage.js';
 import { resolveAssetUrl } from './formatters.js';
 
 const EMPTY_ALTERNATE_DATES: AlternateDate[] = [];
@@ -415,10 +416,13 @@ export const SourceCitationTag: React.FC<{
               </button>
             </div>
             <div className={cx(overlayStyles, 'scan-lightbox-scroll')}>
-              <img
+              <ArchivalImage
                 src={activeScan.url}
                 alt={activeScan.title}
+                loading="eager"
+                frameStyle={{ width: '100%' }}
                 className={cx(overlayStyles, 'scan-page-img-full')}
+                fallbackCaption={activeScan.title}
               />
               {activeScan.citation && (
                 <p

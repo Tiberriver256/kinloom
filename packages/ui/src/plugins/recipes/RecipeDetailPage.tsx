@@ -11,6 +11,7 @@ import {
   ArchivalTagPill,
   ArchivalToast,
 } from '../../components/ArchivalPrimitives.js';
+import { ArchivalImage } from '../../components/Atoms.js';
 import { ExplorerTopBar } from '../../components/ExplorerTopBar.js';
 import { KinloomFooter } from '../../components/KinloomFooter.js';
 import { cx } from '../../lib/cx.js';
@@ -684,14 +685,16 @@ export const RecipeDetailPage: React.FC = () => {
                               setActivePhotoIndex(index);
                             }}
                           >
-                            <img
+                            <ArchivalImage
                               src={photo.url}
                               alt={
                                 photo.caption ||
                                 `${detail.recipe.title} (${UI_RECIPE_CARD_SIDE_LABELS[photo.card_side]})`
                               }
                               loading="lazy"
+                              frameStyle={{ width: '100%' }}
                               className={cx(recipeStyles, 'recipe-gallery-thumb')}
+                              fallbackCaption={photo.caption || UI_RECIPE_CARD_SIDE_LABELS[photo.card_side]}
                             />
                             <figcaption className={cx(recipeStyles, 'recipe-gallery-caption')}>
                               <span className={cx(recipeStyles, 'recipe-gallery-badges')}>

@@ -2,7 +2,7 @@ import type { Person, Place, Pronunciation, ResidenceSpan } from '@kinloom/core'
 import { resolvePersonPronunciation } from '@kinloom/core';
 import type React from 'react';
 import { Link } from 'react-router-dom';
-import { resolveAssetUrl } from '../../components/Atoms.js';
+import { PersonPortrait } from '../../components/Atoms.js';
 import atomStyles from '../../components/Atoms.module.css';
 import { PronunciationBadge } from '../../components/PronunciationBadge.js';
 import type { RelativeCreateContext } from '../../components/wiki/CreateEntityModal.js';
@@ -62,22 +62,30 @@ export const PersonProfileHeader: React.FC<PersonProfileHeaderProps> = ({
   return (
     <header className={cx(personStyles, 'person-header')}>
       <div className={cx(personStyles, 'person-header-top')}>
-        <div
-          className={cx(personStyles, `person-header-identity${person.portrait_url ? ' has-portrait' : ''}`)}
-        >
-          {person.portrait_url && (
+        <div className={cx(personStyles, 'person-header-identity has-portrait')}>
+          {person.portrait_url ? (
             <button
               type="button"
               className={cx(personStyles, 'person-portrait-btn')}
               onClick={onOpenPortraitLightbox}
               title="Click to zoom archival portrait"
             >
-              <img
-                src={resolveAssetUrl(person.portrait_url, baseUrl)}
+              <PersonPortrait
+                name={person.full_name}
+                src={person.portrait_url}
+                baseUrl={baseUrl}
                 alt={`Archival portrait of ${person.full_name}`}
-                className={cx(atomStyles, 'person-portrait-img')}
+                variant="print"
+                size="lg"
+                loading="eager"
+                fetchPriority="high"
+                decorative={false}
               />
             </button>
+          ) : (
+            <span className={cx(personStyles, 'person-portrait-slot')}>
+              <PersonPortrait name={person.full_name} src={null} variant="print" size="lg" />
+            </span>
           )}
           <h1 className={cx(personStyles, 'person-header-title')}>{person.full_name}</h1>
           {showPronunciationRow && (

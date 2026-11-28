@@ -1,9 +1,8 @@
 import type { ArchiveEvent, TimePersonEntry } from '@kinloom/core';
 import type React from 'react';
 import { Link } from 'react-router-dom';
-import { initialsOf, resolveAssetUrl } from '../../components/Atoms.js';
-import atomStyles from '../../components/Atoms.module.css';
-import { cx, joinClasses } from '../../lib/cx.js';
+import { PersonPortrait } from '../../components/Atoms.js';
+import { cx } from '../../lib/cx.js';
 import timeStyles from '../TimePage.module.css';
 
 export const TimePersonCard: React.FC<{
@@ -24,16 +23,15 @@ export const TimePersonCard: React.FC<{
   const thumb = personThumbMap.get(entry.person.id) || entry.person.portrait_url;
   return (
     <Link to={targetUrl} className={cx(timeStyles, `time-person-item ${tierClass}`)}>
-      <div
-        className={joinClasses(cx(atomStyles, 'photo-print'), cx(timeStyles, 'time-person-thumb'))}
-        aria-hidden="true"
-      >
-        {thumb ? (
-          <img src={resolveAssetUrl(thumb, baseUrl)} alt="" loading="lazy" />
-        ) : (
-          <span className={cx(atomStyles, 'photo-print-monogram')}>{initialsOf(entry.person.full_name)}</span>
-        )}
-      </div>
+      <PersonPortrait
+        name={entry.person.full_name}
+        src={thumb}
+        baseUrl={baseUrl}
+        variant="print"
+        size="md"
+        loading="lazy"
+        className={cx(timeStyles, 'time-person-thumb')}
+      />
       <div className={cx(timeStyles, 'time-person-info')}>
         <div className={cx(timeStyles, 'time-person-name-row')}>
           <span className={cx(timeStyles, 'time-person-name')}>{entry.person.full_name}</span>

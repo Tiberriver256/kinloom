@@ -12,6 +12,7 @@ import {
   stepLightboxZoom,
 } from '../lib/lightboxModel.js';
 import styles from './ArchivalLightbox.module.css';
+import { ArchivalImage } from './Atoms.js';
 
 export interface ArchivalLightboxItem {
   readonly id: string;
@@ -422,10 +423,13 @@ export const ArchivalLightbox: React.FC<ArchivalLightboxProps> = ({
           </button>
         )}
 
-        <img
+        <ArchivalImage
           src={activeItem.url}
           alt={activeItem.alt}
+          loading="eager"
+          allowOverflow
           draggable={false}
+          fallbackCaption={activeItem.caption || activeItem.alt}
           className={cx(
             styles,
             isPanning ? 'archival-lightbox-image archival-lightbox-image-panning' : 'archival-lightbox-image'
@@ -465,11 +469,13 @@ export const ArchivalLightbox: React.FC<ArchivalLightboxProps> = ({
                   onChangeIndex(idx);
                 }}
               >
-                <img
+                <ArchivalImage
                   src={item.url}
                   alt=""
+                  frameClassName={cx(styles, 'archival-lightbox-thumb-img')}
                   className={cx(styles, 'archival-lightbox-thumb-img')}
                   loading="lazy"
+                  fallbackCompact
                 />
               </button>
             ))}

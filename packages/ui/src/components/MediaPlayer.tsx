@@ -5,7 +5,7 @@ import { cx } from '../lib/cx.js';
 import { useKinloomPlugins } from '../plugins/PluginContext.js';
 import controlStyles from '../styles/Controls.module.css';
 import overlayStyles from '../styles/Overlays.module.css';
-import { resolveAssetUrl } from './Atoms.js';
+import { ArchivalImage, resolveAssetUrl } from './Atoms.js';
 import atomStyles from './Atoms.module.css';
 import mediaGalleryStyles from './MediaGallery.module.css';
 
@@ -82,11 +82,13 @@ export const MediaPlayer: React.FC<MediaPlayerProps> = ({ media, baseUrl, varian
         <div
           className={cx(mediaGalleryStyles, className ?? 'media-player-preview media-player-video-preview')}
         >
-          <img
+          <ArchivalImage
             src={posterSrc}
             alt={media.caption}
+            frameStyle={{ width: '100%' }}
             className={cx(mediaGalleryStyles, 'person-media-thumb')}
             loading="lazy"
+            fallbackCaption={media.caption}
           />
           <span className={cx(mediaGalleryStyles, 'media-play-badge')} aria-hidden="true">
             ▶ {durationLabel ?? 'Video'}
@@ -195,10 +197,12 @@ export const MediaPlayer: React.FC<MediaPlayerProps> = ({ media, baseUrl, varian
   const imgSrc =
     variant === 'preview' && media.thumb_file ? resolveAssetUrl(media.thumb_file, effectiveBase) : src;
   return (
-    <img
+    <ArchivalImage
       src={imgSrc}
       alt={media.caption}
-      loading="lazy"
+      loading={variant === 'full' ? 'eager' : 'lazy'}
+      frameStyle={{ width: '100%' }}
+      fallbackCaption={media.caption}
       className={
         className ??
         (variant === 'preview'

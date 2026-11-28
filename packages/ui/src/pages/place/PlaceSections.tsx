@@ -1,7 +1,7 @@
 import type { ArchiveEvent, MediaItem, Place, SourceRecord } from '@kinloom/core';
 import type React from 'react';
 import { Link } from 'react-router-dom';
-import { DateStamp, SourceCitationTag } from '../../components/Atoms.js';
+import { DateStamp, PersonPortrait, SourceCitationTag } from '../../components/Atoms.js';
 import { MediaPlayer } from '../../components/MediaPlayer.js';
 import milestoneStyles from '../../components/MilestoneStoryCard.module.css';
 import { cx } from '../../lib/cx.js';
@@ -71,7 +71,9 @@ export const PlaceHistoricalProfileSection: React.FC<{
 
 export const PlaceOccupancySection: React.FC<{
   readonly occupancyRows: PlaceOccupancySummary;
-}> = ({ occupancyRows }) => {
+  readonly personThumbMap?: ReadonlyMap<string, string>;
+  readonly baseUrl?: string;
+}> = ({ occupancyRows, personThumbMap, baseUrl }) => {
   const spanYears = Math.max(1, occupancyRows.maxYear - occupancyRows.minYear);
   return (
     <section className={cx(layoutStyles, 'place-map-box')}>
@@ -117,7 +119,17 @@ export const PlaceOccupancySection: React.FC<{
                 aria-label={`Jump to ${row.person.full_name} (${yearLabel})`}
               >
                 <span className={cx(placeStyles, 'occupancy-row-header')}>
-                  <span className={cx(placeStyles, 'occupancy-person-name')}>{row.person.full_name}</span>
+                  <span className={cx(placeStyles, 'occupancy-person-identity')}>
+                    <PersonPortrait
+                      name={row.person.full_name}
+                      src={personThumbMap?.get(row.person.id) || row.person.portrait_url}
+                      baseUrl={baseUrl}
+                      variant="circle"
+                      size="xs"
+                      loading="lazy"
+                    />
+                    <span className={cx(placeStyles, 'occupancy-person-name')}>{row.person.full_name}</span>
+                  </span>
                   <span className={cx(placeStyles, 'occupancy-year-label')}>{yearLabel}</span>
                 </span>
                 <span className={cx(placeStyles, 'occupancy-track')} aria-hidden="true">

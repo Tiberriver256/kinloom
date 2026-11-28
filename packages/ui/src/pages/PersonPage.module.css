@@ -132,12 +132,16 @@
   min-width: 0;
 }
 
-.person-portrait-btn {
+.person-portrait-btn,
+.person-portrait-slot {
   padding: 0;
   border: none;
   background: transparent;
-  cursor: zoom-in;
   display: inline-flex;
+}
+
+.person-portrait-btn {
+  cursor: zoom-in;
 }
 
 .person-branch-badge {
@@ -180,7 +184,8 @@
   column-gap: 14px;
 }
 
-.person-header-identity:global(.has-portrait) .person-portrait-btn {
+.person-header-identity:global(.has-portrait) .person-portrait-btn,
+.person-header-identity:global(.has-portrait) .person-portrait-slot {
   grid-column: 1;
   grid-row: 1 / span 3;
   align-self: start;
@@ -370,7 +375,8 @@
 }
 
 @media (max-width: 480px) {
-  .person-header-identity:global(.has-portrait) .person-portrait-btn {
+  .person-header-identity:global(.has-portrait) .person-portrait-btn,
+  .person-header-identity:global(.has-portrait) .person-portrait-slot {
     grid-row: 1 / span 2;
     align-self: start;
   }

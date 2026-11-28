@@ -6,6 +6,7 @@ import { createPortal } from 'react-dom';
 import { cx } from '../lib/cx.js';
 import citationStyles from '../styles/Citations.module.css';
 import markdownStyles from './ArchivalMarkdown.module.css';
+import { ArchivalImage } from './Atoms.js';
 
 const SAFE_EXTERNAL_URL_RE = /^https?:\/\//i;
 
@@ -220,11 +221,13 @@ export const CitationPopover: React.FC<CitationPopoverProps> = ({
               }}
             >
               <span className={cx(markdownStyles, 'citation-popover-media-frame')}>
-                <img
+                <ArchivalImage
                   src={mediaUrl}
                   alt={media.caption}
                   className={cx(markdownStyles, 'citation-popover-media-img')}
+                  frameStyle={{ width: '100%' }}
                   loading="lazy"
+                  fallback={null}
                   onLoad={reposition}
                   onError={() => {
                     setImageFailed(true);
@@ -236,11 +239,13 @@ export const CitationPopover: React.FC<CitationPopoverProps> = ({
           ) : (
             <figure className={cx(markdownStyles, 'citation-popover-media-figure')}>
               <div className={cx(markdownStyles, 'citation-popover-media-frame')}>
-                <img
+                <ArchivalImage
                   src={mediaUrl}
                   alt={media.caption}
                   className={cx(markdownStyles, 'citation-popover-media-img')}
+                  frameStyle={{ width: '100%' }}
                   loading="lazy"
+                  fallback={null}
                   onLoad={reposition}
                   onError={() => {
                     setImageFailed(true);

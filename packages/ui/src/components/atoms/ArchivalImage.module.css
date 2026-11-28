@@ -1,0 +1,81 @@
+/* ==========================================================================
+   ArchivalImage — Warm Linen Underlay, Smooth Fade-In, & Editorial Fallback
+   ========================================================================== */
+
+.archival-image-frame {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  max-width: 100%;
+  background: var(--surface-linen);
+  overflow: hidden;
+  box-sizing: border-box;
+}
+
+.archival-image-frame.is-overflow-visible {
+  overflow: visible;
+  background: transparent;
+}
+
+.archival-image-frame.is-overflow-visible[data-image-status="loading"] {
+  background: var(--surface-linen);
+  min-width: 120px;
+  min-height: 90px;
+  border-radius: var(--radius-sm);
+}
+
+.archival-image-el {
+  display: block;
+  opacity: 0;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .archival-image-el {
+    transition: opacity 180ms ease-out;
+  }
+}
+
+.archival-image-el.is-loaded {
+  opacity: 1;
+}
+
+.archival-image-fallback {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  width: 100%;
+  min-height: 88px;
+  padding: 12px 10px;
+  background: var(--surface-linen);
+  border: 1px solid var(--border-decorative);
+  border-radius: var(--radius-sm);
+  color: var(--text-secondary);
+  text-align: center;
+  box-sizing: border-box;
+  overflow: hidden;
+}
+
+.archival-image-fallback.is-compact {
+  min-height: 0;
+  height: 100%;
+  padding: 4px;
+  gap: 0;
+}
+
+.archival-image-fallback-glyph {
+  color: var(--accent-primary);
+  opacity: 0.78;
+  flex-shrink: 0;
+}
+
+.archival-image-fallback-label {
+  font-family: var(--font-mono);
+  font-size: 0.74rem;
+  line-height: 1.35;
+  color: var(--text-secondary);
+  max-width: 28ch;
+  overflow-wrap: anywhere;
+}

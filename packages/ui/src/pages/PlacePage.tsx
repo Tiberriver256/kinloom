@@ -1,4 +1,4 @@
-import { resolvePlacePronunciation } from '@kinloom/core';
+import { buildPersonThumbMap, resolvePlacePronunciation } from '@kinloom/core';
 import type React from 'react';
 import { useMemo, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
@@ -77,6 +77,11 @@ export const PlacePage: React.FC = () => {
         ? buildPlaceOccupancySummary(bundle, matchingPlaceIds, peopleById)
         : { rows: [], minYear: 1800, maxYear: 2000 },
     [bundle, place, matchingPlaceIds, peopleById]
+  );
+
+  const personThumbMap = useMemo(
+    () => (bundle ? buildPersonThumbMap(bundle) : new Map<string, string>()),
+    [bundle]
   );
 
   const scopeLocalRecords = useMemo(
@@ -265,7 +270,11 @@ export const PlacePage: React.FC = () => {
               sourcesById={sourcesById}
               baseUrl={baseUrl}
             />
-            <PlaceOccupancySection occupancyRows={occupancyRows} />
+            <PlaceOccupancySection
+              occupancyRows={occupancyRows}
+              personThumbMap={personThumbMap}
+              baseUrl={baseUrl}
+            />
             <PlaceLocalHistorySection
               localRecords={localRecords}
               recordDecades={recordDecades}

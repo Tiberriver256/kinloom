@@ -97,11 +97,20 @@ export {
   ArchivalTagPill,
   ArchivalToast,
 } from './components/ArchivalPrimitives.js';
+export type {
+  ArchivalImageProps,
+  ArchivalImageStatus,
+  PersonPortraitProps,
+  PersonPortraitSize,
+  PersonPortraitVariant,
+} from './components/Atoms.js';
 export {
+  ArchivalImage,
   ArchivalPhotoFrame,
   CoordinatePill,
   DateStamp,
   initialsOf,
+  PersonPortrait,
   RelativeAvatarChip,
   resolveAssetUrl,
   ScopeGlyph,

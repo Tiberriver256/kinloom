@@ -3,6 +3,7 @@ import type React from 'react';
 import { cx } from '../../lib/cx.js';
 import controlStyles from '../../styles/Controls.module.css';
 import overlayStyles from '../../styles/Overlays.module.css';
+import { ArchivalImage } from '../Atoms.js';
 import readerStyles from '../SourceReaderDrawer.module.css';
 
 export type ReaderViewMode = 'text' | 'split' | 'scan';
@@ -54,11 +55,13 @@ export const SourceReaderStage: React.FC<{
             Zoom Full Page ↗
           </button>
         </div>
-        <img
+        <ArchivalImage
           src={scanSrc}
           alt={`Scanned original page for ${currentDoc.title}, ${currentPage.label}`}
+          frameStyle={{ width: '100%' }}
           className={cx(readerStyles, 'scan-page-img')}
           loading="lazy"
+          fallbackCaption={`Original scan unavailable (${currentPage.label})`}
         />
       </figure>
     )}
@@ -125,10 +128,13 @@ export const SourceReaderScanZoomDialog: React.FC<{
         </button>
       </div>
       <div className={cx(overlayStyles, 'scan-lightbox-scroll')}>
-        <img
+        <ArchivalImage
           src={scanSrc}
           alt={`High-resolution scan of ${pageLabel}`}
+          loading="eager"
+          frameStyle={{ width: '100%' }}
           className={cx(overlayStyles, 'scan-page-img-full')}
+          fallbackCaption={`High-resolution scan unavailable (${pageLabel})`}
         />
       </div>
     </div>
