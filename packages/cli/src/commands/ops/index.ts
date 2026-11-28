@@ -197,6 +197,24 @@ export {
   runMigrateCommand,
 } from './migrate.js';
 export {
+  applyPatchYamlWritesWithRollback,
+  assertLivingPersonPrivacyInvariants,
+  assertPatchedRelationsLivingPrivacy,
+  formatPatchTextReport,
+  isEffectiveLivingPerson,
+  type NormalizedMultiEntityPatch,
+  normalizeMultiEntityPatch,
+  PATCH_HELP,
+  type PatchAllEntityCounts,
+  type PatchCommandOptions,
+  type PatchCommandResult,
+  type PatchEntityCounts,
+  type PatchValidationSummary,
+  type PendingPatchYamlWrite,
+  parsePatchDocumentText,
+  runPatchCommand,
+} from './patch.js';
+export {
   buildCommonsAudioUrl,
   evaluatePersonOverrideRedundancy,
   extractMediaWikiPronunciations,

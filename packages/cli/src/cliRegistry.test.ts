@@ -41,7 +41,7 @@ function extractListedRootHelpCommands(helpText: string): string[] {
 }
 
 describe('BUILTIN_CLI_COMMANDS & ROOT_HELP single source of truth', () => {
-  it('registers media, query, and every command listed in ROOT_HELP as a built-in command', () => {
+  it('registers media, query, patch, and every command listed in ROOT_HELP as a built-in command', () => {
     expect(isBuiltInCliCommand('media')).toBe(true);
     expect(CORE_CLI_COMMANDS.has('media')).toBe(true);
     expect(resolveBuiltInCliCommand('media')?.run).toBeTypeOf('function');
@@ -49,6 +49,10 @@ describe('BUILTIN_CLI_COMMANDS & ROOT_HELP single source of truth', () => {
     expect(isBuiltInCliCommand('query')).toBe(true);
     expect(CORE_CLI_COMMANDS.has('query')).toBe(true);
     expect(resolveBuiltInCliCommand('query')?.run).toBeTypeOf('function');
+
+    expect(isBuiltInCliCommand('patch')).toBe(true);
+    expect(CORE_CLI_COMMANDS.has('patch')).toBe(true);
+    expect(resolveBuiltInCliCommand('patch')?.run).toBeTypeOf('function');
 
     const listedCommands = extractListedRootHelpCommands(ROOT_HELP);
     expect(listedCommands.length).toBeGreaterThan(35);

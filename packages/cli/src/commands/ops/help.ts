@@ -441,3 +441,26 @@ Options:
   --fields <csv>           Comma-separated list of fields to project in table and JSON output
   --json                   Emit deterministic structured JSON instead of compact text/table output
   -h, --help               Show this help message`;
+
+export const PATCH_HELP = `Usage: kinloom patch <file-or-stdin> [options]
+
+Transactionally validate and apply a multi-entity JSON or YAML patch document across
+people, places, events, kinship, sources, media, and narratives in local data/*.yaml files.
+Validates every entry against @kinloom/core Zod schemas, checks referential integrity and
+dual-mode archive compilation invariants, and writes deterministic sorted YAML atomically
+with byte-for-byte rollback on error.
+
+Living people are rejected by default. Pass --allow-living to explicitly permit
+privacy-compliant living-person entries (enforces explicit is_living: true, zero portraits,
+zero full YYYY-MM-DD DOBs, and zero residence spans).
+
+Arguments:
+  file-or-stdin          Path to a JSON or YAML patch file, or \`-\` to read from stdin
+
+Options:
+  --repo <dir>           Archive repository root (default: current working directory)
+  --file <path>          Alias for positional <file-or-stdin>
+  --dry-run              Validate schemas, invariants, and diff summary without writing files
+  --allow-living         Explicitly permit privacy-compliant living-person records (default: false)
+  --json                 Emit deterministic structured JSON summary
+  -h, --help             Show this help message`;
