@@ -9,9 +9,16 @@ import { useArchiveUi } from '../context/ArchiveUiContext.js';
 import { useDialogFocusTrap } from '../hooks/useDialogFocusTrap.js';
 import { cx, joinClasses } from '../lib/cx.js';
 import { isSearchableQuery, searchNavNext, searchNavPrev, searchNavReset } from '../lib/searchNavigation.js';
+import {
+  buildSearchPreviewSlip,
+  COMMAND_BAR_QUICK_ACTIONS,
+  findPreviewShortcutAction,
+  type SearchShortcutAction,
+} from '../lib/searchPreview.js';
 import { KINLOOM_VOCABULARY, SEARCH_KIND_LABELS } from '../lib/vocabulary.js';
 import controlStyles from '../styles/Controls.module.css';
 import overlayStyles from '../styles/Overlays.module.css';
+import { PersonPortrait } from './atoms/PersonPortrait.js';
 import searchModalStyles from './GlobalSearchModal.module.css';
 
 function escapeRegExp(value: string): string {
@@ -47,7 +54,8 @@ function renderHighlightedText(text: string, rawQuery: string, markClassName: st
 }
 
 export const GlobalSearchModal: React.FC = () => {
-  const { bundle, placesById, readings, readingsLoading, siteConfig } = useArchiveData();
+  const { bundle, baseUrl, peopleById, placesById, eventsById, readings, readingsLoading, siteConfig } =
+    useArchiveData();
   const { searchOpen, closeSearch, openSourceReader } = useArchiveUi();
   const navigate = useNavigate();
   const listboxId = useId();
@@ -134,6 +142,31 @@ export const GlobalSearchModal: React.FC = () => {
     [query, bundle, placesById, readings]
   );
 
+  const searchable = isSearchableQuery(query);
+
+  const previewSlip = useMemo(
+    () =>
+      searchable && results.length > 0
+        ? buildSearchPreviewSlip({
+            item: results[activeIdx],
+            bundle,
+            peopleById,
+            placesById,
+            eventsById,
+          })
+        : null,
+    [searchable, results, activeIdx, bundle, peopleById, placesById, eventsById]
+  );
+
+  const navigateAndClose = useCallback(
+    (route: string) => {
+      closeSearch();
+      setQuery('');
+      void navigate(route);
+    },
+    [closeSearch, navigate]
+  );
+
   const activateResult = useCallback(
     (item: ArchiveSearchResult) => {
       closeSearch();
@@ -146,6 +179,23 @@ export const GlobalSearchModal: React.FC = () => {
         });
       } else if (item.route) {
         void navigate(item.route);
+      }
+    },
+    [closeSearch, openSourceReader, navigate]
+  );
+
+  const activateShortcutAction = useCallback(
+    (action: SearchShortcutAction) => {
+      closeSearch();
+      setQuery('');
+      if (action.sourceReaderTarget) {
+        openSourceReader({
+          sourceId: action.sourceReaderTarget.sourceId,
+          page: action.sourceReaderTarget.page,
+          highlightQuery: action.sourceReaderTarget.query,
+        });
+      } else if (action.route) {
+        void navigate(action.route);
       }
     },
     [closeSearch, openSourceReader, navigate]
@@ -165,13 +215,23 @@ export const GlobalSearchModal: React.FC = () => {
       } else if (e.key === 'Enter' && document.activeElement === inputRef.current && results[activeIdx]) {
         e.preventDefault();
         activateResult(results[activeIdx]);
+      } else if (previewSlip && !e.ctrlKey && !e.metaKey) {
+        const isTypingInInput = document.activeElement === inputRef.current;
+        const canTriggerOneKey = e.altKey || !isTypingInInput;
+        if (canTriggerOneKey) {
+          const matchedAction = findPreviewShortcutAction(previewSlip, e.key);
+          if (matchedAction) {
+            e.preventDefault();
+            activateShortcutAction(matchedAction);
+          }
+        }
       }
     };
     window.addEventListener('keydown', onKeyDown);
     return (): void => {
       window.removeEventListener('keydown', onKeyDown);
     };
-  }, [searchOpen, results, activeIdx, activateResult]);
+  }, [searchOpen, results, activeIdx, previewSlip, activateResult, activateShortcutAction]);
 
   if (!searchOpen) {
     return null;
@@ -184,7 +244,6 @@ export const GlobalSearchModal: React.FC = () => {
     }))
     .filter((g) => g.items.length > 0);
 
-  const searchable = isSearchableQuery(query);
   const activeOptionId = searchable && results[activeIdx] ? `${listboxId}-option-${activeIdx}` : undefined;
   const liveCountAnnouncement = searchable
     ? results.length === 0
@@ -192,6 +251,7 @@ export const GlobalSearchModal: React.FC = () => {
       : `${results.length} matching ${results.length === 1 ? 'result' : 'results'} for ${query.trim()}`
     : '';
   const markClass = cx(searchModalStyles, 'global-search-mark');
+  const hasPreview = Boolean(previewSlip);
 
   return (
     <dialog
@@ -208,7 +268,7 @@ export const GlobalSearchModal: React.FC = () => {
         aria-label="Close search"
         onClick={closeSearch}
       />
-      <div className={cx(searchModalStyles, 'global-search-card')}>
+      <div className={cx(searchModalStyles, `global-search-card${hasPreview ? ' has-preview' : ''}`)}>
         <div className={cx(searchModalStyles, 'global-search-header')}>
           <input
             ref={inputRef}
@@ -250,78 +310,154 @@ export const GlobalSearchModal: React.FC = () => {
           {searchable ? (
             <>
               {results.length === 0 && (
-                <div style={{ padding: '18px 16px', color: 'var(--text-secondary)', fontSize: '0.9rem' }}>
+                <div className={cx(searchModalStyles, 'global-search-empty')}>
                   {KINLOOM_VOCABULARY.search.emptyPrefix} “{query}”.
                 </div>
               )}
               {results.length > 0 && (
-                <div
-                  id={listboxId}
-                  role="listbox"
-                  aria-label="Search results"
-                  className={cx(searchModalStyles, 'global-search-groups')}
-                >
-                  {grouped.map((group) => (
-                    <div key={group.kind} className={'global-search-group'}>
-                      <div className={cx(searchModalStyles, 'global-search-group-title')}>
-                        {SEARCH_KIND_LABELS[group.kind]} ({group.items.length})
-                      </div>
-                      {group.items.map((item) => {
-                        const flatIdx = results.findIndex((r) => r.id === item.id);
-                        const isActive = flatIdx === activeIdx;
-                        return (
-                          <button
-                            key={item.id}
-                            id={`${listboxId}-option-${flatIdx}`}
-                            role="option"
-                            aria-selected={isActive}
-                            type="button"
-                            className={cx(
-                              searchModalStyles,
-                              `global-search-item ${isActive ? 'active' : ''}`
-                            )}
-                            onMouseEnter={() => {
-                              setActiveIdx(flatIdx);
-                            }}
-                            onClick={() => {
-                              activateResult(item);
-                            }}
-                          >
-                            <div className={'global-search-item-title'}>
-                              {renderHighlightedText(item.title, query, markClass)}
-                            </div>
-                            <div className={'global-search-item-sub'}>
-                              {renderHighlightedText(item.subtitle, query, markClass)}
-                            </div>
-                            {item.snippet && (
-                              <div className={'global-search-item-snippet'}>
-                                {renderHighlightedText(item.snippet, query, markClass)}
+                <div className={cx(searchModalStyles, 'global-search-split')}>
+                  <div
+                    id={listboxId}
+                    role="listbox"
+                    aria-label="Search results"
+                    className={cx(searchModalStyles, 'global-search-groups')}
+                  >
+                    {grouped.map((group) => (
+                      <div key={group.kind} className={'global-search-group'}>
+                        <div className={cx(searchModalStyles, 'global-search-group-title')}>
+                          {SEARCH_KIND_LABELS[group.kind]} ({group.items.length})
+                        </div>
+                        {group.items.map((item) => {
+                          const flatIdx = results.findIndex((r) => r.id === item.id);
+                          const isActive = flatIdx === activeIdx;
+                          return (
+                            <button
+                              key={item.id}
+                              id={`${listboxId}-option-${flatIdx}`}
+                              role="option"
+                              aria-selected={isActive}
+                              type="button"
+                              className={cx(
+                                searchModalStyles,
+                                `global-search-item ${isActive ? 'active' : ''}`
+                              )}
+                              onMouseEnter={() => {
+                                setActiveIdx(flatIdx);
+                              }}
+                              onClick={() => {
+                                activateResult(item);
+                              }}
+                            >
+                              <div className={'global-search-item-title'}>
+                                {renderHighlightedText(item.title, query, markClass)}
                               </div>
-                            )}
-                          </button>
-                        );
-                      })}
-                    </div>
-                  ))}
+                              <div className={'global-search-item-sub'}>
+                                {renderHighlightedText(item.subtitle, query, markClass)}
+                              </div>
+                              {item.snippet && (
+                                <div className={'global-search-item-snippet'}>
+                                  {renderHighlightedText(item.snippet, query, markClass)}
+                                </div>
+                              )}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    ))}
+                  </div>
+
+                  {previewSlip && (
+                    <aside
+                      className={cx(searchModalStyles, 'global-search-preview')}
+                      aria-label="Selected result preview"
+                    >
+                      <div className={cx(searchModalStyles, 'global-search-preview-header')}>
+                        {previewSlip.kind === 'person' && previewSlip.portraitName && (
+                          <PersonPortrait
+                            name={previewSlip.portraitName}
+                            src={previewSlip.portraitUrl}
+                            baseUrl={baseUrl}
+                            size="md"
+                            variant="print"
+                          />
+                        )}
+                        <div className={cx(searchModalStyles, 'global-search-preview-heading')}>
+                          <div className={cx(searchModalStyles, 'global-search-preview-eyebrow')}>
+                            {previewSlip.eyebrow}
+                          </div>
+                          <h3 className={cx(searchModalStyles, 'global-search-preview-title')}>
+                            {previewSlip.title}
+                          </h3>
+                          {previewSlip.lifespan && (
+                            <div className={cx(searchModalStyles, 'global-search-preview-lifespan')}>
+                              {previewSlip.lifespan}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+
+                      {previewSlip.primaryPlace && (
+                        <div className={cx(searchModalStyles, 'global-search-preview-place')}>
+                          <span className={cx(searchModalStyles, 'global-search-preview-label')}>
+                            Primary place
+                          </span>
+                          <span>{previewSlip.primaryPlace}</span>
+                        </div>
+                      )}
+
+                      {previewSlip.summaryLines.length > 0 && (
+                        <ul className={cx(searchModalStyles, 'global-search-preview-meta')}>
+                          {previewSlip.summaryLines.map((line) => (
+                            <li key={line}>{line}</li>
+                          ))}
+                        </ul>
+                      )}
+
+                      {previewSlip.excerpt && (
+                        <p className={cx(searchModalStyles, 'global-search-preview-excerpt')}>
+                          {previewSlip.excerpt}
+                        </p>
+                      )}
+
+                      {previewSlip.actions.length > 0 && (
+                        <div
+                          className={cx(searchModalStyles, 'global-search-preview-actions')}
+                          role="group"
+                          aria-label="Quick navigation shortcuts"
+                        >
+                          {previewSlip.actions.map((action) => (
+                            <button
+                              key={`${action.key}-${action.label}`}
+                              type="button"
+                              className={cx(searchModalStyles, 'global-search-preview-action-btn')}
+                              title={
+                                action.key === 'Enter'
+                                  ? `Press Enter to open ${action.label}`
+                                  : `Press ${action.key} (or Alt+${action.key} while typing) to open ${action.label}`
+                              }
+                              onClick={() => {
+                                activateShortcutAction(action);
+                              }}
+                            >
+                              <kbd className="kl-kbd">{action.key}</kbd>
+                              <span>{action.label}</span>
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                    </aside>
+                  )}
                 </div>
               )}
             </>
           ) : (
-            <div style={{ padding: '14px 16px' }}>
+            <div className={cx(searchModalStyles, 'global-search-zero-query')}>
               {recentlyViewed.length > 0 && (
-                <div style={{ marginBottom: 14 }}>
-                  <div
-                    style={{
-                      fontFamily: 'var(--font-mono)',
-                      fontSize: '0.74rem',
-                      letterSpacing: '0.05em',
-                      textTransform: 'uppercase',
-                      color: 'var(--text-secondary)',
-                      marginBottom: 6,
-                    }}
-                  >
-                    Recently viewed
-                  </div>
+                <section
+                  className={cx(searchModalStyles, 'global-search-zero-section')}
+                  aria-label="Recently viewed"
+                >
+                  <div className={cx(searchModalStyles, 'global-search-section-label')}>Recently viewed</div>
                   <div className="kl-cluster">
                     {recentlyViewed.map((item) => (
                       <button
@@ -329,9 +465,7 @@ export const GlobalSearchModal: React.FC = () => {
                         type="button"
                         className={cx(searchModalStyles, 'global-search-suggestion-chip')}
                         onClick={() => {
-                          closeSearch();
-                          setQuery('');
-                          void navigate(
+                          navigateAndClose(
                             item.kind === 'person' ? `/person/${item.slug}` : `/place/${item.slug}`
                           );
                         }}
@@ -341,44 +475,63 @@ export const GlobalSearchModal: React.FC = () => {
                       </button>
                     ))}
                   </div>
-                </div>
+                </section>
               )}
-              <div
-                style={{
-                  fontFamily: 'var(--font-mono)',
-                  fontSize: '0.78rem',
-                  color: 'var(--text-secondary)',
-                  marginBottom: 8,
-                }}
+
+              <section
+                className={cx(searchModalStyles, 'global-search-zero-section')}
+                aria-label="Quick actions"
               >
-                TRY SEARCHING ACROSS PEOPLE, PLACES, EVENTS &amp;{' '}
-                {totalSourcePages > 0 ? `${totalSourcePages} SOURCE PAGES:` : 'SOURCE PAGES:'}
-              </div>
-              {quickQueries.length > 0 && (
-                <div className="kl-cluster">
-                  {quickQueries.map((q) => (
+                <div className={cx(searchModalStyles, 'global-search-section-label')}>Quick actions</div>
+                <div className={cx(searchModalStyles, 'global-search-quick-actions')}>
+                  {COMMAND_BAR_QUICK_ACTIONS.map((action) => (
                     <button
-                      key={q}
+                      key={action.id}
                       type="button"
-                      className={cx(searchModalStyles, 'global-search-suggestion-chip')}
+                      className={cx(searchModalStyles, 'global-search-quick-action-btn')}
                       onClick={() => {
-                        setQuery(q);
+                        navigateAndClose(action.route);
                       }}
                     >
-                      {q}
+                      <span className={cx(searchModalStyles, 'global-search-quick-action-title')}>
+                        {action.label}
+                      </span>
+                      <span className={cx(searchModalStyles, 'global-search-quick-action-desc')}>
+                        {action.description}
+                      </span>
                     </button>
                   ))}
                 </div>
-              )}
+              </section>
+
+              <section
+                className={cx(searchModalStyles, 'global-search-zero-section')}
+                aria-label="Suggested searches"
+              >
+                <div className={cx(searchModalStyles, 'global-search-section-label')}>
+                  TRY SEARCHING ACROSS PEOPLE, PLACES, EVENTS &amp;{' '}
+                  {totalSourcePages > 0 ? `${totalSourcePages} SOURCE PAGES:` : 'SOURCE PAGES:'}
+                </div>
+                {quickQueries.length > 0 && (
+                  <div className="kl-cluster">
+                    {quickQueries.map((q) => (
+                      <button
+                        key={q}
+                        type="button"
+                        className={cx(searchModalStyles, 'global-search-suggestion-chip')}
+                        onClick={() => {
+                          setQuery(q);
+                        }}
+                      >
+                        {q}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </section>
+
               {readingsLoading && (
-                <div
-                  style={{
-                    fontFamily: 'var(--font-mono)',
-                    fontSize: '0.75rem',
-                    color: 'var(--text-secondary)',
-                    marginTop: 10,
-                  }}
-                >
+                <div className={cx(searchModalStyles, 'global-search-loading-note')}>
                   Loading primary source transcriptions…
                 </div>
               )}
@@ -390,7 +543,8 @@ export const GlobalSearchModal: React.FC = () => {
           <span className={cx(searchModalStyles, 'global-search-kbd-hint')}>
             <kbd className="kl-kbd">↑</kbd>
             <kbd className="kl-kbd">↓</kbd> navigate · <kbd className="kl-kbd">Enter</kbd> open ·{' '}
-            <kbd className="kl-kbd">Esc</kbd> close
+            <kbd className="kl-kbd">T</kbd>/<kbd className="kl-kbd">M</kbd>/<kbd className="kl-kbd">K</kbd>{' '}
+            jump · <kbd className="kl-kbd">Esc</kbd> close
           </span>
           <span>{readings ? `${totalSourcePages} source pages searchable` : 'Archive ready'}</span>
         </div>
