@@ -736,4 +736,152 @@ describe('Multi-component generation alignment and orthogonal obstacle detour ro
     const coupleBus = layout.buses.find((b) => b.unionId === coupleUnion?.id);
     expect(coupleBus?.stemPoints.length).toBeGreaterThanOrEqual(2);
   });
+
+  it('separates parallel inter-generation bus lanes by >= 12px, places Died-young strips laterally with zero U-bend stems, and sizes chips to fill the strip width (#79)', () => {
+    const people: Person[] = [
+      makePerson({
+        id: 'p_a1',
+        slug: 'a1',
+        full_name: 'Arthur Alder',
+        lineage_group: 'ancestor',
+        birth_year: 1810,
+        death_year: 1882,
+      }),
+      makePerson({
+        id: 'p_a2',
+        slug: 'a2',
+        full_name: 'Beatrice Finch',
+        lineage_group: 'ancestor',
+        birth_year: 1814,
+        death_year: 1886,
+      }),
+      makePerson({
+        id: 'p_b1',
+        slug: 'b1',
+        full_name: 'Charles Brent',
+        lineage_group: 'collateral',
+        birth_year: 1812,
+        death_year: 1884,
+      }),
+      makePerson({
+        id: 'p_b2',
+        slug: 'b2',
+        full_name: 'Dora Mercer',
+        lineage_group: 'collateral',
+        birth_year: 1816,
+        death_year: 1890,
+      }),
+      makePerson({
+        id: 'p_c1',
+        slug: 'c1',
+        full_name: 'Edmund Vance',
+        lineage_group: 'collateral',
+        birth_year: 1815,
+        death_year: 1885,
+      }),
+      makePerson({
+        id: 'p_c2',
+        slug: 'c2',
+        full_name: 'Flora Hale',
+        lineage_group: 'collateral',
+        birth_year: 1818,
+        death_year: 1892,
+      }),
+      // Early-loss child with long given name + lifespan on union A
+      makePerson({
+        id: 'p_early_edward',
+        slug: 'edward-benjamin-alder',
+        full_name: 'Edward Benjamin Alder',
+        given_name: 'Edward Benjamin',
+        lineage_group: 'collateral',
+        birth_year: 1846,
+        death_year: 1848,
+      }),
+      // Generation 2 children across all 3 parallel unions
+      makePerson({
+        id: 'p_ch_a1',
+        slug: 'ch-a1',
+        full_name: 'Henry Alder',
+        lineage_group: 'pivot_ancestor',
+        birth_year: 1842,
+        death_year: 1918,
+      }),
+      makePerson({
+        id: 'p_ch_a2',
+        slug: 'ch-a2',
+        full_name: 'Clara Alder',
+        lineage_group: 'collateral',
+        birth_year: 1844,
+        death_year: 1910,
+      }),
+      makePerson({
+        id: 'p_ch_b1',
+        slug: 'ch-b1',
+        full_name: 'Samuel Brent',
+        lineage_group: 'collateral',
+        birth_year: 1843,
+        death_year: 1912,
+      }),
+      makePerson({
+        id: 'p_ch_b2',
+        slug: 'ch-b2',
+        full_name: 'Martha Brent',
+        lineage_group: 'collateral',
+        birth_year: 1845,
+        death_year: 1915,
+      }),
+      makePerson({
+        id: 'p_ch_c1',
+        slug: 'ch-c1',
+        full_name: 'Walter Vance',
+        lineage_group: 'collateral',
+        birth_year: 1847,
+        death_year: 1920,
+      }),
+    ];
+    const kinship: KinshipEdge[] = [
+      { from: 'p_a1', to: 'p_a2', relation: 'spouse' },
+      { from: 'p_b1', to: 'p_b2', relation: 'spouse' },
+      { from: 'p_c1', to: 'p_c2', relation: 'spouse' },
+      { from: 'p_a1', to: 'p_early_edward', relation: 'parent' },
+      { from: 'p_a2', to: 'p_early_edward', relation: 'parent' },
+      { from: 'p_a1', to: 'p_ch_a1', relation: 'parent' },
+      { from: 'p_a2', to: 'p_ch_a1', relation: 'parent' },
+      { from: 'p_a1', to: 'p_ch_a2', relation: 'parent' },
+      { from: 'p_a2', to: 'p_ch_a2', relation: 'parent' },
+      { from: 'p_b1', to: 'p_ch_b1', relation: 'parent' },
+      { from: 'p_b2', to: 'p_ch_b1', relation: 'parent' },
+      { from: 'p_b1', to: 'p_ch_b2', relation: 'parent' },
+      { from: 'p_b2', to: 'p_ch_b2', relation: 'parent' },
+      { from: 'p_c1', to: 'p_ch_c1', relation: 'parent' },
+      { from: 'p_c2', to: 'p_ch_c1', relation: 'parent' },
+    ];
+
+    const model = buildArchivalTreeModel({ people, kinship, branchFilter: 'all', mode: 'full' });
+    const layout = computeArchivalDiagramLayout(model);
+
+    // 1. All 3 sibling buses in generation 0 have strictly distinct lanes >= 12px apart
+    const gen0Buses = layout.buses
+      .filter((b) => model.unionsById.get(b.unionId)?.gen === 0)
+      .toSorted((a, b) => a.busY - b.busY);
+    expect(gen0Buses).toHaveLength(3);
+    for (let i = 1; i < gen0Buses.length; i += 1) {
+      expect(gen0Buses[i].busY - gen0Buses[i - 1].busY).toBeGreaterThanOrEqual(12);
+    }
+
+    // 2. Died-young strip sits laterally clear of union A's vertical stem -> straight 2-point stem (0 U-bends)
+    expect(layout.earlyLossStrips).toHaveLength(1);
+    const strip = layout.earlyLossStrips[0];
+    const unionABus = layout.buses.find((b) => b.unionId === strip.unionId);
+    expect(unionABus).toBeDefined();
+    expect(strip.x).toBeGreaterThanOrEqual((unionABus?.hubX ?? 0) + 12);
+    expect(unionABus?.stemPoints).toHaveLength(2);
+    expect(unionABus?.stemPoints[0].x).toBe(unionABus?.stemPoints[1].x);
+
+    // 3. Single chip inside Died-young strip spans full inner box width (170px inside 194px strip)
+    expect(strip.chips).toHaveLength(1);
+    const chip = strip.chips[0];
+    expect(chip.width).toBe(strip.width - 24);
+    expect(chip.width).toBeGreaterThanOrEqual(170);
+  });
 });

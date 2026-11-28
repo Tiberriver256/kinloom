@@ -6,6 +6,10 @@
   max-width: calc(100% - 32px);
 }
 
+.tree-toolbar-shell:global(.is-filters-open) {
+  z-index: 38;
+}
+
 :global(.tree-page-roll) .tree-toolbar-shell {
   position: sticky;
   top: calc(var(--topbar-height) + 8px);
@@ -23,7 +27,7 @@
   gap: 8px;
   overflow: visible;
   scrollbar-width: none;
-  background: var(--surface-overlay-card);
+  background: var(--surface-card);
   border: 1px solid var(--border-control);
   border-radius: var(--radius-md);
   padding: 5px 8px;
@@ -34,8 +38,18 @@
   display: none;
 }
 
-.tree-toolbar-row {
+.tree-toolbar-primary-bar,
+.tree-toolbar-filters-panel {
   display: contents;
+}
+
+.tree-filters-toggle-btn,
+.tree-filters-sheet-header {
+  display: none;
+}
+
+.tree-seg-detail {
+  display: inline;
 }
 
 .tree-search-desktop {
@@ -43,6 +57,7 @@
   display: inline-flex;
   align-items: center;
   flex-shrink: 0;
+  order: 1;
 }
 
 .tree-search-icon {
@@ -119,6 +134,7 @@
   padding: 0;
   align-items: center;
   justify-content: center;
+  order: 1;
 }
 
 .tree-search-toggle-btn:global(.active) {
@@ -246,6 +262,14 @@
   flex-shrink: 0;
 }
 
+.tree-layout-segmented {
+  order: 3;
+}
+
+.tree-scope-segmented {
+  order: 4;
+}
+
 .tree-segmented :global(.tree-seg-btn) {
   border-radius: var(--radius-sm);
   padding: 4px 11px;
@@ -272,6 +296,7 @@
 
 .tree-branch-select {
   max-width: 260px;
+  order: 2;
 }
 
 .tree-toolbar select:global(.pill-btn).tree-branch-select {
@@ -286,6 +311,7 @@
 }
 
 .tree-toolbar :global(.tree-add-person-btn) {
+  order: 6;
   padding: 4px 11px;
   border: 1px solid var(--accent-primary);
   border-radius: var(--radius-md);
@@ -297,19 +323,8 @@
   flex-shrink: 0;
 }
 
-.tree-toolbar :global(.tree-add-person-mobile-btn) {
-  display: none;
-  border: 1px solid var(--accent-primary);
-  border-radius: var(--radius-md);
-  background: var(--surface-card);
-  color: var(--accent-primary);
-  padding: 0;
-  flex: 0 0 auto;
-}
-
 @media (hover: hover) and (pointer: fine) {
-  .tree-toolbar :global(.tree-add-person-btn):hover,
-  .tree-toolbar :global(.tree-add-person-mobile-btn):hover {
+  .tree-toolbar :global(.tree-add-person-btn):hover {
     background: var(--accent-primary);
     color: var(--text-inverse);
   }
@@ -319,19 +334,41 @@
   position: relative;
   display: inline-flex;
   align-items: center;
-  gap: 4px;
   flex-shrink: 0;
+  order: 5;
+}
+
+.tree-anchor-control {
+  display: inline-flex;
+  align-items: stretch;
+  min-height: 30px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border-control);
+  background: var(--surface-card);
+  overflow: hidden;
+  transition:
+    border-color 0.14s ease,
+    background-color 0.14s ease;
+}
+
+.tree-anchor-control:hover {
+  border-color: var(--accent-primary);
+}
+
+.tree-anchor-control:global(.is-custom) {
+  border-color: var(--accent-primary);
+  background: var(--surface-linen);
 }
 
 .tree-anchor-trigger {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  min-height: 30px;
+  min-height: 28px;
   padding: 4px 10px;
-  border-radius: 999px;
-  border: 1px solid var(--border-control);
-  background: var(--surface-card);
+  border: none;
+  border-radius: 0;
+  background: transparent;
   color: var(--text-primary);
   font-family: var(--font-mono);
   font-size: 0.76rem;
@@ -341,21 +378,20 @@
 }
 
 .tree-anchor-trigger:hover {
-  border-color: var(--accent-primary);
+  color: var(--surface-header);
+}
+
+.tree-anchor-trigger:global(.is-custom) {
   color: var(--surface-header);
 }
 
 .tree-anchor-trigger:focus-visible,
-.tree-anchor-reset-btn:focus-visible,
-.tree-anchor-popover-reset:focus-visible {
+.tree-anchor-clear-btn:focus-visible,
+.tree-anchor-popover-reset:focus-visible,
+.tree-filters-toggle-btn:focus-visible,
+.tree-filters-sheet-close:focus-visible {
   outline: 2px solid var(--action-focus);
-  outline-offset: 2px;
-}
-
-.tree-anchor-trigger:global(.is-custom) {
-  border-color: var(--accent-primary);
-  background: var(--surface-linen);
-  color: var(--surface-header);
+  outline-offset: -2px;
 }
 
 .tree-anchor-trigger-label {
@@ -364,25 +400,27 @@
   gap: 4px;
 }
 
-.tree-anchor-reset-btn {
+.tree-anchor-clear-btn {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  min-height: 30px;
-  padding: 4px 10px;
-  border-radius: 999px;
-  border: 1px solid var(--border-control);
-  background: var(--surface-card);
+  min-width: 28px;
+  min-height: 28px;
+  padding: 0 7px;
+  border: none;
+  border-left: 1px solid var(--border-decorative);
+  border-radius: 0;
+  background: transparent;
   color: var(--text-secondary);
   font-family: var(--font-mono);
-  font-size: 0.74rem;
-  font-weight: 600;
-  white-space: nowrap;
+  font-size: 0.92rem;
+  font-weight: 700;
+  line-height: 1;
   cursor: pointer;
 }
 
-.tree-anchor-reset-btn:hover {
-  border-color: var(--accent-primary);
+.tree-anchor-clear-btn:hover {
+  background: var(--surface-card);
   color: var(--accent-primary);
 }
 
@@ -404,7 +442,7 @@
   width: 100%;
   min-height: 34px;
   padding: 5px 10px;
-  border-radius: 999px;
+  border-radius: var(--radius-md);
   border: 1px solid var(--border-control);
   background: var(--surface-card);
   color: var(--text-primary);
@@ -425,7 +463,7 @@
   align-self: flex-start;
   padding: 3px 10px;
   min-height: 28px;
-  border-radius: 999px;
+  border-radius: var(--radius-md);
   border: 1px solid var(--border-control);
   background: var(--surface-card);
   color: var(--accent-primary);
@@ -468,8 +506,9 @@
 
   .tree-toolbar {
     display: flex;
-    flex-direction: column;
-    align-items: stretch;
+    flex-direction: row;
+    flex-wrap: wrap;
+    align-items: center;
     gap: 6px;
     overflow: visible;
     background: transparent;
@@ -477,45 +516,6 @@
     border-radius: 0;
     box-shadow: none;
     padding: 0;
-  }
-
-  .tree-toolbar-row {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    min-width: 0;
-    width: 100%;
-  }
-
-  :global(.tree-toolbar-row-primary) {
-    justify-content: space-between;
-  }
-
-  :global(.tree-toolbar-row-secondary) {
-    justify-content: stretch;
-    flex-wrap: wrap;
-  }
-
-  :global(.tree-toolbar-row-secondary):global(.is-desktop-only) {
-    display: none;
-  }
-
-  :global(.tree-layout-segmented) {
-    flex: 0 0 auto;
-  }
-
-  :global(.tree-scope-segmented) {
-    flex: 1 1 100%;
-    width: 100%;
-    min-width: 0;
-    overflow: hidden;
-  }
-
-  :global(.tree-scope-segmented) :global(.tree-seg-btn) {
-    flex: 1 1 auto;
-    min-width: 0;
-    justify-content: center;
-    white-space: nowrap;
   }
 
   .tree-search-desktop {
@@ -531,22 +531,11 @@
     flex: 0 0 auto;
   }
 
-  .tree-toolbar :global(.tree-add-person-mobile-btn) {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    min-width: 44px;
-    min-height: 44px;
-    width: 44px;
-    height: 44px;
-  }
-
   .tree-toolbar select:global(.pill-btn).tree-branch-select {
-    flex: 1 1 80px;
+    flex: 1 1 140px;
     min-width: 0;
     max-width: none;
     min-height: 44px;
-    width: 100%;
     font-size: 16px;
   }
 
@@ -559,7 +548,8 @@
   }
 
   .tree-toolbar :global(.tree-add-person-btn) {
-    display: none;
+    min-height: 44px;
+    padding: 0 12px;
   }
 
   .tree-search-popover:global(.is-mobile-open) {
@@ -578,9 +568,12 @@
   }
 
   .tree-anchor-picker {
-    flex: 1 1 100%;
+    flex: 1 1 200px;
+  }
+
+  .tree-anchor-control {
     width: 100%;
-    flex-wrap: wrap;
+    min-height: 44px;
   }
 
   .tree-anchor-trigger {
@@ -590,9 +583,9 @@
     padding: 6px 12px;
   }
 
-  .tree-anchor-reset-btn {
+  .tree-anchor-clear-btn {
+    min-width: 44px;
     min-height: 44px;
-    padding: 6px 12px;
   }
 
   .tree-anchor-popover {
@@ -609,5 +602,224 @@
 
   .tree-anchor-popover-reset {
     min-height: 44px;
+  }
+}
+
+@media (max-width: 639px) {
+  .tree-toolbar-shell {
+    padding: 2px 8px;
+  }
+
+  .tree-toolbar {
+    flex-wrap: nowrap;
+    gap: 6px;
+  }
+
+  .tree-toolbar-primary-bar {
+    display: flex;
+    flex-wrap: nowrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 6px;
+    width: 100%;
+    min-width: 0;
+  }
+
+  .tree-layout-segmented,
+  .tree-scope-segmented {
+    order: 0;
+  }
+
+  .tree-segmented {
+    padding: 0;
+    gap: 0;
+    border-radius: var(--radius-md);
+  }
+
+  .tree-segmented :global(.tree-seg-btn) {
+    min-height: 44px;
+    height: 44px;
+    padding: 0 7px;
+    font-size: 0.74rem;
+    border: none;
+    box-sizing: border-box;
+  }
+
+  .tree-seg-detail {
+    display: none;
+  }
+
+  .tree-filters-toggle-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 4px;
+    min-height: 44px;
+    height: 44px;
+    padding: 0 8px;
+    border-radius: var(--radius-md);
+    border: 1px solid var(--border-control);
+    background: var(--surface-card);
+    color: var(--surface-header);
+    font-family: var(--font-mono);
+    font-size: 0.74rem;
+    font-weight: 600;
+    white-space: nowrap;
+    flex-shrink: 0;
+    box-sizing: border-box;
+  }
+
+  .tree-filters-toggle-btn:global(.has-active) {
+    border-color: var(--accent-primary);
+    background: var(--surface-linen);
+    color: var(--surface-header);
+  }
+
+  .tree-filters-toggle-btn:global(.active) {
+    background: var(--surface-header);
+    color: var(--text-inverse);
+    border-color: var(--surface-header);
+  }
+
+  .tree-filters-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 18px;
+    height: 18px;
+    padding: 0 5px;
+    border-radius: var(--radius-sm);
+    background: var(--accent-primary);
+    color: var(--text-inverse);
+    font-family: var(--font-mono);
+    font-size: 0.68rem;
+    font-weight: 700;
+    line-height: 1;
+  }
+
+  .tree-filters-toggle-btn:global(.active) .tree-filters-badge {
+    background: var(--surface-card);
+    color: var(--surface-header);
+  }
+
+  .tree-toolbar-filters-panel {
+    display: none;
+  }
+
+  .tree-toolbar-filters-panel:global(.is-open) {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 10px;
+    position: absolute;
+    top: calc(100% + 6px);
+    left: 0;
+    right: 0;
+    z-index: 45;
+    padding: 12px;
+    background: var(--surface-card);
+    border: 1px solid var(--border-control);
+    border-radius: var(--radius-md);
+    box-shadow: var(--shadow-active);
+    max-height: calc(100dvh - 168px);
+    overflow-y: auto;
+    overscroll-behavior: contain;
+  }
+
+  .tree-filters-sheet-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    padding-bottom: 6px;
+    border-bottom: 1px solid var(--border-decorative);
+  }
+
+  .tree-filters-sheet-title {
+    font-family: var(--font-mono);
+    font-size: 0.76rem;
+    font-weight: 700;
+    letter-spacing: 0.03em;
+    text-transform: uppercase;
+    color: var(--text-secondary);
+  }
+
+  .tree-filters-sheet-close {
+    min-height: 36px;
+    padding: 4px 12px;
+    border-radius: var(--radius-md);
+    border: 1px solid var(--border-control);
+    background: var(--surface-linen);
+    color: var(--surface-header);
+    font-family: var(--font-mono);
+    font-size: 0.76rem;
+    font-weight: 600;
+    cursor: pointer;
+  }
+
+  .tree-toolbar-filters-panel .tree-search-desktop {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    width: 100%;
+    order: 0;
+  }
+
+  .tree-toolbar-filters-panel .tree-search-icon {
+    top: 15px;
+  }
+
+  .tree-toolbar-filters-panel .tree-search-clear {
+    top: 11px;
+  }
+
+  .tree-toolbar-filters-panel .tree-search-input {
+    width: 100%;
+    min-height: 44px;
+    font-size: 16px;
+  }
+
+  .tree-toolbar-filters-panel .tree-search-toggle-btn {
+    display: none;
+  }
+
+  .tree-toolbar-filters-panel .tree-search-popover {
+    position: relative;
+    top: auto;
+    left: auto;
+    width: 100%;
+    max-width: none;
+    margin-top: 6px;
+    box-shadow: none;
+  }
+
+  .tree-toolbar-filters-panel select:global(.pill-btn).tree-branch-select {
+    flex: 0 0 auto;
+    width: 100%;
+    order: 0;
+  }
+
+  .tree-toolbar-filters-panel .tree-anchor-picker {
+    flex: 0 0 auto;
+    width: 100%;
+    flex-direction: column;
+    align-items: stretch;
+    order: 0;
+  }
+
+  .tree-toolbar-filters-panel .tree-anchor-popover {
+    position: relative;
+    top: auto;
+    left: auto;
+    right: auto;
+    width: 100%;
+    margin-top: 6px;
+    box-shadow: none;
+  }
+
+  .tree-toolbar-filters-panel :global(.tree-add-person-btn) {
+    order: 0;
+    width: 100%;
+    justify-content: center;
   }
 }

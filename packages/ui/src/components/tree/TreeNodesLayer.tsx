@@ -226,12 +226,19 @@ export const EarlyLossStripLayer: React.FC<{
       (strip.parentIds.some((pid) => highlightedIds.has(pid)) ||
         strip.chips.some((chip) => highlightedIds.has(chip.person.id)))
   );
+  const isStemInsideStrip = strip.stemFromX >= strip.x && strip.stemFromX <= strip.x + strip.width;
+  const attachY = Math.round(strip.y + 14);
+  const stripConnectorPath = isStemInsideStrip
+    ? `M ${strip.stemFromX} ${strip.stemFromY} V ${strip.y}`
+    : strip.stemFromX < strip.x
+      ? `M ${strip.stemFromX} ${strip.stemFromY} V ${attachY} H ${strip.x}`
+      : `M ${strip.stemFromX} ${strip.stemFromY} V ${attachY} H ${strip.x + strip.width}`;
   return (
     <g className={`tree-diagram-early-strip${anyLit ? ' is-lit' : ''}`} data-union-id={strip.unionId}>
       <title>{KINLOOM_VOCABULARY.tree.diedYoungTooltip}</title>
       <path
         className={`tree-edge${anyLit ? ' is-lit' : ''}`}
-        d={`M ${strip.stemFromX} ${strip.stemFromY} V ${strip.y}`}
+        d={stripConnectorPath}
         fill="none"
         stroke={anyLit ? 'var(--accent-primary)' : 'var(--border-control)'}
         strokeWidth="1.2"
@@ -260,6 +267,8 @@ export const EarlyLossStripLayer: React.FC<{
       {strip.chips.map((chip) => {
         const isSelected = selectedPersonId === chip.person.id;
         const isLit = Boolean(highlightedIds?.has(chip.person.id));
+        const safeChipId = chip.person.id.replace(/[^a-zA-Z0-9_-]/g, '_');
+        const chipClipId = `tree-early-chip-clip-${safeChipId}`;
         return (
           <g
             key={chip.person.id}
@@ -289,6 +298,17 @@ export const EarlyLossStripLayer: React.FC<{
             }}
           >
             <title>{chip.person.full_name}</title>
+            <defs>
+              <clipPath id={chipClipId}>
+                <rect
+                  x={2}
+                  y={2}
+                  width={Math.max(0, chip.width - 4)}
+                  height={Math.max(0, chip.height - 4)}
+                  rx={2}
+                />
+              </clipPath>
+            </defs>
             <rect
               width={chip.width}
               height={chip.height}
@@ -297,25 +317,31 @@ export const EarlyLossStripLayer: React.FC<{
               stroke={isSelected || isLit ? 'var(--accent-primary)' : 'var(--border-control)'}
               strokeWidth={isSelected ? 1.8 : 1}
             />
-            <text
-              x={8}
-              y={13}
-              fontSize="10.5"
-              fontWeight="600"
-              fontFamily="var(--font-serif)"
-              fill={isSelected ? 'var(--text-inverse)' : 'var(--text-primary)'}
-            >
-              {fitTreeCardNameToWidth(chip.person.given_name || chip.person.full_name, chip.width - 16, 10.5)}
-            </text>
-            <text
-              x={8}
-              y={25}
-              fontSize="9.5"
-              fontFamily="var(--font-mono)"
-              fill={isSelected ? 'var(--surface-linen)' : 'var(--text-secondary)'}
-            >
-              {formatEarlyLossAgeLabel(chip.person)}
-            </text>
+            <g clipPath={`url(#${chipClipId})`}>
+              <text
+                x={8}
+                y={13}
+                fontSize="10.5"
+                fontWeight="600"
+                fontFamily="var(--font-serif)"
+                fill={isSelected ? 'var(--text-inverse)' : 'var(--text-primary)'}
+              >
+                {fitTreeCardNameToWidth(
+                  chip.person.given_name || chip.person.full_name,
+                  chip.width - 16,
+                  10.5
+                )}
+              </text>
+              <text
+                x={8}
+                y={25}
+                fontSize="9.5"
+                fontFamily="var(--font-mono)"
+                fill={isSelected ? 'var(--surface-linen)' : 'var(--text-secondary)'}
+              >
+                {formatEarlyLossAgeLabel(chip.person)}
+              </text>
+            </g>
           </g>
         );
       })}
@@ -336,11 +362,19 @@ export const SiblingToggleItem: React.FC<{
     mode: toggle.mode,
   });
 
+  const isStemInsideToggle = toggle.stemFromX >= toggle.x && toggle.stemFromX <= toggle.x + toggle.width;
+  const toggleAttachY = Math.round(toggle.y + toggle.height / 2);
+  const toggleConnectorPath = isStemInsideToggle
+    ? `M ${toggle.stemFromX} ${toggle.stemFromY} V ${toggle.y}`
+    : toggle.stemFromX < toggle.x
+      ? `M ${toggle.stemFromX} ${toggle.stemFromY} V ${toggleAttachY} H ${toggle.x}`
+      : `M ${toggle.stemFromX} ${toggle.stemFromY} V ${toggleAttachY} H ${toggle.x + toggle.width}`;
+
   return (
     <g className={`tree-diagram-sibling-toggle${isLit ? ' is-lit' : ''}`}>
       <path
         className={`tree-edge${isLit ? ' is-lit' : ''}`}
-        d={`M ${toggle.stemFromX} ${toggle.stemFromY} V ${toggle.y}`}
+        d={toggleConnectorPath}
         fill="none"
         stroke={isLit ? 'var(--accent-primary)' : 'var(--border-control)'}
         strokeWidth="1.2"

@@ -417,6 +417,29 @@ describe('Tree layout property-based invariants (deterministic seed)', () => {
           expect(strip.width).toBeGreaterThan(0);
           expect(strip.height).toBeGreaterThan(0);
           expect(strip.chips.length).toBeGreaterThan(0);
+          // Every chip lies strictly within strip inner padding and fills available row width
+          const chipsPerRow = Math.min(3, strip.chips.length);
+          const expectedChipW = Math.floor((strip.width - 24 - (chipsPerRow - 1) * 8) / chipsPerRow);
+          for (const chip of strip.chips) {
+            expect(chip.x).toBeGreaterThanOrEqual(strip.x + 12);
+            expect(chip.x + chip.width).toBeLessThanOrEqual(strip.x + strip.width - 12);
+            expect(chip.width).toBe(expectedChipW);
+          }
+        }
+        // 7. Sibling horizontal buses in the same generation band maintain >= 12px vertical lane separation
+        const busesByGen = new Map<number, number[]>();
+        for (const bus of layout1.buses) {
+          const union = model1.unionsById.get(bus.unionId);
+          if (!union) continue;
+          const list = busesByGen.get(union.gen) ?? [];
+          list.push(bus.busY);
+          busesByGen.set(union.gen, list);
+        }
+        for (const laneYs of busesByGen.values()) {
+          const sorted = [...laneYs].sort((a, b) => a - b);
+          for (let i = 1; i < sorted.length; i += 1) {
+            expect(sorted[i] - sorted[i - 1]).toBeGreaterThanOrEqual(12);
+          }
         }
         for (const rail of layout1.hangingRails) {
           expect(Number.isFinite(rail.spineX)).toBe(true);

@@ -1,5 +1,6 @@
 import type { BranchConfig, Person } from '@kinloom/core';
 import type React from 'react';
+import { useCallback, useEffect, useId, useRef, useState } from 'react';
 import type { TreeLineageMode, TreeSearchCandidate, TreeViewSurface } from '../../lib/archivalTreeModel.js';
 import { cx, joinClasses } from '../../lib/cx.js';
 import { KINLOOM_VOCABULARY } from '../../lib/vocabulary.js';
@@ -62,104 +63,91 @@ export const TreeToolbar: React.FC<TreeToolbarProps> = ({
   anchorCandidates = [],
   onSelectAnchor,
   onResetAnchor,
-}) => (
-  <div ref={shellRef} className={cx(treeToolbarStyles, 'tree-toolbar-shell')}>
+}) => {
+  const filtersPanelId = useId();
+  const [mobileFiltersOpen, setMobileFiltersOpen] = useState(false);
+  const localShellRef = useRef<HTMLDivElement | null>(null);
+  const filtersTriggerRef = useRef<HTMLButtonElement | null>(null);
+
+  const assignShellRef = useCallback(
+    (node: HTMLDivElement | null): void => {
+      localShellRef.current = node;
+      if (shellRef) {
+        shellRef.current = node;
+      }
+    },
+    [shellRef]
+  );
+
+  const activeFilterCount =
+    (branchFilter !== 'all' ? 1 : 0) +
+    (activeAnchor !== null ? 1 : 0) +
+    (searchQuery.trim().length > 0 ? 1 : 0);
+
+  useEffect(() => {
+    if (!mobileFiltersOpen) {
+      return undefined;
+    }
+    const onPointerDown = (e: MouseEvent): void => {
+      if (localShellRef.current && e.target instanceof Node && !localShellRef.current.contains(e.target)) {
+        setMobileFiltersOpen(false);
+      }
+    };
+    const onKeyDown = (e: KeyboardEvent): void => {
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        setMobileFiltersOpen(false);
+        filtersTriggerRef.current?.focus();
+      }
+    };
+    document.addEventListener('mousedown', onPointerDown);
+    document.addEventListener('keydown', onKeyDown);
+    return (): void => {
+      document.removeEventListener('mousedown', onPointerDown);
+      document.removeEventListener('keydown', onKeyDown);
+    };
+  }, [mobileFiltersOpen]);
+
+  return (
     <div
-      className={cx(treeToolbarStyles, 'tree-toolbar')}
-      role="toolbar"
-      aria-label={KINLOOM_VOCABULARY.tree.toolbarAria}
+      ref={assignShellRef}
+      className={cx(treeToolbarStyles, `tree-toolbar-shell${mobileFiltersOpen ? ' is-filters-open' : ''}`)}
     >
-      <div className={cx(treeToolbarStyles, 'tree-toolbar-row tree-toolbar-row-primary')}>
-        <TreePersonSearch
-          query={searchQuery}
-          onQueryChange={onSearchQueryChange}
-          candidates={searchCandidates}
-          onSelectCandidate={onSelectSearchPerson}
-          mobileOpen={mobileSearchOpen}
-          onMobileOpenChange={onMobileSearchOpenChange}
-        />
-
-        {populatedBranches.length > 1 && (
-          <select
-            className={joinClasses(
-              cx(controlStyles, 'pill-btn'),
-              cx(treeToolbarStyles, 'tree-branch-select')
-            )}
-            aria-label={KINLOOM_VOCABULARY.tree.branchSelectAria}
-            value={branchFilter}
-            onChange={(e) => {
-              onBranchFilterChange(e.target.value);
-            }}
+      <div
+        className={cx(treeToolbarStyles, 'tree-toolbar')}
+        role="toolbar"
+        aria-label={KINLOOM_VOCABULARY.tree.toolbarAria}
+      >
+        <div className={cx(treeToolbarStyles, 'tree-toolbar-primary-bar')}>
+          <div
+            className={cx(treeToolbarStyles, 'tree-segmented tree-layout-segmented')}
+            role="group"
+            aria-label={KINLOOM_VOCABULARY.tree.layoutGroupAria}
           >
-            <option value="all">
-              {KINLOOM_VOCABULARY.tree.allBranches} ({branchCounts.all || 0})
-            </option>
-            {populatedBranches.map((branch) => (
-              <option key={branch.id} value={branch.id}>
-                {branch.label} ({branchCounts[branch.id] || 0})
-              </option>
-            ))}
-          </select>
-        )}
-
-        {canEdit && (
-          <button
-            type="button"
-            className={cx(controlStyles, 'pill-btn tree-add-person-mobile-btn')}
-            aria-label="Add person"
-            title={KINLOOM_VOCABULARY.tree.addPerson}
-            onClick={onAddPerson}
-          >
-            <svg
-              width="16"
-              height="16"
-              viewBox="0 0 16 16"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="1.9"
-              strokeLinecap="round"
-              aria-hidden="true"
+            <button
+              type="button"
+              className={cx(controlStyles, `pill-btn tree-seg-btn${surface === 'roll' ? ' active' : ''}`)}
+              aria-pressed={surface === 'roll'}
+              onClick={() => {
+                setMobileFiltersOpen(false);
+                onSurfaceChange('roll');
+              }}
             >
-              <path d="M8 3v10M3 8h10" />
-            </svg>
-          </button>
-        )}
+              {KINLOOM_VOCABULARY.tree.listViewShort}
+            </button>
+            <button
+              type="button"
+              className={cx(controlStyles, `pill-btn tree-seg-btn${surface === 'diagram' ? ' active' : ''}`)}
+              aria-pressed={surface === 'diagram'}
+              onClick={() => {
+                setMobileFiltersOpen(false);
+                onSurfaceChange('diagram');
+              }}
+            >
+              {KINLOOM_VOCABULARY.tree.chartViewShort}
+            </button>
+          </div>
 
-        <div
-          className={cx(treeToolbarStyles, 'tree-segmented tree-layout-segmented')}
-          role="group"
-          aria-label={KINLOOM_VOCABULARY.tree.layoutGroupAria}
-        >
-          <button
-            type="button"
-            className={cx(controlStyles, `pill-btn tree-seg-btn${surface === 'roll' ? ' active' : ''}`)}
-            aria-pressed={surface === 'roll'}
-            onClick={() => {
-              onSurfaceChange('roll');
-            }}
-          >
-            {KINLOOM_VOCABULARY.tree.listViewShort}
-          </button>
-          <button
-            type="button"
-            className={cx(controlStyles, `pill-btn tree-seg-btn${surface === 'diagram' ? ' active' : ''}`)}
-            aria-pressed={surface === 'diagram'}
-            onClick={() => {
-              onSurfaceChange('diagram');
-            }}
-          >
-            {KINLOOM_VOCABULARY.tree.chartViewShort}
-          </button>
-        </div>
-      </div>
-
-      {(showDirectToggle || Boolean(onSelectAnchor) || canEdit) && (
-        <div
-          className={cx(
-            treeToolbarStyles,
-            `tree-toolbar-row tree-toolbar-row-secondary${showDirectToggle || onSelectAnchor ? '' : ' is-desktop-only'}`
-          )}
-        >
           {showDirectToggle && (
             <div
               className={cx(treeToolbarStyles, 'tree-segmented tree-scope-segmented')}
@@ -171,22 +159,123 @@ export const TreeToolbar: React.FC<TreeToolbarProps> = ({
                 className={cx(controlStyles, `pill-btn tree-seg-btn${mode === 'spine' ? ' active' : ''}`)}
                 aria-pressed={mode === 'spine'}
                 onClick={() => {
+                  setMobileFiltersOpen(false);
                   onModeChange('spine');
                 }}
               >
-                {KINLOOM_VOCABULARY.tree.directLine}
+                Direct<span className={cx(treeToolbarStyles, 'tree-seg-detail')}> Line</span>
               </button>
               <button
                 type="button"
                 className={cx(controlStyles, `pill-btn tree-seg-btn${mode === 'full' ? ' active' : ''}`)}
                 aria-pressed={mode === 'full'}
                 onClick={() => {
+                  setMobileFiltersOpen(false);
                   onModeChange('full');
                 }}
               >
-                {KINLOOM_VOCABULARY.tree.fullTree} ({activeCount})
+                Full<span className={cx(treeToolbarStyles, 'tree-seg-detail')}> Tree ({activeCount})</span>
               </button>
             </div>
+          )}
+
+          <button
+            ref={filtersTriggerRef}
+            type="button"
+            className={joinClasses(
+              cx(controlStyles, 'pill-btn'),
+              cx(
+                treeToolbarStyles,
+                `tree-filters-toggle-btn${mobileFiltersOpen ? ' active' : ''}${activeFilterCount > 0 ? ' has-active' : ''}`
+              )
+            )}
+            aria-expanded={mobileFiltersOpen}
+            aria-controls={filtersPanelId}
+            aria-label={
+              activeFilterCount > 0 ? `Filters and trace (${activeFilterCount} active)` : 'Filters and trace'
+            }
+            onClick={() => {
+              setMobileFiltersOpen((prev) => !prev);
+            }}
+          >
+            <svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true" focusable="false">
+              <path
+                d="M2.5 4h11M4.5 8h7M6.5 12h3"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="1.6"
+                strokeLinecap="round"
+              />
+            </svg>
+            <span>Filters</span>
+            {activeFilterCount > 0 && (
+              <span
+                className={cx(treeToolbarStyles, 'tree-filters-badge')}
+                data-active-count={activeFilterCount}
+                aria-hidden="true"
+              >
+                {activeFilterCount}
+              </span>
+            )}
+          </button>
+        </div>
+
+        <div
+          id={filtersPanelId}
+          className={cx(
+            treeToolbarStyles,
+            `tree-toolbar-filters-panel${mobileFiltersOpen ? ' is-open' : ''}`
+          )}
+          data-filters-open={mobileFiltersOpen ? 'true' : 'false'}
+        >
+          <div className={cx(treeToolbarStyles, 'tree-filters-sheet-header')}>
+            <span className={cx(treeToolbarStyles, 'tree-filters-sheet-title')}>Filters &amp; Trace</span>
+            <button
+              type="button"
+              className={cx(treeToolbarStyles, 'tree-filters-sheet-close')}
+              aria-label="Close filters and trace"
+              onClick={() => {
+                setMobileFiltersOpen(false);
+                filtersTriggerRef.current?.focus();
+              }}
+            >
+              Done
+            </button>
+          </div>
+
+          <TreePersonSearch
+            query={searchQuery}
+            onQueryChange={onSearchQueryChange}
+            candidates={searchCandidates}
+            onSelectCandidate={(person) => {
+              setMobileFiltersOpen(false);
+              onSelectSearchPerson(person);
+            }}
+            mobileOpen={mobileSearchOpen}
+            onMobileOpenChange={onMobileSearchOpenChange}
+          />
+
+          {populatedBranches.length > 1 && (
+            <select
+              className={joinClasses(
+                cx(controlStyles, 'pill-btn'),
+                cx(treeToolbarStyles, 'tree-branch-select')
+              )}
+              aria-label={KINLOOM_VOCABULARY.tree.branchSelectAria}
+              value={branchFilter}
+              onChange={(e) => {
+                onBranchFilterChange(e.target.value);
+              }}
+            >
+              <option value="all">
+                {KINLOOM_VOCABULARY.tree.allBranches} ({branchCounts.all || 0})
+              </option>
+              {populatedBranches.map((branch) => (
+                <option key={branch.id} value={branch.id}>
+                  {branch.label} ({branchCounts[branch.id] || 0})
+                </option>
+              ))}
+            </select>
           )}
 
           {onSelectAnchor && onAnchorQueryChange && onResetAnchor && (
@@ -195,7 +284,10 @@ export const TreeToolbar: React.FC<TreeToolbarProps> = ({
               query={anchorQuery}
               onQueryChange={onAnchorQueryChange}
               candidates={anchorCandidates}
-              onSelectAnchor={onSelectAnchor}
+              onSelectAnchor={(person) => {
+                onSelectAnchor(person);
+                setMobileFiltersOpen(false);
+              }}
               onResetAnchor={onResetAnchor}
             />
           )}
@@ -204,13 +296,16 @@ export const TreeToolbar: React.FC<TreeToolbarProps> = ({
             <button
               type="button"
               className={cx(controlStyles, 'pill-btn tree-add-person-btn')}
-              onClick={onAddPerson}
+              onClick={() => {
+                setMobileFiltersOpen(false);
+                onAddPerson();
+              }}
             >
               {KINLOOM_VOCABULARY.tree.addPerson}
             </button>
           )}
         </div>
-      )}
+      </div>
     </div>
-  </div>
-);
+  );
+};

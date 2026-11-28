@@ -4,10 +4,18 @@ import { parseKinloomConfig } from '@kinloom/core';
 import { act } from 'react';
 import { createRoot } from 'react-dom/client';
 import { MemoryRouter } from 'react-router-dom';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import { TreeAnchorPicker } from '../components/tree/TreeAnchorPicker.js';
+import {
+  DiagramNodeCard,
+  EarlyLossStripLayer,
+  SiblingToggleItem,
+} from '../components/tree/TreeNodesLayer.js';
+import { TreeToolbar } from '../components/tree/TreeToolbar.js';
 import { ArchiveProvider } from '../context/ArchiveProvider.js';
 import { buildSynthetic145PersonArchive } from '../lib/tree/largeMultiBranchTree.test.js';
 import { TreePage } from './TreePage.js';
+import { TreeZoomControls } from './tree/TreeZoomControls.js';
 
 declare global {
   var IS_REACT_ACT_ENVIRONMENT: boolean | undefined;
@@ -679,5 +687,505 @@ describe('TreePage', () => {
     });
     expect(toggleBtn?.getAttribute('aria-expanded')).toBe('true');
     expect(container.querySelector('.tree-minimap-surface')).not.toBeNull();
+  });
+
+  it('toggles mobile Filters popover with active badge, embeds Search/Branch/Trace-from inside it, and resets custom anchor via inline × button (#79)', () => {
+    const { container } = mountTreeAtWidth(390, '/tree?surface=diagram&mode=spine');
+
+    // No standalone "Reset to default" button exists in the toolbar
+    const toolbar = container.querySelector('.tree-toolbar');
+    expect(toolbar).not.toBeNull();
+    const standaloneReset = [...(toolbar?.querySelectorAll('button') ?? [])].find(
+      (b) => b.textContent?.trim() === 'Reset to default'
+    );
+    expect(standaloneReset).toBeUndefined();
+
+    // Primary row contains List/Chart, Direct/Full, and Filters trigger (initially closed, 0 active badge)
+    const filtersBtn = container.querySelector<HTMLButtonElement>('button.tree-filters-toggle-btn');
+    expect(filtersBtn).not.toBeNull();
+    expect(filtersBtn?.getAttribute('aria-expanded')).toBe('false');
+    expect(filtersBtn?.querySelector('.tree-filters-badge')).toBeNull();
+
+    const filtersPanel = container.querySelector<HTMLElement>('.tree-toolbar-filters-panel');
+    expect(filtersPanel?.dataset.filtersOpen).toBe('false');
+
+    // Open Filters popover
+    act(() => {
+      filtersBtn?.click();
+    });
+    expect(filtersBtn?.getAttribute('aria-expanded')).toBe('true');
+    expect(filtersPanel?.dataset.filtersOpen).toBe('true');
+    expect(filtersPanel?.querySelector('input.tree-search-input')).not.toBeNull();
+    expect(filtersPanel?.querySelector('select.tree-branch-select')).not.toBeNull();
+    expect(filtersPanel?.querySelector('.tree-anchor-picker')).not.toBeNull();
+
+    // Select a branch filter -> badge displays "1"
+    const branchSelect = filtersPanel?.querySelector<HTMLSelectElement>('select.tree-branch-select');
+    act(() => {
+      if (branchSelect) {
+        branchSelect.value = 'hale_line';
+        branchSelect.dispatchEvent(new window.Event('change', { bubbles: true }));
+      }
+    });
+    expect(filtersBtn?.querySelector('.tree-filters-badge')?.textContent?.trim()).toBe('1');
+
+    // Select a custom anchor inside Trace from: -> badge increments, inline × button renders inside Trace from:
+    const anchorTrigger = filtersPanel?.querySelector<HTMLButtonElement>('button.tree-anchor-trigger');
+    expect(anchorTrigger).not.toBeNull();
+    act(() => {
+      anchorTrigger?.click();
+    });
+    const henryOpt = [...(filtersPanel?.querySelectorAll<HTMLButtonElement>('[role="option"]') ?? [])].find(
+      (opt) => opt.textContent?.includes('Henry Hale')
+    );
+    expect(henryOpt).not.toBeUndefined();
+    act(() => {
+      henryOpt?.click();
+    });
+
+    // Selecting anchor auto-closes the Filters sheet and updates active badge
+    expect(filtersBtn?.getAttribute('aria-expanded')).toBe('false');
+    const badgeCount = Number(filtersBtn?.querySelector('.tree-filters-badge')?.textContent?.trim() ?? '0');
+    expect(badgeCount).toBeGreaterThanOrEqual(1);
+
+    // Reopen Filters sheet and reset anchor using the inline × button inside .tree-anchor-control
+    act(() => {
+      filtersBtn?.click();
+    });
+    const inlineClearBtn = filtersPanel?.querySelector<HTMLButtonElement>(
+      '.tree-anchor-control button.tree-anchor-clear-btn[aria-label="Reset trace anchor to default"]'
+    );
+    expect(inlineClearBtn).not.toBeNull();
+    expect(inlineClearBtn?.textContent?.trim()).toBe('×');
+    act(() => {
+      inlineClearBtn?.click();
+    });
+    expect(filtersPanel?.querySelector('.tree-anchor-control button.tree-anchor-clear-btn')).toBeNull();
+
+    // Pressing Escape closes the Filters popover
+    act(() => {
+      document.dispatchEvent(new window.KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+    });
+    expect(filtersBtn?.getAttribute('aria-expanded')).toBe('false');
+    expect(filtersPanel?.dataset.filtersOpen).toBe('false');
+
+    // Opaque zoom controls hook classes are present on diagram view (including Loom toggle)
+    const zoomControls = container.querySelector('.tree-controls.tree-zoom-controls');
+    expect(zoomControls).not.toBeNull();
+    expect(
+      [...(zoomControls?.querySelectorAll('button.tree-zoom-btn') ?? [])].map((b) => b.textContent?.trim())
+    ).toEqual(['+', '−', 'Fit', '1:1', 'Loom']);
+  });
+
+  it('exercises TreeAnchorPicker keyboard/outside-click/reset, TreeToolbar Done/outside-click/Add Person, TreeZoomControls Loom active, and TreeNodesLayer lateral connectors & zoom tiers (#79)', () => {
+    const p1 = makePerson({
+      id: 'p_anchor_1',
+      slug: 'thomas-hale',
+      full_name: 'Thomas Hale',
+      given_name: 'Thomas',
+      surname: 'Hale',
+      birth_year: 1810,
+      death_year: 1882,
+    });
+    const p2 = makePerson({
+      id: 'p_anchor_2',
+      slug: 'owen-vance',
+      full_name: 'Owen Vance',
+      given_name: 'Owen',
+      surname: 'Vance',
+      birth_year: 1814,
+      death_year: 1890,
+      branch: 'vance_line',
+    });
+    const earlyChild = makePerson({
+      id: 'p_early_1',
+      slug: 'baby-hale',
+      full_name: 'Clara Hale',
+      given_name: '',
+      surname: 'Hale',
+      birth_year: 1841,
+      death_year: 1842,
+    });
+
+    const container = document.createElement('div');
+    document.body.append(container);
+    const root = createRoot(container);
+    try {
+      const onSelectAnchor = vi.fn();
+      const onResetAnchor = vi.fn();
+      const onAddPerson = vi.fn();
+      const onSelectNode = vi.fn();
+      const onToggleSibs = vi.fn();
+      let anchorQuery = 'zzz';
+
+      const renderHarness = (nextQuery: string, emptyCandidates: boolean): void => {
+        anchorQuery = nextQuery;
+        const candidates = emptyCandidates
+          ? []
+          : [
+              {
+                person: p1,
+                lifespanLabel: '1810–1882',
+                branchId: 'hale_line',
+                branchLabel: 'Hale Line',
+                genLabel: 'Gen 1',
+                isCollapsed: false,
+                isOutsideCurrentMode: false,
+                isOutsideCurrentBranch: false,
+              },
+              {
+                person: p2,
+                lifespanLabel: '1814–1890',
+                branchId: 'vance_line',
+                branchLabel: 'Vance Line',
+                genLabel: 'Gen 1',
+                isCollapsed: false,
+                isOutsideCurrentMode: false,
+                isOutsideCurrentBranch: true,
+              },
+            ];
+
+        act(() => {
+          root.render(
+            <div>
+              <TreeToolbar
+                populatedBranches={TEST_SITE_CONFIG.branches ?? []}
+                branchCounts={{ all: 2, hale_line: 1, vance_line: 1 }}
+                branchFilter="hale_line"
+                onBranchFilterChange={() => {}}
+                showDirectToggle={true}
+                mode="spine"
+                activeCount={2}
+                onModeChange={() => {}}
+                surface="diagram"
+                onSurfaceChange={() => {}}
+                searchQuery="Thomas"
+                onSearchQueryChange={() => {}}
+                searchCandidates={[]}
+                onSelectSearchPerson={() => {}}
+                mobileSearchOpen={false}
+                onMobileSearchOpenChange={() => {}}
+                canEdit={true}
+                onAddPerson={onAddPerson}
+                activeAnchor={p1}
+                anchorQuery={anchorQuery}
+                onAnchorQueryChange={(q) => {
+                  renderHarness(q, q === 'zzz');
+                }}
+                anchorCandidates={candidates}
+                onSelectAnchor={onSelectAnchor}
+                onResetAnchor={onResetAnchor}
+              />
+              <TreeAnchorPicker
+                activeAnchor={p1}
+                query={anchorQuery}
+                onQueryChange={(q) => {
+                  renderHarness(q, q === 'zzz');
+                }}
+                candidates={candidates}
+                onSelectAnchor={onSelectAnchor}
+                onResetAnchor={onResetAnchor}
+              />
+              <TreeZoomControls
+                zoomPercent={35}
+                onZoomIn={() => {}}
+                onZoomOut={() => {}}
+                onFit={() => {}}
+                onResetZoom={() => {}}
+                loomActive={true}
+                onToggleLoom={() => {}}
+              />
+              <svg width="800" height="400">
+                <title>Test Tree Nodes</title>
+                <DiagramNodeCard
+                  node={{
+                    person: p1,
+                    x: 10,
+                    y: 10,
+                    width: 170,
+                    height: 52,
+                    gen: 0,
+                    isDirect: false,
+                    placement: 'rank',
+                    unionId: null,
+                  }}
+                  displayName="Thomas Hale"
+                  surnameOrGiven="Hale"
+                  lifespan="1810–1882"
+                  thumbUrl="/media/thomas.jpg"
+                  initials="TH"
+                  isSelected={false}
+                  isLit={false}
+                  isAnchor={true}
+                  semanticZoom="detail"
+                  onSelect={onSelectNode}
+                />
+                <DiagramNodeCard
+                  node={{
+                    person: p2,
+                    x: 200,
+                    y: 10,
+                    width: 170,
+                    height: 52,
+                    gen: 0,
+                    isDirect: true,
+                    placement: 'rank',
+                    unionId: null,
+                  }}
+                  displayName="Owen Vance"
+                  surnameOrGiven="Vance"
+                  lifespan="1814–1890"
+                  thumbUrl={null}
+                  initials="OV"
+                  isSelected={false}
+                  isLit={false}
+                  semanticZoom="compact"
+                  onSelect={onSelectNode}
+                />
+                <DiagramNodeCard
+                  node={{
+                    person: earlyChild,
+                    x: 400,
+                    y: 10,
+                    width: 170,
+                    height: 52,
+                    gen: 1,
+                    isDirect: true,
+                    placement: 'rank',
+                    unionId: null,
+                  }}
+                  displayName="Clara Hale"
+                  surnameOrGiven="Hale"
+                  lifespan="1841–1842"
+                  thumbUrl={null}
+                  initials="CH"
+                  isSelected={true}
+                  isLit={true}
+                  semanticZoom="overview"
+                  onSelect={onSelectNode}
+                />
+                <EarlyLossStripLayer
+                  strip={{
+                    unionId: 'u_left',
+                    parentIds: ['p_anchor_1'],
+                    x: 120,
+                    y: 120,
+                    width: 110,
+                    height: 52,
+                    stemFromX: 60,
+                    stemFromY: 90,
+                    chips: [{ person: earlyChild, unionId: 'u_left', x: 126, y: 138, width: 96, height: 30 }],
+                  }}
+                  selectedPersonId={earlyChild.id}
+                  highlightedIds={new Set([earlyChild.id])}
+                  onSelect={onSelectNode}
+                />
+                <EarlyLossStripLayer
+                  strip={{
+                    unionId: 'u_right',
+                    parentIds: ['p_anchor_2'],
+                    x: 260,
+                    y: 120,
+                    width: 110,
+                    height: 52,
+                    stemFromX: 420,
+                    stemFromY: 90,
+                    chips: [{ person: p2, unionId: 'u_right', x: 266, y: 138, width: 96, height: 30 }],
+                  }}
+                  selectedPersonId={null}
+                  highlightedIds={null}
+                  onSelect={onSelectNode}
+                />
+                <SiblingToggleItem
+                  toggle={{
+                    unionId: 'u_sib_left',
+                    parentIds: ['p_anchor_1'],
+                    x: 120,
+                    y: 220,
+                    width: 120,
+                    height: 28,
+                    stemFromX: 60,
+                    stemFromY: 190,
+                    hiddenCount: 2,
+                    totalCollateralCount: 2,
+                    visibleChildCount: 1,
+                    isExpanded: false,
+                    isDirect: true,
+                    mode: 'spine',
+                  }}
+                  isLit={true}
+                  onToggle={onToggleSibs}
+                />
+                <SiblingToggleItem
+                  toggle={{
+                    unionId: 'u_sib_right',
+                    parentIds: ['p_anchor_2'],
+                    x: 260,
+                    y: 220,
+                    width: 120,
+                    height: 28,
+                    stemFromX: 440,
+                    stemFromY: 190,
+                    hiddenCount: 0,
+                    totalCollateralCount: 2,
+                    visibleChildCount: 3,
+                    isExpanded: true,
+                    isDirect: false,
+                    mode: 'full',
+                  }}
+                  isLit={false}
+                  onToggle={onToggleSibs}
+                />
+              </svg>
+            </div>
+          );
+        });
+      };
+
+      renderHarness('zzz', true);
+
+      // TreeToolbar: badge counts branch + anchor + search = 3, Done button & outside click close sheet, Add Person fires
+      expect(container.querySelector('.tree-filters-badge')?.textContent).toBe('3');
+      const filtersToggle = container.querySelector<HTMLButtonElement>('.tree-filters-toggle-btn');
+      act(() => {
+        filtersToggle?.click();
+      });
+      expect(filtersToggle?.getAttribute('aria-expanded')).toBe('true');
+      act(() => {
+        container.querySelector<HTMLButtonElement>('.tree-filters-sheet-close')?.click();
+      });
+      expect(filtersToggle?.getAttribute('aria-expanded')).toBe('false');
+
+      act(() => {
+        filtersToggle?.click();
+      });
+      act(() => {
+        document.body.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }));
+      });
+      expect(filtersToggle?.getAttribute('aria-expanded')).toBe('false');
+
+      act(() => {
+        container.querySelector<HTMLButtonElement>('.tree-add-person-btn')?.click();
+      });
+      expect(onAddPerson).toHaveBeenCalledTimes(1);
+
+      // TreeAnchorPicker: empty state, Escape clears query, ArrowDown/Up/Enter selects, Reset to default, outside mousedown
+      const anchorTriggers = [...container.querySelectorAll<HTMLButtonElement>('.tree-anchor-trigger')];
+      const standaloneTrigger = anchorTriggers[1];
+      act(() => {
+        standaloneTrigger?.click();
+      });
+      expect(container.querySelector('.tree-search-empty')?.textContent).toContain('No matching people');
+
+      // Pressing Escape while open closes the anchor popover via document capture listener
+      const anchorInput = container.querySelector<HTMLInputElement>('.tree-anchor-search-input');
+      act(() => {
+        anchorInput?.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+      });
+      expect(container.querySelector('.tree-anchor-popover')).toBeNull();
+
+      // Reopen, clear query via input onChange, and inspect full candidate metadata
+      act(() => {
+        standaloneTrigger?.click();
+      });
+      const reopenedInput = container.querySelector<HTMLInputElement>('.tree-anchor-search-input');
+      const setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value')?.set;
+      act(() => {
+        if (reopenedInput) {
+          setter?.call(reopenedInput, '');
+          reopenedInput.dispatchEvent(new Event('input', { bubbles: true }));
+        }
+      });
+      expect(container.querySelectorAll('.tree-anchor-popover [role="option"]')).toHaveLength(2);
+      expect(container.querySelector('.tree-anchor-popover')?.textContent).toContain('Spine anchor');
+      expect(container.querySelector('.tree-anchor-popover')?.textContent).toContain('Vance Line');
+
+      // ArrowDown -> ArrowUp -> hover option 1 -> Enter selects Owen Vance
+      const opts = [...container.querySelectorAll<HTMLButtonElement>('.tree-anchor-popover [role="option"]')];
+      act(() => {
+        reopenedInput?.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true }));
+        reopenedInput?.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowUp', bubbles: true }));
+        opts[1]?.dispatchEvent(new MouseEvent('mouseover', { bubbles: true }));
+      });
+      act(() => {
+        reopenedInput?.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+      });
+      expect(onSelectAnchor).toHaveBeenCalledWith(p2);
+
+      // Reopen -> click Reset to default -> reopen -> Escape on empty query closes -> reopen -> outside mousedown closes
+      act(() => {
+        standaloneTrigger?.click();
+      });
+      act(() => {
+        container.querySelector<HTMLButtonElement>('.tree-anchor-popover-reset')?.click();
+      });
+      expect(onResetAnchor).toHaveBeenCalledTimes(1);
+
+      act(() => {
+        standaloneTrigger?.click();
+      });
+      act(() => {
+        container
+          .querySelector<HTMLInputElement>('.tree-anchor-search-input')
+          ?.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+      });
+      expect(container.querySelector('.tree-anchor-popover')).toBeNull();
+
+      act(() => {
+        standaloneTrigger?.click();
+      });
+      act(() => {
+        document.body.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }));
+      });
+      expect(container.querySelector('.tree-anchor-popover')).toBeNull();
+
+      // TreeNodesLayer: lateral EarlyLossStrip paths (left + right), chip keyboard activation, image error fallback, SiblingToggle keyboard
+      const stripPaths = [...container.querySelectorAll('.tree-diagram-early-strip path')].map((p) =>
+        p.getAttribute('d')
+      );
+      expect(stripPaths).toEqual(['M 60 90 V 134 H 120', 'M 420 90 V 134 H 370']);
+
+      const earlyChip = container.querySelector<SVGGElement>('.tree-diagram-early-chip');
+      act(() => {
+        earlyChip?.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+        earlyChip?.dispatchEvent(new KeyboardEvent('keydown', { key: ' ', bubbles: true }));
+        earlyChip?.dispatchEvent(new KeyboardEvent('keyup', { key: ' ', bubbles: true }));
+      });
+      expect(onSelectNode).toHaveBeenCalledWith(earlyChild, true);
+
+      const cardImg = container.querySelector('image');
+      act(() => {
+        cardImg?.dispatchEvent(new Event('error', { bubbles: true }));
+      });
+      expect(container.querySelector('image')).toBeNull();
+
+      const detailCard = container.querySelector<SVGGElement>('[data-person-id="p_anchor_1"]');
+      act(() => {
+        detailCard?.dispatchEvent(new KeyboardEvent('keydown', { key: ' ', bubbles: true }));
+        detailCard?.dispatchEvent(new KeyboardEvent('keyup', { key: ' ', bubbles: true }));
+      });
+      expect(onSelectNode).toHaveBeenCalledWith(p1, true);
+
+      const sibButtons = [...container.querySelectorAll<SVGGElement>('.tree-diagram-sibling-btn')];
+      const sibPaths = [...container.querySelectorAll('.tree-diagram-sibling-toggle path')].map((p) =>
+        p.getAttribute('d')
+      );
+      expect(sibPaths).toEqual(['M 60 190 V 234 H 120', 'M 440 190 V 234 H 380']);
+      act(() => {
+        sibButtons[0]?.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+        sibButtons[1]?.dispatchEvent(new KeyboardEvent('keydown', { key: ' ', bubbles: true }));
+        sibButtons[1]?.dispatchEvent(new KeyboardEvent('keyup', { key: ' ', bubbles: true }));
+      });
+      expect(onToggleSibs).toHaveBeenCalledWith('u_sib_left');
+      expect(onToggleSibs).toHaveBeenCalledWith('u_sib_right');
+      expect(
+        container.querySelector('.tree-zoom-controls button[aria-pressed="true"]')?.textContent?.trim()
+      ).toBe('Loom');
+    } finally {
+      act(() => {
+        root.unmount();
+      });
+      container.remove();
+    }
   });
 });

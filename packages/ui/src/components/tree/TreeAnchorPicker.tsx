@@ -2,10 +2,9 @@ import type { Person } from '@kinloom/core';
 import type React from 'react';
 import { useEffect, useId, useMemo, useRef, useState } from 'react';
 import type { TreeSearchCandidate } from '../../lib/archivalTreeModel.js';
-import { cx, joinClasses } from '../../lib/cx.js';
+import { cx } from '../../lib/cx.js';
 import { searchNavNext, searchNavPrev, searchNavReset } from '../../lib/searchNavigation.js';
 import { formatTreeCardName } from '../../lib/treeNodeDisplay.js';
-import controlStyles from '../../styles/Controls.module.css';
 import treeToolbarStyles from './TreeToolbar.module.css';
 
 export interface TreeAnchorPickerProps {
@@ -125,50 +124,47 @@ export const TreeAnchorPicker: React.FC<TreeAnchorPickerProps> = ({
 
   return (
     <div ref={containerRef} className={cx(treeToolbarStyles, 'tree-anchor-picker')}>
-      <button
-        ref={triggerRef}
-        id={triggerId}
-        type="button"
-        className={joinClasses(
-          cx(controlStyles, 'pill-btn'),
-          cx(treeToolbarStyles, `tree-anchor-trigger${activeAnchor ? ' is-custom' : ''}`)
-        )}
-        aria-expanded={isOpen}
-        aria-haspopup="dialog"
-        aria-controls={isOpen ? popoverId : undefined}
-        aria-label={triggerAriaLabel}
-        onClick={() => {
-          setIsOpen((prev) => !prev);
-        }}
-      >
-        <span className={cx(treeToolbarStyles, 'tree-anchor-trigger-label')}>
-          Trace from: <strong>{displayAnchorLabel}</strong>
-        </span>
-        <svg viewBox="0 0 12 12" width="11" height="11" aria-hidden="true" focusable="false">
-          <path
-            d="M2.5 4.25L6 7.75l3.5-3.5"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="1.5"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          />
-        </svg>
-      </button>
-
-      {activeAnchor && (
+      <div className={cx(treeToolbarStyles, `tree-anchor-control${activeAnchor ? ' is-custom' : ''}`)}>
         <button
+          ref={triggerRef}
+          id={triggerId}
           type="button"
-          className={joinClasses(
-            cx(controlStyles, 'pill-btn'),
-            cx(treeToolbarStyles, 'tree-anchor-reset-btn')
-          )}
-          aria-label="Reset to default"
-          onClick={commitReset}
+          className={cx(treeToolbarStyles, `tree-anchor-trigger${activeAnchor ? ' is-custom' : ''}`)}
+          aria-expanded={isOpen}
+          aria-haspopup="dialog"
+          aria-controls={isOpen ? popoverId : undefined}
+          aria-label={triggerAriaLabel}
+          onClick={() => {
+            setIsOpen((prev) => !prev);
+          }}
         >
-          Reset to default
+          <span className={cx(treeToolbarStyles, 'tree-anchor-trigger-label')}>
+            Trace from: <strong>{displayAnchorLabel}</strong>
+          </span>
+          <svg viewBox="0 0 12 12" width="11" height="11" aria-hidden="true" focusable="false">
+            <path
+              d="M2.5 4.25L6 7.75l3.5-3.5"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="1.5"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            />
+          </svg>
         </button>
-      )}
+
+        {activeAnchor && (
+          <button
+            type="button"
+            className={cx(treeToolbarStyles, 'tree-anchor-clear-btn')}
+            aria-label="Reset trace anchor to default"
+            title="Reset to default"
+            onClick={commitReset}
+          >
+            <span aria-hidden="true">×</span>
+          </button>
+        )}
+      </div>
 
       {isOpen && (
         <div

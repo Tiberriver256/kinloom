@@ -40,6 +40,134 @@ const OBSTACLE_PAD_X = 4;
 const OBSTACLE_PAD_Y = 1;
 const MIN_SAFE_CORRIDOR_X = 136;
 const Y_STRIPE_SHIFT = 7; // 128px vertical buckets
+const BUS_LANE_SPACING = 14;
+const CHANNEL_TOP_MARGIN = 18;
+const CHANNEL_BOTTOM_MARGIN = 18;
+const LATERAL_STEM_GAP = 14;
+const EARLY_STRIP_MIN_WIDTH = 194;
+const EARLY_STRIP_PAD_X = 12;
+const EARLY_CHIP_GAP = 8;
+const EARLY_CHIP_MULTI_MIN_W = 128;
+
+interface EarlyLossStripMetrics {
+  readonly chipsPerRow: number;
+  readonly chipRows: number;
+  readonly chipWidth: number;
+  readonly stripWidth: number;
+  readonly stripHeight: number;
+}
+
+interface UnitFootprint {
+  readonly width: number;
+  readonly memberOffsetX: number;
+}
+
+interface BusDraft {
+  readonly union: ArchivalTreeModel['unions'][number];
+  readonly hub: DiagramUnionHub;
+  readonly rawDrops: readonly {
+    readonly childId: string;
+    readonly x: number;
+    readonly toY: number;
+    readonly isDirect: boolean;
+  }[];
+  readonly minChildTopY: number;
+  readonly meanChildX: number;
+  readonly railMinX: number;
+  readonly railMaxX: number;
+  readonly anyDirectDrop: boolean;
+}
+
+function computeEarlyLossStripMetrics(count: number): EarlyLossStripMetrics {
+  const chipsPerRow = Math.min(3, count);
+  const chipRows = Math.ceil(count / chipsPerRow);
+  const minChipW =
+    chipsPerRow === 1 ? ARCHIVAL_EARLY_CHIP_W : Math.max(ARCHIVAL_EARLY_CHIP_W, EARLY_CHIP_MULTI_MIN_W);
+  const rawStripW =
+    chipsPerRow * minChipW + Math.max(0, chipsPerRow - 1) * EARLY_CHIP_GAP + EARLY_STRIP_PAD_X * 2;
+  const stripWidth = Math.max(EARLY_STRIP_MIN_WIDTH, rawStripW);
+  const innerWidth = stripWidth - EARLY_STRIP_PAD_X * 2 - Math.max(0, chipsPerRow - 1) * EARLY_CHIP_GAP;
+  const chipWidth = Math.floor(innerWidth / chipsPerRow);
+  const stripHeight = 22 + chipRows * (ARCHIVAL_EARLY_CHIP_H + 6) + 4;
+  return { chipsPerRow, chipRows, chipWidth, stripWidth, stripHeight };
+}
+
+function resolveLateralAttachmentSide(unit: TreeFamilyUnit, marriageOrder: number): 'left' | 'right' {
+  if (unit.unionIds.length > 1 && marriageOrder === 1) {
+    return 'left';
+  }
+  return 'right';
+}
+
+function resolveUnionHubRelativeX(
+  unit: TreeFamilyUnit,
+  primaryPartnerId: string,
+  secondaryPartnerId: string | null
+): number | null {
+  const primaryIdx = unit.orderedMemberIds.indexOf(primaryPartnerId);
+  if (primaryIdx < 0) {
+    return null;
+  }
+  const primaryX = primaryIdx * (ARCHIVAL_NODE_W + ARCHIVAL_SPOUSE_GAP);
+  if (!secondaryPartnerId) {
+    return Math.round(primaryX + ARCHIVAL_NODE_W / 2);
+  }
+  const secondaryIdx = unit.orderedMemberIds.indexOf(secondaryPartnerId);
+  if (secondaryIdx < 0) {
+    return Math.round(primaryX + ARCHIVAL_NODE_W / 2);
+  }
+  const secondaryX = secondaryIdx * (ARCHIVAL_NODE_W + ARCHIVAL_SPOUSE_GAP);
+  const leftX = Math.min(primaryX, secondaryX) + ARCHIVAL_NODE_W;
+  const rightX = Math.max(primaryX, secondaryX);
+  return Math.round((leftX + rightX) / 2);
+}
+
+function countOrderedBusPairCrossings(upper: BusDraft, lower: BusDraft): number {
+  let crossings = 0;
+  if (upper.railMaxX > upper.railMinX && lower.hub.x > upper.railMinX && lower.hub.x < upper.railMaxX) {
+    crossings += 1;
+  }
+  if (lower.railMaxX > lower.railMinX) {
+    for (let i = 0; i < upper.rawDrops.length; i += 1) {
+      const dx = upper.rawDrops[i].x;
+      if (dx > lower.railMinX && dx < lower.railMaxX) {
+        crossings += 1;
+      }
+    }
+  }
+  return crossings;
+}
+
+function orderBusesInBandToMinimizeCrossings(drafts: readonly BusDraft[]): BusDraft[] {
+  const ordered = [...drafts].toSorted((a, b) => {
+    const spanA = a.railMaxX - a.railMinX;
+    const spanB = b.railMaxX - b.railMinX;
+    if (spanA !== spanB) {
+      return spanB - spanA;
+    }
+    if (a.hub.x !== b.hub.x) {
+      return a.hub.x - b.hub.x;
+    }
+    return a.union.id.localeCompare(b.union.id);
+  });
+
+  for (let pass = 0; pass < ordered.length; pass += 1) {
+    let swapped = false;
+    for (let i = 0; i < ordered.length - 1; i += 1) {
+      const a = ordered[i];
+      const b = ordered[i + 1];
+      if (countOrderedBusPairCrossings(b, a) < countOrderedBusPairCrossings(a, b)) {
+        ordered[i] = b;
+        ordered[i + 1] = a;
+        swapped = true;
+      }
+    }
+    if (!swapped) {
+      break;
+    }
+  }
+  return ordered;
+}
 
 interface ObstacleSpatialIndex {
   readonly all: readonly ObstacleRect[];
@@ -657,39 +785,39 @@ function minimizeGenerationCrossingsSlots(model: ArchivalTreeModel): TreeFamilyU
   return orderedSlots;
 }
 
-function computeUnitFootprintWidth(model: ArchivalTreeModel, unit: TreeFamilyUnit): number {
+function computeUnitFootprint(model: ArchivalTreeModel, unit: TreeFamilyUnit): UnitFootprint {
   const memberSpan =
     unit.orderedMemberIds.length * ARCHIVAL_NODE_W +
     Math.max(0, unit.orderedMemberIds.length - 1) * ARCHIVAL_SPOUSE_GAP;
 
-  let extraSpan = memberSpan;
+  let minRelX = 0;
+  let maxRelX = memberSpan;
+
   for (let i = 0; i < unit.unionIds.length; i += 1) {
     const union = model.unionsById.get(unit.unionIds[i]);
     if (!union) {
       continue;
     }
-    const hasStemDetourNeed =
-      union.visibleChildIds.length > 0 &&
-      (union.earlyLossChildIds.length > 0 ||
-        union.collapsedSiblingIds.length > 0 ||
-        union.hangingChildIds.length > 0);
-    const detourPad = hasStemDetourNeed ? 28 : 0;
+    const hubRelX = resolveUnionHubRelativeX(unit, union.primaryPartnerId, union.secondaryPartnerId);
+    if (hubRelX === null) {
+      continue;
+    }
+    const hasBusStem = union.visibleChildIds.length > 0;
+    const lateralSide = resolveLateralAttachmentSide(unit, union.marriageOrder);
+    const earlySide = lateralSide;
 
-    if (union.hangingChildIds.length > 0) {
-      const cols = union.hangingChildIds.length === 1 ? 1 : 2;
-      const gridW = cols * ARCHIVAL_NODE_W + (cols === 2 ? ARCHIVAL_HANGING_COL_GAP : 0) + detourPad;
-      if (gridW > extraSpan) {
-        extraSpan = gridW;
-      }
-    }
     if (union.earlyLossChildIds.length > 0) {
-      const chipsPerRow = Math.min(3, union.earlyLossChildIds.length);
-      const stripW =
-        Math.max(194, chipsPerRow * ARCHIVAL_EARLY_CHIP_W + (chipsPerRow - 1) * 8 + 24) + detourPad;
-      if (stripW > extraSpan) {
-        extraSpan = stripW;
-      }
+      const { stripWidth } = computeEarlyLossStripMetrics(union.earlyLossChildIds.length);
+      const stripLeft = hasBusStem
+        ? earlySide === 'right'
+          ? hubRelX + LATERAL_STEM_GAP
+          : hubRelX - LATERAL_STEM_GAP - stripWidth
+        : Math.round(hubRelX - stripWidth / 2);
+      const stripRight = stripLeft + stripWidth;
+      if (stripLeft < minRelX) minRelX = stripLeft;
+      if (stripRight > maxRelX) maxRelX = stripRight;
     }
+
     const totalCollateral = union.collapsedSiblingIds.length + union.hangingChildIds.length;
     if (totalCollateral > 0) {
       const toggleLabels = formatUnionOtherChildrenLabel({
@@ -699,13 +827,40 @@ function computeUnitFootprintWidth(model: ArchivalTreeModel, unit: TreeFamilyUni
         isExpanded: union.isExpanded,
         mode: model.effectiveMode,
       });
-      const pillW = Math.max(168, Math.round(toggleLabels.compactLabel.length * 7.2 + 28)) + detourPad;
-      if (pillW > extraSpan) {
-        extraSpan = pillW;
-      }
+      const pillW = Math.max(168, Math.round(toggleLabels.compactLabel.length * 7.2 + 28));
+      const placeToggleLaterally = hasBusStem && union.hangingChildIds.length === 0;
+      const toggleSide =
+        unit.unionIds.length === 1 && union.earlyLossChildIds.length > 0
+          ? earlySide === 'right'
+            ? 'left'
+            : 'right'
+          : lateralSide;
+      const detourPad = hasBusStem && !placeToggleLaterally ? 14 : 0;
+      const pillLeft = placeToggleLaterally
+        ? toggleSide === 'right'
+          ? hubRelX + LATERAL_STEM_GAP
+          : hubRelX - LATERAL_STEM_GAP - pillW
+        : Math.round(hubRelX - pillW / 2) - detourPad;
+      const pillRight = placeToggleLaterally ? pillLeft + pillW : pillLeft + pillW + detourPad * 2;
+      if (pillLeft < minRelX) minRelX = pillLeft;
+      if (pillRight > maxRelX) maxRelX = pillRight;
+    }
+
+    if (union.hangingChildIds.length > 0) {
+      const cols = union.hangingChildIds.length === 1 ? 1 : 2;
+      const gridW = cols * ARCHIVAL_NODE_W + (cols === 2 ? ARCHIVAL_HANGING_COL_GAP : 0);
+      const detourPad = hasBusStem ? 14 : 0;
+      const gridLeft = Math.round(hubRelX - gridW / 2) - detourPad;
+      const gridRight = Math.round(hubRelX + gridW / 2) + detourPad;
+      if (gridLeft < minRelX) minRelX = gridLeft;
+      if (gridRight > maxRelX) maxRelX = gridRight;
     }
   }
-  return extraSpan;
+
+  return {
+    width: maxRelX - minRelX,
+    memberOffsetX: -minRelX,
+  };
 }
 
 function buildOrthogonalBuses(params: {
@@ -718,9 +873,8 @@ function buildOrthogonalBuses(params: {
   readonly maxContentX: number;
 }): DiagramOrthogonalBus[] {
   const { model, hubByUnionId, byId, genBands, genBandIdxByGen, spatialIndex, maxContentX } = params;
-  const buses: DiagramOrthogonalBus[] = [];
-  const busTrackCounterByGen = new Map<number, number>();
-  const usedCorridorCounts = new Map<number, number>();
+  const draftsByGen = new Map<number, BusDraft[]>();
+  const orderedGens: number[] = [];
 
   for (let u = 0; u < model.unions.length; u += 1) {
     const union = model.unions[u];
@@ -768,68 +922,101 @@ function buildOrthogonalBuses(params: {
       continue;
     }
 
-    const trackIdx = busTrackCounterByGen.get(union.gen) ?? 0;
-    busTrackCounterByGen.set(union.gen, trackIdx + 1);
-
-    const genBandIdx = genBandIdxByGen.get(union.gen) ?? -1;
-    const genBand = genBandIdx >= 0 ? genBands[genBandIdx] : undefined;
-    const nextBand = genBandIdx >= 0 ? genBands[genBandIdx + 1] : undefined;
-    const channelStartY = genBand ? genBand.y + genBand.height + 16 : hub.y + 32;
-    const rawBusY = channelStartY + trackIdx * 11;
-    const channelCapY = nextBand ? Math.min(minChildTopY - 18, nextBand.y - 14) : minChildTopY - 18;
-    const busY = Math.round(Math.min(channelCapY, Math.max(hub.y + 20, rawBusY)));
-
-    const meanChildX = sumChildX / rawDrops.length;
-    const rowBottomOfParentsY = genBand ? genBand.y + ARCHIVAL_NODE_H : hub.y + ARCHIVAL_NODE_H / 2;
-
-    const stemPoints = routeStemAroundObstacles({
-      hubX: hub.x,
-      hubY: hub.y + 8,
-      busY,
-      rowBottomOfParentsY,
-      preferredSideX: meanChildX,
-      spatialIndex,
-      skipParent1: union.primaryPartnerId,
-      skipParent2: union.secondaryPartnerId,
-      maxContentX,
-      usedCorridorCounts,
-    });
-
-    const childDrops: DiagramOrthogonalDrop[] = new Array(rawDrops.length);
-    const childIds: string[] = new Array(rawDrops.length);
-    for (let i = 0; i < rawDrops.length; i += 1) {
-      const drop = rawDrops[i];
-      childIds[i] = drop.childId;
-      childDrops[i] = {
-        childId: drop.childId,
-        x: drop.x,
-        toY: drop.toY,
-        isDirect: drop.isDirect,
-        points: routeChildDropAroundObstacles({
-          dropX: drop.x,
-          busY,
-          toY: drop.toY,
-          childId: drop.childId,
-          spatialIndex,
-          maxContentX,
-          usedCorridorCounts,
-        }),
-      };
+    let bucket = draftsByGen.get(union.gen);
+    if (!bucket) {
+      bucket = [];
+      draftsByGen.set(union.gen, bucket);
+      orderedGens.push(union.gen);
     }
-
-    buses.push({
-      unionId: union.id,
-      parentIds: union.partnerIds,
-      childIds,
-      isDirect: union.isDirect && anyDirectDrop,
-      hubX: hub.x,
-      hubY: hub.y + 8,
-      busY,
+    bucket.push({
+      union,
+      hub,
+      rawDrops,
+      minChildTopY,
+      meanChildX: sumChildX / rawDrops.length,
       railMinX,
       railMaxX,
-      stemPoints,
-      childDrops,
+      anyDirectDrop,
     });
+  }
+
+  const buses: DiagramOrthogonalBus[] = [];
+  const usedCorridorCounts = new Map<number, number>();
+
+  for (let gIdx = 0; gIdx < orderedGens.length; gIdx += 1) {
+    const gen = orderedGens[gIdx];
+    const drafts = draftsByGen.get(gen);
+    if (!drafts || drafts.length === 0) {
+      continue;
+    }
+
+    const orderedDrafts = orderBusesInBandToMinimizeCrossings(drafts);
+    const genBandIdx = genBandIdxByGen.get(gen) ?? -1;
+    const genBand = genBandIdx >= 0 ? genBands[genBandIdx] : undefined;
+    const nextBand = genBandIdx >= 0 ? genBands[genBandIdx + 1] : undefined;
+
+    for (let laneIdx = 0; laneIdx < orderedDrafts.length; laneIdx += 1) {
+      const draft = orderedDrafts[laneIdx];
+      const { union, hub, rawDrops, minChildTopY, meanChildX, railMinX, railMaxX, anyDirectDrop } = draft;
+
+      const channelStartY = genBand ? genBand.y + genBand.height + CHANNEL_TOP_MARGIN : hub.y + 32;
+      const rawBusY = channelStartY + laneIdx * BUS_LANE_SPACING;
+      const channelCapY = nextBand
+        ? Math.min(minChildTopY - CHANNEL_BOTTOM_MARGIN, nextBand.y - CHANNEL_BOTTOM_MARGIN)
+        : minChildTopY - CHANNEL_BOTTOM_MARGIN;
+      const busY = Math.round(Math.min(channelCapY, Math.max(hub.y + 20, rawBusY)));
+
+      const rowBottomOfParentsY = genBand ? genBand.y + ARCHIVAL_NODE_H : hub.y + ARCHIVAL_NODE_H / 2;
+
+      const stemPoints = routeStemAroundObstacles({
+        hubX: hub.x,
+        hubY: hub.y + 8,
+        busY,
+        rowBottomOfParentsY,
+        preferredSideX: meanChildX,
+        spatialIndex,
+        skipParent1: union.primaryPartnerId,
+        skipParent2: union.secondaryPartnerId,
+        maxContentX,
+        usedCorridorCounts,
+      });
+
+      const childDrops: DiagramOrthogonalDrop[] = new Array(rawDrops.length);
+      const childIds: string[] = new Array(rawDrops.length);
+      for (let i = 0; i < rawDrops.length; i += 1) {
+        const drop = rawDrops[i];
+        childIds[i] = drop.childId;
+        childDrops[i] = {
+          childId: drop.childId,
+          x: drop.x,
+          toY: drop.toY,
+          isDirect: drop.isDirect,
+          points: routeChildDropAroundObstacles({
+            dropX: drop.x,
+            busY,
+            toY: drop.toY,
+            childId: drop.childId,
+            spatialIndex,
+            maxContentX,
+            usedCorridorCounts,
+          }),
+        };
+      }
+
+      buses.push({
+        unionId: union.id,
+        parentIds: union.partnerIds,
+        childIds,
+        isDirect: union.isDirect && anyDirectDrop,
+        hubX: hub.x,
+        hubY: hub.y + 8,
+        busY,
+        railMinX,
+        railMaxX,
+        stemPoints,
+        childDrops,
+      });
+    }
   }
 
   return buses;
@@ -904,20 +1091,20 @@ export function computeArchivalDiagramLayout(model: ArchivalTreeModel): Archival
   }
 
   const orderedUnitsBySlot = minimizeGenerationCrossingsSlots(model);
-  const unitWidthsBySlot: Float64Array[] = new Array(numGens);
+  const unitFootprintsBySlot: UnitFootprint[][] = new Array(numGens);
   const rowWidths = new Float64Array(numGens);
 
   let maxRowWidth = 0;
   for (let gIdx = 0; gIdx < numGens; gIdx += 1) {
     const units = orderedUnitsBySlot[gIdx];
-    const widths = new Float64Array(units.length);
+    const footprints = new Array<UnitFootprint>(units.length);
     let unitSum = 0;
     for (let i = 0; i < units.length; i += 1) {
-      const w = computeUnitFootprintWidth(model, units[i]);
-      widths[i] = w;
-      unitSum += w;
+      const fp = computeUnitFootprint(model, units[i]);
+      footprints[i] = fp;
+      unitSum += fp.width;
     }
-    unitWidthsBySlot[gIdx] = widths;
+    unitFootprintsBySlot[gIdx] = footprints;
     const totalW = unitSum + Math.max(0, units.length - 1) * ARCHIVAL_UNIT_GAP;
     rowWidths[gIdx] = totalW;
     if (totalW > maxRowWidth) {
@@ -943,7 +1130,7 @@ export function computeArchivalDiagramLayout(model: ArchivalTreeModel): Archival
   for (let gIdx = 0; gIdx < numGens; gIdx += 1) {
     const g = model.generations[gIdx];
     const units = orderedUnitsBySlot[gIdx];
-    const unitWidths = unitWidthsBySlot[gIdx];
+    const unitFootprints = unitFootprintsBySlot[gIdx];
     const rowW = rowWidths[gIdx];
     let cursorX = leftPad + (maxRowWidth - rowW) / 2;
     const rowTopY = cursorY;
@@ -951,11 +1138,8 @@ export function computeArchivalDiagramLayout(model: ArchivalTreeModel): Archival
 
     for (let uIdx = 0; uIdx < units.length; uIdx += 1) {
       const unit = units[uIdx];
-      const footprintW = unitWidths[uIdx];
-      const memberSpan =
-        unit.orderedMemberIds.length * ARCHIVAL_NODE_W +
-        Math.max(0, unit.orderedMemberIds.length - 1) * ARCHIVAL_SPOUSE_GAP;
-      const memberStartX = cursorX + (footprintW - memberSpan) / 2;
+      const footprint = unitFootprints[uIdx];
+      const memberStartX = cursorX + footprint.memberOffsetX;
 
       for (let idx = 0; idx < unit.orderedMemberIds.length; idx += 1) {
         const pid = unit.orderedMemberIds[idx];
@@ -979,9 +1163,7 @@ export function computeArchivalDiagramLayout(model: ArchivalTreeModel): Archival
       }
 
       const unitPlacedRects: { left: number; right: number; bottom: number }[] = [];
-      const resolveAttachmentTopY = (centerX: number, width: number, baseTopY: number): number => {
-        const left = centerX - width / 2;
-        const right = centerX + width / 2;
+      const resolveAttachmentTopY = (left: number, right: number, baseTopY: number): number => {
         let y = baseTopY;
         for (let r = 0; r < unitPlacedRects.length; r += 1) {
           const prior = unitPlacedRects[r];
@@ -1039,23 +1221,28 @@ export function computeArchivalDiagramLayout(model: ArchivalTreeModel): Archival
 
         hubs.push(hub);
         hubByUnionId.set(union.id, hub);
-
-        let attachmentY = rowTopY + ARCHIVAL_NODE_H + 16;
-        if (priorHangingBottomY !== null && union.hangingChildIds.length > 0) {
-          attachmentY = Math.max(attachmentY, priorHangingBottomY + 18);
+        if (hub.y + 10 > rowBottomY) {
+          rowBottomY = hub.y + 10;
         }
-        let stemFromY = hub.y + 8;
+
+        const hasBusStem = union.visibleChildIds.length > 0;
+        const lateralSide = resolveLateralAttachmentSide(unit, union.marriageOrder);
+        const baseAttachmentY = rowTopY + ARCHIVAL_NODE_H + 16;
+        let centeredAttachmentY = baseAttachmentY;
+        if (priorHangingBottomY !== null && union.hangingChildIds.length > 0) {
+          centeredAttachmentY = Math.max(centeredAttachmentY, priorHangingBottomY + 18);
+        }
+        let centeredStemFromY = hub.y + 8;
 
         if (union.earlyLossChildIds.length > 0) {
-          const chipW = ARCHIVAL_EARLY_CHIP_W;
-          const chipGap = 8;
-          const padX = 12;
-          const chipsPerRow = Math.min(3, union.earlyLossChildIds.length);
-          const chipRows = Math.ceil(union.earlyLossChildIds.length / chipsPerRow);
-          const stripW = Math.max(194, chipsPerRow * chipW + (chipsPerRow - 1) * chipGap + padX * 2);
-          const stripH = 22 + chipRows * (ARCHIVAL_EARLY_CHIP_H + 6) + 4;
-          const stripY = Math.round(resolveAttachmentTopY(hub.x, stripW, attachmentY));
-          const stripX = Math.round(hub.x - stripW / 2);
+          const metrics = computeEarlyLossStripMetrics(union.earlyLossChildIds.length);
+          const { chipsPerRow, chipWidth, stripWidth: stripW, stripHeight: stripH } = metrics;
+          const stripX = hasBusStem
+            ? lateralSide === 'right'
+              ? Math.round(hub.x + LATERAL_STEM_GAP)
+              : Math.round(hub.x - LATERAL_STEM_GAP - stripW)
+            : Math.round(hub.x - stripW / 2);
+          const stripY = Math.round(resolveAttachmentTopY(stripX, stripX + stripW, baseAttachmentY));
 
           const chips: DiagramEarlyLossChip[] = [];
           for (let cIdx = 0; cIdx < union.earlyLossChildIds.length; cIdx += 1) {
@@ -1069,9 +1256,9 @@ export function computeArchivalDiagramLayout(model: ArchivalTreeModel): Archival
             chips.push({
               person: child,
               unionId: union.id,
-              x: stripX + padX + col * (chipW + chipGap),
+              x: stripX + EARLY_STRIP_PAD_X + col * (chipWidth + EARLY_CHIP_GAP),
               y: stripY + 20 + row * (ARCHIVAL_EARLY_CHIP_H + 6),
-              width: chipW,
+              width: chipWidth,
               height: ARCHIVAL_EARLY_CHIP_H,
             });
           }
@@ -1084,12 +1271,14 @@ export function computeArchivalDiagramLayout(model: ArchivalTreeModel): Archival
             width: stripW,
             height: stripH,
             stemFromX: hub.x,
-            stemFromY,
+            stemFromY: hub.y + 8,
             chips,
           });
           unitPlacedRects.push({ left: stripX, right: stripX + stripW, bottom: stripY + stripH });
-          stemFromY = stripY + stripH;
-          attachmentY = stripY + stripH + ARCHIVAL_EARLY_STRIP_GAP;
+          if (!hasBusStem) {
+            centeredStemFromY = stripY + stripH;
+            centeredAttachmentY = Math.max(centeredAttachmentY, stripY + stripH + ARCHIVAL_EARLY_STRIP_GAP);
+          }
           if (stripY + stripH > rowBottomY) rowBottomY = stripY + stripH;
         }
 
@@ -1104,8 +1293,20 @@ export function computeArchivalDiagramLayout(model: ArchivalTreeModel): Archival
           });
           const pillW = Math.max(168, Math.round(toggleLabels.compactLabel.length * 7.2 + 28));
           const pillH = 28;
-          const pillY = Math.round(resolveAttachmentTopY(hub.x, pillW, attachmentY));
-          const pillX = Math.round(hub.x - pillW / 2);
+          const placeToggleLaterally = hasBusStem && union.hangingChildIds.length === 0;
+          const toggleSide =
+            unit.unionIds.length === 1 && union.earlyLossChildIds.length > 0
+              ? lateralSide === 'right'
+                ? 'left'
+                : 'right'
+              : lateralSide;
+          const pillX = placeToggleLaterally
+            ? toggleSide === 'right'
+              ? Math.round(hub.x + LATERAL_STEM_GAP)
+              : Math.round(hub.x - LATERAL_STEM_GAP - pillW)
+            : Math.round(hub.x - pillW / 2);
+          const pillBaseY = placeToggleLaterally ? baseAttachmentY : centeredAttachmentY;
+          const pillY = Math.round(resolveAttachmentTopY(pillX, pillX + pillW, pillBaseY));
           siblingToggles.push({
             unionId: union.id,
             parentIds: union.partnerIds,
@@ -1114,7 +1315,7 @@ export function computeArchivalDiagramLayout(model: ArchivalTreeModel): Archival
             width: pillW,
             height: pillH,
             stemFromX: hub.x,
-            stemFromY,
+            stemFromY: placeToggleLaterally ? hub.y + 8 : centeredStemFromY,
             hiddenCount: union.collapsedSiblingIds.length,
             totalCollateralCount: totalCollateral,
             visibleChildCount: union.visibleChildIds.length,
@@ -1123,8 +1324,10 @@ export function computeArchivalDiagramLayout(model: ArchivalTreeModel): Archival
             isDirect: union.isDirect,
           });
           unitPlacedRects.push({ left: pillX, right: pillX + pillW, bottom: pillY + pillH });
-          stemFromY = pillY + pillH;
-          attachmentY = pillY + pillH + 12;
+          if (!placeToggleLaterally) {
+            centeredStemFromY = pillY + pillH;
+            centeredAttachmentY = pillY + pillH + 12;
+          }
           if (pillY + pillH > rowBottomY) rowBottomY = pillY + pillH;
         }
 
@@ -1132,7 +1335,9 @@ export function computeArchivalDiagramLayout(model: ArchivalTreeModel): Archival
           const cols = union.hangingChildIds.length === 1 ? 1 : 2;
           const spineX = hub.x;
           const gridW = cols * ARCHIVAL_NODE_W + (cols === 2 ? ARCHIVAL_HANGING_COL_GAP : 0);
-          const gridTopY = Math.round(resolveAttachmentTopY(spineX, gridW, attachmentY));
+          const gridTopY = Math.round(
+            resolveAttachmentTopY(spineX - gridW / 2, spineX + gridW / 2, centeredAttachmentY)
+          );
           const ticks: {
             childId: string;
             y: number;
@@ -1190,7 +1395,7 @@ export function computeArchivalDiagramLayout(model: ArchivalTreeModel): Archival
             parentIds: union.partnerIds,
             childIds: union.hangingChildIds,
             spineX,
-            topY: stemFromY,
+            topY: centeredStemFromY,
             bottomY: ticks.length > 0 ? maxTickY : gridTopY,
             ticks,
           });
@@ -1204,7 +1409,7 @@ export function computeArchivalDiagramLayout(model: ArchivalTreeModel): Archival
         }
       }
 
-      cursorX += footprintW + ARCHIVAL_UNIT_GAP;
+      cursorX += footprint.width + ARCHIVAL_UNIT_GAP;
     }
 
     let activeBusCount = 0;
@@ -1213,7 +1418,11 @@ export function computeArchivalDiagramLayout(model: ArchivalTreeModel): Archival
         activeBusCount += 1;
       }
     }
-    const channelHeight = Math.max(ARCHIVAL_GEN_MIN_GAP, 44 + activeBusCount * 12);
+    const neededChannelHeight =
+      activeBusCount > 0
+        ? CHANNEL_TOP_MARGIN + Math.max(0, activeBusCount - 1) * BUS_LANE_SPACING + CHANNEL_BOTTOM_MARGIN + 12
+        : ARCHIVAL_GEN_MIN_GAP;
+    const channelHeight = Math.max(ARCHIVAL_GEN_MIN_GAP, neededChannelHeight);
 
     const band: DiagramGenBand = {
       gen: g.gen,
