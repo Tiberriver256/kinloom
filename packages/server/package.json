@@ -1,6 +1,6 @@
 {
   "name": "@kinloom/server",
-  "version": "0.65.2",
+  "version": "0.66.0",
   "type": "module",
   "sideEffects": false,
   "license": "MIT",
@@ -34,7 +34,7 @@
     "typecheck": "tsc --noEmit -p tsconfig.json"
   },
   "dependencies": {
-    "@kinloom/core": "^0.65.2",
+    "@kinloom/core": "^0.66.0",
     "zod": "^4.6.7"
   },
   "peerDependencies": {
