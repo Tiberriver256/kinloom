@@ -47,6 +47,12 @@ export {
   createStaticArchiveDataSource,
   StaticDemoDataSource,
 } from './adapters/staticDemoDataSource.js';
+export type {
+  HttpStoriesClientOptions,
+  StaticStoriesClientOptions,
+  StoriesClient,
+} from './adapters/storiesClient.js';
+export { createHttpStoriesClient, createStaticStoriesClient } from './adapters/storiesClient.js';
 export * from './browser/clientTelemetry.js';
 export * from './browser/ohmStyle.js';
 export * from './browser/registerServiceWorker.js';
@@ -282,6 +288,7 @@ export * from './lib/recipesModel.js';
 export * from './lib/scrollMemory.js';
 export * from './lib/searchNavigation.js';
 export * from './lib/sourceReaderNav.js';
+export * from './lib/storiesModel.js';
 export * from './lib/themeModel.js';
 export * from './lib/timelineScroll.js';
 export * from './lib/tokens.js';
@@ -369,6 +376,12 @@ export {
 } from './plugins/PluginContext.js';
 export type { RecipesUiPluginOptions } from './plugins/recipesPlugin.js';
 export { createRecipesUiPlugin, RECIPES_UI_PLUGIN_ID } from './plugins/recipesPlugin.js';
+export type { StoriesUiPluginOptions } from './plugins/storiesPlugin.js';
+export {
+  createStoriesUiPlugin,
+  STORIES_UI_PLUGIN_ID,
+  storiesUiPlugin,
+} from './plugins/storiesPlugin.js';
 export type {
   KinloomMediaRenderer,
   KinloomMediaRendererProps,

@@ -18,6 +18,7 @@ import {
 } from '../commands/ops/help.js';
 import { formatRecordsDiscoveryHelp } from '../commands/records/dispatch.js';
 import { formatRecordCommandsHelp } from '../commands/records/help.js';
+import { STORIES_HELP } from '../commands/stories.js';
 
 export type BuiltInCommandCategory = 'lifecycle' | 'ops' | 'meta';
 
@@ -252,6 +253,12 @@ Options:
     category: 'ops',
     summary: 'Run deterministic UI/UX design audits (APCA, WCAG 2.2, DTCG tokens, SARIF 2.1.0)',
     help: DESIGN_AUDIT_HELP,
+  },
+  {
+    name: 'stories',
+    category: 'ops',
+    summary: 'Author, validate, build, publish, and list interactive Specialty Stories',
+    help: STORIES_HELP,
   },
   {
     name: 'records',
