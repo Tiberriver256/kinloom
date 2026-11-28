@@ -39,7 +39,7 @@
   overflow: visible;
   scrollbar-width: none;
   background: var(--surface-card);
-  border: var(--border-width-thin) solid var(--border-control);
+  border: var(--border-width-thin) solid var(--border-decorative);
   border-radius: var(--radius-control);
   padding: 5px 8px;
   box-shadow: var(--shadow-print);
@@ -85,7 +85,7 @@
   min-height: var(--control-height-sm);
   padding: 4px 26px 4px 30px;
   border-radius: var(--radius-control);
-  border: 1px solid var(--border-decorative);
+  border: var(--border-width-thin) solid transparent;
   background: var(--surface-subtle);
   color: var(--text-primary);
   font-family: var(--font-ui);
@@ -247,7 +247,7 @@
   border: 1px solid var(--border-control);
   background: var(--surface-card);
   color: var(--text-primary);
-  font-family: var(--font-serif);
+  font-family: var(--font-ui);
   font-size: var(--text-base);
 }
 
@@ -270,7 +270,7 @@
   min-height: var(--control-height-sm);
   border-radius: var(--radius-control);
   background: var(--surface-subtle);
-  border: 1px solid var(--border-decorative);
+  border: none;
   flex-shrink: 0;
 }
 
@@ -360,8 +360,8 @@
   align-items: stretch;
   min-height: var(--control-height-sm);
   border-radius: var(--radius-control);
-  border: 1px solid var(--border-control);
-  background: var(--surface-card);
+  border: var(--border-width-thin) solid var(--border-decorative);
+  background: var(--surface-subtle);
   overflow: hidden;
   transition:
     border-color 0.14s ease,
@@ -381,7 +381,7 @@
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  min-height: 28px;
+  min-height: var(--control-height-sm);
   padding: 4px 10px;
   border: none;
   border-radius: 0;
@@ -422,7 +422,7 @@
   align-items: center;
   justify-content: center;
   min-width: 28px;
-  min-height: 28px;
+  min-height: var(--control-height-sm);
   padding: 0 7px;
   border: none;
   border-left: 1px solid var(--border-decorative);

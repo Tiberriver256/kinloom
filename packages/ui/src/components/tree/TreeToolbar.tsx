@@ -79,9 +79,13 @@ export const TreeToolbar: React.FC<TreeToolbarProps> = ({
     [shellRef]
   );
 
+  const isLoomSurface = surface === 'loom';
+  const showScopeControls = showDirectToggle && !isLoomSurface;
+  const showAnchorPicker = !isLoomSurface && Boolean(onSelectAnchor && onAnchorQueryChange && onResetAnchor);
+
   const activeFilterCount =
     (branchFilter !== 'all' ? 1 : 0) +
-    (activeAnchor !== null ? 1 : 0) +
+    (showAnchorPicker && activeAnchor !== null ? 1 : 0) +
     (searchQuery.trim().length > 0 ? 1 : 0);
 
   useEffect(() => {
@@ -159,7 +163,7 @@ export const TreeToolbar: React.FC<TreeToolbarProps> = ({
             </button>
           </div>
 
-          {showDirectToggle && (
+          {showScopeControls && (
             <div
               className={cx(treeToolbarStyles, 'tree-segmented tree-scope-segmented')}
               role="group"
@@ -240,7 +244,9 @@ export const TreeToolbar: React.FC<TreeToolbarProps> = ({
           data-filters-open={mobileFiltersOpen ? 'true' : 'false'}
         >
           <div className={cx(treeToolbarStyles, 'tree-filters-sheet-header')}>
-            <span className={cx(treeToolbarStyles, 'tree-filters-sheet-title')}>Filters &amp; Trace</span>
+            <span className={cx(treeToolbarStyles, 'tree-filters-sheet-title')}>
+              {isLoomSurface ? 'Filters' : 'Filters & Trace'}
+            </span>
             <button
               type="button"
               className={cx(treeToolbarStyles, 'tree-filters-sheet-close')}
@@ -289,7 +295,7 @@ export const TreeToolbar: React.FC<TreeToolbarProps> = ({
             </select>
           )}
 
-          {onSelectAnchor && onAnchorQueryChange && onResetAnchor && (
+          {showAnchorPicker && onSelectAnchor && onAnchorQueryChange && onResetAnchor && (
             <TreeAnchorPicker
               activeAnchor={activeAnchor}
               query={anchorQuery}

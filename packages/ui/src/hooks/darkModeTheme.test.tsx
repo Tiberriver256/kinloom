@@ -418,6 +418,28 @@ describe('MapLibre and token dark-mode parity', () => {
           'source-layer': 'water_areas',
           paint: { 'fill-color': '#B8D4E3' },
         },
+        {
+          id: 'water_lines_river',
+          type: 'line',
+          source: 'ohm',
+          'source-layer': 'water_lines',
+          paint: { 'line-color': '#8CB4C9' },
+        },
+        {
+          id: 'land_ohm_borders',
+          type: 'line',
+          source: 'ohm',
+          'source-layer': 'land_ohm_lines',
+          paint: { 'line-color': '#776655' },
+        },
+        {
+          id: 'place_labels_ohm',
+          type: 'symbol',
+          source: 'ohm',
+          'source-layer': 'populated_places',
+          layout: { 'text-field': ['get', 'name'] },
+          paint: { 'text-color': '#222222', 'text-halo-color': '#FFFFFF' },
+        },
       ],
     };
 
@@ -447,6 +469,27 @@ describe('MapLibre and token dark-mode parity', () => {
     expect(waterLayer && 'paint' in waterLayer ? waterLayer.paint : null).toEqual({
       'fill-color': '#17222D',
     });
+    const waterLineLayer = darkOhm.layers.find((l) => l.id === 'water_lines_river');
+    expect(waterLineLayer && 'paint' in waterLineLayer ? waterLineLayer.paint : null).toEqual({
+      'line-color': '#17222D',
+    });
+    const borderLayer = darkOhm.layers.find((l) => l.id === 'land_ohm_borders');
+    expect(borderLayer && 'paint' in borderLayer ? borderLayer.paint : null).toEqual({
+      'line-color': '#BDB3A3',
+    });
+    const placeLabelLayer = darkOhm.layers.find((l) => l.id === 'place_labels_ohm');
+    expect(placeLabelLayer && 'paint' in placeLabelLayer ? placeLabelLayer.paint : null).toEqual({
+      'text-color': '#E4DDD0',
+      'text-halo-color': '#171614',
+    });
+
+    // Timeout guard rejects cleanly when OHM fetch stalls
+    resetCachedOhmStyle();
+    const stalledFetch = (() => new Promise(() => {})) as unknown as typeof fetch;
+    await expect(loadArchivalOhmStyle(OVERVIEW_REFERENCE_YEAR, stalledFetch, true, 15)).rejects.toThrow(
+      /Timed out/
+    );
+    resetCachedOhmStyle();
 
     // Dynamic repaint helper updates paint properties on active MapLibre layers (both dark and light)
     const painted: Array<[string, string, unknown]> = [];

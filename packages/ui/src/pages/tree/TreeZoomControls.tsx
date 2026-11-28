@@ -12,8 +12,6 @@ export interface TreeZoomControlsProps {
   readonly onZoomOut: () => void;
   readonly onFit: () => void;
   readonly onResetZoom: () => void;
-  readonly loomActive?: boolean;
-  readonly onToggleLoom?: () => void;
 }
 
 export const TreeZoomControls: React.FC<TreeZoomControlsProps> = ({
@@ -23,8 +21,6 @@ export const TreeZoomControls: React.FC<TreeZoomControlsProps> = ({
   onZoomOut,
   onFit,
   onResetZoom,
-  loomActive = false,
-  onToggleLoom,
 }) => {
   const buttonClass = joinClasses(cx(controlStyles, 'pill-btn'), cx(treePageStyles, 'tree-zoom-btn'));
 
@@ -68,20 +64,6 @@ export const TreeZoomControls: React.FC<TreeZoomControlsProps> = ({
       >
         1:1
       </button>
-      {onToggleLoom && (
-        <button
-          type="button"
-          className={joinClasses(
-            cx(controlStyles, `pill-btn${loomActive ? ' active' : ''}`),
-            cx(treePageStyles, 'tree-zoom-btn')
-          )}
-          aria-pressed={loomActive}
-          title="Toggle Kinship Loom birth-year constellation (< 45% zoom tier)"
-          onClick={onToggleLoom}
-        >
-          Loom
-        </button>
-      )}
       <output
         className={cx(treePageStyles, 'tree-zoom-readout')}
         aria-live="polite"

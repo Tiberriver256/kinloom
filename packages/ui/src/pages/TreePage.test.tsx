@@ -777,7 +777,7 @@ describe('TreePage', () => {
     expect(zoomControls).not.toBeNull();
     expect(
       [...(zoomControls?.querySelectorAll('button.tree-zoom-btn') ?? [])].map((b) => b.textContent?.trim())
-    ).toEqual(['+', '−', 'Fit', '1:1', 'Loom']);
+    ).toEqual(['+', '−', 'Fit', '1:1']);
   });
 
   it('exercises TreeAnchorPicker keyboard/outside-click/reset, TreeToolbar Done/outside-click/Add Person, TreeZoomControls Loom active, and TreeNodesLayer lateral connectors & zoom tiers (#79)', () => {
@@ -895,8 +895,6 @@ describe('TreePage', () => {
                 onZoomOut={() => {}}
                 onFit={() => {}}
                 onResetZoom={() => {}}
-                loomActive={true}
-                onToggleLoom={() => {}}
               />
               <svg width="800" height="400">
                 <title>Test Tree Nodes</title>
@@ -1182,8 +1180,8 @@ describe('TreePage', () => {
       expect(onToggleSibs).toHaveBeenCalledWith('u_sib_left');
       expect(onToggleSibs).toHaveBeenCalledWith('u_sib_right');
       expect(
-        container.querySelector('.tree-zoom-controls button[aria-pressed="true"]')?.textContent?.trim()
-      ).toBe('Loom');
+        [...container.querySelectorAll('.tree-zoom-controls button')].map((b) => b.textContent?.trim())
+      ).toEqual(['+', '−', 'Fit', '1:1']);
     } finally {
       act(() => {
         root.unmount();
@@ -1285,7 +1283,8 @@ describe('TreePage', () => {
 
     const loomSection = container.querySelector<HTMLElement>('section[aria-label*="Kinship Loom"]');
     expect(loomSection).not.toBeNull();
-    expect(loomSection?.textContent).toContain('Tap or hover any person to trace their thread');
+    expect(loomSection?.textContent).toContain('Select any person to trace their thread');
+    expect(loomSection?.getAttribute('data-zoom-mode')).toBe('fit');
 
     const firstNode = container.querySelector<SVGGElement>('[data-person-id]');
     expect(firstNode).not.toBeNull();

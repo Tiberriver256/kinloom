@@ -18,6 +18,10 @@ const LOOM_MIN_ZOOM = 0.4;
 const LOOM_MAX_ZOOM = 2.4;
 const LOOM_ZOOM_STEP = 1.25;
 
+function getInitialLoomZoomMode(): LoomZoomMode {
+  return typeof window !== 'undefined' && window.innerWidth <= 768 ? 'fit' : 'auto';
+}
+
 export interface TreeKinshipLoomProps {
   readonly model: ArchivalTreeModel;
   readonly selectedPersonId: string | null;
@@ -35,7 +39,7 @@ export const TreeKinshipLoom: React.FC<TreeKinshipLoomProps> = ({
 }) => {
   const [hoveredPersonId, setHoveredPersonId] = useState<string | null>(null);
   const [focusedPersonId, setFocusedPersonId] = useState<string | null>(null);
-  const [zoomMode, setZoomMode] = useState<LoomZoomMode>('auto');
+  const [zoomMode, setZoomMode] = useState<LoomZoomMode>(getInitialLoomZoomMode);
   const [zoomScale, setZoomScale] = useState<number>(1);
   const nodeRefs = useRef<Array<SVGGElement | null>>([]);
 
@@ -49,6 +53,20 @@ export const TreeKinshipLoom: React.FC<TreeKinshipLoomProps> = ({
     [layout.nodes, activeTraceId]
   );
 
+  const focalPersonId = useMemo(() => {
+    if (activeTraceId) {
+      return activeTraceId;
+    }
+    const anchorNode = layout.nodes.find((n) => n.isAnchor);
+    if (anchorNode) {
+      return anchorNode.person.id;
+    }
+    if (model.pivotPersonId && layout.nodes.some((n) => n.person.id === model.pivotPersonId)) {
+      return model.pivotPersonId;
+    }
+    return layout.nodes[0]?.person.id ?? null;
+  }, [activeTraceId, layout.nodes, model.pivotPersonId]);
+
   const visibleLabelIds = useMemo(() => {
     const ids = new Set<string>();
     const showAll = layout.nodes.length <= 24;
@@ -56,12 +74,13 @@ export const TreeKinshipLoom: React.FC<TreeKinshipLoomProps> = ({
       const pid = node.person.id;
       const isLit = Boolean(spotlight?.highlightedPersonIds.has(pid));
       const isFocus = activeTraceId === pid;
-      if (isFocus || isLit || showAll) {
+      const isRestingFocal = focalPersonId === pid;
+      if (isFocus || isLit || isRestingFocal || showAll) {
         ids.add(pid);
       }
     }
     return ids;
-  }, [layout.nodes, spotlight, activeTraceId]);
+  }, [layout.nodes, spotlight, activeTraceId, focalPersonId]);
 
   const labelPlacements = useMemo(
     () =>
@@ -70,9 +89,9 @@ export const TreeKinshipLoom: React.FC<TreeKinshipLoomProps> = ({
         visiblePersonIds: visibleLabelIds,
         width: layout.width,
         height: layout.height,
-        priorityPersonId: activeTraceId,
+        priorityPersonId: focalPersonId,
       }),
-    [layout.nodes, visibleLabelIds, layout.width, layout.height, activeTraceId]
+    [layout.nodes, visibleLabelIds, layout.width, layout.height, focalPersonId]
   );
 
   const handleNodeKeyDown = useCallback(
@@ -150,7 +169,7 @@ export const TreeKinshipLoom: React.FC<TreeKinshipLoomProps> = ({
             </span>
           ) : (
             <span className={cx(loomStyles, 'kinship-loom-hint')}>
-              Tap or hover any person to trace their thread
+              Select any person to trace their thread
             </span>
           )}
         </div>

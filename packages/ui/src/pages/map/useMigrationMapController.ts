@@ -86,6 +86,7 @@ export function useMigrationMapController(params: UseMigrationMapControllerParam
   const toolbarRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<MapLibreMap | null>(null);
   const styleLoadedRef = useRef(false);
+  const usingOhmStyleRef = useRef(false);
   const historicalFailedRef = useRef(false);
   const pendingBoundsRef = useRef<[[number, number], [number, number]] | null>(null);
   const programmaticMoveRef = useRef(false);
@@ -240,16 +241,18 @@ export function useMigrationMapController(params: UseMigrationMapControllerParam
     ensureMapLibreConfigured();
     let cancelled = false;
     styleLoadedRef.current = false;
+    usingOhmStyleRef.current = false;
     historicalFailedRef.current = false;
     lastAppliedDateRef.current = null;
     let activeMap: MapLibreMap | null = null;
+    let activeAttribution: AttributionControl | null = null;
 
     const buildAttributionControl = (offline: boolean): AttributionControl =>
       new AttributionControl({
         compact: true,
         customAttribution: offline
           ? [
-              'Offline archival basemap',
+              'Archival basemap',
               '<a href="https://maplibre.org/" target="_blank" rel="noopener noreferrer">MapLibre</a>',
             ]
           : [
@@ -258,13 +261,17 @@ export function useMigrationMapController(params: UseMigrationMapControllerParam
             ],
       });
 
-    const mountMap = (initialStyle: StyleSpecification, isFallback: boolean): void => {
-      if (cancelled) {
-        return;
+    const replaceAttribution = (map: MapLibreMap, offline: boolean): void => {
+      if (activeAttribution && typeof map.removeControl === 'function') {
+        map.removeControl(activeAttribution);
       }
-      if (isFallback) {
-        historicalFailedRef.current = true;
-        setHistoricalMap({ kind: 'failed' });
+      activeAttribution = buildAttributionControl(offline);
+      map.addControl(activeAttribution, 'bottom-left');
+    };
+
+    const mountMap = (initialStyle: StyleSpecification): MapLibreMap | null => {
+      if (cancelled) {
+        return null;
       }
       let map: MapLibreMap;
       try {
@@ -287,11 +294,10 @@ export function useMigrationMapController(params: UseMigrationMapControllerParam
       } catch {
         historicalFailedRef.current = true;
         setHistoricalMap({ kind: 'failed' });
-        return;
+        return null;
       }
       activeMap = map;
-      let activeAttribution = buildAttributionControl(isFallback);
-      map.addControl(activeAttribution, 'bottom-left');
+      replaceAttribution(map, true);
       mapRef.current = map;
       host.kinloomMigrationMap = map;
       map.getCanvas().setAttribute('aria-label', `${siteConfig.site.familyName} migration map`);
@@ -306,10 +312,12 @@ export function useMigrationMapController(params: UseMigrationMapControllerParam
           map.resize();
         }
         setPeriodBasemap(map, darkNow);
-        if (!historicalFailedRef.current) {
+        if (usingOhmStyleRef.current && !historicalFailedRef.current) {
           lastAppliedDateRef.current = OVERVIEW_REFERENCE_YEAR;
+          setHistoricalMap({ kind: 'ready' });
+        } else if (historicalFailedRef.current) {
+          setHistoricalMap({ kind: 'failed' });
         }
-        setHistoricalMap(historicalFailedRef.current ? { kind: 'failed' } : { kind: 'ready' });
         syncFamilyOverlay(
           map,
           overlayRef.current,
@@ -324,23 +332,21 @@ export function useMigrationMapController(params: UseMigrationMapControllerParam
       };
 
       const onError = (event: ErrorEvent): void => {
-        if (cancelled || styleLoadedRef.current || historicalFailedRef.current) {
+        if (cancelled || historicalFailedRef.current || !usingOhmStyleRef.current) {
           return;
         }
         if (!event.error?.message?.includes(OHM_STYLE_URL)) {
           return;
         }
         historicalFailedRef.current = true;
+        usingOhmStyleRef.current = false;
         setHistoricalMap({ kind: 'failed' });
-        if (typeof map.removeControl === 'function') {
-          map.removeControl(activeAttribution);
-        }
-        activeAttribution = buildAttributionControl(true);
-        map.addControl(activeAttribution, 'bottom-left');
+        replaceAttribution(map, true);
         window.setTimeout(() => {
-          if (cancelled || mapRef.current !== map || styleLoadedRef.current) {
+          if (cancelled || mapRef.current !== map) {
             return;
           }
+          styleLoadedRef.current = false;
           map.setStyle(buildPaperStyle(readResolvedDarkMode()));
         }, 0);
       };
@@ -357,6 +363,8 @@ export function useMigrationMapController(params: UseMigrationMapControllerParam
           programmaticMoveRef.current = false;
         }, 60);
       }
+
+      return map;
     };
 
     const initialIsDark = readResolvedDarkMode();
@@ -367,18 +375,49 @@ export function useMigrationMapController(params: UseMigrationMapControllerParam
       }
     });
 
+    // Mount the offline archival basemap immediately so dark and light modes paint
+    // landmasses, coastlines, routes, and markers on first frame without waiting on OHM.
+    const mountedMap = mountMap(buildPaperStyle(initialIsDark));
+    if (!mountedMap) {
+      return (): void => {
+        cancelled = true;
+        unsubscribeTheme();
+      };
+    }
+
     void loadArchivalOhmStyle(OVERVIEW_REFERENCE_YEAR, fetch, initialIsDark)
-      .then((archivalStyle) => {
-        mountMap(archivalStyle, false);
+      .then(async (archivalStyle) => {
+        if (cancelled || mapRef.current !== mountedMap) {
+          return;
+        }
+        const darkNow = readResolvedDarkMode();
+        const resolvedStyle =
+          darkNow === initialIsDark
+            ? archivalStyle
+            : await loadArchivalOhmStyle(OVERVIEW_REFERENCE_YEAR, fetch, darkNow);
+        if (cancelled || mapRef.current !== mountedMap) {
+          return;
+        }
+        usingOhmStyleRef.current = true;
+        historicalFailedRef.current = false;
+        styleLoadedRef.current = false;
+        replaceAttribution(mountedMap, false);
+        mountedMap.setStyle(resolvedStyle);
       })
       .catch(() => {
-        mountMap(buildPaperStyle(readResolvedDarkMode()), true);
+        if (cancelled || mapRef.current !== mountedMap) {
+          return;
+        }
+        usingOhmStyleRef.current = false;
+        historicalFailedRef.current = true;
+        setHistoricalMap({ kind: 'failed' });
       });
 
     return (): void => {
       cancelled = true;
       unsubscribeTheme();
       styleLoadedRef.current = false;
+      usingOhmStyleRef.current = false;
       historicalFailedRef.current = false;
       lastAppliedDateRef.current = null;
       delete host.kinloomMigrationMap;

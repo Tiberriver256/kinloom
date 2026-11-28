@@ -7,6 +7,7 @@ export const PAPER_LAND_LAYER_ID = 'kinloom-paper-land';
 export const OVERVIEW_REFERENCE_YEAR = '1900';
 
 const MAP_MAX_ZOOM = 12;
+const DEFAULT_OHM_STYLE_TIMEOUT_MS = 4000;
 
 const ARCHIVAL_SOURCE_LAYERS = new Set([
   'land',
@@ -102,21 +103,43 @@ function transformLayer(layer: LayerSpecification, isDark: boolean): LayerSpecif
       ...next,
       paint: { ...next.paint, 'fill-color': palette.water },
     };
+  } else if (isDark && next.type === 'line' && sourceLayer === 'water_lines') {
+    next = {
+      ...next,
+      paint: { ...next.paint, 'line-color': palette.water },
+    };
+  } else if (isDark && next.type === 'line' && sourceLayer === 'land_ohm_lines') {
+    next = {
+      ...next,
+      paint: { ...next.paint, 'line-color': palette.futureStopStroke },
+    };
   }
 
-  if (next.type === 'symbol' && next.layout) {
-    const nextLayout: Record<string, unknown> = { ...next.layout };
-    let layoutChanged = false;
-    if (isPlainNameGetter(nextLayout['text-field'])) {
-      nextLayout['text-field'] = ENGLISH_FIRST_NAME_EXPR;
-      layoutChanged = true;
+  if (next.type === 'symbol') {
+    if (next.layout) {
+      const nextLayout: Record<string, unknown> = { ...next.layout };
+      let layoutChanged = false;
+      if (isPlainNameGetter(nextLayout['text-field'])) {
+        nextLayout['text-field'] = ENGLISH_FIRST_NAME_EXPR;
+        layoutChanged = true;
+      }
+      if (isItalicFontStack(nextLayout['text-font'])) {
+        nextLayout['text-font'] = ['OpenHistorical'];
+        layoutChanged = true;
+      }
+      if (layoutChanged) {
+        next = { ...next, layout: nextLayout as typeof next.layout };
+      }
     }
-    if (isItalicFontStack(nextLayout['text-font'])) {
-      nextLayout['text-font'] = ['OpenHistorical'];
-      layoutChanged = true;
-    }
-    if (layoutChanged) {
-      next = { ...next, layout: nextLayout as typeof next.layout };
+    if (isDark) {
+      next = {
+        ...next,
+        paint: {
+          ...next.paint,
+          'text-color': palette.labelColor,
+          'text-halo-color': palette.labelHalo,
+        },
+      };
     }
   }
 
@@ -197,13 +220,30 @@ export function resetCachedOhmStyle(): void {
   cachedDefaultDarkStyle = null;
 }
 
+async function fetchOhmStyleWithTimeout(fetchFn: typeof fetch, timeoutMs: number): Promise<Response> {
+  let timer: ReturnType<typeof setTimeout> | null = null;
+  const timeoutPromise = new Promise<never>((_resolve, reject) => {
+    timer = setTimeout(() => {
+      reject(new Error(`Timed out after ${timeoutMs}ms loading ${OHM_STYLE_URL}`));
+    }, timeoutMs);
+  });
+  try {
+    return await Promise.race([fetchFn(OHM_STYLE_URL), timeoutPromise]);
+  } finally {
+    if (timer !== null) {
+      clearTimeout(timer);
+    }
+  }
+}
+
 export async function loadArchivalOhmStyle(
   initialYear = OVERVIEW_REFERENCE_YEAR,
   fetchFn: typeof fetch = fetch,
-  isDark = false
+  isDark = false,
+  timeoutMs = DEFAULT_OHM_STYLE_TIMEOUT_MS
 ): Promise<StyleSpecification> {
   if (!cachedRawStylePromise) {
-    cachedRawStylePromise = fetchFn(OHM_STYLE_URL)
+    cachedRawStylePromise = fetchOhmStyleWithTimeout(fetchFn, timeoutMs)
       .then(async (res) => {
         if (!res.ok) {
           throw new Error(`HTTP ${res.status} loading ${OHM_STYLE_URL}`);

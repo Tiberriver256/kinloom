@@ -121,7 +121,10 @@ export const TreePage: React.FC = () => {
     branchFilter === 'all' ? siteConfig.site.familyName : (activeBranchConfig?.label ?? branchFilter);
 
   const showDirectToggle =
-    activeAnchorPerson !== null || branchFilter === 'all' || (activeBranchConfig?.supportsDirectMode ?? true);
+    surface !== 'loom' &&
+    (activeAnchorPerson !== null ||
+      branchFilter === 'all' ||
+      (activeBranchConfig?.supportsDirectMode ?? true));
 
   const model = useMemo(() => {
     if (!bundle) {
@@ -779,20 +782,10 @@ export const TreePage: React.FC = () => {
                 canvas.handleDiagramZoomBy(1.28);
               }}
               onZoomOut={() => {
-                const nextZoom = Math.round(canvas.zoomPercent / 1.28);
-                if (nextZoom < KINSHIP_LOOM_ZOOM_THRESHOLD && model.totalVisibleCount > 0) {
-                  setSurface('loom');
-                  setLiveAnnouncement('Switched to Kinship Loom birth-year constellation view.');
-                  return;
-                }
                 canvas.handleDiagramZoomBy(1 / 1.28);
               }}
               onFit={canvas.animateFitToViewport}
               onResetZoom={canvas.handleDiagramResetZoom}
-              loomActive={false}
-              onToggleLoom={() => {
-                setSurface('loom');
-              }}
             />
           </>
         )}
