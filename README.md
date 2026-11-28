@@ -25,180 +25,105 @@
   </a>
 </p>
 
-Kinloom is an open-source MIT framework for private, collaborative family history wikis grounded in primary archival records. Families explore people, places, timelines, maps, kinship graphs, and primary source transcriptions inside one web application while editing records with append-only revision history, optimistic conflict resolution, and one-click revert.
+Kinloom is an open-source, self-hosted family history wiki built for relatives and family archivists who want their stories anchored in primary records rather than locked inside commercial subscription sites. It keeps living relatives private by default while letting enrolled family members explore, cite, and collaboratively edit generations of people, places, maps, and historical documents.
 
-## Live public demo
+## Live demo & visual tour
 
-Browse the live demo archive at [https://tiberriver256.github.io/kinloom/](https://tiberriver256.github.io/kinloom/).
-
-The demo publishes a 54-person, 10-generation public-domain archive (1622-1985) covering the Lincoln, Todd, Hanks, and Harlan branches across Massachusetts, New Jersey, Pennsylvania, Virginia, Kentucky, Indiana, Illinois, Iowa, Washington, D.C., and Vermont. It includes 35 verified public-domain photographs and NARA record scans, plus one synthetic living test fixture that verifies public redaction.
-
-## Visual tour
-
-All screenshots below come directly from the public-domain Lincoln and Todd demo in `examples/demo/`.
+Explore the live public-domain demo archive at **[tiberriver256.github.io/kinloom](https://tiberriver256.github.io/kinloom/)** (10 generations of the Lincoln, Todd, Hanks, and Harlan families with verified photographs and NARA record scans).
 
 <table>
   <tr>
     <td width="50%">
-      <img src="docs/assets/demo-home.png" alt="Kinloom archival people index showing the Lincoln and Todd family" />
-      <p><strong>Archive index.</strong> White-labeled family landing page with search, photo filters, GEDCOM 7 export, and living-person redaction.</p>
+      <img src="docs/assets/demo-home.png" alt="Kinloom People Directory showing the Lincoln and Todd family" />
+      <p><strong>People Directory.</strong> Era-grouped family directory with instant search, branch filters, AAA Dark Mode, and GEDCOM 7 export.</p>
     </td>
     <td width="50%">
-      <img src="docs/assets/demo-tree.png" alt="Kinloom interactive ten-generation family tree chart" />
-      <p><strong>Interactive family tree.</strong> Ten-generation zoomable pedigree chart with direct-line framing, branch filters, and list view.</p>
+      <img src="docs/assets/demo-tree.png" alt="Kinloom interactive ten-generation Family Tree chart" />
+      <p><strong>Family Tree.</strong> Zoomable multi-generation pedigree chart, Kinship Loom overview, direct-line framing, and accessible list view.</p>
     </td>
   </tr>
   <tr>
     <td width="50%">
-      <img src="docs/assets/demo-map.png" alt="Kinloom historical migration map with era filters and route playback" />
-      <p><strong>Historical migration map.</strong> Era-filtered residence routes plotted on OpenHistoricalMap with step-by-step chronological playback.</p>
+      <img src="docs/assets/demo-map.png" alt="Kinloom historical Migration Map with era filters and route playback" />
+      <p><strong>Migration Map &amp; Places Directory.</strong> Era-filtered residence routes on OpenHistoricalMap paired with regional place histories.</p>
     </td>
     <td width="50%">
-      <img src="docs/assets/demo-person.png" alt="Kinloom person dossier for Abraham Lincoln with timeline and cited sources" />
-      <p><strong>Person dossier.</strong> Primary-source life timeline, portrait mat, residence history, family relationships, and cited archival records.</p>
+      <img src="docs/assets/demo-person.png" alt="Kinloom Person Profile for Abraham Lincoln with timeline and cited sources" />
+      <p><strong>Person Profile.</strong> Cited life timeline, Folio Marginalia, portrait mat, primary-source reader, and collaborative revision history.</p>
     </td>
   </tr>
 </table>
 
-## Quickstart
+### Core archive capabilities
 
-Launch a family archive in three commands:
+- **Collaborative archival editing:** Inline editing with `Cited` vs. `Family memory` badges, Talk discussions, Research Field Reports (`/changes`), and one-click revision or batch revert.
+- **Built-in living-person privacy:**
+  - Living relatives (explicit `is_living: true` or born within the living-cutoff window without a death date) have portraits, exact birth dates, and addresses stripped automatically.
+  - Public builds and GEDCOM 7 exports redact living individuals completely across directories, narratives, timelines, and Open Graph cards.
+  - Uploading or attaching media to a living person is blocked in the UI and rejected by the server before any bytes touch object storage.
+- **Accessible by design:** Paper &amp; Ink light and dark themes verified to WCAG 2.2 AAA contrast (`npm run check:contrast`), keyboard-first Command Bar (`/` or `Cmd/Ctrl+K`), and heirloom print stylesheets.
+
+## Built-in plugins (opt-in, off by default)
+
+Extend any private archive without forking core packages. Every built-in plugin ships typed configuration, Admin Settings integration, and in-app documentation:
+
+| Plugin | What it adds | Surface | Guide |
+| --- | --- | --- | --- |
+| **Family Recipes** | Heirloom recipe box with card scans, ancestor attribution, favorites, and threaded family comments. | UI, Server | [Plugin authoring](docs/developers/plugin-authoring.md) |
+| **Narrative Audio** | Spoken family biographies with a persistent playback dock and narrated Editor's Notes. | UI, CLI | [Colab GPU TTS](docs/colab-gpu-tts.md) |
+| **Pronunciation Guide** | Canonical surname and place IPA/phonetic lexicon with cached neural TTS audio clips. | UI, Server, CLI | [Plugin settings](docs/plugin-settings.md) |
+| **Book Publishing** | Print-ready archival hardcover PDF compilation with mandatory living-person privacy gating and Lulu Print API export. | UI, Server, CLI | [Book Publishing](docs/book-publishing.md) |
+| **Open Finance** | Transparent archive operating-cost ledger and allowlisted zero-custody family donation links. | UI, Server | [Open Finance](docs/open-finance.md) |
+| **Page Visit Stats** | Cookieless, IP-free aggregate readership counts for deceased people, places, and narratives. | UI, Server | [Observability](docs/observability.md) |
+| **Workers Observability** | Structured JSON request logs, `Server-Timing` spans (`d1`, `r2`, `bundle`), and synthetic `kinloom probe` checks. | Server, CLI | [Observability](docs/observability.md) |
+| **Security Telemetry** | Structured auth, CSRF, RBAC, and media-rejection security event logging and alerting hooks. | Server | [Observability](docs/observability.md) |
+| **Cloudflare Web Analytics** | Lightweight RUM beacon injection with automatic `/privacy` disclosure. | Server | [Observability](docs/observability.md) |
+
+## Quickstart & self-hosting
+
+Launch a private family archive on Cloudflare Workers (D1 + R2) in three commands:
 
 ```bash
 # 1. Scaffold kinloom.config.yaml, starter YAML records, and Wrangler config
 npx kinloom init my-family-archive --family-name "Alder Family" --title "Alder Family Archive"
 
-# 2. Seed the archive database from YAML (or slice an existing GEDCOM first with `npx kinloom slice-gedcom`)
+# 2. Seed the archive database from YAML (or slice a GEDCOM first with `npx kinloom slice-gedcom`)
 npx kinloom seed --site https://archive.example.org --token "$KINLOOM_AGENT_TOKEN" --data ./data
 
 # 3. Deploy the Cloudflare Worker and static SPA bundle
 npx wrangler deploy
 ```
 
-## Documentation
+For full production setup, authentication, invites, and operations, see the **Admin Documentation**:
+[Installation](docs/admin/installation.md) · [Configuration](docs/admin/configuration.md) · [Access &amp; Privacy](docs/admin/access-and-privacy.md) · [Operations](docs/admin/operations.md) · [Troubleshooting](docs/admin/troubleshooting.md) · [All Docs](docs/README.md)
 
-Browse the full [documentation hub](docs/README.md) or jump directly to a guide:
+## Developers, CLI & plugin authors
 
-| Audience | Guide | Summary |
-| --- | --- | --- |
-| All readers | [Documentation hub](docs/README.md) | Central index of developer, plugin, operational, and historical docs. |
-| Contributors | [Architecture](docs/developers/architecture.md) | Six-package DAG, hexagonal ports, incremental bundle patching, XState v5, dark mode tokens, and CI invariants. |
-| Plugin authors | [Plugin authoring guide](docs/developers/plugin-authoring.md) | Build plugins across Server, Worker, UI, and CLI with settings schemas, scoped SQL migrations, and named UI slots. |
-| Plugin authors | [Testing and publishing plugins](docs/developers/testing-and-publishing-plugins.md) | InMemory and Miniflare D1/R2 parity tests, RBAC/CSRF/SQL checks, npm subpath exports, and privacy checklist. |
-| Plugin authors | [Declarative plugin settings](docs/plugin-settings.md) | Typed `settingsSchema` fields, write-only secrets, and Admin Settings HTTP API. |
-| Operators | [Observability and telemetry](docs/observability.md) | Workers telemetry, security events, WAF rules, `kinloom probe`, and Page Visit Stats. |
-| Operators | [Optional plugins and CLI guides](docs/README.md#operational-and-optional-plugin-guides) | [Open Finance](docs/open-finance.md), [Book Publishing](docs/book-publishing.md), [UI Screenshots](docs/ui-screenshots.md), and [Colab GPU TTS](docs/colab-gpu-tts.md). |
-| Designers & writers | [Design system](DESIGN.md) & [Ubiquitous language](docs/ubiquitous-language.md) | Paper & Ink AAA tokens and canonical archive vocabulary. |
+Kinloom is a six-workspace TypeScript monorepo with a strict unidirectional dependency graph and a zero-Cloudflare portable HTTP core:
 
-## Backend modularity seam
+| Package | Role |
+| --- | --- |
+| `@kinloom/tokens` | Paper &amp; Ink DTCG design tokens (`Newsreader` + `IBM Plex Mono`), WCAG 2.2 AAA verified. |
+| `@kinloom/core` | Domain schemas, EDTF dates, living-person privacy filter, GEDCOM 7 import/export, and incremental bundle patching. |
+| `@kinloom/server` | Portable Web-Fetch HTTP router, auth/invites/RBAC, revision ledger, byte-range media streaming, and `KinloomServerPlugin`. |
+| `@kinloom/worker` | Thin Cloudflare Workers adapter binding `@kinloom/server` to D1 SQLite and R2 object storage. |
+| `@kinloom/ui` | Capability-driven React 19 archive explorer, wiki editors, Admin hub, and `KinloomUiPlugin` slots. |
+| `@kinloom/cli` | Pure-TypeScript operator &amp; research CLI: lifecycle (`init`, `seed`, `sync`, `export-yaml`), 23 archival/OCR/audio commands (`nara`, `chronam`, `findagrave`, `prep-scan`, `ocr`, `narrative-audio`), and 26 embedded guides (`kinloom guide`). |
 
-Kinloom separates the React explorer (`<KinloomApp />`) from storage and hosting through two boundaries:
+Dive deeper in the developer documentation:
+[Architecture](docs/developers/architecture.md) · [Plugin Authoring](docs/developers/plugin-authoring.md) · [Testing &amp; Publishing Plugins](docs/developers/testing-and-publishing-plugins.md) · [Design System](DESIGN.md) · [Ubiquitous Language](docs/ubiquitous-language.md)
 
-```text
-<KinloomApp />
-   │
-   ├── StaticDemoDataSource ──────────► Static JSON files (GitHub Pages / local preview)
-   │     (reports canEdit: false, hasRevisionHistory: false, hasTalk: false)
-   │
-   └── HttpWikiDataSource ────────────► @kinloom/server (portable Web-Fetch HTTP router)
-         (reports live role capabilities)    │
-                                             ├── @kinloom/worker (Cloudflare D1 + R2)
-                                             ├── InMemory adapters (local tests / CI)
-                                             └── Custom Node, Postgres, or S3 adapters
-```
-
-- **Capability-driven UI.** `<KinloomApp />` has no demo-mode switches. `StaticDemoDataSource.getSession()` reports an anonymous session with all write, history, talk, upload, and admin capabilities set to `false`. `HttpWikiDataSource.getSession()` reads `/api/auth/me` from the live server and enables Edit, History, Talk, Media Upload, Recent Changes, and Admin views from those capabilities.
-- **Zero-Cloudflare server core.** `@kinloom/server` depends only on Web-Standard Fetch and WebCrypto primitives (`Request`, `Response`, `crypto.subtle`). `@kinloom/worker` binds `@kinloom/server` to Cloudflare D1 and R2, while tests or self-hosted deployments can swap in any adapter implementing `ArchiveRepository`, `BundleCache`, `MediaStore`, `EmailSender`, and `AuthProvider`.
-- **Incremental bundle patching.** Every live write patches the compiled `ArchiveBundle` in place with `patchCompiledBundle()` in `@kinloom/core` instead of recompiling the entire archive from scratch.
-
-## Architecture and packages
-
-Kinloom ships six npm workspaces and a public-domain demo app:
-
-| Package | Role | Key capabilities |
-| --- | --- | --- |
-| `@kinloom/tokens` | Design tokens | Paper & Ink DTCG color and typography tokens (`Newsreader` + `IBM Plex Mono`) verified to WCAG 2.2 AA and AAA via `npm run check:contrast`. |
-| `@kinloom/core` | Domain engine | Typed Zod schemas, EDTF date parser, residence-span derivation, living-person privacy filter, GEDCOM 7 import/export, YAML serialization, revision diffs/reverts, and incremental `patchCompiledBundle()`. |
-| `@kinloom/server` | Portable backend | Zero-Cloudflare Web-Fetch HTTP router, auth/invite/magic-link services, optimistic concurrency (`409 Conflict`), append-only revision ledger, HTTP `206 Partial Content` byte-range media streaming, `KinloomServerPlugin`, and `InMemory` test adapters. |
-| `@kinloom/worker` | Cloudflare runtime | Thin adapter binding `@kinloom/server` to Cloudflare Workers, D1 SQLite migrations, R2 content-addressed media storage, and R2 incremental bundle caching. |
-| `@kinloom/ui` | React 19 explorer & wiki | White-labeled People, Places, Time, Tree, Map, Kinship, and Evidence views; inline editors with `Cited` and `Family memory` badges; `409 Conflict` merge dialog; visual diffs; one-click Revert and Batch Revert; Talk threads; Media Uploader; HTML5 `<video>`/`<audio>` player; and `KinloomUiPlugin`. |
-| `@kinloom/cli` | Operator & agent CLI | Pure-TypeScript CLI for archive lifecycle (`init`, `slice-gedcom`, `seed`, `submit-batch`, `export-yaml`, `sync`, `migrate`), archive operations (`context`, `integrate`, `audit`, `verify`, `pronounce`), 23 built-in archival, scan-prep, OCR, and narrative-audio commands, and 26 embedded workflow guides (`kinloom guide`). |
-
-## Typed plugin seam and rich media
-
-Private sites extend Kinloom without forking core packages:
-
-- **`KinloomUiPlugin` (`@kinloom/ui`).** Register custom routes and top-bar/footer links, inject React panels into named page slots (`indexHero`, `personDetail`, `placeDetail`, `sourceReaderFooter`, `evidenceExtra`, `topBarNav`, `footer`, `adminSettings`), provide custom `mediaRenderers`, opt into open-cost transparency with `createOpenFinancePlugin()` (off by default; see [docs/open-finance.md](docs/open-finance.md)), or enable admin-only archival hardcover book publishing with `createBookPublishingPlugin()` (off by default; see [docs/book-publishing.md](docs/book-publishing.md)).
-- **`KinloomServerPlugin` (`@kinloom/server`).** Mount authenticated custom API routes that inherit session, RBAC, and CSRF enforcement, subscribe to `onRevisionCommitted` hooks, opt into request lifecycle telemetry with `createWorkersObservabilityPlugin()` (off by default; see [docs/observability.md](docs/observability.md)), enable open-cost transparency and allowlisted donations with `createOpenFinancePlugin()` (off by default; see [docs/open-finance.md](docs/open-finance.md)), or enable landscape hardcover book PDF export and Lulu Print API fulfillment with `createBookPublishingServerPlugin()` (off by default; see [docs/book-publishing.md](docs/book-publishing.md)).
-- **`KinloomCliPlugin` (`@kinloom/cli`).** Auto-discovered from `extensions/<name>/cli.mjs` or `kinloom.config.yaml` (`plugins`). Plugins can register custom subcommands (such as the opt-in `createBookPublishingCliPlugin()` for `kinloom book build|quote|submit|status`; see [docs/book-publishing.md](docs/book-publishing.md)), `auditChecks` for `kinloom audit`, and `verifyChecks` for `kinloom verify` (including check-only plugins without custom commands):
-
-```js
-/** @type {import('@kinloom/cli').KinloomCliPlugin} */
-export default {
-  id: 'site-quality-checks',
-  name: 'Site Quality Checks',
-  auditChecks: [
-    {
-      id: 'require-custom-note',
-      name: 'Custom Note Check',
-      run: ({ patch }) => ({
-        errors: [],
-        warnings: patch.notes ? [] : ['Staged patch is missing a custom research note.'],
-      }),
-    },
-  ],
-  verifyChecks: [
-    {
-      id: 'require-places',
-      name: 'Place Count Check',
-      run: ({ places }) => ({
-        errors: places.length > 0 ? [] : ['Archive must define at least one place.'],
-        warnings: [],
-      }),
-    },
-  ],
-};
-```
-
-- **Byte-range video and oral histories.** `MediaService` validates and stores images, PDFs, MP4/WebM videos, and audio oral histories under content-addressed SHA-256 keys, streaming `GET /media/:key` with HTTP `206 Partial Content` and `Content-Range` headers for scrubbable `<video>` and `<audio>` playback.
-
-## Built-in genealogy research CLI and guides
-
-`@kinloom/cli` ships 23 pure-TypeScript archival, scan-prep, OCR, and narrative-audio commands plus 26 embedded workflow guides (`kinloom guide`), with no Python or external package manager required:
-
-- **Federal and general archives.** `nara`, `archive-org` (alias `ia`), `chronam`, `hathi`, `findagrave`, `gnis`, `wikitree`, `persi`
-- **State archives.** `ca-archives`, `ky-archives`, `michiganology`, `mn-archives`, `mo-archives`, `nj-archives`, `texas-archives`, `va-archives`
-- **International archives.** `fi-archives`, `openarchieven`, `se-archives`, `uk-archives`
-- **Media, scan prep, and OCR.** `prep-scan`, `ocr`, `narrative-audio`
-- **Embedded research guides.** `kinloom guide` (including `blm-glo`, `cyndis-list`, `pronounce`, and `narrative-audio/script-rules`)
-
-Agents submit structured multi-entity discoveries through `POST /api/batches` with scoped `write_batch` bearer tokens. Every agent wave appears in `/changes` with a `Research agent` badge and supports one-click reverse-order Batch Revert.
-
-## Living-person privacy policy
-
-Kinloom enforces living-person privacy in both `@kinloom/core` and `@kinloom/server`:
-
-- Any person marked `is_living: true` (or with no death date and a birth year inside the configured living-cutoff window, 101 years by default) has portraits, exact birth dates, street addresses, and residence spans stripped at write and compile time.
-- Public builds redact living individuals completely from people lists, narratives, event summaries, and GEDCOM 7 exports.
-- Attempting to upload or attach a portrait or photo to a living person is blocked in the uploader UI and rejected by the server with HTTP `422` (`LIVING_MEDIA_FORBIDDEN`) before any file bytes are written to object storage.
-
-## Development and verification
+### Local development & verification
 
 ```bash
 npm ci
-npm run check         # check:arch, Biome, build all 6 workspaces, typecheck, Vitest, WCAG contrast, leak check
-npm run test:coverage # enforce >= 90% V8 line, function, statement, and branch coverage
-npm run test:e2e      # Chromium Playwright suite covering static demo and live wiki flows
+npm run check         # architecture, lint, build, typecheck, Vitest, WCAG contrast, leak & docs checks
+npm run test:coverage # enforce >= 90% V8 statements, branches, functions, and lines
+npm run test:e2e      # Chromium Playwright suite (static demo and live wiki)
 ```
 
-## Community and governance
+## Community & license
 
-- **Contributing.** Read [CONTRIBUTING.md](CONTRIBUTING.md) for local setup, architecture invariants, and pull request checks.
-- **Support and discussions.** Ask setup questions or share custom plugins in [GitHub Discussions](https://github.com/Tiberriver256/kinloom/discussions) or read [SUPPORT.md](SUPPORT.md).
-- **Security and privacy.** Report vulnerabilities privately through [SECURITY.md](SECURITY.md) instead of public issues.
-- **Code of conduct.** All contributors follow [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md).
-- **Design system.** Review Paper & Ink tokens and WCAG AAA rules in [DESIGN.md](DESIGN.md).
-
-## License
-
-MIT. See [LICENSE](LICENSE).
+- **Contributing:** [CONTRIBUTING.md](CONTRIBUTING.md) · **Support:** [SUPPORT.md](SUPPORT.md) &amp; [GitHub Discussions](https://github.com/Tiberriver256/kinloom/discussions)
+- **Security &amp; privacy:** [SECURITY.md](SECURITY.md) · **Code of conduct:** [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md)
+- **License:** MIT — see [LICENSE](LICENSE).
