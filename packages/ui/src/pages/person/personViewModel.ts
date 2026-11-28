@@ -7,6 +7,7 @@ import type {
   ResidenceSpan,
 } from '@kinloom/core';
 import { getMediaPersonIds } from '@kinloom/core';
+import { isRedactedLivingPlaceholder } from '../../lib/tree/types.js';
 import { KINLOOM_VOCABULARY } from '../../lib/vocabulary.js';
 
 export type PersonLightboxState =
@@ -19,14 +20,24 @@ export interface ImmediateFamilyEntry {
   readonly slug: string;
   readonly name: string;
   readonly years: string;
+  readonly isLiving?: boolean;
 }
 
 export interface ImmediateFamilySummary {
   readonly parents: readonly ImmediateFamilyEntry[];
   readonly spouses: readonly ImmediateFamilyEntry[];
   readonly children: readonly ImmediateFamilyEntry[];
+  readonly livingParentCount?: number;
   readonly livingSpouseCount: number;
   readonly livingChildCount: number;
+}
+
+export function extractBirthYearForLiving(person: Pick<Person, 'birth_year' | 'birth_edtf'>): number | null {
+  if (typeof person.birth_year === 'number' && Number.isFinite(person.birth_year)) {
+    return person.birth_year;
+  }
+  const match = /^(\d{4})/.exec((person.birth_edtf ?? '').trim());
+  return match ? Number.parseInt(match[1], 10) : null;
 }
 
 export interface TimelineScrubberTick {
@@ -89,28 +100,42 @@ export function buildImmediateFamily(
   }
 
   const toEntries = (ids: ReadonlySet<string>): { visible: ImmediateFamilyEntry[]; livingCount: number } => {
-    const visible: { id: string; slug: string; name: string; years: string; sortYear: number }[] = [];
+    const visible: {
+      id: string;
+      slug: string;
+      name: string;
+      years: string;
+      isLiving: boolean;
+      sortYear: number;
+    }[] = [];
     let livingCount = 0;
     for (const id of ids) {
       const rel = peopleById.get(id);
       if (!rel) {
         continue;
       }
-      if (rel.is_living || rel.full_name === 'Living') {
+      if (isRedactedLivingPlaceholder(rel)) {
         livingCount += 1;
         continue;
       }
+      const livingBirthYear = rel.is_living ? extractBirthYearForLiving(rel) : null;
+      const years = rel.is_living
+        ? livingBirthYear !== null
+          ? `b. ${livingBirthYear}`
+          : 'Living'
+        : `${rel.birth_year || '?'}–${rel.death_year || '?'}`;
       visible.push({
         id: rel.id,
         slug: rel.slug,
         name: rel.full_name,
-        years: `${rel.birth_year || '?'}–${rel.death_year || '?'}`,
-        sortYear: rel.birth_year ?? 9999,
+        years,
+        isLiving: Boolean(rel.is_living),
+        sortYear: (rel.is_living ? livingBirthYear : rel.birth_year) ?? 9999,
       });
     }
     visible.sort((a, b) => a.sortYear - b.sortYear || a.name.localeCompare(b.name));
     return {
-      visible: visible.map(({ id, slug, name, years }) => ({ id, slug, name, years })),
+      visible: visible.map(({ id, slug, name, years, isLiving }) => ({ id, slug, name, years, isLiving })),
       livingCount,
     };
   };
@@ -122,6 +147,7 @@ export function buildImmediateFamily(
     parents: parents.visible,
     spouses: spouses.visible,
     children: children.visible,
+    livingParentCount: parents.livingCount,
     livingSpouseCount: spouses.livingCount,
     livingChildCount: children.livingCount,
   };

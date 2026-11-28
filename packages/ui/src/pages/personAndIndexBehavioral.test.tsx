@@ -467,3 +467,267 @@ describe('PersonPage, IndexPage, PlacePage, LocalSurveyMap, and TreePage behavio
     }
   });
 });
+
+describe('Issue #75: named living relatives on private archives vs redacted public fence', () => {
+  const { bundle: PRIVATE_LIVING_BUNDLE } = compileArchive({
+    siteConfig: SITE_CONFIG,
+    mode: 'private',
+    places: [],
+    sources: [],
+    people: [
+      {
+        id: 'per_nora',
+        slug: 'nora-alder',
+        full_name: 'Nora Alder',
+        given_name: 'Nora',
+        surname: 'Alder',
+        alt_names: [],
+        sex: 'F',
+        is_living: true,
+        lineage_group: 'descendant',
+        branch: 'main',
+        birth_edtf: '1954-09-18',
+        death_edtf: '',
+        portrait_url: null,
+      },
+      {
+        id: 'per_jordan',
+        slug: 'jordan-alder',
+        full_name: 'Jordan Alder',
+        given_name: 'Jordan',
+        surname: 'Alder',
+        alt_names: [],
+        sex: 'X',
+        is_living: true,
+        lineage_group: 'descendant',
+        branch: 'main',
+        birth_edtf: '1984-03-22',
+        death_edtf: '',
+        portrait_url: null,
+      },
+      {
+        id: 'per_casey',
+        slug: 'casey-mercer',
+        full_name: 'Casey Mercer',
+        given_name: 'Casey',
+        surname: 'Mercer',
+        alt_names: [],
+        sex: 'F',
+        is_living: true,
+        lineage_group: 'descendant',
+        branch: 'main',
+        birth_edtf: '1985-11-04',
+        death_edtf: '',
+        portrait_url: null,
+      },
+      {
+        id: 'per_quinn',
+        slug: 'quinn-alder',
+        full_name: 'Quinn Alder',
+        given_name: 'Quinn',
+        surname: 'Alder',
+        alt_names: [],
+        sex: 'U',
+        is_living: true,
+        lineage_group: 'descendant',
+        branch: 'main',
+        birth_edtf: '',
+        death_edtf: '',
+        portrait_url: null,
+      },
+      {
+        id: 'per_hist',
+        slug: 'elias-alder',
+        full_name: 'Elias Alder',
+        given_name: 'Elias',
+        surname: 'Alder',
+        alt_names: [],
+        sex: 'M',
+        is_living: false,
+        lineage_group: 'ancestor',
+        branch: 'main',
+        birth_edtf: '1890',
+        death_edtf: '1970',
+        portrait_url: null,
+      },
+    ],
+    events: [],
+    kinship: [
+      { from: 'per_nora', to: 'per_jordan', relation: 'parent' },
+      { from: 'per_jordan', to: 'per_casey', relation: 'spouse' },
+      { from: 'per_jordan', to: 'per_quinn', relation: 'parent' },
+    ],
+    media: [],
+    narratives: [],
+  });
+
+  const { bundle: PUBLIC_LIVING_BUNDLE } = compileArchive({
+    siteConfig: SITE_CONFIG,
+    mode: 'public',
+    places: [],
+    sources: [],
+    people: [
+      {
+        id: 'per_pub_parent',
+        slug: 'secret-parent-alder',
+        full_name: 'SecretParent Alder',
+        given_name: 'SecretParent',
+        surname: 'Alder',
+        alt_names: [],
+        sex: 'F',
+        is_living: true,
+        lineage_group: 'ancestor',
+        branch: 'main',
+        birth_edtf: '1960-05-05',
+        death_edtf: '',
+        portrait_url: null,
+      },
+      {
+        id: 'per_pub_subject',
+        slug: 'arthur-public-alder',
+        full_name: 'Arthur Public Alder',
+        given_name: 'Arthur',
+        surname: 'Alder',
+        alt_names: [],
+        sex: 'M',
+        is_living: false,
+        lineage_group: 'descendant',
+        branch: 'main',
+        birth_edtf: '1920',
+        death_edtf: '2000',
+        portrait_url: null,
+      },
+      {
+        id: 'per_pub_spouse',
+        slug: 'secret-spouse-mercer',
+        full_name: 'SecretSpouse Mercer',
+        given_name: 'SecretSpouse',
+        surname: 'Mercer',
+        alt_names: [],
+        sex: 'F',
+        is_living: true,
+        lineage_group: 'descendant',
+        branch: 'main',
+        birth_edtf: '1970-02-02',
+        death_edtf: '',
+        portrait_url: null,
+      },
+      {
+        id: 'per_pub_child',
+        slug: 'secret-child-alder',
+        full_name: 'SecretChild Alder',
+        given_name: 'SecretChild',
+        surname: 'Alder',
+        alt_names: [],
+        sex: 'M',
+        is_living: true,
+        lineage_group: 'descendant',
+        branch: 'main',
+        birth_edtf: '1998-08-08',
+        death_edtf: '',
+        portrait_url: null,
+      },
+    ],
+    events: [],
+    kinship: [
+      { from: 'per_pub_parent', to: 'per_pub_subject', relation: 'parent' },
+      { from: 'per_pub_subject', to: 'per_pub_spouse', relation: 'spouse' },
+      { from: 'per_pub_subject', to: 'per_pub_child', relation: 'parent' },
+    ],
+    media: [],
+    narratives: [],
+  });
+
+  it('renders named living relatives with birth years and Living indicator on private PersonPage and lists all living relatives on IndexPage', async () => {
+    const personEl = mountEl(
+      <MemoryRouter initialEntries={['/person/jordan-alder']}>
+        <ArchiveProvider siteConfig={SITE_CONFIG} initialBundle={PRIVATE_LIVING_BUNDLE}>
+          <Routes>
+            <Route path="/person/:slug" element={<PersonPage />} />
+          </Routes>
+        </ArchiveProvider>
+      </MemoryRouter>
+    );
+    await flushUi();
+
+    expect(personEl.textContent).toContain('Jordan Alder');
+    expect(personEl.textContent).toContain('b. 1984');
+    // Never leak exact month-day from birth_edtf on living dossier header
+    expect(personEl.textContent).not.toContain('1984-03-22');
+
+    // Clickable relative links for living parent, spouse, and child
+    const links = Array.from(personEl.querySelectorAll('a')).map((a) => ({
+      href: a.getAttribute('href'),
+      text: a.textContent || '',
+    }));
+    expect(
+      links.some(
+        (l) => l.href === '/person/nora-alder' && l.text.includes('Nora Alder') && l.text.includes('b. 1954')
+      )
+    ).toBe(true);
+    expect(
+      links.some(
+        (l) =>
+          l.href === '/person/casey-mercer' && l.text.includes('Casey Mercer') && l.text.includes('b. 1985')
+      )
+    ).toBe(true);
+    expect(
+      links.some(
+        (l) => l.href === '/person/quinn-alder' && l.text.includes('Quinn Alder') && l.text.includes('Living')
+      )
+    ).toBe(true);
+    expect(personEl.textContent).not.toContain('(redacted)');
+
+    // IndexPage lists all living relatives in a dedicated Living relatives section
+    const indexEl = mountEl(
+      <MemoryRouter initialEntries={['/']}>
+        <ArchiveProvider siteConfig={SITE_CONFIG} initialBundle={PRIVATE_LIVING_BUNDLE}>
+          <IndexPage />
+        </ArchiveProvider>
+      </MemoryRouter>
+    );
+    await flushUi();
+
+    const livingSection = indexEl.querySelector('section[aria-label="Living relatives"]');
+    expect(livingSection).not.toBeNull();
+    expect(livingSection?.textContent).toContain('Nora Alder');
+    expect(livingSection?.textContent).toContain('b. 1954 · Living');
+    expect(livingSection?.textContent).toContain('Jordan Alder');
+    expect(livingSection?.textContent).toContain('Casey Mercer');
+    expect(livingSection?.textContent).toContain('Quinn Alder');
+  });
+
+  it('keeps public archive privacy fence intact with redacted parent/spouse/child counters and zero living PII', async () => {
+    const personEl = mountEl(
+      <MemoryRouter initialEntries={['/person/arthur-public-alder']}>
+        <ArchiveProvider siteConfig={SITE_CONFIG} initialBundle={PUBLIC_LIVING_BUNDLE}>
+          <Routes>
+            <Route path="/person/:slug" element={<PersonPage />} />
+          </Routes>
+        </ArchiveProvider>
+      </MemoryRouter>
+    );
+    await flushUi();
+
+    expect(personEl.textContent).toContain('1 living parent (redacted)');
+    expect(personEl.textContent).toContain('1 living spouse (redacted)');
+    expect(personEl.textContent).toContain('+1 living child (redacted)');
+    expect(personEl.textContent).not.toContain('SecretParent');
+    expect(personEl.textContent).not.toContain('SecretSpouse');
+    expect(personEl.textContent).not.toContain('SecretChild');
+
+    const indexEl = mountEl(
+      <MemoryRouter initialEntries={['/']}>
+        <ArchiveProvider siteConfig={SITE_CONFIG} initialBundle={PUBLIC_LIVING_BUNDLE}>
+          <IndexPage />
+        </ArchiveProvider>
+      </MemoryRouter>
+    );
+    await flushUi();
+
+    expect(indexEl.querySelector('section[aria-label="Living relatives"]')).toBeNull();
+    expect(indexEl.textContent).not.toContain('SecretParent');
+    expect(indexEl.textContent).not.toContain('SecretSpouse');
+    expect(indexEl.textContent).not.toContain('SecretChild');
+  });
+});

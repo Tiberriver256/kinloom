@@ -304,7 +304,8 @@ export function toRomanNumeral(order: number): string {
 }
 
 export function isRedactedLivingPlaceholder(person: Pick<Person, 'is_living' | 'full_name'>): boolean {
-  return person.is_living && person.full_name.trim() === 'Living';
+  const trimmed = person.full_name.trim();
+  return (person.is_living && trimmed === '') || trimmed === 'Living';
 }
 
 export function isDirectAncestorOrPivot(person: Pick<Person, 'lineage_group'>): boolean {

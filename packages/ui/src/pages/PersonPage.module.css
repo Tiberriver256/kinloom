@@ -284,6 +284,22 @@
   border-bottom-style: dashed;
 }
 
+.person-living-pill {
+  display: inline-block;
+  margin-left: 6px;
+  padding: 0 5px;
+  border: 1px solid var(--border-control);
+  border-radius: var(--radius-sm);
+  background: var(--surface-linen);
+  color: var(--text-secondary);
+  font-family: var(--font-mono);
+  font-size: 0.66rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  vertical-align: baseline;
+}
+
 .person-family-add-btn {
   display: inline-flex;
   align-items: center;

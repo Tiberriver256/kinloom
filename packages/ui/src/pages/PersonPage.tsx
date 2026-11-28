@@ -126,7 +126,14 @@ export const PersonPage: React.FC = () => {
     () =>
       bundle && person
         ? buildImmediateFamily(bundle, person.id, peopleById)
-        : { parents: [], spouses: [], children: [], livingSpouseCount: 0, livingChildCount: 0 },
+        : {
+            parents: [],
+            spouses: [],
+            children: [],
+            livingParentCount: 0,
+            livingSpouseCount: 0,
+            livingChildCount: 0,
+          },
     [bundle, person, peopleById]
   );
 

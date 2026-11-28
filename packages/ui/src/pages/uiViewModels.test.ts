@@ -622,3 +622,119 @@ describe('placeViewModel', () => {
     expect(filterLocalRecordsByDecade(localRecords, '1870')).toHaveLength(0);
   });
 });
+
+describe('personViewModel living relatives redaction vs private display (#75)', () => {
+  it('displays named living parents, spouses, and children in private archives while collapsing redacted placeholders on public archives', () => {
+    const livingParent = makePerson({
+      id: 'per_living_parent',
+      slug: 'nora-alder',
+      full_name: 'Nora Alder',
+      is_living: true,
+      birth_year: 1954,
+      birth_edtf: '1954-09-18',
+    });
+    const subject = makePerson({
+      id: 'per_living_subject',
+      slug: 'jordan-alder',
+      full_name: 'Jordan Alder',
+      is_living: true,
+      birth_year: 1984,
+      birth_edtf: '1984-03-22',
+    });
+    const livingSpouse = makePerson({
+      id: 'per_living_spouse',
+      slug: 'casey-mercer',
+      full_name: 'Casey Mercer',
+      is_living: true,
+      birth_year: null,
+      birth_edtf: '1985-11-04',
+    });
+    const livingChildUnknownBirth = makePerson({
+      id: 'per_living_child',
+      slug: 'quinn-alder',
+      full_name: 'Quinn Alder',
+      is_living: true,
+      birth_year: null,
+      birth_edtf: '',
+    });
+
+    const privateBundle: ArchiveBundle = {
+      ...makeBundle(),
+      meta: { ...makeBundle().meta, build_mode: 'private' },
+      people: [livingParent, subject, livingSpouse, livingChildUnknownBirth],
+      kinship: [
+        { from: 'per_living_parent', to: 'per_living_subject', relation: 'parent' },
+        { from: 'per_living_subject', to: 'per_living_spouse', relation: 'spouse' },
+        { from: 'per_living_subject', to: 'per_living_child', relation: 'parent' },
+      ],
+    };
+
+    const privateById = new Map(privateBundle.people.map((p) => [p.id, p]));
+    const privateFamily = buildImmediateFamily(privateBundle, 'per_living_subject', privateById);
+
+    expect(privateFamily.livingParentCount).toBe(0);
+    expect(privateFamily.livingSpouseCount).toBe(0);
+    expect(privateFamily.livingChildCount).toBe(0);
+    expect(privateFamily.parents).toEqual([
+      { id: 'per_living_parent', slug: 'nora-alder', name: 'Nora Alder', years: 'b. 1954', isLiving: true },
+    ]);
+    expect(privateFamily.spouses).toEqual([
+      {
+        id: 'per_living_spouse',
+        slug: 'casey-mercer',
+        name: 'Casey Mercer',
+        years: 'b. 1985',
+        isLiving: true,
+      },
+    ]);
+    expect(privateFamily.children).toEqual([
+      { id: 'per_living_child', slug: 'quinn-alder', name: 'Quinn Alder', years: 'Living', isLiving: true },
+    ]);
+
+    // Public archive: redacted placeholders collapse cleanly into counts (including livingParentCount)
+    const redactedParent = makePerson({
+      id: 'per_red_parent',
+      slug: 'living-parent',
+      full_name: 'Living',
+      is_living: true,
+    });
+    const redactedSpouse = makePerson({
+      id: 'per_red_spouse',
+      slug: 'living-spouse',
+      full_name: '   ',
+      is_living: true,
+    });
+    const redactedChild = makePerson({
+      id: 'per_red_child',
+      slug: 'living-child',
+      full_name: 'Living',
+      is_living: true,
+    });
+    const publicSubject = makePerson({
+      id: 'per_pub_subject',
+      slug: 'owen-alder',
+      full_name: 'Owen Alder',
+      birth_year: 1910,
+      death_year: 1990,
+    });
+
+    const publicBundle: ArchiveBundle = {
+      ...makeBundle(),
+      people: [redactedParent, publicSubject, redactedSpouse, redactedChild],
+      kinship: [
+        { from: 'per_red_parent', to: 'per_pub_subject', relation: 'parent' },
+        { from: 'per_pub_subject', to: 'per_red_spouse', relation: 'spouse' },
+        { from: 'per_pub_subject', to: 'per_red_child', relation: 'parent' },
+      ],
+    };
+    const publicById = new Map(publicBundle.people.map((p) => [p.id, p]));
+    const publicFamily = buildImmediateFamily(publicBundle, 'per_pub_subject', publicById);
+
+    expect(publicFamily.parents).toEqual([]);
+    expect(publicFamily.spouses).toEqual([]);
+    expect(publicFamily.children).toEqual([]);
+    expect(publicFamily.livingParentCount).toBe(1);
+    expect(publicFamily.livingSpouseCount).toBe(1);
+    expect(publicFamily.livingChildCount).toBe(1);
+  });
+});

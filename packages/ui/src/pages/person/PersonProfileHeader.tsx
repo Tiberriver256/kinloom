@@ -8,10 +8,11 @@ import { PronunciationBadge } from '../../components/PronunciationBadge.js';
 import type { RelativeCreateContext } from '../../components/wiki/CreateEntityModal.js';
 import { CitationBadge } from '../../components/wiki/WikiBadges.js';
 import { cx } from '../../lib/cx.js';
+import { isRedactedLivingPlaceholder } from '../../lib/tree/types.js';
 import { KINLOOM_VOCABULARY } from '../../lib/vocabulary.js';
 import controlStyles from '../../styles/Controls.module.css';
 import personStyles from '../PersonPage.module.css';
-import type { ImmediateFamilySummary } from './personViewModel.js';
+import { extractBirthYearForLiving, type ImmediateFamilySummary } from './personViewModel.js';
 
 export interface PersonProfileHeaderProps {
   readonly person: Person;
@@ -49,8 +50,12 @@ export const PersonProfileHeader: React.FC<PersonProfileHeaderProps> = ({
     immediateFamily.parents.length > 0 ||
     immediateFamily.spouses.length > 0 ||
     immediateFamily.children.length > 0 ||
+    (immediateFamily.livingParentCount ?? 0) > 0 ||
     immediateFamily.livingSpouseCount > 0 ||
     immediateFamily.livingChildCount > 0;
+
+  const isRedactedPerson = isRedactedLivingPlaceholder(person);
+  const livingBirthYear = person.is_living && !isRedactedPerson ? extractBirthYearForLiving(person) : null;
 
   const effectivePronunciation =
     !person.is_living && person.full_name !== 'Living'
@@ -126,9 +131,18 @@ export const PersonProfileHeader: React.FC<PersonProfileHeaderProps> = ({
             </div>
           )}
           <div className={cx(personStyles, 'person-header-dates')}>
-            <span>
-              {person.birth_edtf || '?'} — {person.death_edtf || (person.is_living ? 'Living' : '?')}
-            </span>
+            {person.is_living ? (
+              <span>
+                {livingBirthYear !== null ? `b. ${livingBirthYear}` : 'Living'}
+                {livingBirthYear !== null && (
+                  <span className={cx(personStyles, 'person-living-pill')}>Living</span>
+                )}
+              </span>
+            ) : (
+              <span>
+                {person.birth_edtf || '?'} — {person.death_edtf || '?'}
+              </span>
+            )}
             {branchLabel && <span className={cx(personStyles, 'person-branch-badge')}>{branchLabel}</span>}
             {person.has_primary_source !== undefined && (
               <CitationBadge hasPrimarySource={person.has_primary_source} />
@@ -163,7 +177,9 @@ export const PersonProfileHeader: React.FC<PersonProfileHeaderProps> = ({
           role="region"
           aria-label="Immediate family connections"
         >
-          {(immediateFamily.parents.length > 0 || canEdit) && (
+          {(immediateFamily.parents.length > 0 ||
+            (immediateFamily.livingParentCount ?? 0) > 0 ||
+            canEdit) && (
             <div className={cx(personStyles, 'person-family-row')}>
               <span className={cx(personStyles, 'person-family-label')}>Parents</span>
               <div className={cx(personStyles, 'person-family-chips')}>
@@ -171,11 +187,23 @@ export const PersonProfileHeader: React.FC<PersonProfileHeaderProps> = ({
                   <Link
                     key={rel.id}
                     to={`/person/${rel.slug}`}
-                    className={cx(personStyles, 'person-family-chip')}
+                    className={cx(
+                      personStyles,
+                      rel.isLiving ? 'person-family-chip is-living' : 'person-family-chip'
+                    )}
                   >
                     {rel.name} <span>({rel.years})</span>
+                    {rel.isLiving && rel.years !== 'Living' && (
+                      <span className={cx(personStyles, 'person-living-pill')}>Living</span>
+                    )}
                   </Link>
                 ))}
+                {(immediateFamily.livingParentCount ?? 0) > 0 && (
+                  <span className={cx(personStyles, 'person-family-chip is-redacted')}>
+                    {immediateFamily.livingParentCount} living{' '}
+                    {immediateFamily.livingParentCount === 1 ? 'parent' : 'parents'} (redacted)
+                  </span>
+                )}
                 {canEdit && (
                   <button
                     type="button"
@@ -207,14 +235,21 @@ export const PersonProfileHeader: React.FC<PersonProfileHeaderProps> = ({
                   <Link
                     key={rel.id}
                     to={`/person/${rel.slug}`}
-                    className={cx(personStyles, 'person-family-chip')}
+                    className={cx(
+                      personStyles,
+                      rel.isLiving ? 'person-family-chip is-living' : 'person-family-chip'
+                    )}
                   >
                     {rel.name} <span>({rel.years})</span>
+                    {rel.isLiving && rel.years !== 'Living' && (
+                      <span className={cx(personStyles, 'person-living-pill')}>Living</span>
+                    )}
                   </Link>
                 ))}
                 {immediateFamily.livingSpouseCount > 0 && (
                   <span className={cx(personStyles, 'person-family-chip is-redacted')}>
-                    {immediateFamily.livingSpouseCount} living spouse (redacted)
+                    {immediateFamily.livingSpouseCount} living{' '}
+                    {immediateFamily.livingSpouseCount === 1 ? 'spouse' : 'spouses'} (redacted)
                   </span>
                 )}
                 {canEdit && (
@@ -244,9 +279,15 @@ export const PersonProfileHeader: React.FC<PersonProfileHeaderProps> = ({
                   <Link
                     key={rel.id}
                     to={`/person/${rel.slug}`}
-                    className={cx(personStyles, 'person-family-chip')}
+                    className={cx(
+                      personStyles,
+                      rel.isLiving ? 'person-family-chip is-living' : 'person-family-chip'
+                    )}
                   >
                     {rel.name} <span>({rel.years})</span>
+                    {rel.isLiving && rel.years !== 'Living' && (
+                      <span className={cx(personStyles, 'person-living-pill')}>Living</span>
+                    )}
                   </Link>
                 ))}
                 {immediateFamily.livingChildCount > 0 && (

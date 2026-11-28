@@ -15,6 +15,7 @@ import { KinloomFooter } from '../components/KinloomFooter.js';
 import wikiChromeStyles from '../components/wiki/WikiChrome.module.css';
 import { useArchiveData } from '../context/ArchiveDataContext.js';
 import { cx, joinClasses } from '../lib/cx.js';
+import { isRedactedLivingPlaceholder } from '../lib/tree/types.js';
 import { formatPhotoDocumentCount, formatReaderLoadError, KINLOOM_VOCABULARY } from '../lib/vocabulary.js';
 import { PluginSlot } from '../plugins/PluginContext.js';
 import controlStyles from '../styles/Controls.module.css';
@@ -67,7 +68,7 @@ export const IndexPage: React.FC = () => {
     if (!bundle) {
       return [];
     }
-    return bundle.people.filter((p) => !(p.is_living && p.full_name === 'Living'));
+    return bundle.people.filter((p) => !isRedactedLivingPlaceholder(p));
   }, [bundle]);
 
   const personThumbMap = useMemo(() => {
@@ -102,50 +103,55 @@ export const IndexPage: React.FC = () => {
   }, [publicPeople, placesById, onlyWithMedia, query]);
 
   const sections = useMemo<ResolvedSection[]>(() => {
+    const historicalPeople = filteredPeople.filter((p) => !p.is_living);
+    const livingPeople = filteredPeople.filter((p) => p.is_living).toSorted(byBirthThenName);
     const configured = siteConfig.lineageSections;
-    if (configured.length === 0) {
-      return filteredPeople.length > 0
-        ? [
-            {
-              id: 'all',
-              heading: `${siteConfig.site.familyName} Relatives`,
-              people: [...filteredPeople].toSorted(byBirthThenName),
-            },
-          ]
-        : [];
-    }
-
-    const assignedIds = new Set<string>();
     const grouped: ResolvedSection[] = [];
 
-    for (const sec of configured) {
-      const matched = filteredPeople
-        .filter((p) => {
-          if (assignedIds.has(p.id)) {
-            return false;
-          }
-          const groupMatch = sec.lineageGroups.length === 0 || sec.lineageGroups.includes(p.lineage_group);
-          const branchMatch = !sec.branchId || p.branch === sec.branchId;
-          return groupMatch && branchMatch;
-        })
-        .toSorted(byBirthThenName);
-
-      if (matched.length > 0) {
-        for (const p of matched) {
-          assignedIds.add(p.id);
-        }
+    if (configured.length === 0) {
+      if (historicalPeople.length > 0) {
         grouped.push({
-          id: sec.id,
-          heading: sec.title,
-          subtitle: sec.subtitle,
-          people: matched,
+          id: 'all',
+          heading: `${siteConfig.site.familyName} Relatives`,
+          people: [...historicalPeople].toSorted(byBirthThenName),
         });
+      }
+    } else {
+      const assignedIds = new Set<string>();
+
+      for (const sec of configured) {
+        const matched = historicalPeople
+          .filter((p) => {
+            if (assignedIds.has(p.id)) {
+              return false;
+            }
+            const groupMatch = sec.lineageGroups.length === 0 || sec.lineageGroups.includes(p.lineage_group);
+            const branchMatch = !sec.branchId || p.branch === sec.branchId;
+            return groupMatch && branchMatch;
+          })
+          .toSorted(byBirthThenName);
+
+        if (matched.length > 0) {
+          for (const p of matched) {
+            assignedIds.add(p.id);
+          }
+          grouped.push({
+            id: sec.id,
+            heading: sec.title,
+            subtitle: sec.subtitle,
+            people: matched,
+          });
+        }
+      }
+
+      const others = historicalPeople.filter((p) => !assignedIds.has(p.id)).toSorted(byBirthThenName);
+      if (others.length > 0) {
+        grouped.push({ id: 'other', heading: 'Other relatives', people: others });
       }
     }
 
-    const others = filteredPeople.filter((p) => !assignedIds.has(p.id)).toSorted(byBirthThenName);
-    if (others.length > 0) {
-      grouped.push({ id: 'other', heading: 'Other relatives', people: others });
+    if (livingPeople.length > 0) {
+      grouped.push({ id: 'living-relatives', heading: 'Living relatives', people: livingPeople });
     }
     return grouped;
   }, [filteredPeople, siteConfig.lineageSections, siteConfig.site.familyName]);
@@ -375,7 +381,11 @@ export const IndexPage: React.FC = () => {
                           <div className={cx(indexStyles, 'person-card-body')}>
                             <h3>{p.full_name}</h3>
                             <div className={cx(indexStyles, 'person-card-meta')}>
-                              {p.birth_year || '?'} – {p.death_year || (p.is_living ? 'Living' : '?')}
+                              {p.is_living
+                                ? p.birth_year
+                                  ? `b. ${p.birth_year} · Living`
+                                  : 'Living'
+                                : `${p.birth_year || '?'} – ${p.death_year || '?'}`}
                             </div>
                             <div
                               style={{ fontSize: '0.88rem', color: 'var(--text-secondary)', marginTop: 3 }}
