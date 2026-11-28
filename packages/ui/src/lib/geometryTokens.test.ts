@@ -97,6 +97,7 @@ describe('semantic geometry tokens & CSS module hygiene (#100)', () => {
       'packages/ui/src/components/GlobalSearchModal.module.css',
       'packages/ui/src/components/ExplorerTopBar.module.css',
       'packages/ui/src/components/tree/TreeToolbar.module.css',
+      'packages/ui/src/components/tree/TreeKinshipLoom.module.css',
       'packages/ui/src/pages/IndexPage.module.css',
       'packages/ui/src/pages/PlacesIndexPage.module.css',
       'packages/ui/src/pages/MapPage.module.css',

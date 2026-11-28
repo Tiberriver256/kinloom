@@ -48,6 +48,166 @@ export interface KinshipLoomSpotlight {
   readonly descendantCount: number;
 }
 
+export interface KinshipLoomLabelPlacement {
+  readonly personId: string;
+  readonly x: number;
+  readonly y: number;
+  readonly textAnchor: 'start' | 'end';
+  readonly width: number;
+  readonly height: number;
+  readonly boxX: number;
+  readonly boxY: number;
+  readonly hasLeader: boolean;
+}
+
+interface LabelBox {
+  readonly x0: number;
+  readonly y0: number;
+  readonly x1: number;
+  readonly y1: number;
+}
+
+const LABEL_HEIGHT = 16;
+const LABEL_PAD_X = 6;
+const LABEL_GAP_X = 10;
+const LABEL_MIN_LEFT_X = 68;
+const LABEL_VERTICAL_STEP = 17;
+const LABEL_CHAR_WIDTH = 6.6;
+
+function estimateLabelWidth(name: string): number {
+  return Math.round(Math.max(44, Math.min(200, name.length * LABEL_CHAR_WIDTH + LABEL_PAD_X * 2)));
+}
+
+function boxesOverlap(a: LabelBox, b: LabelBox): boolean {
+  return a.x0 < b.x1 && a.x1 > b.x0 && a.y0 < b.y1 && a.y1 > b.y0;
+}
+
+/**
+ * Computes collision-free SVG label coordinates for visible Kinship Loom nodes.
+ * Tries right/left sides first, then staggers vertically so closely spaced
+ * relatives never collide into an unreadable tangle.
+ */
+export function computeKinshipLoomLabelPlacements(params: {
+  readonly nodes: readonly KinshipLoomNode[];
+  readonly visiblePersonIds: ReadonlySet<string>;
+  readonly width: number;
+  readonly height: number;
+  readonly priorityPersonId?: string | null;
+}): ReadonlyMap<string, KinshipLoomLabelPlacement> {
+  const { nodes, visiblePersonIds, width, height, priorityPersonId = null } = params;
+  const result = new Map<string, KinshipLoomLabelPlacement>();
+  if (visiblePersonIds.size === 0 || nodes.length === 0) {
+    return result;
+  }
+
+  const visibleNodes = nodes
+    .filter((n) => visiblePersonIds.has(n.person.id))
+    .toSorted((a, b) => {
+      if (a.person.id === priorityPersonId) {
+        return -1;
+      }
+      if (b.person.id === priorityPersonId) {
+        return 1;
+      }
+      return a.y - b.y || a.x - b.x || fastLocaleCompare(a.person.full_name, b.person.full_name);
+    });
+
+  const placedBoxes: LabelBox[] = [];
+  const minCenterY = 14;
+  const maxCenterY = Math.max(minCenterY, height - 12);
+  const maxRightX = Math.max(LABEL_MIN_LEFT_X + 60, width - 12);
+
+  // Build candidate vertical offsets: 0, -17, +17, -34, +34, ...
+  const dyOffsets: number[] = [0];
+  for (let step = 1; step <= 14; step += 1) {
+    dyOffsets.push(-step * LABEL_VERTICAL_STEP, step * LABEL_VERTICAL_STEP);
+  }
+
+  for (const node of visibleNodes) {
+    const labelW = estimateLabelWidth(node.person.full_name);
+    const preferLeft = node.x + LABEL_GAP_X + labelW > maxRightX;
+    const sides: readonly ('start' | 'end')[] = preferLeft ? ['end', 'start'] : ['start', 'end'];
+
+    let chosen: {
+      readonly x: number;
+      readonly y: number;
+      readonly textAnchor: 'start' | 'end';
+      readonly box: LabelBox;
+    } | null = null;
+
+    outer: for (const dy of dyOffsets) {
+      const candidateY = Math.round(Math.max(minCenterY, Math.min(maxCenterY, node.y + dy)) * 10) / 10;
+      for (const side of sides) {
+        const anchorX = side === 'start' ? node.x + LABEL_GAP_X : node.x - LABEL_GAP_X;
+        const boxX = side === 'start' ? anchorX - LABEL_PAD_X / 2 : anchorX - labelW + LABEL_PAD_X / 2;
+        if (side === 'end' && boxX < LABEL_MIN_LEFT_X) {
+          continue;
+        }
+        if (side === 'start' && boxX + labelW > maxRightX) {
+          continue;
+        }
+        const boxY = candidateY - LABEL_HEIGHT / 2;
+        const box: LabelBox = {
+          x0: boxX,
+          y0: boxY,
+          x1: boxX + labelW,
+          y1: boxY + LABEL_HEIGHT,
+        };
+        if (!placedBoxes.some((existing) => boxesOverlap(existing, box))) {
+          chosen = { x: anchorX, y: candidateY, textAnchor: side, box };
+          break outer;
+        }
+      }
+    }
+
+    if (!chosen) {
+      // Fallback: place below the lowest overlapping box on the preferred side
+      const side: 'start' | 'end' =
+        preferLeft && node.x - LABEL_GAP_X - labelW >= LABEL_MIN_LEFT_X ? 'end' : 'start';
+      const anchorX = side === 'start' ? node.x + LABEL_GAP_X : node.x - LABEL_GAP_X;
+      const boxX = side === 'start' ? anchorX - LABEL_PAD_X / 2 : anchorX - labelW + LABEL_PAD_X / 2;
+      let fallbackY = Math.max(minCenterY, Math.min(maxCenterY, node.y));
+      for (let attempt = 0; attempt < 24; attempt += 1) {
+        const box: LabelBox = {
+          x0: boxX,
+          y0: fallbackY - LABEL_HEIGHT / 2,
+          x1: boxX + labelW,
+          y1: fallbackY + LABEL_HEIGHT / 2,
+        };
+        if (!placedBoxes.some((existing) => boxesOverlap(existing, box))) {
+          chosen = { x: anchorX, y: fallbackY, textAnchor: side, box };
+          break;
+        }
+        fallbackY = Math.min(maxCenterY, fallbackY + LABEL_VERTICAL_STEP);
+      }
+      if (!chosen) {
+        const boxY = fallbackY - LABEL_HEIGHT / 2;
+        chosen = {
+          x: anchorX,
+          y: fallbackY,
+          textAnchor: side,
+          box: { x0: boxX, y0: boxY, x1: boxX + labelW, y1: boxY + LABEL_HEIGHT },
+        };
+      }
+    }
+
+    placedBoxes.push(chosen.box);
+    result.set(node.person.id, {
+      personId: node.person.id,
+      x: chosen.x,
+      y: chosen.y,
+      textAnchor: chosen.textAnchor,
+      width: labelW,
+      height: LABEL_HEIGHT,
+      boxX: chosen.box.x0,
+      boxY: chosen.box.y0,
+      hasLeader: Math.abs(chosen.y - node.y) > 4,
+    });
+  }
+
+  return result;
+}
+
 function collectVisiblePeople(model: ArchivalTreeModel): readonly Person[] {
   return model.visiblePeople;
 }

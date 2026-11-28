@@ -1,7 +1,7 @@
 import { fastLocaleCompare, type KinshipEdge, type Person } from '@kinloom/core';
 
 export type TreeLineageMode = 'spine' | 'full';
-export type TreeViewSurface = 'roll' | 'diagram';
+export type TreeViewSurface = 'roll' | 'diagram' | 'loom';
 export type SemanticZoomLevel = 'overview' | 'compact' | 'detail';
 export type TreeUnionKind = 'couple' | 'single_parent';
 

@@ -1269,4 +1269,31 @@ describe('TreePage', () => {
     expect(chartDrawer?.classList.contains(treeFocusStyles['tree-focus-drawer'] ?? '')).toBe(true);
     expect(chartDrawer?.classList.contains(treeFocusStyles['tree-focus-drawer-diagram'] ?? '')).toBe(true);
   });
+
+  it('wires List, Chart, and Loom as equal TreeToolbar segments with tree-page-loom layout on mobile (#123)', () => {
+    const { container } = mountTreeAtWidth(360, '/tree?surface=loom&mode=full');
+
+    const main = container.querySelector<HTMLElement>('main.tree-page');
+    expect(main).not.toBeNull();
+    expect(main?.getAttribute('data-surface')).toBe('loom');
+    expect(main?.classList.contains(treePageStyles['tree-page-loom'] ?? '')).toBe(true);
+
+    const layoutGroup = container.querySelector<HTMLElement>('[role="group"][aria-label="Tree layout"]');
+    const segButtons = [...(layoutGroup?.querySelectorAll<HTMLButtonElement>('button') ?? [])];
+    expect(segButtons.map((b) => b.textContent?.trim())).toEqual(['List', 'Chart', 'Loom']);
+    expect(segButtons[2]?.getAttribute('aria-pressed')).toBe('true');
+
+    const loomSection = container.querySelector<HTMLElement>('section[aria-label*="Kinship Loom"]');
+    expect(loomSection).not.toBeNull();
+    expect(loomSection?.textContent).toContain('Tap or hover any person to trace their thread');
+
+    const firstNode = container.querySelector<SVGGElement>('[data-person-id]');
+    expect(firstNode).not.toBeNull();
+    act(() => {
+      firstNode?.dispatchEvent(new window.KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+    });
+    const loomDrawer = container.querySelector<HTMLElement>('aside.tree-focus-drawer');
+    expect(loomDrawer).not.toBeNull();
+    expect(loomDrawer?.classList.contains(treeFocusStyles['tree-focus-drawer-loom'] ?? '')).toBe(true);
+  });
 });

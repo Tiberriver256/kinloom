@@ -18,7 +18,9 @@ export function readInitialTreePreferences(searchParams: URLSearchParams): {
   const modeParam = searchParams.get('mode');
   const hasAnchorParam = Boolean(searchParams.get('anchor')?.trim());
   const surface: TreeViewSurface =
-    surfaceParam === 'diagram' || surfaceParam === 'roll' ? surfaceParam : fallback.surface;
+    surfaceParam === 'diagram' || surfaceParam === 'roll' || surfaceParam === 'loom'
+      ? surfaceParam
+      : fallback.surface;
   const mode: TreeLineageMode =
     modeParam === 'spine' || modeParam === 'full' ? modeParam : hasAnchorParam ? 'spine' : fallback.mode;
   return { surface, mode };
