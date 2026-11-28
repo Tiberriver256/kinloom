@@ -312,12 +312,11 @@ test('5. soft-delete hides record from active views and restore brings it back c
   await page.goto(`${wiki.baseUrl}/`);
   await expect(page.getByRole('link', { name: /Samuel Lincoln Jr\./ })).toHaveCount(0);
 
-  // Restore via Revision History one-click Revert on the delete revision
+  // Restore via Research Field Reports one-click Revert on the delete revision
   await page.goto(`${wiki.baseUrl}/changes`);
   const deleteRow = page
-    .locator('article.wiki-revision-item')
-    .filter({ hasText: 'person/p_samuel_lincoln_jr' })
-    .filter({ hasText: 'delete' })
+    .locator('article.wiki-revision-item[data-revision-action="delete"]')
+    .filter({ hasText: 'Removed person: Samuel Lincoln Jr.' })
     .first();
   await expect(deleteRow).toBeVisible();
   await deleteRow.getByRole('button', { name: 'Revert' }).click();
@@ -472,10 +471,11 @@ test('7. AI agent batch submit shows Research agent badge in /changes and one-cl
   await expect(page.locator('.person-header')).toContainText('Tom Lincoln of Kentucky');
 
   await page.goto(`${wiki.baseUrl}/changes`);
-  const batchSection = page.locator('section.wiki-batch-group', { hasText: `Batch ${batchId}` });
+  const batchSection = page.locator('section.wiki-batch-group', { hasText: batchId });
   await expect(batchSection).toBeVisible();
+  await expect(batchSection).toContainText('Research Field Report: 1 person updated, 1 source linked');
   await expect(batchSection).toContainText('Research agent · Demo Research Agent');
-  await expect(batchSection).toContainText('2 changes');
+  await expect(batchSection).toContainText('2 individual record changes');
 
   await batchSection.getByRole('button', { name: 'Revert Entire Batch' }).click();
   await batchSection.getByRole('button', { name: 'Confirm Batch Revert' }).click();

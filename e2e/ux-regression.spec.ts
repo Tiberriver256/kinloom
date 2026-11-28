@@ -659,13 +659,22 @@ test.describe('Wave 50B UX regression suite', () => {
       }
     }
 
-    // 4. Source Discrepancy pill clearance on 390x844 and 1280x800
+    // 4. Source Discrepancy visibility and pill clearance on 390x844 and 1280x800
     for (const vp of [
       { name: '390x844', width: 390, height: 844 },
       { name: '1280x800', width: 1280, height: 800 },
     ]) {
       await page.setViewportSize({ width: vp.width, height: vp.height });
       await page.goto('/person/abraham-lincoln-1809');
+      if (vp.width >= 1024) {
+        // Desktop marginalia rail surfaces discrepancies alongside events by default
+        await expect(page.locator('.folio-marginalia-item.is-discrepancy').first()).toBeVisible();
+        // Toggling marginalia off reveals inline conflict pills with full vertical clearance
+        const marginaliaToggle = page.locator('.marginalia-toggle-btn').first();
+        await expect(marginaliaToggle).toHaveAttribute('aria-pressed', 'true');
+        await marginaliaToggle.click();
+        await expect(marginaliaToggle).toHaveAttribute('aria-pressed', 'false');
+      }
       await expect(page.locator('.conflict-pill').first()).toBeVisible();
       const pillPaddings = await page.evaluate(() =>
         [...document.querySelectorAll('.conflict-pill')].map((el) => {
@@ -680,6 +689,10 @@ test.describe('Wave 50B UX regression suite', () => {
       for (const pad of pillPaddings) {
         expect(pad.top, `conflict-pill paddingTop at ${vp.name}`).toBeGreaterThanOrEqual(4);
         expect(pad.bottom, `conflict-pill paddingBottom at ${vp.name}`).toBeGreaterThanOrEqual(4);
+      }
+      if (vp.width >= 1024) {
+        await page.locator('.marginalia-toggle-btn').first().click();
+        await expect(page.locator('.marginalia-toggle-btn').first()).toHaveAttribute('aria-pressed', 'true');
       }
       if (vp.width === 390) {
         await page.locator('.conflict-pill').first().scrollIntoViewIfNeeded();

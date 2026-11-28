@@ -97,7 +97,7 @@ export const PersonNarrativesSection: React.FC<PersonNarrativesSectionProps> = (
             narrative.source_ids ?? [],
             sourcesById
           );
-          const hasMarginalia = marginaliaEnabled && orderedSources.length > 0;
+          const hasMarginalia = marginaliaEnabled && orderedSources.length > 0 && (isBiography || isExpanded);
 
           return (
             <article

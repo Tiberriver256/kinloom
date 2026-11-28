@@ -97,6 +97,8 @@ export const RevisionFeedItem: React.FC<{
 
   return (
     <article
+      data-revision-action={rev.action}
+      data-entity-ref={`${rev.entity_type}/${rev.entity_id}`}
       className={joinClasses(
         standalone && cx(layoutStyles, 'place-map-box'),
         cx(wikiPanelStyles, 'wiki-revision-item')

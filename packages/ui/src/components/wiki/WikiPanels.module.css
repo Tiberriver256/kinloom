@@ -81,6 +81,8 @@
   display: flex;
   flex-direction: column;
   gap: 10px;
+  min-width: 0;
+  max-width: 100%;
 }
 
 .wiki-revision-item,
@@ -92,6 +94,7 @@
   padding: 12px;
   min-width: 0;
   max-width: 100%;
+  box-sizing: border-box;
 }
 
 .wiki-revision-row,
@@ -160,6 +163,8 @@
   color: var(--surface-header);
   text-decoration: underline;
   text-underline-offset: 2px;
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
 
 .wiki-entity-link:hover {
@@ -193,6 +198,10 @@
   margin-top: 4px;
   font-size: 0.94rem;
   color: var(--text-primary);
+  min-width: 0;
+  max-width: 100%;
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
 
 .wiki-revision-time {
@@ -209,6 +218,8 @@
   align-items: center;
   gap: 8px;
   flex-wrap: wrap;
+  min-width: 0;
+  max-width: 100%;
 }
 
 .wiki-revision-diff-body {
@@ -281,6 +292,8 @@
   flex-wrap: wrap;
   gap: 10px 14px;
   margin-bottom: 14px;
+  min-width: 0;
+  max-width: 100%;
 }
 
 .wiki-batch-main {
@@ -288,6 +301,7 @@
   flex-direction: column;
   gap: 6px;
   min-width: 0;
+  max-width: 100%;
   flex: 1 1 280px;
 }
 
@@ -298,10 +312,16 @@
   font-weight: 600;
   line-height: 1.3;
   color: var(--surface-header);
+  min-width: 0;
+  max-width: 100%;
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
 
 .wiki-report-headline-row {
   margin-bottom: 4px;
+  min-width: 0;
+  max-width: 100%;
 }
 
 .wiki-report-headline {
@@ -311,6 +331,10 @@
   font-weight: 600;
   line-height: 1.35;
   color: var(--surface-header);
+  min-width: 0;
+  max-width: 100%;
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
 
 .wiki-touched-strip {
@@ -319,6 +343,8 @@
   flex-wrap: wrap;
   gap: 6px 10px;
   font-size: 0.86rem;
+  min-width: 0;
+  max-width: 100%;
 }
 
 .wiki-touched-label {
@@ -383,6 +409,15 @@
   font-family: var(--font-mono);
   font-size: 0.74rem;
   color: var(--text-secondary);
+  min-width: 0;
+  max-width: 100%;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+.wiki-ledger-ref code {
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
 
 .wiki-diff-stat {

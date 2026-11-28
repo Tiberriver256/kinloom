@@ -100,14 +100,20 @@
       display: none;
     }
 
-    .is-collapsed-screen {
+    .is-collapsed-screen,
+    .person-biography-entry.has-marginalia .person-biography-sources {
       display: block;
     }
 
-    .person-biography-entry.has-marginalia .person-biography-sources-toggle,
-    .person-biography-entry.has-marginalia .person-biography-sources,
+    .person-biography-sources-toggle,
     .folio-marginalia-row .folio-marginalia-inline-fallback {
       display: none;
+    }
+
+    .person-biography-source-text {
+      display: block;
+      overflow: visible;
+      -webkit-line-clamp: unset;
     }
 
     .person-biography-source-btn {

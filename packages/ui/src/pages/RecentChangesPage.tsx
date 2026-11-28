@@ -371,7 +371,11 @@ export const RecentChangesPage: React.FC<RecentChangesPageProps> = ({ initialRev
                 );
 
                 return (
-                  <section key={group.key} className={cx(layoutStyles, 'place-map-box wiki-batch-group')}>
+                  <section
+                    key={group.key}
+                    data-batch-id={groupBatchId}
+                    className={cx(layoutStyles, 'place-map-box wiki-batch-group')}
+                  >
                     <div className={cx(wikiPanelStyles, 'wiki-batch-header')}>
                       <div className={cx(wikiPanelStyles, 'wiki-batch-main')}>
                         <h2 className={cx(wikiPanelStyles, 'wiki-batch-headline')}>{report.headline}</h2>

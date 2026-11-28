@@ -6,14 +6,17 @@ const INSPECTOR_LABEL = 'Source Inspector';
 test('source inspector and multi-document source reader work end to end', async ({ page }) => {
   await page.goto('/person/abraham-lincoln-1809');
 
-  // Expand citation on the 1850 Census event and open Source Inspector
+  // Open Source Inspector from the desktop marginalia rail on the 1850 Census event
   const censusCard = page
     .locator('article')
     .filter({ hasText: '1850 U.S. Federal Census records the Lincoln household' })
     .first();
   await expect(censusCard).toBeVisible();
-  await censusCard.locator('button.source-toggle').click();
-  await censusCard.getByRole('button', { name: 'Inspect Source →' }).first().click();
+  await censusCard
+    .locator('.folio-marginalia-rail')
+    .getByRole('button', { name: 'Inspect', exact: true })
+    .first()
+    .click();
 
   const inspector = page.getByRole('dialog', { name: INSPECTOR_LABEL });
   await expect(inspector).toBeVisible();

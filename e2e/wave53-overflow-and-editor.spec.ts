@@ -297,6 +297,7 @@ async function navigateAndWaitReady(page: Page, url: string): Promise<void> {
         !text.includes('Loading family archive') &&
         !text.includes('Loading family tree') &&
         !text.includes('Loading revision history') &&
+        !text.includes('Loading research field reports') &&
         !text.includes('Loading administration records')
       );
     },
@@ -694,9 +695,10 @@ test.describe('Wave 53B signed-in editor UX, per-element overflow/collision, and
     // 1. RecentChangesPage stacked mobile diff + Revert confirmation
     await page.goto(`${wiki.baseUrl}/changes`, { waitUntil: 'networkidle' });
     const batchSection = page.locator('section.wiki-batch-group', {
-      hasText: 'Batch batch_wave53b_mobile_diff',
+      hasText: 'batch_wave53b_mobile_diff',
     });
     await expect(batchSection).toBeVisible();
+    await expect(batchSection).toContainText('Research Field Report:');
 
     const firstViewDiff = batchSection.getByRole('button', { name: 'View Diff' }).first();
     await expect(firstViewDiff).toHaveAttribute('aria-expanded', 'false');

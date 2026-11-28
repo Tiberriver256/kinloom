@@ -218,7 +218,7 @@
   margin-top: 14px;
 }
 
-@media (min-width: 1024px) {
+@media screen and (min-width: 1024px) {
   .person-biography-entry:global(.has-marginalia) {
     max-width: none;
   }
