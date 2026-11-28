@@ -21,7 +21,7 @@
       "slate-card": { "$value": "#1F1D1A", "$description": "Nocturnal elevated card and subtle tinted surface." },
       "smoked-linen": { "$value": "#2A2723", "$description": "Nocturnal linen surface, action surface, and decorative hairline." },
       "parchment-heading": { "$value": "#E4DDD0", "$description": "Halation-capped parchment ink (APCA Lc 82..88 on nocturnal folio)." },
-      "warm-stone": { "$value": "#D2C9BA", "$description": "Nocturnal secondary metadata ink (APCA >= Lc 72 on nocturnal surfaces)." },
+      "warm-stone": { "$value": "#D7CEC0", "$description": "Nocturnal secondary metadata ink (APCA >= Lc 75 on nocturnal surfaces)." },
       "warm-brass": { "$value": "#F6D191", "$description": "Nocturnal brass accent and active highlight ink." },
       "verdigris-sage": { "$value": "#7CC2A6", "$description": "Nocturnal secondary sage accent and cited/addition ink." },
       "archival-sky": { "$value": "#7DB6F2", "$description": "Nocturnal keyboard focus indicator ink." },

@@ -67,7 +67,7 @@ export const PlacePage: React.FC = () => {
   } = useArchiveData();
   const { openSearch } = useArchiveUi();
 
-  const [scopeMode, setScopeMode] = useState<PlaceScopeMode>('radius15');
+  const [scopeMode, setScopeMode] = useState<PlaceScopeMode>('exact');
   const [decadeFilter, setDecadeFilter] = useState<string>('all');
   const [wikiTab, setWikiTab] = useState<WikiEntityTab>('read');
   const [editInitialSection, setEditInitialSection] = useState<EntityEditDrawerSection | undefined>(
@@ -206,28 +206,14 @@ export const PlacePage: React.FC = () => {
         id="main-content"
         className={joinClasses(cx(layoutStyles, 'place-page'), cx(placeStyles, 'place-folio-shell'))}
       >
-        <div className={cx(placeStyles, 'place-utility-bar print-hide')}>
-          <nav className={cx(placeStyles, 'place-breadcrumb')} aria-label="Breadcrumb">
-            <Link to="/places">Places</Link>
-            <span aria-hidden="true">/</span>
-            <span aria-current="page">{place.name}</span>
-          </nav>
-          <div className={cx(placeStyles, 'place-utility-actions')}>
-            {occupancyRows.rows.length > 0 && (
-              <Link to={`/time?year=${occupancyRows.minYear}`} className={cx(atomStyles, 'ink-link-btn')}>
-                See Family in {occupancyRows.minYear} →
-              </Link>
-            )}
-            <Link to={`/map?place=${place.slug}`} className={cx(atomStyles, 'ink-link-btn')}>
-              Migration Map →
-            </Link>
-            {hasPlaceMarginalia && <FolioMarginaliaToggle />}
-          </div>
-        </div>
-
         <section className={cx(layoutStyles, 'place-map-box')}>
           <div className={cx(placeStyles, 'place-header-top')}>
-            <div>
+            <nav className={cx(placeStyles, 'place-breadcrumb print-hide')} aria-label="Breadcrumb">
+              <Link to="/places">Places</Link>
+              <span aria-hidden="true">/</span>
+              <span aria-current="page">{place.name}</span>
+            </nav>
+            <div className={cx(placeStyles, 'place-header-lead')}>
               <h1 className={cx(placeStyles, 'place-dossier-title')}>{place.full_name}</h1>
               {occupancyRows.rows.length > 0 && (
                 <p className={cx(placeStyles, 'place-front-door-summary')}>
@@ -274,6 +260,18 @@ export const PlacePage: React.FC = () => {
                   )}
                 </div>
               )}
+            </div>
+
+            <div className={cx(placeStyles, 'place-utility-actions print-hide')}>
+              {occupancyRows.rows.length > 0 && (
+                <Link to={`/time?year=${occupancyRows.minYear}`} className={cx(atomStyles, 'ink-link-btn')}>
+                  See Family in {occupancyRows.minYear} →
+                </Link>
+              )}
+              <Link to={`/map?place=${place.slug}`} className={cx(atomStyles, 'ink-link-btn')}>
+                Migration Map →
+              </Link>
+              {hasPlaceMarginalia && <FolioMarginaliaToggle />}
             </div>
 
             <div

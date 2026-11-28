@@ -25,7 +25,7 @@ export function ensureTerminalPunctuation(text: string): string {
   return /[.!?…]$/.test(trimmed) ? trimmed : `${trimmed}.`;
 }
 
-export function truncateAtWordBoundary(text: string, maxLength = 130): string {
+export function truncateAtWordBoundary(text: string, maxLength = 185): string {
   const cleaned = text.trim();
   if (cleaned.length <= maxLength) {
     return cleaned;
@@ -62,7 +62,7 @@ export function extractFirstSentence(text: string): string {
 export function cleanTimeActivityNote(
   note: string,
   sourceEvent?: ArchiveEvent | null,
-  maxLength = 130
+  maxLength = 185
 ): string {
   const trimmed = note.trim();
   if (!trimmed) {

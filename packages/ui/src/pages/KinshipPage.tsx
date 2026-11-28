@@ -340,7 +340,13 @@ export const KinshipPage: React.FC = () => {
             </section>
 
             <div className={cx(kinshipStyles, 'kinship-results-flow')}>
-              {resolvedPresets.length > 0 && (
+              {resolvedPresets.some(
+                (preset) =>
+                  !(
+                    (preset.fromId === effectiveFromId && preset.toId === effectiveToId) ||
+                    (preset.fromId === effectiveToId && preset.toId === effectiveFromId)
+                  )
+              ) && (
                 <div
                   className={joinClasses(
                     cx(controlStyles, 'filter-bar print-hide'),
@@ -348,20 +354,28 @@ export const KinshipPage: React.FC = () => {
                   )}
                 >
                   <span className={cx(kinshipStyles, 'kinship-examples-label')}>Examples:</span>
-                  {resolvedPresets.map((preset) => (
-                    <button
-                      key={preset.label}
-                      type="button"
-                      className={cx(controlStyles, 'pill-btn kinship-example-chip')}
-                      title={preset.note}
-                      onClick={() => {
-                        setFromId(preset.fromId);
-                        setToId(preset.toId);
-                      }}
-                    >
-                      {preset.label}
-                    </button>
-                  ))}
+                  {resolvedPresets
+                    .filter(
+                      (preset) =>
+                        !(
+                          (preset.fromId === effectiveFromId && preset.toId === effectiveToId) ||
+                          (preset.fromId === effectiveToId && preset.toId === effectiveFromId)
+                        )
+                    )
+                    .map((preset) => (
+                      <button
+                        key={preset.label}
+                        type="button"
+                        className={cx(controlStyles, 'pill-btn kinship-example-chip')}
+                        title={preset.note}
+                        onClick={() => {
+                          setFromId(preset.fromId);
+                          setToId(preset.toId);
+                        }}
+                      >
+                        {preset.label}
+                      </button>
+                    ))}
                 </div>
               )}
 

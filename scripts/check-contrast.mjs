@@ -80,6 +80,9 @@ export const APCA_CONTRAST_CHECKS = [
   // Dark-mode display heading halation ceiling (Lc 82..88, <= Lc 90)
   { mode: 'dark', fgKey: 'surface-header', bgKey: 'surface-canvas', minLc: 82, maxLc: 88 },
   { mode: 'dark', fgKey: 'surface-header', bgKey: 'surface-card', minLc: 82, maxLc: 88 },
+  // Nocturnal secondary metadata ink (>= Lc 75 on canvas & card)
+  { mode: 'dark', fgKey: 'text-secondary', bgKey: 'surface-canvas', minLc: 75 },
+  { mode: 'dark', fgKey: 'text-secondary', bgKey: 'surface-card', minLc: 75 },
 ];
 
 export function resolveTokenColor(val, tokens) {

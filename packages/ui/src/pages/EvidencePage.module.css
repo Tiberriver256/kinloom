@@ -502,6 +502,29 @@
     margin-bottom: 6px;
   }
 
+  .evidence-tabs-wrap {
+    position: relative;
+  }
+
+  .evidence-tabs-wrap::after {
+    content: "";
+    position: absolute;
+    top: 0;
+    right: 0;
+    bottom: 1px;
+    width: 44px;
+    pointer-events: none;
+    background: linear-gradient(to right, transparent, var(--surface-canvas));
+  }
+
+  .evidence-tabs-wrap:has([data-overflowing="false"])::after {
+    display: none;
+  }
+
+  .evidence-tabs-wrap :global(.evidence-tabs) {
+    padding-right: 36px;
+  }
+
   .evidence-discrepancy-card {
     padding: 16px;
   }

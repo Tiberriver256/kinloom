@@ -50,6 +50,16 @@
   border-radius: var(--radius-sm);
 }
 
+.archival-image-loading-underlay {
+  position: absolute;
+  inset: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+  opacity: 0.55;
+}
+
 .archival-image-el {
   display: block;
   opacity: 0;

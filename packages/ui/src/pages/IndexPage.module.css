@@ -194,9 +194,9 @@
   max-width: 320px;
   min-height: var(--control-height-md);
   padding: 6px 12px;
-  border: var(--border-width-thin) solid var(--border-decorative);
+  border: var(--border-width-thin) solid var(--border-control);
   border-radius: var(--radius-control);
-  background: var(--surface-linen);
+  background: var(--surface-card);
   font-family: var(--font-ui);
   font-size: var(--text-sm);
   color: var(--text-primary);

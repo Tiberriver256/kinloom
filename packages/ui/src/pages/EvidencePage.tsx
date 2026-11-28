@@ -225,39 +225,41 @@ export const EvidencePage: React.FC = () => {
 
         <PluginSlot name="evidenceExtra" />
 
-        <div
-          ref={evidenceTabsRef}
-          className={cx(controlStyles, 'filter-bar evidence-tabs')}
-          role="tablist"
-          aria-label={KINLOOM_VOCABULARY.evidence.tablistAria}
-          onKeyDown={(event) => {
-            handleTablistKeyDown(event, EVIDENCE_TABS, tab, (next) => {
-              selectTab(next);
-            });
-          }}
-        >
-          {tabItems.map((item) => {
-            const isSelected = tab === item.id;
-            return (
-              <button
-                key={item.id}
-                id={`${tabBaseId}-tab-${item.id}`}
-                ref={(node) => {
-                  tabRefs.current[item.id] = node;
-                }}
-                type="button"
-                role="tab"
-                tabIndex={isSelected ? 0 : -1}
-                aria-selected={isSelected}
-                className={cx(controlStyles, `pill-btn ${isSelected ? 'active' : ''}`)}
-                onClick={() => {
-                  selectTab(item.id);
-                }}
-              >
-                {item.label} ({item.count})
-              </button>
-            );
-          })}
+        <div className={cx(evidenceStyles, 'evidence-tabs-wrap')}>
+          <div
+            ref={evidenceTabsRef}
+            className={cx(controlStyles, 'filter-bar evidence-tabs')}
+            role="tablist"
+            aria-label={KINLOOM_VOCABULARY.evidence.tablistAria}
+            onKeyDown={(event) => {
+              handleTablistKeyDown(event, EVIDENCE_TABS, tab, (next) => {
+                selectTab(next);
+              });
+            }}
+          >
+            {tabItems.map((item) => {
+              const isSelected = tab === item.id;
+              return (
+                <button
+                  key={item.id}
+                  id={`${tabBaseId}-tab-${item.id}`}
+                  ref={(node) => {
+                    tabRefs.current[item.id] = node;
+                  }}
+                  type="button"
+                  role="tab"
+                  tabIndex={isSelected ? 0 : -1}
+                  aria-selected={isSelected}
+                  className={cx(controlStyles, `pill-btn ${isSelected ? 'active' : ''}`)}
+                  onClick={() => {
+                    selectTab(item.id);
+                  }}
+                >
+                  {item.label} ({item.count})
+                </button>
+              );
+            })}
+          </div>
         </div>
 
         <div id={tabpanelId} role="tabpanel" aria-labelledby={activeTabId}>

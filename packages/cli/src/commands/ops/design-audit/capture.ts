@@ -276,19 +276,6 @@ async function auditFocusOcclusion(page: DesignAuditBrowserPage): Promise<Design
     return [];
   }
   const issues: DesignAuditFocusIssue[] = [];
-  const stickyBars =
-    (await page.evaluate<Array<{ tag: string; rect: [number, number, number, number] }>>(`(() => {
-    return [...document.querySelectorAll('*')]
-      .filter((el) => {
-        const pos = getComputedStyle(el).position;
-        return pos === 'fixed' || pos === 'sticky';
-      })
-      .map((el) => {
-        const r = el.getBoundingClientRect();
-        return { tag: el.tagName.toLowerCase(), rect: [r.left, r.top, r.right, r.bottom] };
-      })
-      .filter((b) => b.rect[2] - b.rect[0] > 0 && b.rect[3] - b.rect[1] > 0);
-  })()`)) ?? [];
 
   for (let step = 0; step < 10; step += 1) {
     await page.keyboard.press('Tab');
@@ -298,44 +285,49 @@ async function auditFocusOcclusion(page: DesignAuditBrowserPage): Promise<Design
       rect: [number, number, number, number];
       outlineStyle: string;
       boxShadow: string;
+      occluders?: string[];
     } | null>(`(() => {
       const el = document.activeElement;
       if (!el || el === document.body) return null;
       const r = el.getBoundingClientRect();
       const cs = getComputedStyle(el);
+      const occluders = [];
+      for (const candidate of document.querySelectorAll('*')) {
+        const pos = getComputedStyle(candidate).position;
+        if (pos !== 'fixed' && pos !== 'sticky') continue;
+        if (candidate === el || candidate.contains(el)) continue;
+        const cr = candidate.getBoundingClientRect();
+        if (cr.right - cr.left <= 0 || cr.bottom - cr.top <= 0) continue;
+        const overlapX = Math.max(0, Math.min(r.right, cr.right) - Math.max(r.left, cr.left));
+        const overlapY = Math.max(0, Math.min(r.bottom, cr.bottom) - Math.max(r.top, cr.top));
+        if (overlapX > 2 && overlapY > 2) {
+          occluders.push(candidate.tagName.toLowerCase());
+        }
+      }
       return {
         tag: el.tagName.toLowerCase(),
         text: (el.innerText || el.getAttribute('aria-label') || '').trim().slice(0, 60),
         rect: [r.left, r.top, r.right, r.bottom],
         outlineStyle: cs.outlineStyle,
         boxShadow: cs.boxShadow,
+        occluders,
       };
     })()`);
     if (!active) {
       continue;
     }
-    for (const bar of stickyBars) {
-      const overlapX = Math.max(
-        0,
-        Math.min(active.rect[2], bar.rect[2]) - Math.max(active.rect[0], bar.rect[0])
-      );
-      const overlapY = Math.max(
-        0,
-        Math.min(active.rect[3], bar.rect[3]) - Math.max(active.rect[1], bar.rect[1])
-      );
-      if (overlapX > 2 && overlapY > 2) {
-        issues.push({
-          type: 'focus-occluded',
-          target: active.text || active.tag,
-          rect: [
-            Math.round(active.rect[0]),
-            Math.round(active.rect[1]),
-            Math.round(active.rect[2]),
-            Math.round(active.rect[3]),
-          ],
-          occluder: bar.tag,
-        });
-      }
+    for (const occluder of active.occluders ?? []) {
+      issues.push({
+        type: 'focus-occluded',
+        target: active.text || active.tag,
+        rect: [
+          Math.round(active.rect[0]),
+          Math.round(active.rect[1]),
+          Math.round(active.rect[2]),
+          Math.round(active.rect[3]),
+        ],
+        occluder,
+      });
     }
     if (active.outlineStyle === 'none' && (!active.boxShadow || active.boxShadow === 'none')) {
       issues.push({

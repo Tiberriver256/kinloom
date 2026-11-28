@@ -484,16 +484,15 @@ describe('kinloom design-audit CLI subcommand dispatch', () => {
                 stylesheets: [{ href: 'main.css', cssText: 'body { color: #23272e; font-size: 16px; }' }],
               } as T;
             }
-            if (code.includes('fixed') && code.includes('sticky')) {
-              return [{ tag: 'header', rect: [0, 0, 360, 56] }] as T;
-            }
             if (code.includes('document.activeElement')) {
+              expect(code).toContain('candidate.contains(el)');
               return {
                 tag: 'a',
                 text: 'Nav Link',
                 rect: [10, 10, 100, 44],
                 outlineStyle: 'none',
                 boxShadow: 'none',
+                occluders: ['header'],
               } as T;
             }
             if (code.includes('overflowY')) {

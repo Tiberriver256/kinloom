@@ -7,7 +7,7 @@ import atomStyles from '../../components/Atoms.module.css';
 import { PronunciationBadge } from '../../components/PronunciationBadge.js';
 import type { RelativeCreateContext } from '../../components/wiki/CreateEntityModal.js';
 import { CitationBadge } from '../../components/wiki/WikiBadges.js';
-import { cx } from '../../lib/cx.js';
+import { cx, joinClasses } from '../../lib/cx.js';
 import { resolvePersonPortraitUrl } from '../../lib/personPortrait.js';
 import { isRedactedLivingPlaceholder } from '../../lib/tree/types.js';
 import { KINLOOM_VOCABULARY } from '../../lib/vocabulary.js';
@@ -219,7 +219,10 @@ export const PersonProfileHeader: React.FC<PersonProfileHeaderProps> = ({
           )}
           <button
             type="button"
-            className={cx(controlStyles, 'cta-btn-secondary print-hide')}
+            className={joinClasses(
+              cx(controlStyles, 'cta-btn-secondary print-hide'),
+              cx(personStyles, 'person-export-gedcom-btn')
+            )}
             onClick={onExportGedcom}
             title={`Download family tree file for ${person.full_name}`}
           >

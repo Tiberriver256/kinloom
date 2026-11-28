@@ -133,7 +133,7 @@ export const EvidenceDiscrepanciesTab: React.FC<EvidenceDiscrepanciesTabProps> =
                       {readableRef && (
                         <button
                           type="button"
-                          className={cx(controlStyles, 'cta-btn-primary')}
+                          className={cx(controlStyles, 'cta-btn-secondary')}
                           onClick={() => {
                             onOpenSourceReader({ sourceId: readableRef.source_id, eventId: ev.id });
                           }}

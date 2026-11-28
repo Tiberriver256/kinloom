@@ -190,6 +190,11 @@ export const ArchivalImage: React.FC<ArchivalImageProps> = ({
       style={frameStyle}
       data-image-status={status.kind}
     >
+      {status.kind === 'loading' && (
+        <span className={cx(imageStyles, 'archival-image-loading-underlay')} aria-hidden="true">
+          <ArchivalPlateGlyph compact={fallbackCompact} />
+        </span>
+      )}
       <img
         ref={imgRef}
         src={status.src}

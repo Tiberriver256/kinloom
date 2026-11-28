@@ -96,6 +96,12 @@
   min-width: 0;
 }
 
+.kinship-field > span {
+  font-family: var(--font-ui);
+  font-size: var(--text-xs);
+  color: var(--text-secondary);
+}
+
 .kinship-stats-row {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -112,6 +118,7 @@
   font-family: var(--font-ui);
   font-size: var(--text-2xs);
   letter-spacing: 0.05em;
+  text-transform: uppercase;
   color: var(--text-secondary);
 }
 
@@ -484,15 +491,20 @@
   }
 
   .kinship-examples-bar {
-    flex-wrap: wrap;
-    overflow-x: visible;
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    scrollbar-width: none;
     gap: 6px 8px;
     padding-bottom: 4px;
   }
 
+  .kinship-examples-bar::-webkit-scrollbar {
+    display: none;
+  }
+
   .kinship-examples-bar :global(.pill-btn) {
-    flex-shrink: 1;
-    white-space: normal;
+    flex-shrink: 0;
+    white-space: nowrap;
     text-align: left;
     min-height: var(--control-height-touch);
     border: none;
@@ -500,6 +512,10 @@
     padding: 6px 12px;
     background: var(--surface-linen);
     font-family: var(--font-ui);
+  }
+
+  .kinship-examples-bar :global(.kinship-example-chip):nth-of-type(n + 5) {
+    display: none;
   }
 
   .kinship-examples-label {

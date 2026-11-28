@@ -15,6 +15,10 @@
   box-sizing: border-box;
 }
 
+html {
+  scroll-padding-top: calc(var(--topbar-height, 58px) + 12px);
+}
+
 html,
 body {
   margin: 0;
