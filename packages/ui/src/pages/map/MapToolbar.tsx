@@ -97,7 +97,8 @@ export interface MapToolbarProps {
   readonly onSetRouteMode: (mode: LineageRouteMode) => void;
 }
 
-const PRESET_GAP_PX = 5;
+const DEFAULT_PRESET_GAP_PX = 4;
+const DEFAULT_TOOLBAR_INSET_PX = 12;
 const FALLBACK_MORE_BUTTON_WIDTH = 104;
 
 export const MapToolbar: React.FC<MapToolbarProps> = ({
@@ -182,7 +183,8 @@ export const MapToolbar: React.FC<MapToolbarProps> = ({
       const routeEl = toolbar.querySelector<HTMLElement>('[data-map-route-mode="true"]');
       const traceWidth = traceEl ? Math.ceil(traceEl.getBoundingClientRect().width) : 0;
       const routeWidth = routeEl ? Math.ceil(routeEl.getBoundingClientRect().width) : 0;
-      const maxToolbarWidth = Math.max(0, parentWidth - 36);
+      const insetX = Number.parseFloat(style.left) || DEFAULT_TOOLBAR_INSET_PX;
+      const maxToolbarWidth = Math.max(0, parentWidth - insetX * 2);
       const siblingGaps = (traceWidth > 0 ? gapX : 0) + (routeWidth > 0 ? gapX : 0);
       availableWidth = Math.max(
         0,
@@ -194,6 +196,10 @@ export const MapToolbar: React.FC<MapToolbarProps> = ({
       setOverflowIds((prev) => (prev.length === 0 ? prev : []));
       return;
     }
+
+    const measureStyle = window.getComputedStyle(measureRow);
+    const presetGapPx =
+      Number.parseFloat(measureStyle.columnGap || measureStyle.gap) || DEFAULT_PRESET_GAP_PX;
 
     const widthsByKey = new Map<string, number>();
     for (const el of measureRow.querySelectorAll<HTMLElement>('[data-measure-era]')) {
@@ -214,7 +220,7 @@ export const MapToolbar: React.FC<MapToolbarProps> = ({
       containerWidth: availableWidth,
       allButtonWidth,
       moreButtonWidth,
-      gapPx: PRESET_GAP_PX,
+      gapPx: presetGapPx,
       eras: measuredEras,
       selectedEraId,
     });
@@ -252,17 +258,20 @@ export const MapToolbar: React.FC<MapToolbarProps> = ({
     };
     window.addEventListener('resize', onResize);
     let cancelled = false;
-    if (typeof document !== 'undefined' && document.fonts?.ready) {
-      void document.fonts.ready.then(() => {
+    const fontSet = typeof document !== 'undefined' ? document.fonts : undefined;
+    if (fontSet?.ready) {
+      void fontSet.ready.then(() => {
         if (!cancelled) {
           recalculateOverflow();
         }
       });
     }
+    fontSet?.addEventListener?.('loadingdone', onResize);
     return (): void => {
       cancelled = true;
       observer?.disconnect();
       window.removeEventListener('resize', onResize);
+      fontSet?.removeEventListener?.('loadingdone', onResize);
     };
   }, [recalculateOverflow]);
 
@@ -455,7 +464,7 @@ export const MapToolbar: React.FC<MapToolbarProps> = ({
         </div>
 
         <label data-map-trace-label="true" className={cx(mapStyles, 'map-trace-label')}>
-          <span>Trace:</span>
+          <span className={cx(mapStyles, 'map-trace-label-text')}>Trace:</span>
           <select
             className={joinClasses(cx(controlStyles, 'pill-btn'), cx(mapStyles, 'map-trace-select'))}
             aria-label={KINLOOM_VOCABULARY.map.filterByPersonAria}

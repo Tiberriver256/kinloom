@@ -62,13 +62,15 @@ test('map toolbar prevents desktop era clipping, keeps mobile selects and route 
   );
 
   for (const vp of [
-    { width: 1440, height: 900 },
-    { width: 1280, height: 800 },
+    { width: 1440, height: 900, expectIllinoisPrairie: true, expectMoreMenu: false },
+    { width: 1280, height: 800, expectIllinoisPrairie: true, expectMoreMenu: false },
+    { width: 1024, height: 768, expectIllinoisPrairie: false, expectMoreMenu: true },
   ]) {
-    await page.setViewportSize(vp);
+    await page.setViewportSize({ width: vp.width, height: vp.height });
     await page.goto('/map');
     await expect(page.locator('.map-toolbar')).toBeVisible();
     await expect(page.locator('.maplibregl-canvas')).toBeVisible();
+    await page.evaluate(() => document.fonts.ready);
 
     const metrics = await page.evaluate(() => {
       const main = document.querySelector('main')?.getBoundingClientRect();
@@ -125,6 +127,15 @@ test('map toolbar prevents desktop era clipping, keeps mobile selects and route 
       `Era color swatches embedded in toolbar at ${vp.width}px`
     ).toBeGreaterThanOrEqual(1);
     expect(metrics.eraButtons.length, `Visible era buttons at ${vp.width}px`).toBeGreaterThanOrEqual(2);
+    if (vp.expectIllinoisPrairie) {
+      expect(
+        metrics.eraButtons.some((btn) => /Illinois Prairie/.test(btn.text)),
+        `Illinois Prairie stage directly visible without More popover at ${vp.width}px`
+      ).toBe(true);
+    }
+    if (vp.expectMoreMenu) {
+      expect(metrics.moreBtnText, `Overflow More menu rendered at ${vp.width}px`).not.toBeNull();
+    }
     for (const btn of metrics.eraButtons) {
       expect(btn.overflowsPresets, `Button "${btn.text}" clipped at ${vp.width}px`).toBeLessThanOrEqual(1);
       expect(
@@ -152,6 +163,23 @@ test('map toolbar prevents desktop era clipping, keeps mobile selects and route 
       ).toContainText(promotedLabel);
     }
   }
+
+  // Verify 1280x720 retains direct stage visibility even under wider Linux font metrics
+  await page.setViewportSize({ width: 1280, height: 720 });
+  await page.goto('/map');
+  await expect(page.locator('.map-toolbar')).toBeVisible();
+  await page.addStyleTag({
+    content: '.map-toolbar button, .map-toolbar span { letter-spacing: 0.02em !important; }',
+  });
+  await page.evaluate(() => window.dispatchEvent(new Event('resize')));
+  await expect(page.getByRole('button', { name: /Illinois Prairie/ })).toBeVisible();
+  const wide1280Right = await page.evaluate(() => {
+    const toolbar = document.querySelector('.map-toolbar')?.getBoundingClientRect();
+    return toolbar ? Math.ceil(toolbar.right) : 9999;
+  });
+  expect(wide1280Right, 'Toolbar fits within 1280px even under widened font metrics').toBeLessThanOrEqual(
+    1280
+  );
 
   await page.setViewportSize({ width: 360, height: 800 });
   await page.goto('/map');
