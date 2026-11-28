@@ -41,7 +41,7 @@ function extractListedRootHelpCommands(helpText: string): string[] {
 }
 
 describe('BUILTIN_CLI_COMMANDS & ROOT_HELP single source of truth', () => {
-  it('registers media, query, patch, and every command listed in ROOT_HELP as a built-in command', () => {
+  it('registers media, query, patch, records, and every command listed in ROOT_HELP as a built-in command', () => {
     expect(isBuiltInCliCommand('media')).toBe(true);
     expect(CORE_CLI_COMMANDS.has('media')).toBe(true);
     expect(resolveBuiltInCliCommand('media')?.run).toBeTypeOf('function');
@@ -53,6 +53,10 @@ describe('BUILTIN_CLI_COMMANDS & ROOT_HELP single source of truth', () => {
     expect(isBuiltInCliCommand('patch')).toBe(true);
     expect(CORE_CLI_COMMANDS.has('patch')).toBe(true);
     expect(resolveBuiltInCliCommand('patch')?.run).toBeTypeOf('function');
+
+    expect(isBuiltInCliCommand('records')).toBe(true);
+    expect(CORE_CLI_COMMANDS.has('records')).toBe(true);
+    expect(resolveBuiltInCliCommand('records')?.run).toBeTypeOf('function');
 
     const listedCommands = extractListedRootHelpCommands(ROOT_HELP);
     expect(listedCommands.length).toBeGreaterThan(35);
@@ -88,10 +92,11 @@ describe('RECORD_COMMAND_SPECS lazy client loading', () => {
   it('resolves native record specs with lazy loadHandler thunks without eagerly loading clients', () => {
     expect(isRecordCommand('nara')).toBe(true);
     expect(isRecordCommand('ia')).toBe(true);
+    expect(isRecordCommand('pdf-grep')).toBe(true);
     expect(resolveRecordCommand('ia')?.command).toBe('archive-org');
 
     const nativeSpecs = RECORD_COMMAND_SPECS.filter((spec) => spec.kind === 'native');
-    expect(nativeSpecs.length).toBe(23);
+    expect(nativeSpecs.length).toBe(24);
     for (const spec of nativeSpecs) {
       expect(spec.loadHandler).toBeTypeOf('function');
     }

@@ -3,6 +3,7 @@ import { BLM_GLO_GUIDE } from './directories/blm-glo.js';
 import { CYNDIS_LIST_GUIDE } from './directories/cyndis-list.js';
 import { NARRATIVE_AUDIO_GUIDE } from './media/narrative-audio.js';
 import { OCR_GUIDE } from './media/ocr.js';
+import { PDF_GREP_GUIDE } from './media/pdf-grep.js';
 import { PREP_SCAN_GUIDE } from './media/prep-scan.js';
 import { DESIGN_AUDIT_GUIDE } from './ops/design-audit.js';
 import { PRONOUNCE_GUIDE } from './ops/pronounce.js';
@@ -78,10 +79,11 @@ export const EMBEDDED_GUIDES: readonly EmbeddedGuide[] = [
   BLM_GLO_GUIDE,
   CYNDIS_LIST_GUIDE,
 
-  // Media, scan prep & OCR (3)
+  // Media, scan prep & OCR (4)
   NARRATIVE_AUDIO_GUIDE,
   PREP_SCAN_GUIDE,
   OCR_GUIDE,
+  PDF_GREP_GUIDE,
 
   // Archive operations, pronunciation, design audit & live verification (3)
   PRONOUNCE_GUIDE,

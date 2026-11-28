@@ -7,11 +7,37 @@ import {
   type RecordHandler,
   RecordRuntimeError,
 } from '../runtime/types.js';
-import { renderRootHelp, SUBCOMMAND_ALIASES } from './openarchieven/cliSpecs.js';
+import {
+  renderDownloadHelp,
+  renderRootHelp,
+  renderSearchHelp,
+  renderShowHelp,
+  renderUrlHelp,
+  SUBCOMMAND_ALIASES,
+} from './openarchieven/cliSpecs.js';
 import { runDownload, runSearch, runShow, runUrl } from './openarchieven/commands.js';
 
 export { validateApiUrl, validateScanUrl } from './openarchieven/domain.js';
 export { searchWindow } from './openarchieven/transport.js';
+
+function renderSubcommandHelpByName(rawSubcmd: string | undefined): string {
+  if (!rawSubcmd) {
+    return renderRootHelp();
+  }
+  const subcmd = resolveSubcommandAlias(rawSubcmd, SUBCOMMAND_ALIASES);
+  switch (subcmd) {
+    case 'search':
+      return renderSearchHelp();
+    case 'show':
+      return renderShowHelp();
+    case 'download':
+      return renderDownloadHelp();
+    case 'url':
+      return renderUrlHelp();
+    default:
+      throw new CliValidationError(`No such command '${rawSubcmd}'. Run 'kinloom openarchieven --help'.`);
+  }
+}
 
 export const runOpenarchievenCommand: RecordHandler = async (args, ctx): Promise<RecordCommandOutcome> => {
   try {
@@ -21,6 +47,8 @@ export const runOpenarchievenCommand: RecordHandler = async (args, ctx): Promise
     const [rawSubcmd = '', ...rest] = args;
     const subcmd = resolveSubcommandAlias(rawSubcmd, SUBCOMMAND_ALIASES);
     switch (subcmd) {
+      case 'help':
+        return { exitCode: 0, bytesOut: emitStdout(ctx.io, renderSubcommandHelpByName(rest[0])) };
       case 'search':
         return await runSearch(rest, ctx);
       case 'show':

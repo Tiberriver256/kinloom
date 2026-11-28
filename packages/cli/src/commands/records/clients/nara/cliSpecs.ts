@@ -455,7 +455,7 @@ export const CENSUS1950_IMAGE_PARSE_SPEC: CommandParseSpec = {
 export function renderRootHelp(): string {
   return formatCommandUsage({
     usage: 'kinloom nara <command> [options]',
-    summary: 'Search, inspect, and download National Archives Catalog (NARA) records.',
+    summary: 'Search, inspect, and download National Archives Catalog (NARA), 1950 Census, and AAD records.',
     subcommands: [
       { name: 'url', summary: 'Build and print a verified NARA Catalog search URL.' },
       { name: 'search', summary: 'Search the NARA Catalog (parallel via API or shared browser).' },
@@ -463,6 +463,10 @@ export function renderRootHelp(): string {
       { name: 'download', summary: 'Download digitized files for a NARA record or direct NARA/S3 URL.' },
       { name: 'census1950', summary: 'Search 1950 Census population schedules on 1950census.archives.gov.' },
       { name: 'census1950-image', summary: 'Download one or more 1950 Census schedule JPEGs via IIIF.' },
+      {
+        name: 'aad',
+        summary: 'Search or fetch NARA Access to Archival Databases (aad.archives.gov) records.',
+      },
     ],
   });
 }

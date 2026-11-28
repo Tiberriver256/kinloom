@@ -36,7 +36,7 @@ const SKILL_ORIGIN_GUIDE_IDS = new Set([
 
 describe('embedded workflow guides', () => {
   it('ships all 28 embedded guides across the 6 guide categories plus narrative-audio/script-rules', () => {
-    expect(EMBEDDED_GUIDES).toHaveLength(28);
+    expect(EMBEDDED_GUIDES).toHaveLength(29);
     expect(GUIDE_CATEGORIES).toHaveLength(6);
 
     const ids = EMBEDDED_GUIDES.map((g) => g.id);
@@ -51,7 +51,7 @@ describe('embedded workflow guides', () => {
     expect(byCategory.get('state-archives')).toBe(8);
     expect(byCategory.get('international')).toBe(4);
     expect(byCategory.get('directories-guides')).toBe(2);
-    expect(byCategory.get('media-ocr')).toBe(3);
+    expect(byCategory.get('media-ocr')).toBe(4);
     expect(byCategory.get('ops')).toBe(3);
 
     for (const guide of EMBEDDED_GUIDES) {
@@ -154,7 +154,7 @@ describe('embedded workflow guides', () => {
     expect(ocr?.content).toContain('OMP_THREAD_LIMIT=1');
   });
 
-  it('formats the guides catalog with all 26 topics grouped by category and renders footers cleanly', () => {
+  it('formats the guides catalog with all 28 topics grouped by category and renders footers cleanly', () => {
     const catalog = formatGuidesCatalog();
 
     for (const category of GUIDE_CATEGORIES) {

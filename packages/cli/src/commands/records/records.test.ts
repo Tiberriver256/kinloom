@@ -88,6 +88,7 @@ describe('record command registry and discovery', () => {
       'nj-archives',
       'ocr',
       'openarchieven',
+      'pdf-grep',
       'persi',
       'prep-scan',
       'se-archives',
@@ -97,8 +98,8 @@ describe('record command registry and discovery', () => {
       'wikitree',
     ]);
     expect(guideOnlyCommands).toEqual(['blm-glo', 'cyndis-list']);
-    expect(RECORD_COMMAND_SPECS).toHaveLength(25);
-    expect(EMBEDDED_GUIDES).toHaveLength(28);
+    expect(RECORD_COMMAND_SPECS).toHaveLength(26);
+    expect(EMBEDDED_GUIDES).toHaveLength(29);
 
     for (const spec of RECORD_COMMAND_SPECS) {
       const guide = resolveEmbeddedGuide(spec.command);
@@ -259,6 +260,7 @@ describe('help vs subcommand routing, native dispatch, and telemetry', () => {
       { cmd: 'narrative-audio', expectToken: 'synth' },
       { cmd: 'prep-scan', expectToken: 'pdf-pages' },
       { cmd: 'ocr', expectToken: 'batch' },
+      { cmd: 'pdf-grep', expectToken: '--pattern' },
     ];
 
     for (const item of nativeCommands) {
@@ -851,7 +853,7 @@ describe('native TypeScript OCR, alias routing, and ubiquitous-language parity',
     ];
 
     // Verify all 27 compiled embedded guides stay scrubbed and clean.
-    expect(EMBEDDED_GUIDES).toHaveLength(28);
+    expect(EMBEDDED_GUIDES).toHaveLength(29);
     for (const guide of EMBEDDED_GUIDES) {
       for (const { label, regex } of forbiddenPatterns) {
         expect(guide.body, `guide '${guide.id}' contains ${label}`).not.toMatch(regex);

@@ -1,6 +1,7 @@
 import { CliValidationError } from '../../../errors.js';
 import { handleRecordCommandError } from '../runtime/primitives.js';
 import { emitStdout, type RecordCommandOutcome, type RecordHandler } from '../runtime/types.js';
+import { runAstia } from './fiArchives/astia.js';
 import { renderRootHelp } from './fiArchives/cliSpecs.js';
 import {
   runArchiveInspect,
@@ -11,6 +12,13 @@ import {
   runUrl,
 } from './fiArchives/commands.js';
 
+export {
+  ALLOWED_ASTIA_HOSTS,
+  parseAstiaFolderHtml,
+  parseAstiaFolderJson,
+  parseAstiaFolderRef,
+  parseAstiaPageSpec,
+} from './fiArchives/astia.js';
 export {
   ALLOWED_DIGIHAKEMISTO_HOSTS,
   ALLOWED_HISKI_HOSTS,
@@ -54,6 +62,8 @@ export const runFiArchivesCommand: RecordHandler = async (args, ctx): Promise<Re
         return await runArchivesSearch(rest, ctx);
       case 'archive':
         return await runArchiveInspect(rest, ctx);
+      case 'astia':
+        return await runAstia(rest, ctx);
       case 'url':
         return runUrl(rest, ctx);
       default:

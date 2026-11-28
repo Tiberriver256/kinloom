@@ -1,3 +1,4 @@
+import { buildRecordsCatalogJson, formatRecordsDiscoveryHelp } from '../commands/records/dispatch.js';
 import { type CliExitCode, CliValidationError, EXIT_OK, EXIT_USAGE } from '../errors.js';
 import { formatGuidesCatalog, renderEmbeddedGuide, resolveEmbeddedGuide } from '../guides/index.js';
 import {
@@ -6,7 +7,7 @@ import {
   type BuiltInCliCommandName,
   type BuiltInExecutableCommandName,
 } from './builtinCatalog.js';
-import type { CliDispatchContext, CliIo } from './types.js';
+import { type CliDispatchContext, type CliIo, normalizeExitCode } from './types.js';
 
 export type BuiltInCommandHandler = (
   rest: readonly string[],
@@ -34,6 +35,33 @@ export function runGuideCliCommand(rest: readonly string[], io: CliIo): CliExitC
   return EXIT_OK;
 }
 
+export async function runRecordsCliCommand(
+  rest: readonly string[],
+  ctx: CliDispatchContext
+): Promise<CliExitCode> {
+  if (rest.length === 0 || rest[0] === '--help' || rest[0] === '-h') {
+    ctx.io.stdout(formatRecordsDiscoveryHelp());
+    return EXIT_OK;
+  }
+  if (rest.length === 1 && rest[0] === '--json') {
+    ctx.io.stdout(JSON.stringify(buildRecordsCatalogJson(), null, 2));
+    return EXIT_OK;
+  }
+  const first = rest[0];
+  if (first !== undefined && !first.startsWith('-')) {
+    const { runRecordCommand } = await import('../commands/records/dispatch.js');
+    const result = await runRecordCommand(first, rest.slice(1), {
+      io: ctx.rawIo,
+      fetchImpl: ctx.fetchImpl,
+      cwd: ctx.cwd,
+    });
+    return normalizeExitCode(result.exitCode);
+  }
+  throw new CliValidationError(
+    `Unknown option '${first ?? ''}'. Run \`kinloom records --help\` for available commands.`
+  );
+}
+
 const BUILTIN_COMMAND_HANDLERS: Readonly<Record<BuiltInExecutableCommandName, BuiltInCommandHandler>> = {
   init: async (rest, ctx) => (await import('./coreCommands.js')).runInit(rest, ctx),
   brandkit: async (rest, ctx) => (await import('./coreCommands.js')).runBrandkit(rest, ctx),
@@ -59,6 +87,7 @@ const BUILTIN_COMMAND_HANDLERS: Readonly<Record<BuiltInExecutableCommandName, Bu
   telemetry: async (rest, ctx) => (await import('./liveAndUtilityCommands.js')).runTelemetry(rest, ctx),
   screenshots: async (rest, ctx) => (await import('./screenshotsCommand.js')).runScreenshots(rest, ctx),
   'design-audit': async (rest, ctx) => (await import('./designAuditCommand.js')).runDesignAudit(rest, ctx),
+  records: (rest, ctx) => runRecordsCliCommand(rest, ctx),
   guide: (rest, ctx) => runGuideCliCommand(rest, ctx.io),
 };
 

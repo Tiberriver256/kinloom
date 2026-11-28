@@ -1,7 +1,13 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { CliValidationError } from '../../../../errors.js';
-import { getBooleanOption, getNumberOption, getStringOption, parseCommandArgs } from '../../runtime/args.js';
+import {
+  getBooleanOption,
+  getNumberOption,
+  getStringListOption,
+  getStringOption,
+  parseCommandArgs,
+} from '../../runtime/args.js';
 import { atomicWriteFileSync, sha256Hex } from '../../runtime/cache.js';
 import { isPlainRecord, resolveUserPathFromContext } from '../../runtime/primitives.js';
 import {
@@ -62,91 +68,23 @@ function pathExists(targetPath: string): boolean {
   }
 }
 
-export async function runSearch(
-  argv: readonly string[],
-  ctx: RecordCommandContext
-): Promise<RecordCommandOutcome> {
-  const parsed = parseCommandArgs(argv, SEARCH_PARSE_SPEC);
-  if (parsed.helpRequested) {
-    return { exitCode: 0, bytesOut: emitStdout(ctx.io, renderSearchHelp()) };
-  }
-
-  const nameArg = parsed.positionals[0];
-  const nameOpt = getStringOption(parsed, 'nameOpt');
-  const firstName = getStringOption(parsed, 'firstName');
-  const lastName = getStringOption(parsed, 'lastName');
-  const place = getStringOption(parsed, 'place');
-  const birthPlace = getStringOption(parsed, 'birthPlace');
-  const eventType = getStringOption(parsed, 'eventType');
-  const sourceType = getStringOption(parsed, 'sourceType');
-  const year = getStringOption(parsed, 'year');
-  const archive = getStringOption(parsed, 'archive');
-  const relation = getStringOption(parsed, 'relation');
-  const country = getStringOption(parsed, 'country');
-  const lang = getStringOption(parsed, 'lang') ?? 'nl';
-  const limit = getNumberOption(parsed, 'limit') ?? 10;
-  const start = getNumberOption(parsed, 'start') ?? 0;
-  const page = getNumberOption(parsed, 'page');
-  const asJson = getBooleanOption(parsed, 'asJson');
-  const refresh = getBooleanOption(parsed, 'refresh');
-  const cliTtl = getNumberOption(parsed, 'cacheTtlHours');
-
-  const combinedParts = [firstName, lastName]
-    .filter((part): part is string => typeof part === 'string' && part.trim().length > 0)
-    .map((part) => part.trim())
-    .join(' ');
-  let rawName = (nameOpt || nameArg || combinedParts).trim();
-  if (!rawName) {
-    throw new CliValidationError('Provide a name via --name, --first/--last, or a positional argument.');
-  }
-  if (year) {
-    rawName = `${rawName} ${year.trim()}`;
-  }
-
-  const startFromUser = parsed.provided.has('start');
-  const [numberShow, effectiveStart] = searchWindow(limit, start, page, startFromUser);
-
-  const params: Record<string, string | number> = {
-    name: rawName,
-    number_show: numberShow,
-    start: effectiveStart,
-    lang,
-  };
-  if (place) {
-    params['eventplace'] = place;
-  }
-  if (birthPlace) {
-    params['birthplace'] = birthPlace;
-  }
-  if (sourceType) {
-    params['sourcetype'] = sourceType;
-  }
-  if (eventType) {
-    if (isSourceType(eventType) && !('sourcetype' in params)) {
-      params['sourcetype'] = eventType;
-    } else {
-      params['eventtype'] = eventType;
+function hasHelpFlag(argv: readonly string[]): boolean {
+  for (const token of argv) {
+    if (token === '--') {
+      return false;
+    }
+    if (token === '--help' || token === '-h') {
+      return true;
     }
   }
-  if (archive) {
-    params['archive'] = archive;
-  }
-  if (relation) {
-    params['relationtype'] = relation;
-  }
-  if (country) {
-    params['country_code'] = country;
-  }
+  return false;
+}
 
-  const ttlHours = resolveTtlHours(cliTtl, ctx);
-  const cacheDir = getCacheDir(ctx);
-  const { data, cacheHit } = await loadSearch(ctx, cacheDir, params, { refresh, ttlHours });
-
-  if (asJson) {
-    const bytesOut = emitJsonStdout(ctx.io, { ...data, cache_hit: Boolean(cacheHit) });
-    return { exitCode: 0, bytesOut, cacheHit };
-  }
-
+function formatSearchDocsLines(
+  data: Record<string, unknown>,
+  effectiveStart: number,
+  cacheHit: boolean
+): string[] {
   const resp = isPlainRecord(data['response']) ? data['response'] : {};
   const total = typeof resp['number_found'] === 'number' ? resp['number_found'] : 0;
   const docs = Array.isArray(resp['docs']) ? resp['docs'] : [];
@@ -179,14 +117,194 @@ export async function runSearch(
     lines.push(`- ${code}:${ident} | ${person} (${role}) | ${stype} | ${dateStr} | ${placeStr}`);
     lines.push(`  ${url}`);
   }
-  const bytesOut = emitStdout(ctx.io, lines.join('\n'));
-  return { exitCode: 0, bytesOut, cacheHit };
+  return lines;
+}
+
+function collectSearchQueries(
+  nameOpts: readonly string[],
+  positionals: readonly string[],
+  firstName: string | undefined,
+  lastName: string | undefined
+): string[] {
+  const combinedParts = [firstName, lastName]
+    .filter((part): part is string => typeof part === 'string' && part.trim().length > 0)
+    .map((part) => part.trim())
+    .join(' ');
+  const rawList = [...nameOpts, ...positionals]
+    .map((entry) => entry.trim())
+    .filter((entry) => entry.length > 0);
+  if (rawList.length === 0 && combinedParts.length > 0) {
+    rawList.push(combinedParts);
+  }
+  const unique: string[] = [];
+  const seen = new Set<string>();
+  for (const item of rawList) {
+    if (!seen.has(item)) {
+      seen.add(item);
+      unique.push(item);
+    }
+  }
+  return unique;
+}
+
+export async function runSearch(
+  argv: readonly string[],
+  ctx: RecordCommandContext
+): Promise<RecordCommandOutcome> {
+  if (hasHelpFlag(argv)) {
+    return { exitCode: 0, bytesOut: emitStdout(ctx.io, renderSearchHelp()) };
+  }
+  const parsed = parseCommandArgs(argv, SEARCH_PARSE_SPEC);
+  if (parsed.helpRequested) {
+    return { exitCode: 0, bytesOut: emitStdout(ctx.io, renderSearchHelp()) };
+  }
+
+  const nameOpts = getStringListOption(parsed, 'nameOpt');
+  const firstName = getStringOption(parsed, 'firstName');
+  const lastName = getStringOption(parsed, 'lastName');
+  const place = getStringOption(parsed, 'place');
+  const birthPlace = getStringOption(parsed, 'birthPlace');
+  const eventType = getStringOption(parsed, 'eventType');
+  const sourceType = getStringOption(parsed, 'sourceType');
+  const year = getStringOption(parsed, 'year');
+  const archive = getStringOption(parsed, 'archive');
+  const relation = getStringOption(parsed, 'relation');
+  const country = getStringOption(parsed, 'country');
+  const lang = getStringOption(parsed, 'lang') ?? 'nl';
+  const limit = getNumberOption(parsed, 'limit') ?? 10;
+  const start = getNumberOption(parsed, 'start') ?? 0;
+  const page = getNumberOption(parsed, 'page');
+  const asJson = getBooleanOption(parsed, 'asJson');
+  const refresh = getBooleanOption(parsed, 'refresh');
+  const cliTtl = getNumberOption(parsed, 'cacheTtlHours');
+
+  const queries = collectSearchQueries(nameOpts, parsed.positionals, firstName, lastName);
+  if (queries.length === 0) {
+    throw new CliValidationError('Provide a name via --name, --first/--last, or a positional argument.');
+  }
+
+  const startFromUser = parsed.provided.has('start');
+  const [numberShow, effectiveStart] = searchWindow(limit, start, page, startFromUser);
+
+  const sharedParams: Record<string, string | number> = {
+    number_show: numberShow,
+    start: effectiveStart,
+    lang,
+  };
+  if (place) {
+    sharedParams['eventplace'] = place;
+  }
+  if (birthPlace) {
+    sharedParams['birthplace'] = birthPlace;
+  }
+  if (sourceType) {
+    sharedParams['sourcetype'] = sourceType;
+  }
+  if (eventType) {
+    if (isSourceType(eventType) && !('sourcetype' in sharedParams)) {
+      sharedParams['sourcetype'] = eventType;
+    } else {
+      sharedParams['eventtype'] = eventType;
+    }
+  }
+  if (archive) {
+    sharedParams['archive'] = archive;
+  }
+  if (relation) {
+    sharedParams['relationtype'] = relation;
+  }
+  if (country) {
+    sharedParams['country_code'] = country;
+  }
+
+  const ttlHours = resolveTtlHours(cliTtl, ctx);
+  const cacheDir = getCacheDir(ctx);
+
+  if (queries.length === 1 && queries[0] !== undefined) {
+    const rawName = year ? `${queries[0]} ${year.trim()}` : queries[0];
+    const params: Record<string, string | number> = {
+      name: rawName,
+      ...sharedParams,
+    };
+    const { data, cacheHit } = await loadSearch(ctx, cacheDir, params, { refresh, ttlHours });
+
+    if (asJson) {
+      const bytesOut = emitJsonStdout(ctx.io, { ...data, cache_hit: Boolean(cacheHit) });
+      return { exitCode: 0, bytesOut, cacheHit };
+    }
+
+    const lines = formatSearchDocsLines(data, effectiveStart, cacheHit);
+    const bytesOut = emitStdout(ctx.io, lines.join('\n'));
+    return { exitCode: 0, bytesOut, cacheHit };
+  }
+
+  const batchEntries: Array<{
+    readonly query: string;
+    readonly name_param: string;
+    readonly number_found: number;
+    readonly returned: number;
+    readonly cache_hit: boolean;
+    readonly response: unknown;
+    readonly data: Record<string, unknown>;
+  }> = [];
+
+  for (const query of queries) {
+    const nameParam = year ? `${query} ${year.trim()}` : query;
+    const params: Record<string, string | number> = {
+      name: nameParam,
+      ...sharedParams,
+    };
+    const { data, cacheHit } = await loadSearch(ctx, cacheDir, params, { refresh, ttlHours });
+    const resp = isPlainRecord(data['response']) ? data['response'] : {};
+    const total = typeof resp['number_found'] === 'number' ? resp['number_found'] : 0;
+    const docs = Array.isArray(resp['docs']) ? resp['docs'] : [];
+    batchEntries.push({
+      query,
+      name_param: nameParam,
+      number_found: total,
+      returned: docs.length,
+      cache_hit: Boolean(cacheHit),
+      response: data['response'] ?? resp,
+      data,
+    });
+  }
+
+  const allCacheHit = batchEntries.every((entry) => entry.cache_hit);
+  const totalFound = batchEntries.reduce((sum, entry) => sum + entry.number_found, 0);
+
+  if (asJson) {
+    const bytesOut = emitJsonStdout(ctx.io, {
+      batch: true,
+      query_count: batchEntries.length,
+      total_found: totalFound,
+      cache_hit: allCacheHit,
+      queries: batchEntries.map((entry) => ({
+        query: entry.query,
+        name_param: entry.name_param,
+        number_found: entry.number_found,
+        returned: entry.returned,
+        cache_hit: entry.cache_hit,
+        response: entry.response,
+      })),
+    });
+    return { exitCode: 0, bytesOut, cacheHit: allCacheHit };
+  }
+
+  const sections = batchEntries.map((entry) => {
+    const lines = formatSearchDocsLines(entry.data, effectiveStart, entry.cache_hit);
+    return `=== Query: ${entry.name_param} ===\n${lines.join('\n')}`;
+  });
+  const bytesOut = emitStdout(ctx.io, sections.join('\n\n'));
+  return { exitCode: 0, bytesOut, cacheHit: allCacheHit };
 }
 
 export async function runShow(
   argv: readonly string[],
   ctx: RecordCommandContext
 ): Promise<RecordCommandOutcome> {
+  if (hasHelpFlag(argv)) {
+    return { exitCode: 0, bytesOut: emitStdout(ctx.io, renderShowHelp()) };
+  }
   const parsed = parseCommandArgs(argv, SHOW_PARSE_SPEC);
   if (parsed.helpRequested) {
     return { exitCode: 0, bytesOut: emitStdout(ctx.io, renderShowHelp()) };
@@ -320,6 +438,9 @@ export async function runDownload(
   argv: readonly string[],
   ctx: RecordCommandContext
 ): Promise<RecordCommandOutcome> {
+  if (hasHelpFlag(argv)) {
+    return { exitCode: 0, bytesOut: emitStdout(ctx.io, renderDownloadHelp()) };
+  }
   const parsed = parseCommandArgs(argv, DOWNLOAD_PARSE_SPEC);
   if (parsed.helpRequested) {
     return { exitCode: 0, bytesOut: emitStdout(ctx.io, renderDownloadHelp()) };
@@ -482,6 +603,9 @@ export async function runDownload(
 }
 
 export function runUrl(argv: readonly string[], ctx: RecordCommandContext): RecordCommandOutcome {
+  if (hasHelpFlag(argv)) {
+    return { exitCode: 0, bytesOut: emitStdout(ctx.io, renderUrlHelp()) };
+  }
   const parsed = parseCommandArgs(argv, URL_PARSE_SPEC);
   if (parsed.helpRequested) {
     return { exitCode: 0, bytesOut: emitStdout(ctx.io, renderUrlHelp()) };

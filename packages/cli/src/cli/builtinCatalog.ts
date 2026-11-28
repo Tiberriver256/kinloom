@@ -16,6 +16,7 @@ import {
   VERIFY_HELP,
   VERIFY_LIVE_HELP,
 } from '../commands/ops/help.js';
+import { formatRecordsDiscoveryHelp } from '../commands/records/dispatch.js';
 import { formatRecordCommandsHelp } from '../commands/records/help.js';
 
 export type BuiltInCommandCategory = 'lifecycle' | 'ops' | 'meta';
@@ -252,6 +253,12 @@ Options:
     help: DESIGN_AUDIT_HELP,
   },
   {
+    name: 'records',
+    category: 'ops',
+    summary: 'List or invoke federal, state, international, and media/OCR record commands',
+    help: formatRecordsDiscoveryHelp(),
+  },
+  {
     name: 'guide',
     category: 'ops',
     summary: 'Browse embedded research, archive, OCR, and workflow guides',
@@ -263,7 +270,6 @@ Examples:
   kinloom guide                              List all 28 embedded guides by category
   kinloom guide nara                         Show the National Archives (NARA) workflow guide
   kinloom guide ocr                          Show the safe batch OCR workflow guide
-  kinloom guide pronounce                    Show the pronunciation lookup & audit guide
   kinloom guide narrative-audio/script-rules Show the narrative audio script rules subguide
 
 Options:
