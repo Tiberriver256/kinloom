@@ -44,6 +44,10 @@
   max-width: 56ch;
 }
 
+.story-card figcaption {
+  max-width: 56ch;
+}
+
 .also-here {
   margin-top: 14px;
   max-width: 56ch;
@@ -82,9 +86,11 @@
   color: var(--text-secondary);
 }
 
-.also-here button:hover {
-  color: var(--radar-copresence);
-  border-bottom-color: var(--radar-copresence);
+@media (hover: hover) and (pointer: fine) {
+  .also-here button:hover {
+    color: var(--radar-copresence);
+    border-bottom-color: var(--radar-copresence);
+  }
 }
 
 @media (max-width: 768px) {

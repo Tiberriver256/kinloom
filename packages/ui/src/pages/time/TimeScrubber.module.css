@@ -1,5 +1,5 @@
 /* ==========================================================================
-   Time Page Year Scrubber, Anchor Strip & Mobile Dock Sheet
+   Time Page Year Scrubber, Density Ridgeline, Anchor Strip & Mobile Sticky Bar
    ========================================================================== */
 .time-dock-scrim,
 .time-mobile-dock-bar,
@@ -9,11 +9,24 @@
 }
 
 .time-scrubber-wrap {
-  padding-top: 10px;
+  padding: 10px 0 12px;
+  margin-bottom: 12px;
   border-top: 1px solid var(--border-decorative);
+  border-bottom: 1px solid var(--border-decorative);
   display: flex;
-  flex-direction: column-reverse;
+  flex-direction: column;
   gap: 10px;
+}
+
+.time-anchor-sheet {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.time-anchor-block {
+  display: flex;
+  flex-direction: column;
 }
 
 .time-scrubber-controls {
@@ -36,6 +49,23 @@
   gap: 12px;
 }
 
+.time-slider-track-wrap {
+  position: relative;
+  flex: 1 1 auto;
+  display: flex;
+  align-items: center;
+  min-width: 0;
+}
+
+.time-density-ridgeline {
+  position: absolute;
+  inset: 4px 0;
+  width: 100%;
+  height: calc(100% - 8px);
+  pointer-events: none;
+  display: block;
+}
+
 .time-slider-bound {
   font-family: var(--font-mono);
   font-size: 0.76rem;
@@ -45,7 +75,10 @@
 
 .ink-range-slider {
   --slider-thumb-size: 16px;
+  position: relative;
+  z-index: 1;
   flex: 1 1 auto;
+  width: 100%;
   appearance: none;
   -webkit-appearance: none;
   height: 44px;
@@ -120,11 +153,6 @@
     border-color 0.14s ease;
 }
 
-.time-anchor-btn:hover {
-  color: var(--surface-header);
-  border-bottom-color: var(--border-control);
-}
-
 .time-anchor-btn:global(.active) {
   color: var(--radar-copresence);
   border-bottom-color: var(--radar-copresence);
@@ -137,9 +165,17 @@
   line-height: 1;
 }
 
+.time-anchor-sep {
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+  opacity: 0.72;
+}
+
 .time-anchor-count {
   font-family: var(--font-mono);
   font-size: 0.75rem;
+  font-variant-numeric: tabular-nums;
   color: var(--text-secondary);
 }
 
@@ -148,6 +184,13 @@
   font-size: 0.75rem;
   color: var(--text-secondary);
   margin-bottom: 4px;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .time-anchor-btn:hover {
+    color: var(--surface-header);
+    border-bottom-color: var(--border-control);
+  }
 }
 
 @media (max-width: 768px) {
@@ -159,7 +202,7 @@
     display: block;
     position: fixed;
     inset: 0;
-    z-index: 44;
+    z-index: 31;
     background: rgba(27, 42, 65, 0.24);
     border: none;
     padding: 0;
@@ -167,18 +210,18 @@
   }
 
   .time-scrubber-wrap {
-    position: fixed;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    z-index: 45;
+    position: sticky;
+    top: var(--topbar-height);
+    z-index: 32;
     flex-direction: column;
-    gap: 8px;
-    padding: 8px 14px calc(10px + env(safe-area-inset-bottom, 0px));
+    gap: 0;
+    margin: 0 -26px 12px;
+    padding: 4px 14px;
     background: rgba(252, 249, 242, 0.97);
     backdrop-filter: blur(8px);
     border-top: 1px solid var(--border-decorative);
-    box-shadow: 0 -6px 20px rgba(27, 42, 65, 0.1);
+    border-bottom: 1px solid var(--border-decorative);
+    box-shadow: 0 2px 10px rgba(27, 42, 65, 0.08);
   }
 
   .time-mobile-dock-bar {
@@ -186,6 +229,7 @@
     align-items: center;
     justify-content: space-between;
     gap: 8px;
+    min-height: 44px;
   }
 
   .time-dock-stepper {
@@ -249,12 +293,13 @@
   .time-anchor-sheet:global(.open) {
     display: flex;
     flex-direction: column;
-    gap: 8px;
-    padding-bottom: 10px;
-    margin-bottom: 2px;
-    border-bottom: 1px solid var(--border-decorative);
-    max-height: 48vh;
+    gap: 10px;
+    padding: 10px 0 8px;
+    margin-top: 4px;
+    border-top: 1px solid var(--border-decorative);
+    max-height: 60vh;
     overflow-y: auto;
+    overscroll-behavior: contain;
   }
 
   .time-sheet-header {
@@ -286,7 +331,7 @@
 
   .time-anchor-strip {
     display: grid;
-    grid-template-columns: repeat(4, minmax(0, 1fr));
+    grid-template-columns: repeat(3, minmax(0, 1fr));
     gap: 6px;
   }
 

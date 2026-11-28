@@ -3,6 +3,7 @@ import type React from 'react';
 import { Link } from 'react-router-dom';
 import { PersonPortrait } from '../../components/Atoms.js';
 import { cx } from '../../lib/cx.js';
+import { cleanTimeActivityNote } from '../../lib/timeFormatting.js';
 import timeStyles from '../TimePage.module.css';
 
 export const TimePersonCard: React.FC<{
@@ -10,7 +11,8 @@ export const TimePersonCard: React.FC<{
   readonly activeYear: number;
   readonly personThumbMap: Map<string, string>;
   readonly baseUrl: string;
-}> = ({ entry, activeYear, personThumbMap, baseUrl }) => {
+  readonly sourceEvent?: ArchiveEvent | null;
+}> = ({ entry, activeYear, personThumbMap, baseUrl, sourceEvent }) => {
   const targetUrl = entry.nearestEventId
     ? `/person/${entry.person.slug}?event=${entry.nearestEventId}`
     : `/person/${entry.person.slug}`;
@@ -21,6 +23,7 @@ export const TimePersonCard: React.FC<{
     tierClass = 'tier-inferred';
   }
   const thumb = personThumbMap.get(entry.person.id) || entry.person.portrait_url;
+  const cleanedNote = cleanTimeActivityNote(entry.activityNote, sourceEvent);
   return (
     <Link to={targetUrl} className={cx(timeStyles, `time-person-item ${tierClass}`)}>
       <PersonPortrait
@@ -41,7 +44,7 @@ export const TimePersonCard: React.FC<{
           {entry.exactYearMatch ? `In ${activeYear}: ` : ''}
           {entry.activityTitle}
         </div>
-        <p className={cx(timeStyles, 'time-person-note')}>{entry.activityNote}</p>
+        <p className={cx(timeStyles, 'time-person-note')}>{cleanedNote}</p>
         <div className={cx(timeStyles, 'time-person-tier')}>{entry.tier}</div>
       </div>
     </Link>

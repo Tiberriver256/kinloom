@@ -21,6 +21,7 @@ import {
   collectUnverifiedEvents,
   computeEvidenceCitationMetrics,
   countMediaByKind,
+  EVIDENCE_BATCH_SIZE,
   EVIDENCE_TABS,
   type EvidenceTab,
   filterAndSortSources,
@@ -37,6 +38,8 @@ export const EvidencePage: React.FC = () => {
 
   const [tab, setTab] = useState<EvidenceTab>(() => parseInitialEvidenceTab(searchParams.get('tab')));
   const [sourceQuery, setSourceQuery] = useState(() => searchParams.get('source') || '');
+  const [discrepancyLimit, setDiscrepancyLimit] = useState(EVIDENCE_BATCH_SIZE);
+  const [sourceLimit, setSourceLimit] = useState(EVIDENCE_BATCH_SIZE);
   const [showAllUnverified, setShowAllUnverified] = useState(false);
   const [mediaKindFilter, setMediaKindFilter] = useState<MediaKindFilter>('all');
   const [mediaQuery, setMediaQuery] = useState('');
@@ -182,6 +185,10 @@ export const EvidencePage: React.FC = () => {
             peopleById={peopleById}
             sourcesById={sourcesById}
             readableSourceIds={readableSourceIds}
+            discrepancyLimit={discrepancyLimit}
+            onLoadMoreDiscrepancies={() => {
+              setDiscrepancyLimit((n) => n + EVIDENCE_BATCH_SIZE);
+            }}
             onOpenSourceReader={openSourceReader}
           />
         )}
@@ -190,13 +197,20 @@ export const EvidencePage: React.FC = () => {
           <EvidenceSourcesTab
             totalSourceCount={bundle.sources.length}
             filteredSources={filteredSources}
+            sourceLimit={sourceLimit}
             sourceQuery={sourceQuery}
             sourceUsageCounts={sourceUsageCounts}
             readableSourceIds={readableSourceIds}
             unverifiedEvents={unverifiedEvents}
             showAllUnverified={showAllUnverified}
             peopleById={peopleById}
-            onSourceQueryChange={setSourceQuery}
+            onSourceQueryChange={(value) => {
+              setSourceQuery(value);
+              setSourceLimit(EVIDENCE_BATCH_SIZE);
+            }}
+            onLoadMoreSources={() => {
+              setSourceLimit((n) => n + EVIDENCE_BATCH_SIZE);
+            }}
             onToggleShowAllUnverified={() => {
               setShowAllUnverified((v) => !v);
             }}

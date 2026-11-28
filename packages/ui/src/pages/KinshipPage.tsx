@@ -1,12 +1,18 @@
 import { buildPersonThumbMap, findKinshipPath } from '@kinloom/core';
-import React, { useMemo, useState } from 'react';
+import type React from 'react';
+import { useMemo, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { EmptyStateNotice, PersonPortrait } from '../components/Atoms.js';
 import { ExplorerTopBar } from '../components/ExplorerTopBar.js';
 import { KinloomFooter } from '../components/KinloomFooter.js';
 import { useArchiveData } from '../context/ArchiveDataContext.js';
 import { cx, joinClasses } from '../lib/cx.js';
-import { formatKinshipPresentation } from '../lib/kinshipPresentation.js';
+import {
+  computeLifespanOverlapSparkline,
+  formatKinshipPresentation,
+  type LifespanOverlapSparkline,
+  partitionKinshipTopology,
+} from '../lib/kinshipPresentation.js';
 import { KINLOOM_VOCABULARY } from '../lib/vocabulary.js';
 import controlStyles from '../styles/Controls.module.css';
 import layoutStyles from '../styles/Layout.module.css';
@@ -24,6 +30,67 @@ function formatKinshipPersonOption(person: {
   }
   return `${trimmed} (${years})`;
 }
+
+const KinshipOverlapSparklineSvg: React.FC<{
+  readonly sparkline: LifespanOverlapSparkline;
+  readonly personAName: string;
+  readonly personBName: string;
+}> = ({ sparkline, personAName, personBName }) => {
+  const viewW = 240;
+  const viewH = 34;
+  const toX = (pct: number): number => Number(((pct / 100) * viewW).toFixed(2));
+  const aX = toX(sparkline.personA.leftPct);
+  const aW = Math.max(4, toX(sparkline.personA.widthPct));
+  const bX = toX(sparkline.personB.leftPct);
+  const bW = Math.max(4, toX(sparkline.personB.widthPct));
+  const overlapX = sparkline.overlap ? toX(sparkline.overlap.leftPct) : 0;
+  const overlapW = sparkline.overlap ? Math.max(3, toX(sparkline.overlap.widthPct)) : 0;
+
+  return (
+    <svg
+      className={cx(kinshipStyles, 'kinship-overlap-sparkline')}
+      viewBox={`0 0 ${viewW} ${viewH}`}
+      role="img"
+      aria-label={
+        sparkline.overlap
+          ? `Lifespan bars for ${personAName} (${sparkline.personA.startYear}–${sparkline.personA.endYear}) and ${personBName} (${sparkline.personB.startYear}–${sparkline.personB.endYear}), overlapping ${sparkline.overlap.startYear}–${sparkline.overlap.endYear}`
+          : `Lifespan bars for ${personAName} (${sparkline.personA.startYear}–${sparkline.personA.endYear}) and ${personBName} (${sparkline.personB.startYear}–${sparkline.personB.endYear}) with no overlap`
+      }
+    >
+      <line x1={0} y1={17} x2={viewW} y2={17} stroke="var(--border-decorative)" strokeWidth="1" />
+      {sparkline.overlap && (
+        <g>
+          <rect
+            x={overlapX}
+            y={2}
+            width={overlapW}
+            height={viewH - 4}
+            fill="var(--accent-primary)"
+            fillOpacity="0.28"
+          />
+          <line
+            x1={overlapX}
+            y1={2}
+            x2={overlapX}
+            y2={viewH - 2}
+            stroke="var(--accent-primary)"
+            strokeWidth="1.2"
+          />
+          <line
+            x1={overlapX + overlapW}
+            y1={2}
+            x2={overlapX + overlapW}
+            y2={viewH - 2}
+            stroke="var(--accent-primary)"
+            strokeWidth="1.2"
+          />
+        </g>
+      )}
+      <rect x={aX} y={6} width={aW} height={7} rx={2} fill="var(--surface-header)" fillOpacity="0.7" />
+      <rect x={bX} y={21} width={bW} height={7} rx={2} fill="var(--accent-secondary)" fillOpacity="0.7" />
+    </svg>
+  );
+};
 
 export const KinshipPage: React.FC = () => {
   const { siteConfig, baseUrl, bundle, peopleById, peopleBySlug, placesById, loading } = useArchiveData();
@@ -122,6 +189,23 @@ export const KinshipPage: React.FC = () => {
           personBName: personB.full_name,
           result,
         })
+      : null;
+
+  const topology =
+    result?.connected && result.personIds.length > 0
+      ? partitionKinshipTopology(result.personIds, result.steps)
+      : null;
+
+  const sparkline =
+    result && personA && personB
+      ? computeLifespanOverlapSparkline(personA, personB, result.overlapYears)
+      : null;
+
+  const treePathUrl =
+    result?.connected && result.personIds.length > 1 && personA
+      ? `/tree?mode=full&focus=${encodeURIComponent(personA.slug)}&path=${encodeURIComponent(
+          result.personIds.map((id) => peopleById.get(id)?.slug || id).join(',')
+        )}`
       : null;
 
   return (
@@ -259,11 +343,36 @@ export const KinshipPage: React.FC = () => {
                   </div>
                   <div className={cx(kinshipStyles, 'kinship-stat-box')}>
                     <div className={cx(kinshipStyles, 'kinship-stat-label')}>OVERLAPPING YEARS ALIVE</div>
-                    <div className={cx(kinshipStyles, 'kinship-stat-value')}>
-                      {result.overlapYears
-                        ? `${result.overlapYears.start}–${result.overlapYears.end} (${result.overlapYears.durationYears} yrs)`
-                        : 'No lifespan overlap'}
-                    </div>
+                    {result.overlapYears ? (
+                      <Link
+                        to={`/time?year=${result.overlapYears.start}`}
+                        className={cx(kinshipStyles, 'kinship-overlap-link')}
+                        aria-label={`Inspect family snapshot in ${result.overlapYears.start}`}
+                      >
+                        <div className={cx(kinshipStyles, 'kinship-stat-value')}>
+                          {result.overlapYears.start}–{result.overlapYears.end} (
+                          {result.overlapYears.durationYears} yrs) →
+                        </div>
+                        {sparkline && (
+                          <KinshipOverlapSparklineSvg
+                            sparkline={sparkline}
+                            personAName={personA.full_name}
+                            personBName={personB.full_name}
+                          />
+                        )}
+                      </Link>
+                    ) : (
+                      <>
+                        <div className={cx(kinshipStyles, 'kinship-stat-value')}>No lifespan overlap</div>
+                        {sparkline && (
+                          <KinshipOverlapSparklineSvg
+                            sparkline={sparkline}
+                            personAName={personA.full_name}
+                            personBName={personB.full_name}
+                          />
+                        )}
+                      </>
+                    )}
                   </div>
                   <div className={cx(kinshipStyles, 'kinship-stat-box')}>
                     <div className={cx(kinshipStyles, 'kinship-stat-label')}>SHARED PLACES</div>
@@ -275,39 +384,107 @@ export const KinshipPage: React.FC = () => {
                   </div>
                 </div>
 
-                {result.connected && result.steps.length > 0 && result.personIds.length > 0 && (
+                {result.connected && result.steps.length > 0 && topology && (
                   <div style={{ marginTop: 18 }}>
-                    <div
-                      style={{
-                        fontFamily: 'var(--font-mono)',
-                        fontSize: '0.78rem',
-                        color: 'var(--text-secondary)',
-                        marginBottom: 10,
-                      }}
-                    >
-                      {KINLOOM_VOCABULARY.kinship.shortestPathHint}
+                    <div className={cx(kinshipStyles, 'kinship-path-header')}>
+                      <div className={cx(kinshipStyles, 'kinship-path-hint')}>
+                        {KINLOOM_VOCABULARY.kinship.shortestPathHint}
+                      </div>
+                      {treePathUrl && (
+                        <Link
+                          to={treePathUrl}
+                          className={joinClasses(
+                            cx(controlStyles, 'pill-btn print-hide'),
+                            cx(kinshipStyles, 'kinship-tree-highlight-link')
+                          )}
+                        >
+                          Highlight Path in Tree →
+                        </Link>
+                      )}
                     </div>
-                    <div className={cx(kinshipStyles, 'kinship-chain')}>
-                      {result.personIds.map((pid, idx) => {
-                        const p = peopleById.get(pid);
-                        const step = idx > 0 ? result.steps[idx - 1] : null;
+
+                    <ol
+                      className={cx(
+                        kinshipStyles,
+                        topology.topology === 'v'
+                          ? 'kinship-chain kinship-chain--v'
+                          : 'kinship-chain kinship-chain--linear'
+                      )}
+                      aria-label="Kinship lineage path"
+                    >
+                      {topology.orderedNodes.map((node) => {
+                        const p = peopleById.get(node.personId);
                         if (!p) {
                           return null;
                         }
-                        let edgeLabel = '';
-                        if (step?.relation === 'parent') {
-                          edgeLabel = 'parent of →';
-                        } else if (step?.relation === 'child') {
-                          edgeLabel = 'child of →';
-                        } else if (step?.relation === 'spouse') {
-                          edgeLabel = 'married to ↔';
+                        const isV = topology.topology === 'v';
+                        let relText = '';
+                        let desktopArrow = '→';
+                        let mobileArrow = '↓';
+                        if (node.edgeFromPrev === 'parent') {
+                          relText = 'parent of';
+                          desktopArrow = isV ? '↓' : '→';
+                          mobileArrow = '↓';
+                        } else if (node.edgeFromPrev === 'child') {
+                          relText = 'child of';
+                          desktopArrow = isV ? '↑' : '→';
+                          mobileArrow = '↓';
+                        } else if (node.edgeFromPrev === 'spouse') {
+                          relText = 'married to';
+                          desktopArrow = '↔';
+                          mobileArrow = '↕';
                         }
+
+                        let itemRoleClass = 'kinship-step-item';
+                        let gridStyle: React.CSSProperties | undefined;
+                        if (isV) {
+                          const ascendCount = topology.ascending.length;
+                          if (node.role === 'apex') {
+                            itemRoleClass = 'kinship-step-item is-apex';
+                            gridStyle = { gridColumn: 2, gridRow: 1 };
+                          } else if (node.index < ascendCount) {
+                            itemRoleClass = 'kinship-step-item is-ascending';
+                            gridStyle = { gridColumn: 1, gridRow: ascendCount + 1 - node.index };
+                          } else {
+                            const descOffset = node.index - ascendCount;
+                            itemRoleClass = 'kinship-step-item is-descending';
+                            gridStyle = { gridColumn: 3, gridRow: descOffset + 1 };
+                          }
+                        }
+
+                        const isEndpoint =
+                          node.index === 0 || node.index === topology.orderedNodes.length - 1;
+                        const pillClass =
+                          node.role === 'apex'
+                            ? 'kinship-node-pill is-apex'
+                            : isEndpoint
+                              ? 'kinship-node-pill endpoint'
+                              : 'kinship-node-pill';
+
                         return (
-                          <React.Fragment key={pid}>
-                            {step && (
-                              <span className={cx(kinshipStyles, 'kinship-edge-badge')}>{edgeLabel}</span>
+                          <li
+                            key={node.personId}
+                            className={cx(kinshipStyles, itemRoleClass)}
+                            style={gridStyle}
+                          >
+                            {node.edgeFromPrev && (
+                              <span className={cx(kinshipStyles, 'kinship-edge-badge')}>
+                                <span>{relText}</span>{' '}
+                                <span
+                                  className={cx(kinshipStyles, 'kinship-arrow-desktop')}
+                                  aria-hidden="true"
+                                >
+                                  {desktopArrow}
+                                </span>
+                                <span
+                                  className={cx(kinshipStyles, 'kinship-arrow-mobile')}
+                                  aria-hidden="true"
+                                >
+                                  {mobileArrow}
+                                </span>
+                              </span>
                             )}
-                            <Link to={`/person/${p.slug}`} className={cx(kinshipStyles, 'kinship-node-pill')}>
+                            <Link to={`/person/${p.slug}`} className={cx(kinshipStyles, pillClass)}>
                               <PersonPortrait
                                 name={p.full_name}
                                 src={personThumbMap.get(p.id) || p.portrait_url}
@@ -316,24 +493,22 @@ export const KinshipPage: React.FC = () => {
                                 size="sm"
                                 loading="eager"
                               />
-                              <span>
+                              <span className={cx(kinshipStyles, 'kinship-node-body')}>
+                                {node.role === 'apex' && (
+                                  <span className={cx(kinshipStyles, 'kinship-mrca-badge')}>
+                                    Most Recent Common Ancestor
+                                  </span>
+                                )}
                                 <strong>{p.full_name}</strong>
-                                <span
-                                  style={{
-                                    display: 'block',
-                                    fontFamily: 'var(--font-mono)',
-                                    fontSize: '0.75rem',
-                                    color: 'var(--text-secondary)',
-                                  }}
-                                >
+                                <span className={cx(kinshipStyles, 'kinship-node-years')}>
                                   {p.birth_year || '?'}–{p.death_year || '?'}
                                 </span>
                               </span>
                             </Link>
-                          </React.Fragment>
+                          </li>
                         );
                       })}
-                    </div>
+                    </ol>
                   </div>
                 )}
 

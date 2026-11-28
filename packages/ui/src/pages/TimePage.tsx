@@ -1,3 +1,4 @@
+import type { ArchiveEvent } from '@kinloom/core';
 import {
   buildPersonThumbMap,
   computeTimeSnapshot,
@@ -16,6 +17,11 @@ import { KinloomFooter } from '../components/KinloomFooter.js';
 import { useArchiveData } from '../context/ArchiveDataContext.js';
 import { useDialogFocusTrap } from '../hooks/useDialogFocusTrap.js';
 import { cx, joinClasses } from '../lib/cx.js';
+import {
+  buildRidgelineGeometry,
+  cleanTimeActivityNote,
+  computeArchiveYearDensity,
+} from '../lib/timeFormatting.js';
 import { formatReaderLoadError, KINLOOM_VOCABULARY } from '../lib/vocabulary.js';
 import controlStyles from '../styles/Controls.module.css';
 import timeStyles from './TimePage.module.css';
@@ -44,6 +50,17 @@ export const TimePage: React.FC = () => {
     );
   }
 
+  useEffect(() => {
+    if (typeof document === 'undefined') {
+      return undefined;
+    }
+    const prevPadding = document.documentElement.style.scrollPaddingTop;
+    document.documentElement.style.scrollPaddingTop = 'calc(var(--topbar-height) + 64px)';
+    return (): void => {
+      document.documentElement.style.scrollPaddingTop = prevPadding;
+    };
+  }, []);
+
   const suggestedYears = useMemo(() => {
     if (!bundle) {
       return [];
@@ -68,6 +85,25 @@ export const TimePage: React.FC = () => {
     }
     return computeTimeSnapshot(bundle, activeYear, placesById);
   }, [bundle, activeYear, placesById]);
+
+  const eventsById = useMemo(() => {
+    if (!bundle) {
+      return new Map<string, ArchiveEvent>();
+    }
+    return new Map(bundle.events.map((ev) => [ev.id, ev]));
+  }, [bundle]);
+
+  const yearDensity = useMemo(() => {
+    if (!bundle) {
+      return [];
+    }
+    return computeArchiveYearDensity(bundle, TIME_MIN_YEAR, TIME_MAX_YEAR);
+  }, [bundle]);
+
+  const ridgeline = useMemo(
+    () => buildRidgelineGeometry(yearDensity, activeYear, 400, 28),
+    [yearDensity, activeYear]
+  );
 
   const personThumbMap = useMemo(() => {
     if (!bundle) {
@@ -134,49 +170,152 @@ export const TimePage: React.FC = () => {
               </div>
             )}
           </div>
+        </header>
 
-          {yearSheetOpen && (
+        {yearSheetOpen && (
+          <button
+            type="button"
+            tabIndex={-1}
+            className={cx(scrubberStyles, 'time-dock-scrim')}
+            aria-label="Close milestone year picker"
+            onClick={() => {
+              setYearSheetOpen(false);
+            }}
+          />
+        )}
+
+        <div
+          className={cx(scrubberStyles, `time-scrubber-wrap print-hide ${yearSheetOpen ? 'sheet-open' : ''}`)}
+        >
+          <div className={cx(scrubberStyles, 'time-mobile-dock-bar')}>
+            <div className={cx(scrubberStyles, 'time-dock-stepper')}>
+              <button
+                type="button"
+                className={cx(scrubberStyles, 'time-dock-step-btn')}
+                aria-label={
+                  prevAnchorYear === null
+                    ? 'No earlier milestone year'
+                    : `Previous milestone year (${prevAnchorYear})`
+                }
+                disabled={prevAnchorYear === null}
+                onClick={() => {
+                  if (prevAnchorYear !== null) {
+                    setYear(prevAnchorYear);
+                    setYearSheetOpen(false);
+                  }
+                }}
+              >
+                <ChevronIcon direction="left" />
+              </button>
+              <span className={cx(scrubberStyles, 'time-dock-year-readout')} aria-hidden="true">
+                {activeYear}
+              </span>
+              <button
+                type="button"
+                className={cx(scrubberStyles, 'time-dock-step-btn')}
+                aria-label={
+                  nextAnchorYear === null
+                    ? 'No later milestone year'
+                    : `Next milestone year (${nextAnchorYear})`
+                }
+                disabled={nextAnchorYear === null}
+                onClick={() => {
+                  if (nextAnchorYear !== null) {
+                    setYear(nextAnchorYear);
+                    setYearSheetOpen(false);
+                  }
+                }}
+              >
+                <ChevronIcon direction="right" />
+              </button>
+            </div>
             <button
               type="button"
-              tabIndex={-1}
-              className={cx(scrubberStyles, 'time-dock-scrim')}
-              aria-label="Close milestone year picker"
+              className={cx(scrubberStyles, 'time-dock-jump-btn')}
+              aria-expanded={yearSheetOpen}
+              aria-controls="time-anchor-sheet"
               onClick={() => {
-                setYearSheetOpen(false);
+                setYearSheetOpen((open) => !open);
               }}
-            />
-          )}
+            >
+              <span>{suggestedYears.length > 0 ? `Years (${suggestedYears.length})` : 'Slide'}</span>
+              <ChevronIcon direction={yearSheetOpen ? 'up' : 'down'} />
+            </button>
+          </div>
 
+          {/* biome-ignore lint/a11y/useAriaPropsSupportedByRole: responsive mobile drawer becomes modal dialog when expanded on small viewports */}
           <div
-            className={cx(
-              scrubberStyles,
-              `time-scrubber-wrap print-hide ${yearSheetOpen ? 'sheet-open' : ''}`
-            )}
+            ref={yearSheetRef}
+            id="time-anchor-sheet"
+            role={yearSheetOpen ? 'dialog' : undefined}
+            aria-modal={yearSheetOpen ? 'true' : undefined}
+            aria-label={yearSheetOpen ? 'Year scrubber and milestone years' : undefined}
+            className={cx(scrubberStyles, `time-anchor-sheet ${yearSheetOpen ? 'open' : ''}`)}
           >
-            {suggestedYears.length > 0 && (
-              // biome-ignore lint/a11y/useAriaPropsSupportedByRole: responsive mobile sheet becomes modal dialog on small viewports
-              <div
-                ref={yearSheetRef}
-                id="time-anchor-sheet"
-                role={yearSheetOpen ? 'dialog' : undefined}
-                aria-modal={yearSheetOpen ? 'true' : undefined}
-                aria-label={yearSheetOpen ? 'Milestone years' : undefined}
-                className={cx(scrubberStyles, `time-anchor-sheet ${yearSheetOpen ? 'open' : ''}`)}
+            <div className={cx(scrubberStyles, 'time-sheet-header')}>
+              <span className={cx(scrubberStyles, 'time-sheet-title')}>Year &amp; milestones</span>
+              <button
+                ref={sheetCloseBtnRef}
+                type="button"
+                className={cx(scrubberStyles, 'time-sheet-close')}
+                onClick={() => {
+                  setYearSheetOpen(false);
+                }}
               >
-                <div className={cx(scrubberStyles, 'time-sheet-header')}>
-                  <span className={cx(scrubberStyles, 'time-sheet-title')}>Milestone years</span>
-                  <button
-                    ref={sheetCloseBtnRef}
-                    type="button"
-                    className={cx(scrubberStyles, 'time-sheet-close')}
-                    onClick={() => {
-                      setYearSheetOpen(false);
-                    }}
+                Close
+              </button>
+            </div>
+
+            <div className={cx(scrubberStyles, 'time-slider-row')}>
+              <span className={cx(scrubberStyles, 'time-slider-bound')}>{TIME_MIN_YEAR}</span>
+              <div className={cx(scrubberStyles, 'time-slider-track-wrap')}>
+                {ridgeline.hasData && (
+                  <svg
+                    className={cx(scrubberStyles, 'time-density-ridgeline')}
+                    viewBox="0 0 400 28"
+                    preserveAspectRatio="none"
+                    aria-hidden="true"
                   >
-                    Close
-                  </button>
-                </div>
-                <div className={cx(scrubberStyles, 'time-anchor-caption')}>Year · people alive</div>
+                    <path d={ridgeline.areaPath} fill="var(--accent-primary)" fillOpacity="0.16" />
+                    <path
+                      d={ridgeline.linePath}
+                      fill="none"
+                      stroke="var(--accent-primary)"
+                      strokeOpacity="0.45"
+                      strokeWidth="1.2"
+                      vectorEffect="non-scaling-stroke"
+                    />
+                    <line
+                      x1={ridgeline.activeX}
+                      y1={0}
+                      x2={ridgeline.activeX}
+                      y2={28}
+                      stroke="var(--accent-primary)"
+                      strokeOpacity="0.6"
+                      strokeWidth="1.2"
+                      vectorEffect="non-scaling-stroke"
+                    />
+                  </svg>
+                )}
+                <input
+                  type="range"
+                  min={TIME_MIN_YEAR}
+                  max={TIME_MAX_YEAR}
+                  step={1}
+                  value={activeYear}
+                  onChange={(e) => {
+                    setYear(Number(e.target.value));
+                  }}
+                  className={cx(scrubberStyles, 'ink-range-slider')}
+                  aria-label={`Select year to inspect ${siteConfig.site.familyName} locations`}
+                />
+              </div>
+              <span className={cx(scrubberStyles, 'time-slider-bound')}>{TIME_MAX_YEAR}</span>
+            </div>
+
+            {suggestedYears.length > 0 && (
+              <div className={cx(scrubberStyles, 'time-anchor-block')}>
+                <div className={cx(scrubberStyles, 'time-anchor-caption')}>Year · people located</div>
                 <div
                   className={cx(scrubberStyles, 'time-anchor-strip')}
                   role="group"
@@ -198,6 +337,9 @@ export const TimePage: React.FC = () => {
                       title={`${m.year}: ${m.locatedCount} located of ${m.aliveCount} alive in ${m.year}`}
                     >
                       <span className={cx(scrubberStyles, 'time-anchor-year')}>{m.label}</span>
+                      <span className={cx(scrubberStyles, 'time-anchor-sep')} aria-hidden="true">
+                        ·
+                      </span>
                       <span className={cx(scrubberStyles, 'time-anchor-count')} aria-hidden="true">
                         {m.locatedCount}
                       </span>
@@ -206,83 +348,8 @@ export const TimePage: React.FC = () => {
                 </div>
               </div>
             )}
-
-            <div className={cx(scrubberStyles, 'time-mobile-dock-bar')}>
-              <div className={cx(scrubberStyles, 'time-dock-stepper')}>
-                <button
-                  type="button"
-                  className={cx(scrubberStyles, 'time-dock-step-btn')}
-                  aria-label={
-                    prevAnchorYear === null
-                      ? 'No earlier milestone year'
-                      : `Previous milestone year (${prevAnchorYear})`
-                  }
-                  disabled={prevAnchorYear === null}
-                  onClick={() => {
-                    if (prevAnchorYear !== null) {
-                      setYear(prevAnchorYear);
-                      setYearSheetOpen(false);
-                    }
-                  }}
-                >
-                  <ChevronIcon direction="left" />
-                </button>
-                <span className={cx(scrubberStyles, 'time-dock-year-readout')} aria-hidden="true">
-                  {activeYear}
-                </span>
-                <button
-                  type="button"
-                  className={cx(scrubberStyles, 'time-dock-step-btn')}
-                  aria-label={
-                    nextAnchorYear === null
-                      ? 'No later milestone year'
-                      : `Next milestone year (${nextAnchorYear})`
-                  }
-                  disabled={nextAnchorYear === null}
-                  onClick={() => {
-                    if (nextAnchorYear !== null) {
-                      setYear(nextAnchorYear);
-                      setYearSheetOpen(false);
-                    }
-                  }}
-                >
-                  <ChevronIcon direction="right" />
-                </button>
-              </div>
-              {suggestedYears.length > 0 && (
-                <button
-                  type="button"
-                  className={cx(scrubberStyles, 'time-dock-jump-btn')}
-                  aria-expanded={yearSheetOpen}
-                  aria-controls="time-anchor-sheet"
-                  onClick={() => {
-                    setYearSheetOpen((open) => !open);
-                  }}
-                >
-                  <span>Jump to year ({suggestedYears.length})</span>
-                  <ChevronIcon direction={yearSheetOpen ? 'down' : 'up'} />
-                </button>
-              )}
-            </div>
-
-            <div className={cx(scrubberStyles, 'time-slider-row')}>
-              <span className={cx(scrubberStyles, 'time-slider-bound')}>{TIME_MIN_YEAR}</span>
-              <input
-                type="range"
-                min={TIME_MIN_YEAR}
-                max={TIME_MAX_YEAR}
-                step={1}
-                value={activeYear}
-                onChange={(e) => {
-                  setYear(Number(e.target.value));
-                }}
-                className={cx(scrubberStyles, 'ink-range-slider')}
-                aria-label={`Select year to inspect ${siteConfig.site.familyName} locations`}
-              />
-              <span className={cx(scrubberStyles, 'time-slider-bound')}>{TIME_MAX_YEAR}</span>
-            </div>
           </div>
-        </header>
+        </div>
 
         {loading && <p className={cx(controlStyles, 'empty-ring-note')}>Loading archival snapshot…</p>}
         {error && (
@@ -415,6 +482,7 @@ export const TimePage: React.FC = () => {
                             activeYear={activeYear}
                             personThumbMap={personThumbMap}
                             baseUrl={baseUrl}
+                            sourceEvent={entry.nearestEventId ? eventsById.get(entry.nearestEventId) : null}
                           />
                         ))}
                       </div>
@@ -446,24 +514,31 @@ export const TimePage: React.FC = () => {
                   {KINLOOM_VOCABULARY.time.unlocatedHeadingSuffix} ({snapshot.unlocatedPeople.length})
                 </h2>
                 <div className={cx(timeStyles, 'time-unlocated-list')}>
-                  {snapshot.unlocatedPeople.map((entry) => (
-                    <Link
-                      key={entry.person.id}
-                      to={
-                        entry.nearestEventId
-                          ? `/person/${entry.person.slug}?event=${entry.nearestEventId}`
-                          : `/person/${entry.person.slug}`
-                      }
-                      className={cx(timeStyles, 'time-unlocated-row')}
-                    >
-                      <span className={cx(timeStyles, 'time-unlocated-name')}>{entry.person.full_name}</span>
-                      <span className={cx(timeStyles, 'time-unlocated-years')}>
-                        {entry.age === null ? '' : `age ${entry.age} · `}
-                        {entry.person.birth_year || '?'}–{entry.person.death_year || '?'}
-                      </span>
-                      <span className={cx(timeStyles, 'time-unlocated-note')}>{entry.activityNote}</span>
-                    </Link>
-                  ))}
+                  {snapshot.unlocatedPeople.map((entry) => {
+                    const sourceEvent = entry.nearestEventId ? eventsById.get(entry.nearestEventId) : null;
+                    return (
+                      <Link
+                        key={entry.person.id}
+                        to={
+                          entry.nearestEventId
+                            ? `/person/${entry.person.slug}?event=${entry.nearestEventId}`
+                            : `/person/${entry.person.slug}`
+                        }
+                        className={cx(timeStyles, 'time-unlocated-row')}
+                      >
+                        <span className={cx(timeStyles, 'time-unlocated-name')}>
+                          {entry.person.full_name}
+                        </span>
+                        <span className={cx(timeStyles, 'time-unlocated-years')}>
+                          {entry.age === null ? '' : `age ${entry.age} · `}
+                          {entry.person.birth_year || '?'}–{entry.person.death_year || '?'}
+                        </span>
+                        <span className={cx(timeStyles, 'time-unlocated-note')}>
+                          {cleanTimeActivityNote(entry.activityNote, sourceEvent)}
+                        </span>
+                      </Link>
+                    );
+                  })}
                 </div>
               </section>
             )}

@@ -13,6 +13,7 @@ import evidenceStyles from '../EvidencePage.module.css';
 export interface EvidenceSourcesTabProps {
   readonly totalSourceCount: number;
   readonly filteredSources: readonly SourceRecord[];
+  readonly sourceLimit?: number;
   readonly sourceQuery: string;
   readonly sourceUsageCounts: ReadonlyMap<string, number>;
   readonly readableSourceIds: ReadonlySet<string>;
@@ -20,6 +21,7 @@ export interface EvidenceSourcesTabProps {
   readonly showAllUnverified: boolean;
   readonly peopleById: ReadonlyMap<string, Person>;
   readonly onSourceQueryChange: (value: string) => void;
+  readonly onLoadMoreSources?: () => void;
   readonly onToggleShowAllUnverified: () => void;
   readonly onOpenSourceInspector: (params: { sourceId: string }) => void;
   readonly onOpenSourceReader: (params: { sourceId: string }) => void;
@@ -28,6 +30,7 @@ export interface EvidenceSourcesTabProps {
 export const EvidenceSourcesTab: React.FC<EvidenceSourcesTabProps> = ({
   totalSourceCount,
   filteredSources,
+  sourceLimit,
   sourceQuery,
   sourceUsageCounts,
   readableSourceIds,
@@ -35,10 +38,14 @@ export const EvidenceSourcesTab: React.FC<EvidenceSourcesTabProps> = ({
   showAllUnverified,
   peopleById,
   onSourceQueryChange,
+  onLoadMoreSources,
   onToggleShowAllUnverified,
   onOpenSourceInspector,
   onOpenSourceReader,
 }) => {
+  const effectiveSourceLimit = sourceLimit ?? filteredSources.length;
+  const visibleSources = filteredSources.slice(0, effectiveSourceLimit);
+  const remainingSources = Math.max(0, filteredSources.length - visibleSources.length);
   const visibleUnverified = showAllUnverified ? unverifiedEvents : unverifiedEvents.slice(0, 25);
 
   return (
@@ -91,99 +98,111 @@ export const EvidenceSourcesTab: React.FC<EvidenceSourcesTabProps> = ({
               }
             />
           ) : (
-            filteredSources.map((s) => {
-              const count = sourceUsageCounts.get(s.id) || 0;
-              const readable = readableSourceIds.has(s.id);
-              const cit = buildLibrarianCitation(s);
-              return (
-                <div key={s.id} className={cx(evidenceStyles, 'evidence-source-row')}>
-                  <div>
+            <>
+              {visibleSources.map((s) => {
+                const count = sourceUsageCounts.get(s.id) || 0;
+                const readable = readableSourceIds.has(s.id);
+                const cit = buildLibrarianCitation(s);
+                return (
+                  <div key={s.id} className={cx(evidenceStyles, 'evidence-source-row')}>
+                    <div>
+                      <div
+                        style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: 8,
+                          flexWrap: 'wrap',
+                          marginBottom: 4,
+                        }}
+                      >
+                        <span className={cx(citationStyles, `evidence-tier-badge tier-${cit.tier}`)}>
+                          {cit.tierLabel}
+                        </span>
+                        {cit.author && (
+                          <span style={{ fontSize: '0.82rem', color: 'var(--text-secondary)' }}>
+                            {cit.author}
+                          </span>
+                        )}
+                      </div>
+                      <div style={{ fontWeight: 600, fontSize: '0.94rem', color: 'var(--surface-header)' }}>
+                        {cit.title}
+                      </div>
+                      <div
+                        style={{
+                          fontFamily: 'var(--font-mono)',
+                          fontSize: '0.78rem',
+                          color: 'var(--text-secondary)',
+                          marginTop: 2,
+                        }}
+                      >
+                        Repository: {cit.repository || 'Archival Collection'} ·{' '}
+                        {formatSourceTypeLabel(s.source_type)}
+                      </div>
+                    </div>
                     <div
                       style={{
                         display: 'flex',
                         alignItems: 'center',
-                        gap: 8,
+                        gap: 6,
+                        flexShrink: 0,
                         flexWrap: 'wrap',
-                        marginBottom: 4,
                       }}
                     >
-                      <span className={cx(citationStyles, `evidence-tier-badge tier-${cit.tier}`)}>
-                        {cit.tierLabel}
-                      </span>
-                      {cit.author && (
-                        <span style={{ fontSize: '0.82rem', color: 'var(--text-secondary)' }}>
-                          {cit.author}
-                        </span>
-                      )}
-                    </div>
-                    <div style={{ fontWeight: 600, fontSize: '0.94rem', color: 'var(--surface-header)' }}>
-                      {cit.title}
-                    </div>
-                    <div
-                      style={{
-                        fontFamily: 'var(--font-mono)',
-                        fontSize: '0.78rem',
-                        color: 'var(--text-secondary)',
-                        marginTop: 2,
-                      }}
-                    >
-                      Repository: {cit.repository || 'Archival Collection'} ·{' '}
-                      {formatSourceTypeLabel(s.source_type)}
-                    </div>
-                  </div>
-                  <div
-                    style={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: 6,
-                      flexShrink: 0,
-                      flexWrap: 'wrap',
-                    }}
-                  >
-                    <span
-                      style={{
-                        fontFamily: 'var(--font-mono)',
-                        fontSize: '0.78rem',
-                        color: 'var(--text-secondary)',
-                      }}
-                    >
-                      {count} citation{count === 1 ? '' : 's'}
-                    </span>
-                    <button
-                      type="button"
-                      className={cx(citationStyles, 'source-action-btn primary')}
-                      onClick={() => {
-                        onOpenSourceInspector({ sourceId: s.id });
-                      }}
-                    >
-                      Inspect Source →
-                    </button>
-                    {readable && (
-                      <button
-                        type="button"
-                        className={cx(controlStyles, 'source-read-btn')}
-                        onClick={() => {
-                          onOpenSourceReader({ sourceId: s.id });
+                      <span
+                        style={{
+                          fontFamily: 'var(--font-mono)',
+                          fontSize: '0.78rem',
+                          color: 'var(--text-secondary)',
                         }}
                       >
-                        {KINLOOM_VOCABULARY.sources.openReaderCta}
-                      </button>
-                    )}
-                    {s.url && (
-                      <a
-                        href={s.url}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className={cx(controlStyles, 'source-read-btn')}
-                        style={{ textDecoration: 'none' }}
+                        {count} citation{count === 1 ? '' : 's'}
+                      </span>
+                      <button
+                        type="button"
+                        className={cx(citationStyles, 'source-action-btn primary')}
+                        onClick={() => {
+                          onOpenSourceInspector({ sourceId: s.id });
+                        }}
                       >
-                        Open Archive ↗
-                      </a>
-                    )}
+                        Inspect Source →
+                      </button>
+                      {readable && (
+                        <button
+                          type="button"
+                          className={cx(controlStyles, 'source-read-btn')}
+                          onClick={() => {
+                            onOpenSourceReader({ sourceId: s.id });
+                          }}
+                        >
+                          {KINLOOM_VOCABULARY.sources.openReaderCta}
+                        </button>
+                      )}
+                      {s.url && (
+                        <a
+                          href={s.url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className={cx(controlStyles, 'source-read-btn')}
+                          style={{ textDecoration: 'none' }}
+                        >
+                          Open Archive ↗
+                        </a>
+                      )}
+                    </div>
                   </div>
+                );
+              })}
+              {remainingSources > 0 && onLoadMoreSources && (
+                <div className={cx(evidenceStyles, 'evidence-pagination-bar')}>
+                  <span className={cx(evidenceStyles, 'evidence-pagination-count')}>
+                    Showing {visibleSources.length} of {filteredSources.length}
+                  </span>
+                  <button type="button" className={cx(controlStyles, 'pill-btn')} onClick={onLoadMoreSources}>
+                    Show more ({remainingSources} remaining)
+                  </button>
                 </div>
-              );
-            })
+              )}
+            </>
           )}
         </div>
       </section>

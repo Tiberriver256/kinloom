@@ -124,9 +124,11 @@
   border-bottom: 1.5px solid transparent;
 }
 
-.time-lane-place a:hover {
-  color: var(--radar-copresence);
-  border-bottom-color: var(--radar-copresence);
+@media (hover: hover) and (pointer: fine) {
+  .time-lane-place a:hover {
+    color: var(--radar-copresence);
+    border-bottom-color: var(--radar-copresence);
+  }
 }
 
 .time-lane-sub {
@@ -172,8 +174,10 @@
   transition: background-color 0.14s ease;
 }
 
-.time-person-item:hover {
-  background: rgba(234, 225, 206, 0.52);
+@media (hover: hover) and (pointer: fine) {
+  .time-person-item:hover {
+    background: rgba(234, 225, 206, 0.52);
+  }
 }
 
 .time-person-item:global(.tier-inferred) {
@@ -294,8 +298,10 @@
   text-decoration: none;
 }
 
-.time-unlocated-row:hover {
-  background: rgba(234, 225, 206, 0.45);
+@media (hover: hover) and (pointer: fine) {
+  .time-unlocated-row:hover {
+    background: rgba(234, 225, 206, 0.45);
+  }
 }
 
 .time-unlocated-name {
@@ -337,7 +343,7 @@
 
 @media (max-width: 768px) {
   .time-page {
-    padding-bottom: calc(122px + env(safe-area-inset-bottom, 0px));
+    padding-bottom: 40px;
   }
 
   .time-folio-header {
