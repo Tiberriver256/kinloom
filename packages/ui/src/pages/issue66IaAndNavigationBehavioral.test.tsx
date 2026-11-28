@@ -321,3 +321,66 @@ describe('Issue #66: IA topbar grouping, semantic disclosure, cross-object links
     expect(searchEl.textContent).toContain('Zeeland');
   });
 });
+
+describe('Issue #66: recentlyViewed edge cases and GlobalSearchModal navigation', () => {
+  it('handles corrupt/non-array localStorage, blank entries, storage errors, and clicking recently viewed items', async () => {
+    window.localStorage.setItem('kinloom:recently-viewed:v1', '{not-json');
+    expect(readRecentlyViewed()).toEqual([]);
+
+    window.localStorage.setItem('kinloom:recently-viewed:v1', JSON.stringify({ invalid: true }));
+    expect(readRecentlyViewed()).toEqual([]);
+
+    window.localStorage.setItem(
+      'kinloom:recently-viewed:v1',
+      JSON.stringify([
+        null,
+        { kind: 'invalid', slug: 'x', label: 'X' },
+        { kind: 'person', slug: '', label: 'Blank' },
+        { kind: 'place', slug: 'zeeland', label: 'Zeeland', meta: 'Ottawa County' },
+      ])
+    );
+    expect(readRecentlyViewed()).toEqual([
+      { kind: 'place', slug: 'zeeland', label: 'Zeeland', meta: 'Ottawa County' },
+    ]);
+
+    // Blank slug/label is ignored
+    expect(recordRecentlyViewed({ kind: 'person', slug: '  ', label: 'Nobody' })).toHaveLength(1);
+
+    // Clicking a recently viewed chip in GlobalSearchModal closes the modal and navigates
+    const searchEl = mountEl(
+      <MemoryRouter initialEntries={['/']}>
+        <ArchiveProvider siteConfig={SITE_CONFIG} initialBundle={TEST_BUNDLE}>
+          <SearchAndReaderHarness />
+        </ArchiveProvider>
+      </MemoryRouter>
+    );
+    await flushUi();
+
+    const triggerBtn = Array.from(searchEl.querySelectorAll('button')).find(
+      (b) => b.textContent?.trim() === 'Trigger Search'
+    );
+    act(() => {
+      triggerBtn?.click();
+    });
+    await flushUi();
+
+    const recentChip = Array.from(searchEl.querySelectorAll('dialog button')).find((b) =>
+      b.textContent?.includes('Zeeland')
+    );
+    expect(recentChip).toBeDefined();
+    act(() => {
+      recentChip?.click();
+    });
+    await flushUi();
+    expect(searchEl.querySelector('dialog[open]')).toBeNull();
+
+    // Storage write error fails safely without throwing
+    const spy = vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => {
+      throw new Error('QuotaExceededError');
+    });
+    expect(() =>
+      recordRecentlyViewed({ kind: 'person', slug: 'samuel-hale', label: 'Samuel Hale' })
+    ).not.toThrow();
+    spy.mockRestore();
+  });
+});
