@@ -240,23 +240,72 @@ test('map toolbar prevents desktop era clipping, keeps mobile selects and route 
   expect(consoleErrors).toEqual([]);
 });
 
-test('evidence and sources displays discrepancies, source registry, and photos and documents', async ({
+test('evidence and sources leads discrepancy cards with h2 in 2-col desktop grid, separates Needs Citation tab, hides empty /changes filters, and honors reduced-motion (#102)', async ({
   page,
 }) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
   await page.goto('/evidence');
   await expect(page.getByRole('heading', { name: 'Evidence & Sources' })).toBeVisible();
 
-  // Source Discrepancies tab
+  // Source Discrepancies tab: h2 leads every card, 2-column balanced grid on desktop
   await expect(page.getByText(/Preserved Discrepanc/).first()).toBeVisible();
   await expect(page.getByText(/Real estate valued at \$3,000/)).toBeVisible();
+  const evidenceLayout = await page.evaluate(() => {
+    const cards = [...document.querySelectorAll('article')];
+    const first = cards[0];
+    const second = cards[1];
+    const h2Rect = first?.querySelector('h2')?.getBoundingClientRect();
+    const dateRect = first?.querySelector('[class*="date-stamp"]')?.getBoundingClientRect();
+    const badgeRect = first?.querySelector('[class*="evidence-discrepancy-badge"]')?.getBoundingClientRect();
+    const firstRect = first?.getBoundingClientRect();
+    const secondRect = second?.getBoundingClientRect();
+    return {
+      cardCount: cards.length,
+      h2AboveDate: Boolean(h2Rect && dateRect && h2Rect.top < dateRect.top),
+      h2AboveBadge: Boolean(h2Rect && badgeRect && h2Rect.top < badgeRect.top),
+      twoColumnDesktop: Boolean(
+        firstRect &&
+          secondRect &&
+          Math.abs(firstRect.top - secondRect.top) < 8 &&
+          secondRect.left > firstRect.right
+      ),
+    };
+  });
+  expect(evidenceLayout.cardCount).toBeGreaterThanOrEqual(2);
+  expect(evidenceLayout.h2AboveDate).toBe(true);
+  expect(evidenceLayout.h2AboveBadge).toBe(true);
+  expect(evidenceLayout.twoColumnDesktop).toBe(true);
 
-  // Sources & Citations tab
+  // Sources & Citations tab shows Source Registry cleanly separated from Needs Citation
   await page.getByRole('tab', { name: /Sources & Citations/ }).click();
   await expect(page.getByRole('heading', { name: /Source Registry/ })).toBeVisible();
-  await expect(page.getByText(/Entries Needing Primary Citation/)).toBeVisible();
+  await expect(page.getByRole('heading', { name: /Entries Needing Primary Citation/ })).toHaveCount(0);
+
+  // Needs Citation tab is its own first-class audit bucket
+  await page.getByRole('tab', { name: /Needs Citation/ }).click();
+  await expect(page.getByRole('heading', { name: /Entries Needing Primary Citation/ })).toBeVisible();
 
   // Photos & Documents tab
   await page.getByRole('tab', { name: /Photos & Documents/ }).click();
   await expect(page.getByRole('heading', { name: /Photos & Documents/ })).toBeVisible();
   await expect(page.getByText(/Oak Ridge Cemetery monument/)).toBeVisible();
+
+  // /changes hides dead author filter tabs when revisions.length === 0 and shows next-step CTA links
+  await page.setViewportSize({ width: 360, height: 800 });
+  await page.goto('/changes');
+  await expect(page.getByRole('tab')).toHaveCount(0);
+  await expect(page.getByText('No archival changes have been recorded yet.')).toBeVisible();
+  await expect(page.getByRole('link', { name: /Explore People Directory/i })).toBeVisible();
+  await expect(page.getByRole('link', { name: /Inspect Evidence & Sources/i })).toBeVisible();
+  const changesOverflow = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
+  expect(changesOverflow).toBeLessThanOrEqual(0);
+
+  // Reduced-motion media query disables jump-strip scroll animation
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  await page.goto('/');
+  const jumpStripAnim = await page.evaluate(() => {
+    const strip = document.querySelector<HTMLElement>('[class*="jump-strip"]');
+    return strip ? getComputedStyle(strip).animationName : 'none';
+  });
+  expect(jumpStripAnim).toBe('none');
 });

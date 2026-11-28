@@ -61,6 +61,10 @@ export function isHeavyCaptureTarget(target: CaptureTarget): boolean {
   return (target.category === 'page' && target.isHeavyPage === true) || pathOnly === '/evidence';
 }
 
+export function requiresIsolatedCaptureContext(target: CaptureTarget): boolean {
+  return target.category === 'component' && target.recipeId === 'theme-toggle';
+}
+
 export function isScreenshotTimeoutError(err: unknown): boolean {
   const message = err instanceof Error ? err.message : String(err);
   return /timeout|timed out/i.test(message);

@@ -1,8 +1,9 @@
 import type { RevisionRecord } from '@kinloom/core';
 import { asBatchId, asRevisionId } from '@kinloom/core';
 import type React from 'react';
-import { useCallback, useEffect, useId, useMemo, useState } from 'react';
+import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
+import { EmptyStateNotice } from '../components/Atoms.js';
 import atomStyles from '../components/Atoms.module.css';
 import { ExplorerTopBar } from '../components/ExplorerTopBar.js';
 import { KinloomFooter } from '../components/KinloomFooter.js';
@@ -10,12 +11,13 @@ import { AuthorPill, StewardReviewBadge } from '../components/wiki/WikiBadges.js
 import wikiFormStyles from '../components/wiki/WikiForms.module.css';
 import wikiPanelStyles from '../components/wiki/WikiPanels.module.css';
 import { useArchiveData } from '../context/ArchiveDataContext.js';
-import { handleTablistKeyDown } from '../hooks/keyboardNav.js';
+import { handleTablistKeyDown, scrollBehaviorForMotion } from '../hooks/keyboardNav.js';
 import { cx, joinClasses } from '../lib/cx.js';
 import { formatArchivalTimestamp } from '../lib/formatTimestamp.js';
 import { KINLOOM_VOCABULARY } from '../lib/vocabulary.js';
 import controlStyles from '../styles/Controls.module.css';
 import layoutStyles from '../styles/Layout.module.css';
+import changesStyles from './RecentChangesPage.module.css';
 import {
   detectDuplicateEventWarnings,
   formatBatchReportSummary,
@@ -49,6 +51,7 @@ export const RecentChangesPage: React.FC<RecentChangesPageProps> = ({ initialRev
   );
   const [busyKey, setBusyKey] = useState<string | null>(null);
   const [pendingConfirm, setPendingConfirm] = useState<PendingRevertConfirm | null>(null);
+  const authorTabRefs = useRef<Partial<Record<AuthorFilter, HTMLButtonElement | null>>>({});
 
   const entityLinkByKey = useMemo(() => buildEntityLinkMap(bundle), [bundle]);
 
@@ -254,6 +257,21 @@ export const RecentChangesPage: React.FC<RecentChangesPageProps> = ({ initialRev
   const canRevertRevision = Boolean(capabilities.canEdit && dataSource.revertRevision);
   const canReviewRevision = Boolean(capabilities.canEdit && dataSource.markRevisionReviewed);
   const canReviewBatch = Boolean(capabilities.canEdit && dataSource.markBatchReviewed);
+  const showFilterToolbar = !loading && (revisions.length > 0 || authorFilter !== 'all' || onlyUnreviewed);
+
+  useEffect(() => {
+    if (!showFilterToolbar) {
+      return;
+    }
+    const activeTabEl = authorTabRefs.current[authorFilter];
+    if (activeTabEl && typeof activeTabEl.scrollIntoView === 'function') {
+      activeTabEl.scrollIntoView({
+        behavior: scrollBehaviorForMotion(),
+        block: 'nearest',
+        inline: 'nearest',
+      });
+    }
+  }, [authorFilter, showFilterToolbar]);
 
   return (
     <div className={cx(layoutStyles, 'page-shell')}>
@@ -281,318 +299,384 @@ export const RecentChangesPage: React.FC<RecentChangesPageProps> = ({ initialRev
           </div>
         </section>
 
-        <div className={cx(wikiPanelStyles, 'wiki-changes-toolbar')}>
-          <div
-            className={cx(controlStyles, 'filter-bar')}
-            role="tablist"
-            aria-label="Filter revision history by author type"
-            onKeyDown={(event) => {
-              handleTablistKeyDown(
-                event,
-                ['all', 'human', 'agent', 'system_seed'] as const,
-                authorFilter,
-                (next) => {
-                  setAuthorFilter(next);
-                }
-              );
-            }}
-          >
-            {(
-              [
-                ['all', 'All Authors'],
-                ['human', 'Family Editors'],
-                ['agent', 'Research Agents'],
-                ['system_seed', 'Initial Seed'],
-              ] as const
-            ).map(([id, label]) => (
-              <button
-                key={id}
-                id={`${tabBaseId}-tab-${id}`}
-                type="button"
-                role="tab"
-                tabIndex={authorFilter === id ? 0 : -1}
-                aria-selected={authorFilter === id}
-                aria-controls={tabpanelId}
-                className={cx(controlStyles, `pill-btn ${authorFilter === id ? 'active' : ''}`)}
-                onClick={() => {
-                  setAuthorFilter(id);
-                }}
-              >
-                {label}
-              </button>
-            ))}
-          </div>
-
-          <button
-            type="button"
-            aria-pressed={onlyUnreviewed}
-            className={cx(controlStyles, `pill-btn ${onlyUnreviewed ? 'active' : ''}`)}
-            onClick={() => {
-              setOnlyUnreviewed((prev) => !prev);
-            }}
-          >
-            {KINLOOM_VOCABULARY.stewardship.needsReviewLabel} ({unreviewedGroupCount})
-          </button>
-        </div>
-
-        <div id={tabpanelId} role="tabpanel" aria-labelledby={activeTabId}>
-          {statusMessage && (
-            <output className={cx(wikiPanelStyles, 'wiki-status-banner is-success')} aria-live="polite">
-              {statusMessage}
-            </output>
-          )}
-          {error && (
-            <div className={cx(wikiPanelStyles, 'wiki-status-banner is-error')} role="alert">
-              {error}
-            </div>
-          )}
-          {loading && <p className={cx(controlStyles, 'empty-ring-note')}>Loading revision history…</p>}
-          {!loading && groupedFeed.length === 0 && (
-            <p className={cx(controlStyles, 'empty-ring-note')}>
-              {getEmptyRevisionFeedMessage(authorFilter, onlyUnreviewed)}
-            </p>
-          )}
-
-          <div className={cx(wikiPanelStyles, 'wiki-changes-feed')}>
-            {groupedFeed.map((group) => {
-              const groupBatchId = group.batchId;
-              const groupWarnings = duplicateWarningsByGroup.get(group.key) ?? [];
-
-              if (groupBatchId) {
-                const first = group.revisions[0];
-                const report = formatBatchReportSummary(group.revisions, entityLinkByKey);
-                const confirmingBatch =
-                  pendingConfirm?.kind === 'batch' && pendingConfirm.batchId === groupBatchId;
-                const defaultBatchOpen = group.revisions.length <= 5;
-                const batchExpanded = batchExpansionOverrides[groupBatchId] ?? defaultBatchOpen;
-                const extraTouchedCount = Math.max(
-                  0,
-                  report.totalTouchedCount - report.touchedRecords.length
+        {showFilterToolbar && (
+          <div className={cx(changesStyles, 'changes-toolbar')}>
+            <div
+              className={joinClasses(
+                cx(controlStyles, 'filter-bar'),
+                cx(changesStyles, 'changes-author-tabs')
+              )}
+              role="tablist"
+              aria-label="Filter revision history by author type"
+              onKeyDown={(event) => {
+                handleTablistKeyDown(
+                  event,
+                  ['all', 'human', 'agent', 'system_seed'] as const,
+                  authorFilter,
+                  (next) => {
+                    setAuthorFilter(next);
+                  }
                 );
+              }}
+            >
+              {(
+                [
+                  ['all', 'All Authors'],
+                  ['human', 'Family Editors'],
+                  ['agent', 'Research Agents'],
+                  ['system_seed', 'Initial Seed'],
+                ] as const
+              ).map(([id, label]) => (
+                <button
+                  key={id}
+                  id={`${tabBaseId}-tab-${id}`}
+                  ref={(node) => {
+                    authorTabRefs.current[id] = node;
+                  }}
+                  type="button"
+                  role="tab"
+                  tabIndex={authorFilter === id ? 0 : -1}
+                  aria-selected={authorFilter === id}
+                  aria-controls={tabpanelId}
+                  className={cx(controlStyles, `pill-btn ${authorFilter === id ? 'active' : ''}`)}
+                  onClick={() => {
+                    setAuthorFilter(id);
+                  }}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
 
-                return (
-                  <section
-                    key={group.key}
-                    data-batch-id={groupBatchId}
-                    className={cx(layoutStyles, 'place-map-box wiki-batch-group')}
-                  >
-                    <div className={cx(wikiPanelStyles, 'wiki-batch-header')}>
-                      <div className={cx(wikiPanelStyles, 'wiki-batch-main')}>
-                        <h2 className={cx(wikiPanelStyles, 'wiki-batch-headline')}>{report.headline}</h2>
-                        <div className={cx(wikiPanelStyles, 'wiki-revision-topline')}>
-                          <AuthorPill authorType={first.author_type} authorName={first.author_name} />
-                          <span className={cx(wikiPanelStyles, 'wiki-panel-meta')}>
-                            <time dateTime={first.created_at} title={first.created_at}>
-                              {formatArchivalTimestamp(first.created_at)}
-                            </time>
-                          </span>
-                          {report.batchReview && <StewardReviewBadge review={report.batchReview} />}
-                          {canReviewBatch &&
-                            report.batchReview?.target_kind === 'batch' &&
-                            dataSource.clearBatchReview && (
-                              <button
-                                type="button"
-                                className={cx(wikiPanelStyles, 'wiki-review-undo-btn')}
-                                aria-label={`${KINLOOM_VOCABULARY.stewardship.clearReviewAria} for batch ${groupBatchId}`}
-                                disabled={busyKey !== null}
-                                onClick={() => {
-                                  void handleClearBatchReview(groupBatchId);
-                                }}
-                              >
-                                {KINLOOM_VOCABULARY.stewardship.clearReview}
-                              </button>
-                            )}
-                        </div>
-                        {report.touchedRecords.length > 0 && (
-                          <div className={cx(wikiPanelStyles, 'wiki-touched-strip')}>
-                            <span className={cx(wikiPanelStyles, 'wiki-touched-label')}>
-                              Records touched:
-                            </span>
-                            {report.touchedRecords.map((rec) =>
-                              rec.to ? (
-                                <Link
-                                  key={rec.key}
-                                  to={rec.to}
-                                  className={cx(wikiPanelStyles, 'wiki-entity-link')}
-                                >
-                                  {rec.label}
-                                </Link>
-                              ) : (
-                                <span key={rec.key} className={cx(wikiPanelStyles, 'wiki-panel-meta')}>
-                                  {rec.label}
-                                </span>
-                              )
-                            )}
-                            {extraTouchedCount > 0 && (
+            <button
+              type="button"
+              aria-pressed={onlyUnreviewed}
+              className={joinClasses(
+                cx(controlStyles, `pill-btn ${onlyUnreviewed ? 'active' : ''}`),
+                cx(changesStyles, 'changes-review-toggle')
+              )}
+              onClick={() => {
+                setOnlyUnreviewed((prev) => !prev);
+              }}
+            >
+              {KINLOOM_VOCABULARY.stewardship.needsReviewLabel} ({unreviewedGroupCount})
+            </button>
+          </div>
+        )}
+
+        {(() => {
+          const feedContent = (
+            <>
+              {statusMessage && (
+                <output className={cx(wikiPanelStyles, 'wiki-status-banner is-success')} aria-live="polite">
+                  {statusMessage}
+                </output>
+              )}
+              {error && (
+                <div className={cx(wikiPanelStyles, 'wiki-status-banner is-error')} role="alert">
+                  {error}
+                </div>
+              )}
+              {loading && <p className={cx(controlStyles, 'empty-ring-note')}>Loading revision history…</p>}
+              {!loading && !error && groupedFeed.length === 0 && (
+                <EmptyStateNotice
+                  eyebrow={authorFilter === 'all' && !onlyUnreviewed ? 'Revision Ledger' : 'Filtered Ledger'}
+                  title={
+                    authorFilter === 'all' && !onlyUnreviewed
+                      ? 'No archival changes have been recorded yet.'
+                      : getEmptyRevisionFeedMessage(authorFilter, onlyUnreviewed)
+                  }
+                  body={
+                    authorFilter === 'all' && !onlyUnreviewed
+                      ? 'Family edits, steward reviews, and research batches will appear here once contributors update records.'
+                      : undefined
+                  }
+                  action={
+                    onlyUnreviewed ? (
+                      <button
+                        type="button"
+                        className={cx(controlStyles, 'pill-btn')}
+                        onClick={() => {
+                          setOnlyUnreviewed(false);
+                        }}
+                      >
+                        Show all changes
+                      </button>
+                    ) : authorFilter !== 'all' ? (
+                      <button
+                        type="button"
+                        className={cx(controlStyles, 'pill-btn')}
+                        onClick={() => {
+                          setAuthorFilter('all');
+                        }}
+                      >
+                        Show all authors
+                      </button>
+                    ) : (
+                      <Link to="/" className={cx(controlStyles, 'cta-btn-primary')}>
+                        {capabilities.canEdit ? 'Browse People to Edit →' : 'Explore People Directory →'}
+                      </Link>
+                    )
+                  }
+                  secondaryAction={
+                    authorFilter === 'all' && !onlyUnreviewed ? (
+                      <Link to="/evidence" className={cx(controlStyles, 'cta-btn-secondary')}>
+                        Inspect Evidence &amp; Sources
+                      </Link>
+                    ) : undefined
+                  }
+                />
+              )}
+
+              <div className={cx(wikiPanelStyles, 'wiki-changes-feed')}>
+                {groupedFeed.map((group) => {
+                  const groupBatchId = group.batchId;
+                  const groupWarnings = duplicateWarningsByGroup.get(group.key) ?? [];
+
+                  if (groupBatchId) {
+                    const first = group.revisions[0];
+                    const report = formatBatchReportSummary(group.revisions, entityLinkByKey);
+                    const confirmingBatch =
+                      pendingConfirm?.kind === 'batch' && pendingConfirm.batchId === groupBatchId;
+                    const defaultBatchOpen = group.revisions.length <= 5;
+                    const batchExpanded = batchExpansionOverrides[groupBatchId] ?? defaultBatchOpen;
+                    const extraTouchedCount = Math.max(
+                      0,
+                      report.totalTouchedCount - report.touchedRecords.length
+                    );
+
+                    return (
+                      <section
+                        key={group.key}
+                        data-batch-id={groupBatchId}
+                        className={cx(layoutStyles, 'place-map-box wiki-batch-group')}
+                      >
+                        <div className={cx(wikiPanelStyles, 'wiki-batch-header')}>
+                          <div className={cx(wikiPanelStyles, 'wiki-batch-main')}>
+                            <h2 className={cx(wikiPanelStyles, 'wiki-batch-headline')}>{report.headline}</h2>
+                            <div className={cx(wikiPanelStyles, 'wiki-revision-topline')}>
+                              <AuthorPill authorType={first.author_type} authorName={first.author_name} />
                               <span className={cx(wikiPanelStyles, 'wiki-panel-meta')}>
-                                +{extraTouchedCount} more
+                                <time dateTime={first.created_at} title={first.created_at}>
+                                  {formatArchivalTimestamp(first.created_at)}
+                                </time>
                               </span>
+                              {report.batchReview && <StewardReviewBadge review={report.batchReview} />}
+                              {canReviewBatch &&
+                                report.batchReview?.target_kind === 'batch' &&
+                                dataSource.clearBatchReview && (
+                                  <button
+                                    type="button"
+                                    className={cx(wikiPanelStyles, 'wiki-review-undo-btn')}
+                                    aria-label={`${KINLOOM_VOCABULARY.stewardship.clearReviewAria} for batch ${groupBatchId}`}
+                                    disabled={busyKey !== null}
+                                    onClick={() => {
+                                      void handleClearBatchReview(groupBatchId);
+                                    }}
+                                  >
+                                    {KINLOOM_VOCABULARY.stewardship.clearReview}
+                                  </button>
+                                )}
+                            </div>
+                            {report.touchedRecords.length > 0 && (
+                              <div className={cx(wikiPanelStyles, 'wiki-touched-strip')}>
+                                <span className={cx(wikiPanelStyles, 'wiki-touched-label')}>
+                                  Records touched:
+                                </span>
+                                {report.touchedRecords.map((rec) =>
+                                  rec.to ? (
+                                    <Link
+                                      key={rec.key}
+                                      to={rec.to}
+                                      className={cx(wikiPanelStyles, 'wiki-entity-link')}
+                                    >
+                                      {rec.label}
+                                    </Link>
+                                  ) : (
+                                    <span key={rec.key} className={cx(wikiPanelStyles, 'wiki-panel-meta')}>
+                                      {rec.label}
+                                    </span>
+                                  )
+                                )}
+                                {extraTouchedCount > 0 && (
+                                  <span className={cx(wikiPanelStyles, 'wiki-panel-meta')}>
+                                    +{extraTouchedCount} more
+                                  </span>
+                                )}
+                              </div>
                             )}
                           </div>
-                        )}
-                      </div>
 
-                      <div className={cx(wikiPanelStyles, 'wiki-revision-actions')}>
-                        {canReviewBatch && !report.batchReview && (
-                          <button
-                            type="button"
-                            className={cx(wikiPanelStyles, 'wiki-review-btn')}
-                            disabled={busyKey !== null}
-                            onClick={() => {
-                              void handleMarkBatchReviewed(groupBatchId);
-                            }}
-                          >
-                            {busyKey === `review:batch:${groupBatchId}`
-                              ? KINLOOM_VOCABULARY.stewardship.markingReviewed
-                              : KINLOOM_VOCABULARY.stewardship.markReviewed}
-                          </button>
-                        )}
-                        <button
-                          type="button"
-                          className={cx(controlStyles, 'pill-btn')}
-                          aria-expanded={batchExpanded}
-                          onClick={() => {
-                            setBatchExpansionOverrides((prev) => ({
-                              ...prev,
-                              [groupBatchId]: !batchExpanded,
-                            }));
-                          }}
-                        >
-                          {batchExpanded
-                            ? `Hide ${group.revisions.length} individual record ${group.revisions.length === 1 ? 'change' : 'changes'}`
-                            : `Show ${group.revisions.length} individual record ${group.revisions.length === 1 ? 'change' : 'changes'}`}
-                        </button>
-                        {capabilities.canEdit && dataSource.revertBatch && !confirmingBatch && (
-                          <button
-                            type="button"
-                            className={joinClasses(
-                              cx(controlStyles, 'pill-btn'),
-                              cx(wikiFormStyles, 'wiki-danger-btn')
+                          <div className={cx(wikiPanelStyles, 'wiki-revision-actions')}>
+                            {canReviewBatch && !report.batchReview && (
+                              <button
+                                type="button"
+                                className={cx(wikiPanelStyles, 'wiki-review-btn')}
+                                disabled={busyKey !== null}
+                                onClick={() => {
+                                  void handleMarkBatchReviewed(groupBatchId);
+                                }}
+                              >
+                                {busyKey === `review:batch:${groupBatchId}`
+                                  ? KINLOOM_VOCABULARY.stewardship.markingReviewed
+                                  : KINLOOM_VOCABULARY.stewardship.markReviewed}
+                              </button>
                             )}
-                            disabled={busyKey !== null}
-                            onClick={() => {
-                              setPendingConfirm({
-                                kind: 'batch',
-                                batchId: groupBatchId,
-                                count: group.revisions.length,
-                              });
-                            }}
-                          >
-                            {busyKey === group.key ? 'Reverting Batch…' : 'Revert Entire Batch'}
-                          </button>
-                        )}
-                      </div>
-                    </div>
-
-                    <DuplicateEventWarningList warnings={groupWarnings} />
-
-                    {confirmingBatch && (
-                      <div className={cx(wikiPanelStyles, 'wiki-confirm-inline')} role="alert">
-                        <p className={cx(wikiPanelStyles, 'wiki-confirm-inline-text')}>
-                          Revert all <strong>{group.revisions.length}</strong> change
-                          {group.revisions.length === 1 ? '' : 's'} in this research batch? This appends new
-                          revert revisions without deleting history.
-                        </p>
-                        <div className={cx(wikiPanelStyles, 'wiki-inline-actions')}>
-                          <button
-                            type="button"
-                            className={joinClasses(
-                              cx(controlStyles, 'pill-btn'),
-                              cx(wikiFormStyles, 'wiki-danger-btn')
+                            <button
+                              type="button"
+                              className={cx(controlStyles, 'pill-btn')}
+                              aria-expanded={batchExpanded}
+                              onClick={() => {
+                                setBatchExpansionOverrides((prev) => ({
+                                  ...prev,
+                                  [groupBatchId]: !batchExpanded,
+                                }));
+                              }}
+                            >
+                              {batchExpanded
+                                ? `Hide ${group.revisions.length} individual record ${group.revisions.length === 1 ? 'change' : 'changes'}`
+                                : `Show ${group.revisions.length} individual record ${group.revisions.length === 1 ? 'change' : 'changes'}`}
+                            </button>
+                            {capabilities.canEdit && dataSource.revertBatch && !confirmingBatch && (
+                              <button
+                                type="button"
+                                className={joinClasses(
+                                  cx(controlStyles, 'pill-btn'),
+                                  cx(wikiFormStyles, 'wiki-danger-btn')
+                                )}
+                                disabled={busyKey !== null}
+                                onClick={() => {
+                                  setPendingConfirm({
+                                    kind: 'batch',
+                                    batchId: groupBatchId,
+                                    count: group.revisions.length,
+                                  });
+                                }}
+                              >
+                                {busyKey === group.key ? 'Reverting Batch…' : 'Revert Entire Batch'}
+                              </button>
                             )}
-                            disabled={busyKey !== null}
-                            onClick={() => {
-                              void handleRevertBatch(groupBatchId);
-                            }}
-                          >
-                            Confirm Batch Revert
-                          </button>
-                          <button
-                            type="button"
-                            className={cx(controlStyles, 'pill-btn')}
-                            disabled={busyKey !== null}
-                            onClick={() => {
-                              setPendingConfirm(null);
-                            }}
-                          >
-                            Cancel
-                          </button>
+                          </div>
                         </div>
-                      </div>
-                    )}
 
-                    {batchExpanded && (
-                      <>
-                        <div className={cx(wikiPanelStyles, 'wiki-revision-list')}>
-                          {group.revisions.map((rev) => (
-                            <RevisionFeedItem
-                              key={rev.revision_id}
-                              rev={rev}
-                              standalone={false}
-                              isExpanded={expandedId === rev.revision_id}
-                              canRevert={canRevertRevision}
-                              canReview={canReviewRevision}
-                              busyKey={busyKey}
-                              pendingConfirm={pendingConfirm}
-                              entityLinkByKey={entityLinkByKey}
-                              peopleById={peopleById}
-                              sourcesById={sourcesById}
-                              onToggleExpand={(id) => {
-                                setExpandedId(expandedId === id ? null : id);
-                              }}
-                              onRequestRevert={(target) => {
-                                setPendingConfirm({ kind: 'revision', rev: target });
-                              }}
-                              onCancelRevert={() => {
-                                setPendingConfirm(null);
-                              }}
-                              onConfirmRevert={handleRevertRevision}
-                              onMarkReviewed={handleMarkRevisionReviewed}
-                              onClearReview={handleClearRevisionReview}
-                            />
-                          ))}
-                        </div>
-                        <div className={cx(wikiPanelStyles, 'wiki-ledger-ref')}>
-                          Batch ledger reference: <code>{groupBatchId}</code>
-                        </div>
-                      </>
-                    )}
-                  </section>
-                );
-              }
+                        <DuplicateEventWarningList warnings={groupWarnings} />
 
-              const [rev] = group.revisions;
-              return (
-                <RevisionFeedItem
-                  key={group.key}
-                  rev={rev}
-                  standalone
-                  isExpanded={expandedId === rev.revision_id}
-                  canRevert={canRevertRevision}
-                  canReview={canReviewRevision}
-                  busyKey={busyKey}
-                  pendingConfirm={pendingConfirm}
-                  entityLinkByKey={entityLinkByKey}
-                  peopleById={peopleById}
-                  sourcesById={sourcesById}
-                  duplicateWarnings={groupWarnings}
-                  onToggleExpand={(id) => {
-                    setExpandedId(expandedId === id ? null : id);
-                  }}
-                  onRequestRevert={(target) => {
-                    setPendingConfirm({ kind: 'revision', rev: target });
-                  }}
-                  onCancelRevert={() => {
-                    setPendingConfirm(null);
-                  }}
-                  onConfirmRevert={handleRevertRevision}
-                  onMarkReviewed={handleMarkRevisionReviewed}
-                  onClearReview={handleClearRevisionReview}
-                />
-              );
-            })}
-          </div>
-        </div>
+                        {confirmingBatch && (
+                          <div className={cx(wikiPanelStyles, 'wiki-confirm-inline')} role="alert">
+                            <p className={cx(wikiPanelStyles, 'wiki-confirm-inline-text')}>
+                              Revert all <strong>{group.revisions.length}</strong> change
+                              {group.revisions.length === 1 ? '' : 's'} in this research batch? This appends
+                              new revert revisions without deleting history.
+                            </p>
+                            <div className={cx(wikiPanelStyles, 'wiki-inline-actions')}>
+                              <button
+                                type="button"
+                                className={joinClasses(
+                                  cx(controlStyles, 'pill-btn'),
+                                  cx(wikiFormStyles, 'wiki-danger-btn')
+                                )}
+                                disabled={busyKey !== null}
+                                onClick={() => {
+                                  void handleRevertBatch(groupBatchId);
+                                }}
+                              >
+                                Confirm Batch Revert
+                              </button>
+                              <button
+                                type="button"
+                                className={cx(controlStyles, 'pill-btn')}
+                                disabled={busyKey !== null}
+                                onClick={() => {
+                                  setPendingConfirm(null);
+                                }}
+                              >
+                                Cancel
+                              </button>
+                            </div>
+                          </div>
+                        )}
+
+                        {batchExpanded && (
+                          <>
+                            <div className={cx(wikiPanelStyles, 'wiki-revision-list')}>
+                              {group.revisions.map((rev) => (
+                                <RevisionFeedItem
+                                  key={rev.revision_id}
+                                  rev={rev}
+                                  standalone={false}
+                                  isExpanded={expandedId === rev.revision_id}
+                                  canRevert={canRevertRevision}
+                                  canReview={canReviewRevision}
+                                  busyKey={busyKey}
+                                  pendingConfirm={pendingConfirm}
+                                  entityLinkByKey={entityLinkByKey}
+                                  peopleById={peopleById}
+                                  sourcesById={sourcesById}
+                                  onToggleExpand={(id) => {
+                                    setExpandedId(expandedId === id ? null : id);
+                                  }}
+                                  onRequestRevert={(target) => {
+                                    setPendingConfirm({ kind: 'revision', rev: target });
+                                  }}
+                                  onCancelRevert={() => {
+                                    setPendingConfirm(null);
+                                  }}
+                                  onConfirmRevert={handleRevertRevision}
+                                  onMarkReviewed={handleMarkRevisionReviewed}
+                                  onClearReview={handleClearRevisionReview}
+                                />
+                              ))}
+                            </div>
+                            <div className={cx(wikiPanelStyles, 'wiki-ledger-ref')}>
+                              Batch ledger reference: <code>{groupBatchId}</code>
+                            </div>
+                          </>
+                        )}
+                      </section>
+                    );
+                  }
+
+                  const [rev] = group.revisions;
+                  return (
+                    <RevisionFeedItem
+                      key={group.key}
+                      rev={rev}
+                      standalone
+                      isExpanded={expandedId === rev.revision_id}
+                      canRevert={canRevertRevision}
+                      canReview={canReviewRevision}
+                      busyKey={busyKey}
+                      pendingConfirm={pendingConfirm}
+                      entityLinkByKey={entityLinkByKey}
+                      peopleById={peopleById}
+                      sourcesById={sourcesById}
+                      duplicateWarnings={groupWarnings}
+                      onToggleExpand={(id) => {
+                        setExpandedId(expandedId === id ? null : id);
+                      }}
+                      onRequestRevert={(target) => {
+                        setPendingConfirm({ kind: 'revision', rev: target });
+                      }}
+                      onCancelRevert={() => {
+                        setPendingConfirm(null);
+                      }}
+                      onConfirmRevert={handleRevertRevision}
+                      onMarkReviewed={handleMarkRevisionReviewed}
+                      onClearReview={handleClearRevisionReview}
+                    />
+                  );
+                })}
+              </div>
+            </>
+          );
+          return showFilterToolbar ? (
+            <div id={tabpanelId} role="tabpanel" aria-labelledby={activeTabId}>
+              {feedContent}
+            </div>
+          ) : (
+            <div id={tabpanelId}>{feedContent}</div>
+          );
+        })()}
       </main>
       <KinloomFooter />
     </div>

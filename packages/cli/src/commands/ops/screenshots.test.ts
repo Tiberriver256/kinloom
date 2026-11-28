@@ -461,9 +461,7 @@ describe('runScreenshotsCommand orchestration and redaction', () => {
         return {
           newPage: async () => ({
             goto: async () => {
-              if (contextCalls === 1) {
-                throw 'string-failure';
-              }
+              throw 'string-failure';
             },
             screenshot: async ({ path: outPath }) => {
               await fs.writeFile(outPath, MINIMAL_FAKE_PNG);
@@ -1079,5 +1077,130 @@ describe('kinloom screenshots CLI + hermetic HTTP archive integration', () => {
     expect(evidenceDark?.status).toBe('captured');
     expect(evidenceDark?.fallbackUsed).toBe('viewport-after-fullpage-timeout');
     expect(result.rendered).toContain('Fallbacks:     2 viewport fallback(s)');
+  });
+
+  it('isolates theme-toggle context so dark-mode component and plugin captures never inherit light state (#102)', async () => {
+    const outDir = await makeTempDir('kinloom-shots-theme-isolation-');
+    let contextSeq = 0;
+    const closedContextIds: number[] = [];
+
+    const browserFactory: ScreenshotBrowserFactory = async () => ({
+      newContext: async (ctxOpts) => {
+        contextSeq += 1;
+        const contextId = contextSeq;
+        // Simulate per-BrowserContext localStorage (shared across pages in the same context)
+        let persistedTheme: 'light' | 'dark' | null = null;
+        return {
+          newPage: async () => {
+            let currentRoute = '/';
+            let resolvedTheme: 'light' | 'dark' = persistedTheme ?? ctxOpts.colorScheme;
+            const makeLocator = (selector: string): ScreenshotLocatorHandle => {
+              const isThemeToggle = selector === '[data-testid="theme-toggle"]';
+              const isFooter = selector === 'footer';
+              const isHeader = selector === 'header';
+              const isVisible = isThemeToggle || isFooter || isHeader;
+              const handle: ScreenshotLocatorHandle = {
+                count: async () => (isVisible ? 1 : 0),
+                first: () => handle,
+                nth: () => handle,
+                isVisible: async () => isVisible,
+                isDisabled: async () => false,
+                click: async () => {
+                  if (isThemeToggle) {
+                    // Clicking theme-toggle in dark mode persists 'light' into this context's storage
+                    persistedTheme = resolvedTheme === 'dark' ? 'light' : 'dark';
+                    resolvedTheme = persistedTheme;
+                  }
+                },
+                fill: async () => undefined,
+                screenshot: async ({ path: outPath }) => {
+                  await fs.writeFile(
+                    outPath,
+                    Buffer.concat([
+                      PNG_MAGIC_BYTES,
+                      Buffer.from(`${currentRoute}:${selector}:${resolvedTheme}`),
+                    ])
+                  );
+                },
+                boundingBox: async () => (isVisible ? { width: 120, height: 40 } : null),
+                textContent: async () => 'ok',
+              };
+              return handle;
+            };
+            return {
+              emulateMedia: async () => undefined,
+              goto: async (url) => {
+                currentRoute = new URL(url).pathname;
+                resolvedTheme = persistedTheme ?? ctxOpts.colorScheme;
+              },
+              screenshot: async ({ path: outPath }) => {
+                await fs.writeFile(
+                  outPath,
+                  Buffer.concat([PNG_MAGIC_BYTES, Buffer.from(`${currentRoute}:${resolvedTheme}`)])
+                );
+              },
+              locator: (selector) => makeLocator(selector),
+              evaluate: async (expr) => {
+                if (expr.includes('getComputedStyle')) {
+                  return (
+                    resolvedTheme === 'dark'
+                      ? {
+                          backgroundColor: 'rgb(23, 22, 20)',
+                          textColor: 'rgb(234, 227, 213)',
+                          dataTheme: 'dark',
+                          colorScheme: 'dark',
+                          prefersDark: ctxOpts.colorScheme === 'dark',
+                        }
+                      : {
+                          backgroundColor: 'rgb(245, 239, 226)',
+                          textColor: 'rgb(35, 39, 46)',
+                          dataTheme: 'light',
+                          colorScheme: 'light',
+                          prefersDark: ctxOpts.colorScheme === 'dark',
+                        }
+                  ) as never;
+                }
+                return true as never;
+              },
+              waitForTimeout: async () => undefined,
+              waitForSelector: async () => undefined,
+              keyboard: { press: async () => undefined },
+              on: () => undefined,
+              close: async () => undefined,
+            };
+          },
+          close: async () => {
+            closedContextIds.push(contextId);
+          },
+        };
+      },
+      close: async () => undefined,
+    });
+
+    const result = await runScreenshotsCommand({
+      url: 'https://demo.kinloom.example',
+      outDir,
+      viewports: [{ name: 'desktop', width: 1440, height: 900 }],
+      themes: ['light', 'dark'],
+      include: ['components'],
+      waitMs: 0,
+      timeoutMs: 2_000,
+      concurrency: 1,
+      fetchImpl: async () => new Response('missing', { status: 404 }),
+      browserFactory,
+      now: () => new Date('2026-11-28T08:30:00.000Z'),
+    });
+
+    expect(result.ok).toBe(true);
+    // 2 main cell contexts (light + dark) + 2 isolated contexts for theme-toggle (light + dark) = 4
+    expect(contextSeq).toBe(4);
+    expect(closedContextIds).toHaveLength(4);
+    expect(result.manifest.darkThemeVerification?.status).toBe('verified');
+    expect(result.manifest.darkThemeVerification?.lightCanvasInDarkModeCount).toBe(0);
+    const darkFooter = result.manifest.captures.find(
+      (c) => c.slug === 'footer' && c.theme === 'dark' && c.status === 'captured'
+    );
+    expect(darkFooter?.themeAudit?.dataTheme).toBe('dark');
+    expect(darkFooter?.themeAudit?.isDarkSurface).toBe(true);
   });
 });

@@ -1,6 +1,6 @@
 import type { MediaChecklistItem, MediaItem } from '@kinloom/core';
 import type React from 'react';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useId, useMemo, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import atomStyles from '../components/Atoms.module.css';
 import { EvidenceLegend } from '../components/EvidenceLegend.js';
@@ -17,6 +17,7 @@ import layoutStyles from '../styles/Layout.module.css';
 import evidenceStyles from './EvidencePage.module.css';
 import { EvidenceDiscrepanciesTab } from './evidence/EvidenceDiscrepanciesTab.js';
 import { EvidenceMediaLightbox, EvidenceMediaTab } from './evidence/EvidenceMediaTab.js';
+import { EvidenceNeedsCitationTab } from './evidence/EvidenceNeedsCitationTab.js';
 import { EvidenceSourcesTab } from './evidence/EvidenceSourcesTab.js';
 import {
   collectConflictEvents,
@@ -29,7 +30,6 @@ import {
   filterAndSortSources,
   filterMediaItems,
   type MediaKindFilter,
-  parseEvidenceFilterParam,
   parseInitialEvidenceTab,
 } from './evidence/evidenceViewModel.js';
 
@@ -46,12 +46,10 @@ export const EvidencePage: React.FC = () => {
   } = useArchiveData();
   const { openSourceReader, openSourceInspector } = useArchiveUi();
   const [searchParams, setSearchParams] = useSearchParams();
+  const tabBaseId = useId();
 
   const [tab, setTab] = useState<EvidenceTab>(() =>
     parseInitialEvidenceTab(searchParams.get('tab'), searchParams.get('filter'))
-  );
-  const [uncitedOnly, setUncitedOnly] = useState<boolean>(
-    () => parseEvidenceFilterParam(searchParams.get('filter')) === 'uncited'
   );
   const [uncitedQuery, setUncitedQuery] = useState('');
   const [sourceQuery, setSourceQuery] = useState(() => searchParams.get('source') || '');
@@ -65,43 +63,40 @@ export const EvidencePage: React.FC = () => {
   const [mediaChecklist, setMediaChecklist] = useState<MediaChecklistItem[]>([]);
   const uncitedHeadingRef = useRef<HTMLHeadingElement | null>(null);
   const pendingFocusUncitedRef = useRef(false);
+  const tabRefs = useRef<Partial<Record<EvidenceTab, HTMLButtonElement | null>>>({});
 
-  const syncEvidenceUrl = (nextTab: EvidenceTab, nextUncitedOnly: boolean): void => {
+  const syncEvidenceUrl = (nextTab: EvidenceTab): void => {
     const nextParams = new URLSearchParams(searchParams);
     nextParams.set('tab', nextTab);
-    if (nextTab === 'citations' && nextUncitedOnly) {
-      nextParams.set('filter', 'uncited');
-    } else {
-      nextParams.delete('filter');
-    }
+    nextParams.delete('filter');
     setSearchParams(nextParams, { replace: true });
   };
 
   const selectTab = (nextTab: EvidenceTab): void => {
-    const keepUncited = nextTab === 'citations' ? uncitedOnly : false;
     setTab(nextTab);
-    if (nextTab !== 'citations' && uncitedOnly) {
-      setUncitedOnly(false);
-    }
-    syncEvidenceUrl(nextTab, keepUncited);
+    syncEvidenceUrl(nextTab);
   };
 
-  const activateUncitedFilter = (): void => {
-    setTab('citations');
-    setUncitedOnly(true);
+  const openNeedsCitationTab = (): void => {
+    setTab('uncited');
     setShowAllUnverified(false);
     pendingFocusUncitedRef.current = true;
-    syncEvidenceUrl('citations', true);
-  };
-
-  const clearUncitedFilter = (): void => {
-    setUncitedOnly(false);
-    setUncitedQuery('');
-    syncEvidenceUrl(tab, false);
+    syncEvidenceUrl('uncited');
   };
 
   useEffect(() => {
-    if (!pendingFocusUncitedRef.current || tab !== 'citations' || !uncitedOnly) {
+    const activeTabEl = tabRefs.current[tab];
+    if (activeTabEl && typeof activeTabEl.scrollIntoView === 'function') {
+      activeTabEl.scrollIntoView({
+        behavior: scrollBehaviorForMotion(),
+        block: 'nearest',
+        inline: 'nearest',
+      });
+    }
+  }, [tab]);
+
+  useEffect(() => {
+    if (!pendingFocusUncitedRef.current || tab !== 'uncited') {
       return;
     }
     pendingFocusUncitedRef.current = false;
@@ -112,7 +107,7 @@ export const EvidencePage: React.FC = () => {
         heading.scrollIntoView({ behavior: scrollBehaviorForMotion(), block: 'start' });
       }
     }
-  }, [tab, uncitedOnly]);
+  }, [tab]);
 
   useEffect(() => {
     let cancelled = false;
@@ -167,6 +162,20 @@ export const EvidencePage: React.FC = () => {
     );
   }
 
+  const tabpanelId = `${tabBaseId}-panel`;
+  const activeTabId = `${tabBaseId}-tab-${tab}`;
+
+  const tabItems: ReadonlyArray<{
+    readonly id: EvidenceTab;
+    readonly label: string;
+    readonly count: number;
+  }> = [
+    { id: 'conflicts', label: KINLOOM_VOCABULARY.evidence.discrepanciesTab, count: conflictEvents.length },
+    { id: 'citations', label: KINLOOM_VOCABULARY.evidence.sourcesTab, count: bundle.sources.length },
+    { id: 'uncited', label: KINLOOM_VOCABULARY.evidence.needsCitationTab, count: unverifiedEvents.length },
+    { id: 'media', label: KINLOOM_VOCABULARY.evidence.mediaTab, count: allMedia.length },
+  ];
+
   return (
     <div>
       <ExplorerTopBar />
@@ -198,8 +207,8 @@ export const EvidencePage: React.FC = () => {
                 <button
                   type="button"
                   className={cx(evidenceStyles, 'evidence-gap-cta')}
-                  aria-pressed={tab === 'citations' && uncitedOnly}
-                  onClick={activateUncitedFilter}
+                  aria-pressed={tab === 'uncited'}
+                  onClick={openNeedsCitationTab}
                 >
                   <strong>{unverifiedEvents.length}</strong>{' '}
                   {unverifiedEvents.length === 1 ? 'entry' : 'entries'} needing citation →
@@ -225,126 +234,122 @@ export const EvidencePage: React.FC = () => {
             });
           }}
         >
-          <button
-            type="button"
-            role="tab"
-            tabIndex={tab === 'conflicts' ? 0 : -1}
-            aria-selected={tab === 'conflicts'}
-            className={cx(controlStyles, `pill-btn ${tab === 'conflicts' ? 'active' : ''}`)}
-            onClick={() => {
-              selectTab('conflicts');
-            }}
-          >
-            {KINLOOM_VOCABULARY.evidence.discrepanciesTab} ({conflictEvents.length})
-          </button>
-          <button
-            type="button"
-            role="tab"
-            tabIndex={tab === 'citations' ? 0 : -1}
-            aria-selected={tab === 'citations'}
-            className={cx(controlStyles, `pill-btn ${tab === 'citations' ? 'active' : ''}`)}
-            onClick={() => {
-              selectTab('citations');
-            }}
-          >
-            {KINLOOM_VOCABULARY.evidence.sourcesTab} ({bundle.sources.length})
-          </button>
-          <button
-            type="button"
-            role="tab"
-            tabIndex={tab === 'media' ? 0 : -1}
-            aria-selected={tab === 'media'}
-            className={cx(controlStyles, `pill-btn ${tab === 'media' ? 'active' : ''}`)}
-            onClick={() => {
-              selectTab('media');
-            }}
-          >
-            {KINLOOM_VOCABULARY.evidence.mediaTab} ({allMedia.length})
-          </button>
+          {tabItems.map((item) => {
+            const isSelected = tab === item.id;
+            return (
+              <button
+                key={item.id}
+                id={`${tabBaseId}-tab-${item.id}`}
+                ref={(node) => {
+                  tabRefs.current[item.id] = node;
+                }}
+                type="button"
+                role="tab"
+                tabIndex={isSelected ? 0 : -1}
+                aria-selected={isSelected}
+                className={cx(controlStyles, `pill-btn ${isSelected ? 'active' : ''}`)}
+                onClick={() => {
+                  selectTab(item.id);
+                }}
+              >
+                {item.label} ({item.count})
+              </button>
+            );
+          })}
         </div>
 
-        {tab === 'conflicts' && (
-          <EvidenceDiscrepanciesTab
-            conflictEvents={conflictEvents}
-            peopleById={peopleById}
-            sourcesById={sourcesById}
-            readableSourceIds={readableSourceIds}
-            discrepancyLimit={discrepancyLimit}
-            onLoadMoreDiscrepancies={() => {
-              setDiscrepancyLimit((n) => n + EVIDENCE_BATCH_SIZE);
-            }}
-            onOpenSourceReader={openSourceReader}
-          />
-        )}
+        <div id={tabpanelId} role="tabpanel" aria-labelledby={activeTabId}>
+          {tab === 'conflicts' && (
+            <EvidenceDiscrepanciesTab
+              conflictEvents={conflictEvents}
+              peopleById={peopleById}
+              sourcesById={sourcesById}
+              readableSourceIds={readableSourceIds}
+              discrepancyLimit={discrepancyLimit}
+              onLoadMoreDiscrepancies={() => {
+                setDiscrepancyLimit((n) => n + EVIDENCE_BATCH_SIZE);
+              }}
+              onOpenSourceReader={openSourceReader}
+            />
+          )}
 
-        {tab === 'citations' && (
-          <EvidenceSourcesTab
-            totalSourceCount={bundle.sources.length}
-            canEdit={capabilities.canEdit}
-            filteredSources={filteredSources}
-            sourceLimit={sourceLimit}
-            sourceQuery={sourceQuery}
-            sourceUsageCounts={sourceUsageCounts}
-            readableSourceIds={readableSourceIds}
-            unverifiedEvents={unverifiedEvents}
-            showAllUnverified={showAllUnverified}
-            uncitedOnly={uncitedOnly}
-            uncitedQuery={uncitedQuery}
-            uncitedHeadingRef={uncitedHeadingRef}
-            peopleById={peopleById}
-            onSourceQueryChange={(value) => {
-              setSourceQuery(value);
-              setSourceLimit(EVIDENCE_BATCH_SIZE);
-            }}
-            onLoadMoreSources={() => {
-              setSourceLimit((n) => n + EVIDENCE_BATCH_SIZE);
-            }}
-            onUncitedQueryChange={setUncitedQuery}
-            onClearUncitedFilter={clearUncitedFilter}
-            onToggleShowAllUnverified={() => {
-              setShowAllUnverified((v) => !v);
-            }}
-            onOpenSourceInspector={openSourceInspector}
-            onOpenSourceReader={openSourceReader}
-          />
-        )}
+          {tab === 'citations' && (
+            <EvidenceSourcesTab
+              totalSourceCount={bundle.sources.length}
+              canEdit={capabilities.canEdit}
+              filteredSources={filteredSources}
+              sourceLimit={sourceLimit}
+              sourceQuery={sourceQuery}
+              sourceUsageCounts={sourceUsageCounts}
+              readableSourceIds={readableSourceIds}
+              onSourceQueryChange={(value) => {
+                setSourceQuery(value);
+                setSourceLimit(EVIDENCE_BATCH_SIZE);
+              }}
+              onLoadMoreSources={() => {
+                setSourceLimit((n) => n + EVIDENCE_BATCH_SIZE);
+              }}
+              onOpenSourceInspector={openSourceInspector}
+              onOpenSourceReader={openSourceReader}
+            />
+          )}
 
-        {tab === 'media' && (
-          <EvidenceMediaTab
-            allMedia={allMedia}
-            canEdit={capabilities.canEdit}
-            filteredMedia={filteredMedia}
-            mediaLimit={mediaLimit}
-            mediaKindFilter={mediaKindFilter}
-            mediaQuery={mediaQuery}
-            mediaCountsByKind={mediaCountsByKind}
-            mediaChecklist={mediaChecklist}
-            missingChecklistItems={missingChecklistItems}
-            baseUrl={baseUrl}
-            onMediaQueryChange={(value) => {
-              setMediaQuery(value);
-              setMediaLimit(36);
-            }}
-            onMediaKindFilterChange={(kind) => {
-              setMediaKindFilter(kind);
-              setMediaLimit(36);
-            }}
-            onClearMediaFilters={() => {
-              setMediaKindFilter('all');
-              setMediaQuery('');
-            }}
-            onLoadMoreMedia={() => {
-              setMediaLimit((n) => n + 36);
-            }}
-            onOpenMediaItem={(m) => {
-              if (m.kind === 'document_scan' && m.source_id && m.page) {
-                openSourceReader({ sourceId: m.source_id, page: m.page });
-              } else {
-                setLightboxItem(m);
-              }
-            }}
-          />
-        )}
+          {tab === 'uncited' && (
+            <EvidenceNeedsCitationTab
+              totalSourceCount={bundle.sources.length}
+              unverifiedEvents={unverifiedEvents}
+              showAllUnverified={showAllUnverified}
+              uncitedQuery={uncitedQuery}
+              uncitedHeadingRef={uncitedHeadingRef}
+              peopleById={peopleById}
+              onUncitedQueryChange={setUncitedQuery}
+              onToggleShowAllUnverified={() => {
+                setShowAllUnverified((v) => !v);
+              }}
+              onOpenSourceRegistry={() => {
+                setUncitedQuery('');
+                selectTab('citations');
+              }}
+            />
+          )}
+
+          {tab === 'media' && (
+            <EvidenceMediaTab
+              allMedia={allMedia}
+              canEdit={capabilities.canEdit}
+              filteredMedia={filteredMedia}
+              mediaLimit={mediaLimit}
+              mediaKindFilter={mediaKindFilter}
+              mediaQuery={mediaQuery}
+              mediaCountsByKind={mediaCountsByKind}
+              mediaChecklist={mediaChecklist}
+              missingChecklistItems={missingChecklistItems}
+              baseUrl={baseUrl}
+              onMediaQueryChange={(value) => {
+                setMediaQuery(value);
+                setMediaLimit(36);
+              }}
+              onMediaKindFilterChange={(kind) => {
+                setMediaKindFilter(kind);
+                setMediaLimit(36);
+              }}
+              onClearMediaFilters={() => {
+                setMediaKindFilter('all');
+                setMediaQuery('');
+              }}
+              onLoadMoreMedia={() => {
+                setMediaLimit((n) => n + 36);
+              }}
+              onOpenMediaItem={(m) => {
+                if (m.kind === 'document_scan' && m.source_id && m.page) {
+                  openSourceReader({ sourceId: m.source_id, page: m.page });
+                } else {
+                  setLightboxItem(m);
+                }
+              }}
+            />
+          )}
+        </div>
 
         <EvidenceMediaLightbox
           lightboxItem={lightboxItem}

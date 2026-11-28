@@ -50,7 +50,12 @@ import {
   parseCssRgbColor,
   renderContactSheetHtml,
 } from './report.js';
-import { isHeavyCaptureTarget, isMapCaptureTarget, isScreenshotTimeoutError } from './runner.js';
+import {
+  isHeavyCaptureTarget,
+  isMapCaptureTarget,
+  isScreenshotTimeoutError,
+  requiresIsolatedCaptureContext,
+} from './runner.js';
 import type {
   BundleDiscoveryResult,
   ComponentRecipeId,
@@ -1096,6 +1101,17 @@ describe('screenshots/report manifest and XSS-safe contact sheet', () => {
 
     expect(isMapCaptureTarget(mapQueryTarget!)).toBe(true);
     expect(isHeavyCaptureTarget(evidenceQueryTarget!)).toBe(true);
+    const componentTargets = buildComponentCaptureTargets({
+      source: 'none',
+      people: [],
+      places: [],
+      narratives: [],
+    });
+    const themeToggleTarget = componentTargets.find((t) => t.recipeId === 'theme-toggle')!;
+    const footerTarget = componentTargets.find((t) => t.recipeId === 'footer-default')!;
+    expect(requiresIsolatedCaptureContext(themeToggleTarget)).toBe(true);
+    expect(requiresIsolatedCaptureContext(footerTarget)).toBe(false);
+    expect(requiresIsolatedCaptureContext(evidenceTarget!)).toBe(false);
     expect(isScreenshotTimeoutError(new Error('page.screenshot: Timeout 20000ms exceeded.'))).toBe(true);
     expect(isScreenshotTimeoutError('Timed out after 500ms')).toBe(true);
     expect(isScreenshotTimeoutError(new Error('Target closed'))).toBe(false);

@@ -1,0 +1,127 @@
+/* ==========================================================================
+   Revision History / Research Field Reports (/changes)
+   ========================================================================== */
+@property --changes-fade-start {
+  syntax: "<length>";
+  inherits: false;
+  initial-value: 0px;
+}
+
+@property --changes-fade-end {
+  syntax: "<length>";
+  inherits: false;
+  initial-value: 0px;
+}
+
+.changes-toolbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px 14px;
+  margin-bottom: 16px;
+  min-width: 0;
+  max-width: 100%;
+}
+
+.changes-author-tabs {
+  --changes-fade-size: 2rem;
+  display: flex;
+  align-items: center;
+  flex-wrap: nowrap;
+  gap: 6px 14px;
+  margin-bottom: 0;
+  border-bottom: 1px solid var(--border-decorative);
+  overflow-x: auto;
+  scrollbar-width: none;
+  scroll-snap-type: inline proximity;
+  scroll-padding-inline: var(--changes-fade-size);
+  min-width: 0;
+  max-width: 100%;
+}
+
+.changes-author-tabs::-webkit-scrollbar {
+  display: none;
+}
+
+.changes-author-tabs :global(.pill-btn) {
+  flex: none;
+  white-space: nowrap;
+  scroll-snap-align: start;
+  border: none;
+  border-bottom: 2px solid transparent;
+  border-radius: 0;
+  padding: 6px 2px 8px;
+  background: transparent;
+  color: var(--text-secondary);
+  font-family: var(--font-ui);
+}
+
+.changes-author-tabs :global(.pill-btn.active) {
+  background: transparent;
+  border-bottom-color: var(--radar-copresence);
+  color: var(--jump-active-fg);
+  font-weight: 600;
+}
+
+.changes-review-toggle {
+  flex-shrink: 0;
+  white-space: nowrap;
+}
+
+@supports (animation-timeline: scroll()) {
+  @media (prefers-reduced-motion: no-preference) {
+    .changes-author-tabs {
+      mask:
+        linear-gradient(black, black) no-clip subtract,
+        linear-gradient(to right, black, transparent) 0 0 / var(--changes-fade-start) 100% no-repeat no-clip,
+        linear-gradient(to right, transparent, black) 100% 0 / var(--changes-fade-end) 100% no-repeat no-clip;
+      animation-name: changes-fade-start, changes-fade-end;
+      animation-duration: auto, auto;
+      animation-timing-function: linear, linear;
+      animation-fill-mode: both, both;
+      animation-timeline: scroll(self inline);
+      animation-range:
+        0 var(--changes-fade-size),
+        calc(100% - var(--changes-fade-size)) 100%;
+    }
+  }
+}
+
+@keyframes changes-fade-start {
+  to {
+    --changes-fade-start: var(--changes-fade-size);
+  }
+}
+
+@keyframes changes-fade-end {
+  from {
+    --changes-fade-end: var(--changes-fade-size);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .changes-author-tabs {
+    animation: none;
+    mask: none;
+  }
+}
+
+@media (max-width: 768px) {
+  .changes-toolbar {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 10px;
+  }
+
+  .changes-author-tabs {
+    width: 100%;
+    gap: 14px;
+  }
+
+  .changes-author-tabs :global(.pill-btn) {
+    min-height: 44px;
+    display: inline-flex;
+    align-items: center;
+  }
+}

@@ -821,13 +821,13 @@ test.describe('Wave 50B UX regression suite', () => {
     // EvidencePage tablist keyboard navigation (ArrowRight/ArrowLeft/Home/End)
     await page.goto('/evidence');
     const evTabs = page.locator('.evidence-tabs[role="tablist"] [role="tab"]');
-    await expect(evTabs).toHaveCount(3);
+    await expect(evTabs).toHaveCount(4);
     await evTabs.first().focus();
     await page.keyboard.press('ArrowRight');
     await expect(evTabs.nth(1)).toHaveAttribute('aria-selected', 'true');
     await expect(evTabs.nth(1)).toBeFocused();
     await page.keyboard.press('End');
-    await expect(evTabs.nth(2)).toHaveAttribute('aria-selected', 'true');
+    await expect(evTabs.nth(3)).toHaveAttribute('aria-selected', 'true');
     await page.keyboard.press('Home');
     await expect(evTabs.nth(0)).toHaveAttribute('aria-selected', 'true');
 

@@ -312,6 +312,7 @@ select.pill-btn option {
   font-family: var(--font-ui);
   white-space: nowrap;
   flex-shrink: 0;
+  scroll-snap-align: start;
 }
 
 :global(.evidence-tabs) .pill-btn:global(.active) {
@@ -326,6 +327,7 @@ select.pill-btn option {
     flex-wrap: nowrap;
     overflow-x: auto;
     scrollbar-width: none;
+    scroll-snap-type: inline proximity;
     gap: 14px;
   }
 

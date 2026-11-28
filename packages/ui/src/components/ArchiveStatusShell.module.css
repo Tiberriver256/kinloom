@@ -40,6 +40,16 @@
   }
 }
 
+@media (prefers-reduced-motion: reduce) {
+  .archive-loading-spinner {
+    animation: none;
+  }
+
+  .archive-recovery-btn {
+    transition: none;
+  }
+}
+
 .archive-error-box {
   max-width: 520px;
   padding: 18px 20px;

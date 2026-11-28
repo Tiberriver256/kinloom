@@ -570,8 +570,41 @@ describe('MilestoneStoryCard 56ch figcaption cap and EvidencePage editorial seri
       true
     );
 
-    // Initial batch capped at 24 discrepancy cards
-    expect(container.querySelectorAll('article')).toHaveLength(24);
+    // Initial batch capped at 24 discrepancy cards and h2 title leads every card before date/badge
+    const articles = container.querySelectorAll('article');
+    expect(articles).toHaveLength(24);
+    const firstArticle = articles[0];
+    const firstHeading = firstArticle.querySelector('h2');
+    const firstDate = firstArticle.querySelector('[class*="date-stamp"]');
+    const firstBadge = firstArticle.querySelector('[class*="evidence-discrepancy-badge"]');
+    expect(firstHeading?.textContent).toBe('Discrepancy Event 1');
+    expect(firstDate).not.toBeNull();
+    expect(firstBadge).not.toBeNull();
+    expect(
+      Boolean(
+        firstHeading &&
+          firstDate &&
+          firstHeading.compareDocumentPosition(firstDate) & Node.DOCUMENT_POSITION_FOLLOWING
+      )
+    ).toBe(true);
+    expect(
+      Boolean(
+        firstHeading &&
+          firstBadge &&
+          firstHeading.compareDocumentPosition(firstBadge) & Node.DOCUMENT_POSITION_FOLLOWING
+      )
+    ).toBe(true);
+
+    // Reduced-motion guards present in ArchiveStatusShell, DirectoryJumpStrip, EvidencePage, and RecentChangesPage
+    for (const cssRelPath of [
+      'components/ArchiveStatusShell.module.css',
+      'components/atoms/DirectoryJumpStrip.module.css',
+      'pages/EvidencePage.module.css',
+      'pages/RecentChangesPage.module.css',
+    ]) {
+      const cssText = readFileSync(resolve(UI_SRC, cssRelPath), 'utf8');
+      expect(cssText).toContain('@media (prefers-reduced-motion: reduce)');
+    }
     expect(container.textContent).toContain('Showing 24 of 28');
     const showMoreDiscrepancies = [...container.querySelectorAll<HTMLButtonElement>('button')].find((b) =>
       b.textContent?.includes('Show more (4 remaining)')

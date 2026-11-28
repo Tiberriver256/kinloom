@@ -284,6 +284,16 @@
   transform: translateY(-1px);
 }
 
+@media (prefers-reduced-motion: reduce) {
+  .avatar-chip {
+    transition: background-color 0.14s ease;
+  }
+
+  .avatar-chip:hover {
+    transform: none;
+  }
+}
+
 .avatar-chip:global(.tier-confirmed) {
   border: var(--border-width-emphasis) solid var(--radar-copresence);
 }

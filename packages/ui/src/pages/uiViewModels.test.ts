@@ -236,6 +236,9 @@ describe('evidenceViewModel', () => {
     const bundle = makeBundle();
 
     expect(parseInitialEvidenceTab('media')).toBe('media');
+    expect(parseInitialEvidenceTab('uncited')).toBe('uncited');
+    expect(parseInitialEvidenceTab('citations', 'uncited')).toBe('uncited');
+    expect(parseInitialEvidenceTab(null, 'uncited')).toBe('uncited');
     expect(parseInitialEvidenceTab('invalid')).toBe('conflicts');
 
     const conflicts = collectConflictEvents(bundle);

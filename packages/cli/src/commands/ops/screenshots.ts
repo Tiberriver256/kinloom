@@ -33,6 +33,7 @@ import {
   discoverLiveDomMetadata,
   openConfiguredContext,
   type ResolvedScreenshotRunConfig,
+  requiresIsolatedCaptureContext,
   runSingleCapture,
   runWithBoundedConcurrency,
 } from './screenshots/runner.js';
@@ -176,16 +177,34 @@ export async function runScreenshotsCommand(
         const entries: ManifestCaptureEntry[] = [];
         try {
           for (const target of targets) {
-            const entry = await runSingleCapture({
-              context,
-              target,
-              viewport,
-              theme,
-              config,
-              searchQuery,
-              secrets,
-            });
-            entries.push(entry);
+            if (requiresIsolatedCaptureContext(target)) {
+              const isolatedContext = await openConfiguredContext(browser, viewport, theme, config);
+              try {
+                const entry = await runSingleCapture({
+                  context: isolatedContext,
+                  target,
+                  viewport,
+                  theme,
+                  config,
+                  searchQuery,
+                  secrets,
+                });
+                entries.push(entry);
+              } finally {
+                await safeCloseHandle(isolatedContext, 'capture.isolated-context.close', 3_000);
+              }
+            } else {
+              const entry = await runSingleCapture({
+                context,
+                target,
+                viewport,
+                theme,
+                config,
+                searchQuery,
+                secrets,
+              });
+              entries.push(entry);
+            }
           }
           return entries;
         } finally {
