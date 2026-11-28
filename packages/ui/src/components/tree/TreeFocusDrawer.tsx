@@ -4,6 +4,7 @@ import { Link } from 'react-router-dom';
 import type { ArchivalTreeModel, LineageSpotlight, TreeViewSurface } from '../../lib/archivalTreeModel.js';
 import { formatCardLifespan } from '../../lib/archivalTreeModel.js';
 import { cx, joinClasses } from '../../lib/cx.js';
+import { resolvePersonPortraitUrl } from '../../lib/personPortrait.js';
 import { formatLineageGroupLabel } from '../../lib/treeNodeDisplay.js';
 import { formatPhotoDocumentCount, KINLOOM_VOCABULARY } from '../../lib/vocabulary.js';
 import controlStyles from '../../styles/Controls.module.css';
@@ -71,7 +72,8 @@ export const TreeFocusDrawer: React.FC<TreeFocusDrawerProps> = ({
   const primaryPlace = person.primary_place_id ? placesById.get(person.primary_place_id) : undefined;
   const primaryPlaceName = primaryPlace?.full_name ?? 'Unrecorded';
 
-  const resolvedThumb = thumbUrl ? resolveAssetUrl(thumbUrl, baseUrl) : null;
+  const effectiveThumb = thumbUrl?.trim() || resolvePersonPortraitUrl(person);
+  const resolvedThumb = effectiveThumb ? resolveAssetUrl(effectiveThumb, baseUrl) : null;
 
   return (
     <aside

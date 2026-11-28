@@ -27,6 +27,7 @@ import {
   searchTreePeople,
 } from '../lib/archivalTreeModel.js';
 import { cx, joinClasses } from '../lib/cx.js';
+import { resolvePersonPortraitUrl } from '../lib/personPortrait.js';
 import { KINSHIP_LOOM_ZOOM_THRESHOLD } from '../lib/tree/kinshipLoomModel.js';
 import { KINLOOM_VOCABULARY } from '../lib/vocabulary.js';
 import controlStyles from '../styles/Controls.module.css';
@@ -809,7 +810,7 @@ export const TreePage: React.FC = () => {
             model={model}
             spotlight={spotlight}
             placesById={placesById}
-            thumbUrl={personThumbMap.get(selectedPerson.id) || selectedPerson.portrait_url || null}
+            thumbUrl={resolvePersonPortraitUrl(selectedPerson, personThumbMap)}
             baseUrl={baseUrl}
             surface={surface}
             onSelectPerson={handleFocusAndCenterPerson}

@@ -159,7 +159,8 @@ describe('createNarrativeAudioPlugin (Idea 1 + Idea 4)', () => {
     // Inline Archival Margin Bar renders inside the biography entry
     const marginBar = container.querySelector('[data-testid="narrative-audio-margin-bar"]');
     expect(marginBar).not.toBeNull();
-    expect(marginBar?.textContent).toContain('Listen to Biography · Charon');
+    expect(marginBar?.textContent).toContain('Listen to Biography');
+    expect(marginBar?.textContent).not.toContain('Charon');
     expect(marginBar?.textContent).toContain("Editor's notes 4:34");
 
     // Biography download link points to server /media/ attachment URL with deterministic filename
@@ -191,7 +192,8 @@ describe('createNarrativeAudioPlugin (Idea 1 + Idea 4)', () => {
     expect(dock).not.toBeNull();
     expect(dock?.textContent).toContain('Thomas Mercer');
     expect(dock?.textContent).toContain('Miller and Surveyor on Mercer Creek');
-    expect(dock?.textContent).toContain('Biography Narration (Charon)');
+    expect(dock?.textContent).toContain('Biography Narration');
+    expect(dock?.textContent).not.toContain('Charon');
 
     const dockDownloadLink = dock?.querySelector<HTMLAnchorElement>(
       '[data-testid="narrative-audio-dock-download-link"]'
@@ -209,8 +211,10 @@ describe('createNarrativeAudioPlugin (Idea 1 + Idea 4)', () => {
     await act(async () => {
       jumpBtn?.click();
     });
-    expect(marginBar?.textContent).toContain("Editor's Notes · Kore");
-    expect(dock?.textContent).toContain("Editor's Notes (Kore)");
+    expect(marginBar?.textContent).toContain("Editor's Notes");
+    expect(marginBar?.textContent).not.toContain('Kore');
+    expect(dock?.textContent).toContain("Editor's Notes");
+    expect(dock?.textContent).not.toContain('Kore');
 
     // Cycle playback speed updates across bar and dock
     const speedBtn = marginBar?.querySelector<HTMLButtonElement>('.narrative-audio-pill');
@@ -443,19 +447,20 @@ describe('createNarrativeAudioPlugin (Idea 1 + Idea 4)', () => {
       container.querySelectorAll<HTMLElement>('[data-testid="narrative-audio-margin-bar"]')
     );
     const barTexts = bars.map((b) => b.textContent ?? '');
-    expect(barTexts.some((t) => t.includes('Listen to Biography · Charon'))).toBe(true);
-    expect(barTexts.some((t) => t.includes('Listen to Story · Aoede'))).toBe(true);
-    expect(barTexts.some((t) => t.includes('Listen to Research Note · Charon'))).toBe(true);
-    expect(barTexts.some((t) => t.includes('Listen to Proof Summary · Leda'))).toBe(true);
+    expect(barTexts.some((t) => t.includes('Listen to Biography') && !t.includes('Charon'))).toBe(true);
+    expect(barTexts.some((t) => t.includes('Listen to Story') && !t.includes('Aoede'))).toBe(true);
+    expect(barTexts.some((t) => t.includes('Listen to Research Note') && !t.includes('Charon'))).toBe(true);
+    expect(barTexts.some((t) => t.includes('Listen to Proof Summary') && !t.includes('Leda'))).toBe(true);
 
     // Play the Family Story -> dock renders "Story Narration (Aoede)", not "Biography Narration"
-    const storyBar = bars.find((b) => (b.textContent ?? '').includes('Listen to Story · Aoede'));
+    const storyBar = bars.find((b) => (b.textContent ?? '').includes('Listen to Story'));
     const storyPlayBtn = storyBar?.querySelector<HTMLButtonElement>('.narrative-audio-play-btn');
     await act(async () => {
       storyPlayBtn?.click();
     });
     const dock = container.querySelector<HTMLElement>('[data-testid="narrative-audio-dock"]');
-    expect(dock?.textContent).toContain('Story Narration (Aoede)');
+    expect(dock?.textContent).toContain('Story Narration');
+    expect(dock?.textContent).not.toContain('Aoede');
     expect(storyPlayBtn?.getAttribute('aria-pressed')).toBe('true');
 
     // Simulate audio load failure (<audio onError>) -> resets isPlaying=false and shows role="alert" in bar and dock
@@ -506,12 +511,13 @@ describe('createNarrativeAudioPlugin (Idea 1 + Idea 4)', () => {
     }
 
     // Jumping directly to Editor's Notes on a DIFFERENT track switches active track and starts playback
-    const bioBar = bars.find((b) => (b.textContent ?? '').includes('Listen to Biography · Charon'));
+    const bioBar = bars.find((b) => (b.textContent ?? '').includes('Listen to Biography'));
     const bioJumpBtn = bioBar?.querySelector<HTMLButtonElement>('.narrative-audio-jump-btn');
     await act(async () => {
       bioJumpBtn?.click();
     });
-    expect(dock?.textContent).toContain("Editor's Notes (Kore)");
+    expect(dock?.textContent).toContain("Editor's Notes");
+    expect(dock?.textContent).not.toContain('Kore');
 
     act(() => {
       root.unmount();

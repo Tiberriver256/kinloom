@@ -1,5 +1,6 @@
 import type { CoPresenceItem, MediaItem } from '@kinloom/core';
 import {
+  buildPersonThumbMap,
   computePersonCompleteness,
   computeRadarForEvent,
   findNearestEventForPerson,
@@ -40,6 +41,7 @@ const LazyWikiActionBar = lazy(async () => ({
 import { useArchiveData } from '../context/ArchiveDataContext.js';
 import { useArchiveUi } from '../context/ArchiveUiContext.js';
 import { cx } from '../lib/cx.js';
+import { resolvePersonPortraitUrl } from '../lib/personPortrait.js';
 import { isRedactedLivingPlaceholder } from '../lib/tree/types.js';
 import { formatReaderLoadError, KINLOOM_VOCABULARY } from '../lib/vocabulary.js';
 import { PluginSlot } from '../plugins/PluginContext.js';
@@ -129,6 +131,11 @@ export const PersonPage: React.FC = () => {
   const branchLabelById = useMemo(
     () => new Map(siteConfig.branches.map((branch) => [branch.id, branch.label])),
     [siteConfig.branches]
+  );
+
+  const personThumbMap = useMemo(
+    () => (bundle ? buildPersonThumbMap(bundle) : new Map<string, string>()),
+    [bundle]
   );
 
   const personEvents = useMemo(
@@ -304,6 +311,9 @@ export const PersonPage: React.FC = () => {
   const routePlaceCount = countUniqueEventPlaces(personEvents);
   const alsoHere = [...radar.coPresenceVisible, ...radar.coPresenceOverflow];
   const branchLabel = person.branch ? (branchLabelById.get(person.branch) ?? person.branch) : null;
+  const resolvedPortraitUrl = resolvePersonPortraitUrl(person, personThumbMap, {
+    preferFullResolution: true,
+  });
   const isReadingView = wikiTab !== 'history' && wikiTab !== 'talk';
   const sectionJumpItems = buildPersonSectionJumpItems({
     biographyCount: personBiographies.length,
@@ -320,6 +330,7 @@ export const PersonPage: React.FC = () => {
         <main id="main-content" className={cx(personStyles, 'narrative-pane')}>
           <PersonProfileHeader
             person={person}
+            portraitUrl={resolvedPortraitUrl}
             baseUrl={baseUrl}
             branchLabel={branchLabel}
             completeness={personCompleteness}
@@ -330,7 +341,7 @@ export const PersonPage: React.FC = () => {
             residenceSpans={personResidenceSpans}
             placesById={placesById}
             onOpenPortraitLightbox={() => {
-              const next = resolvePortraitLightboxState(person, personMedia);
+              const next = resolvePortraitLightboxState(person, personMedia, resolvedPortraitUrl);
               if (next) {
                 setLightbox(next);
               }
