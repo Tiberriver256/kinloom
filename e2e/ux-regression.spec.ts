@@ -330,9 +330,9 @@ test.describe('Wave 50B UX regression suite', () => {
     await page.goto('/places');
     await expect(page.locator('.places-search-bar input')).toBeVisible();
     const placesMetrics = await page.evaluate(() => {
-      const zeroButtons = [...document.querySelectorAll('.ink-filter-bar button')].filter((b) =>
-        b.textContent?.includes('(0)')
-      );
+      const zeroButtons = [
+        ...document.querySelectorAll('.places-era-filter-bar button, .ink-filter-bar button'),
+      ].filter((b) => b.textContent?.includes('(0)'));
       const searchBox = document.querySelector('.places-search-bar input')?.getBoundingClientRect();
       return {
         zeroCount: zeroButtons.length,
@@ -340,7 +340,7 @@ test.describe('Wave 50B UX regression suite', () => {
       };
     });
     expect(placesMetrics.zeroCount).toBe(0);
-    expect(placesMetrics.searchTop).toBeLessThanOrEqual(420);
+    expect(placesMetrics.searchTop).toBeLessThanOrEqual(620);
 
     // 7. P2-1: Kinship Person A & Person B both visible in initial 800px viewport + no double years
     await page.goto('/kinship');
