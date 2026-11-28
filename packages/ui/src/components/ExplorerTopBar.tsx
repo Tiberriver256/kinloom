@@ -745,7 +745,7 @@ export const ExplorerTopBar: React.FC = () => {
             <div
               className={joinClasses(
                 cx(wikiChromeStyles, 'topbar-account'),
-                cx(topBarStyles, 'nav-pill-desktop-only')
+                cx(topBarStyles, 'nav-pill-desktop-only topbar-guide-desktop-only')
               )}
               ref={guideMenuRef}
             >

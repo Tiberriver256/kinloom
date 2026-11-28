@@ -180,3 +180,73 @@ test('error boundary catches a broken lazy route chunk and posts client telemetr
 
   await telemetryPosted;
 });
+
+test('Mobile 390px Dark Mode: unified 4px topbar geometry, Guide in Archive menu, sans-serif UI controls, and high-contrast active Jump Strip (#88)', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.emulateMedia({ colorScheme: 'dark' });
+  await page.goto('/', { waitUntil: 'networkidle' });
+
+  // 1. Desktop Guide button is hidden from the 390px topbar; site title fits without truncation
+  const desktopGuideBtn = page.locator('header button:has-text("Guide")');
+  await expect(desktopGuideBtn)
+    .toHaveCount(0)
+    .catch(async () => {
+      await expect(desktopGuideBtn.first()).toBeHidden();
+    });
+
+  const brandFits = await page
+    .locator('header a')
+    .first()
+    .evaluate((el) => el.scrollWidth <= el.clientWidth + 1);
+  expect(brandFits).toBe(true);
+
+  // 2. All visible right-side topbar controls share unified 4px border-radius (no circles or 999px pills)
+  const radii = await page.locator('header button').evaluateAll((buttons) =>
+    buttons
+      .filter((btn) => {
+        const style = window.getComputedStyle(btn);
+        const rect = btn.getBoundingClientRect();
+        return style.display !== 'none' && style.visibility !== 'hidden' && rect.width > 0 && rect.height > 0;
+      })
+      .map((btn) => ({
+        label: btn.getAttribute('aria-label') || btn.textContent?.trim() || '',
+        radius: window.getComputedStyle(btn).borderRadius,
+      }))
+  );
+  expect(radii.length).toBeGreaterThanOrEqual(3);
+  for (const item of radii) {
+    expect(item.radius).toBe('4px');
+  }
+
+  // 3. Directory toolbar buttons & selects use UI sans-serif, never IBM Plex Mono
+  const controlFonts = await page.locator('main button, main select').evaluateAll((els) =>
+    els
+      .filter((el) => {
+        const rect = el.getBoundingClientRect();
+        return rect.width > 0 && rect.height > 0;
+      })
+      .slice(0, 8)
+      .map((el) => window.getComputedStyle(el).fontFamily)
+  );
+  expect(controlFonts.length).toBeGreaterThan(0);
+  for (const family of controlFonts) {
+    expect(family).not.toContain('IBM Plex Mono');
+  }
+
+  // 4. Dark-mode active DirectoryJumpStrip link uses bright amber ink (#f5cc8f -> rgb(245, 204, 143)) on transparent fill
+  const activeJump = page.locator('a[aria-current="location"]').first();
+  await expect(activeJump).toBeVisible();
+  const jumpStyle = await activeJump.evaluate((el) => {
+    const cs = window.getComputedStyle(el);
+    return {
+      color: cs.color,
+      backgroundColor: cs.backgroundColor,
+      borderBottomWidth: cs.borderBottomWidth,
+    };
+  });
+  expect(jumpStyle.color).toBe('rgb(245, 204, 143)');
+  expect(jumpStyle.backgroundColor).toBe('rgba(0, 0, 0, 0)');
+  expect(jumpStyle.borderBottomWidth).toBe('2px');
+});

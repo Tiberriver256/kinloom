@@ -109,9 +109,9 @@
 .index-view-segmented {
   display: inline-flex;
   align-items: stretch;
-  border: 1px solid var(--border-control);
-  border-radius: var(--radius-sm);
-  background: var(--surface-card);
+  border: 1px solid var(--border-decorative);
+  border-radius: var(--radius-md);
+  background: var(--surface-subtle);
   overflow: hidden;
 }
 
@@ -119,8 +119,8 @@
   border: none;
   background: transparent;
   color: var(--text-secondary);
-  font-family: var(--font-mono);
-  font-size: 0.82rem;
+  font-family: var(--font-ui);
+  font-size: 0.84rem;
   font-weight: 500;
   padding: 5px 11px;
   cursor: pointer;
@@ -139,17 +139,18 @@
 }
 
 .index-view-btn:global(.is-active) {
-  background: var(--surface-linen);
-  color: var(--radar-copresence);
+  background: var(--surface-card);
+  color: var(--jump-active-fg);
   font-weight: 600;
 }
 
 .index-branch-select {
-  background: var(--surface-card);
-  border: 1px solid var(--border-control);
-  border-radius: var(--radius-sm);
+  background: var(--surface-subtle);
+  border: 1px solid var(--border-decorative);
+  border-radius: var(--radius-md);
   padding: 5px 10px;
-  font-size: 0.82rem;
+  font-family: var(--font-ui);
+  font-size: 0.84rem;
   color: var(--text-primary);
 }
 
@@ -216,8 +217,8 @@
 }
 
 .index-era-snapshot-link {
-  font-family: var(--font-mono);
-  font-size: 0.76rem;
+  font-family: var(--font-ui);
+  font-size: 0.8rem;
   font-weight: 500;
   color: var(--text-secondary);
   text-decoration: none;
@@ -464,8 +465,8 @@
 }
 
 .index-export-link {
-  font-family: var(--font-mono);
-  font-size: 0.8rem;
+  font-family: var(--font-ui);
+  font-size: 0.84rem;
   font-weight: 500;
   color: var(--text-secondary);
   border-bottom-color: var(--border-control);

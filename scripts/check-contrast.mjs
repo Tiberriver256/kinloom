@@ -30,6 +30,10 @@ export const CONTRAST_PAIRS = [
   ['badge-cited-fg', 'badge-cited-bg', 7.0],
   ['border-control', 'surface-canvas', 3.0],
   ['border-control', 'surface-card', 3.0],
+  ['jump-active-fg', 'surface-canvas', 7.0],
+  ['jump-active-fg', 'surface-subtle', 7.0],
+  ['text-primary', 'surface-subtle', 7.0],
+  ['text-secondary', 'surface-subtle', 7.0],
 ];
 
 export function resolveTokenColor(val, tokens) {
@@ -169,7 +173,7 @@ function main() {
     process.exit(1);
   }
   console.log(
-    `All ${audit.results.length} Kinloom contrast checks (24 light + 24 dark) and kinloom.css parity checks passed.`
+    `All ${audit.results.length} Kinloom contrast checks (${CONTRAST_PAIRS.length} light + ${CONTRAST_PAIRS.length} dark) and kinloom.css parity checks passed.`
   );
 }
 

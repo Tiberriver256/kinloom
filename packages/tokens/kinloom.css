@@ -3,6 +3,7 @@
 
   --surface-canvas: #f5efe2;
   --surface-card: #fcf9f2;
+  --surface-subtle: #efe7d7;
   --surface-linen: #eae1ce;
   --surface-radar: var(--surface-linen);
   --surface-muted: #e5dac5;
@@ -35,6 +36,7 @@
   --badge-memory-fg: #6b3d0e;
   --badge-cited-bg: #dfece6;
   --badge-cited-fg: #244a3c;
+  --jump-active-fg: #6b3d0e;
 
   --surface-topbar: rgba(245, 239, 226, 0.95);
   --surface-overlay-card: rgba(252, 249, 242, 0.96);
@@ -56,6 +58,7 @@
   --badge-photo-scan: rgba(122, 70, 18, 0.92);
 
   --font-serif: 'Newsreader', Georgia, 'Times New Roman', serif;
+  --font-ui: ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
   --font-mono: 'IBM Plex Mono', ui-monospace, 'SFMono-Regular', Menlo, monospace;
 
   --topbar-height: 58px;
@@ -79,6 +82,7 @@
 
     --surface-canvas: #171614;
     --surface-card: #1f1d1a;
+    --surface-subtle: #22201c;
     --surface-linen: #2a2723;
     --surface-muted: #34302b;
     --surface-header: #ede6d9;
@@ -107,6 +111,7 @@
     --badge-memory-fg: #efc083;
     --badge-cited-bg: #192d26;
     --badge-cited-fg: #a6dfc7;
+    --jump-active-fg: #f5cc8f;
 
     --surface-topbar: rgba(23, 22, 20, 0.94);
     --surface-overlay-card: rgba(31, 29, 26, 0.96);
@@ -141,6 +146,7 @@
 
   --surface-canvas: #171614;
   --surface-card: #1f1d1a;
+  --surface-subtle: #22201c;
   --surface-linen: #2a2723;
   --surface-muted: #34302b;
   --surface-header: #ede6d9;
@@ -169,6 +175,7 @@
   --badge-memory-fg: #efc083;
   --badge-cited-bg: #192d26;
   --badge-cited-fg: #a6dfc7;
+  --jump-active-fg: #f5cc8f;
 
   --surface-topbar: rgba(23, 22, 20, 0.94);
   --surface-overlay-card: rgba(31, 29, 26, 0.96);

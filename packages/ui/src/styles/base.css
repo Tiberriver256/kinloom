@@ -6,7 +6,7 @@
 
 :root {
   --font-hand: var(--font-serif);
-  --font-sans: var(--font-serif);
+  --font-sans: var(--font-ui);
 }
 
 *,

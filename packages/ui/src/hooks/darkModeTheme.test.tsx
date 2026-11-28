@@ -608,9 +608,9 @@ describe('MapLibre and token dark-mode parity', () => {
     const stdout = execFileSync(process.execPath, [scriptPath], { encoding: 'utf8' });
     const lightPasses = stdout.match(/^PASS \[light\]/gm) ?? [];
     const darkPasses = stdout.match(/^PASS \[dark\]/gm) ?? [];
-    expect(lightPasses).toHaveLength(24);
-    expect(darkPasses).toHaveLength(24);
-    expect(stdout).toContain('All 48 Kinloom contrast checks (24 light + 24 dark)');
+    expect(lightPasses).toHaveLength(28);
+    expect(darkPasses).toHaveLength(28);
+    expect(stdout).toContain('All 56 Kinloom contrast checks (28 light + 28 dark)');
     expect(stdout).not.toContain('FAIL');
   });
 });

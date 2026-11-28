@@ -36,8 +36,8 @@
   align-items: center;
   background: var(--surface-header);
   color: var(--text-inverse);
-  font-family: var(--font-mono);
-  font-size: 0.82rem;
+  font-family: var(--font-ui);
+  font-size: 0.84rem;
   font-weight: 600;
   text-decoration: none;
   border-radius: var(--radius-md);
@@ -110,8 +110,8 @@ dialog[open] {
   background: transparent;
   color: var(--text-secondary);
   border-radius: 0;
-  font-size: 0.84rem;
-  font-family: var(--font-mono);
+  font-size: 0.86rem;
+  font-family: var(--font-ui);
   cursor: pointer;
   transition:
     color 0.14s ease,
@@ -158,10 +158,10 @@ select.pill-btn option {
 :global(.ink-filter-bar) .pill-btn,
 :global(.evidence-tabs) .pill-btn,
 .empty-state-notice-action .pill-btn {
-  border: 1px solid var(--border-control);
-  border-radius: var(--radius-sm);
+  border: 1px solid var(--border-decorative);
+  border-radius: var(--radius-md);
   padding: 5px 11px;
-  background: var(--surface-card);
+  background: var(--surface-subtle);
   color: var(--text-primary);
   transition:
     background-color 0.14s ease,
@@ -214,8 +214,8 @@ select.pill-btn option {
   color: var(--radar-copresence);
   border-radius: 0;
   padding: 2px 1px;
-  font-family: var(--font-mono);
-  font-size: 0.76rem;
+  font-family: var(--font-ui);
+  font-size: 0.8rem;
   font-weight: 600;
   cursor: pointer;
   transition:
@@ -235,8 +235,8 @@ select.pill-btn option {
   border-bottom: 1px solid var(--radar-copresence);
   color: var(--radar-copresence);
   padding: 0 2px;
-  font-family: var(--font-mono);
-  font-size: 0.74rem;
+  font-family: var(--font-ui);
+  font-size: 0.78rem;
   font-weight: 600;
   cursor: pointer;
   min-width: 0;

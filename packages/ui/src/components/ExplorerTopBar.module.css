@@ -99,19 +99,35 @@
 }
 
 .nav-search-btn {
-  padding: 3px 9px;
-  border: 1px solid var(--border-control);
-  border-radius: var(--radius-sm);
-  background: var(--surface-card);
+  padding: 4px 10px;
+  border: 1px solid var(--border-decorative);
+  border-radius: var(--radius-md);
+  background: var(--surface-subtle);
   color: var(--text-primary);
+  font-family: var(--font-ui);
+  font-size: 0.84rem;
+}
+
+.nav-search-btn:hover {
+  background: var(--surface-linen);
+  border-color: var(--border-control);
+  border-bottom-color: var(--border-control);
 }
 
 .nav-guide-btn {
-  padding: 3px 9px;
-  border: 1px solid var(--border-control);
-  border-radius: var(--radius-sm);
-  background: var(--surface-card);
+  padding: 4px 10px;
+  border: 1px solid var(--border-decorative);
+  border-radius: var(--radius-md);
+  background: var(--surface-subtle);
   color: var(--text-primary);
+  font-family: var(--font-ui);
+  font-size: 0.84rem;
+}
+
+.nav-guide-btn:hover {
+  background: var(--surface-linen);
+  border-color: var(--border-control);
+  border-bottom-color: var(--border-control);
 }
 
 .topbar-guide-badge {
@@ -309,7 +325,8 @@
   .year-readout,
   :global(.mobile-sources-btn),
   .topbar-right,
-  :global(.nav-pill-desktop-only) {
+  :global(.nav-pill-desktop-only),
+  .topbar .topbar-guide-desktop-only {
     display: none;
   }
 }
@@ -318,8 +335,8 @@
   display: flex;
   align-items: center;
   gap: 6px;
-  font-family: var(--font-mono);
-  font-size: 0.76rem;
+  font-family: var(--font-ui);
+  font-size: 0.8rem;
 }
 
 .topbar-switcher-caption {
@@ -336,8 +353,8 @@
   min-height: 36px;
   padding: 0;
   border-radius: var(--radius-md);
-  border: 1px solid var(--border-control);
-  background: var(--surface-card);
+  border: 1px solid var(--border-decorative);
+  background: var(--surface-subtle);
   color: var(--surface-header);
   cursor: pointer;
   flex-shrink: 0;
@@ -368,7 +385,7 @@
     height: 44px;
     min-width: 44px;
     min-height: 44px;
-    border-radius: 999px;
+    border-radius: var(--radius-md);
   }
 
   .topbar-mobile-icon-btn {
@@ -381,9 +398,9 @@
     min-width: 44px;
     min-height: 44px;
     padding: 0;
-    border-radius: 999px;
-    border: 1px solid var(--border-control);
-    background: var(--surface-card);
+    border-radius: var(--radius-md);
+    border: 1px solid var(--border-decorative);
+    background: var(--surface-subtle);
     color: var(--surface-header);
     cursor: pointer;
     flex-shrink: 0;
