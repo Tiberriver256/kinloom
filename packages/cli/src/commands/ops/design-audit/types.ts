@@ -123,11 +123,24 @@ export interface DesignAuditClippedTextSample {
   readonly rect: readonly [number, number, number, number];
 }
 
+export interface DesignAuditDisplayTextSample {
+  readonly tag: string;
+  readonly text: string;
+  readonly fontSizePx: number;
+  readonly fontWeight: number;
+  readonly color: string;
+  readonly backgroundColor: string;
+  readonly rect: readonly [number, number, number, number];
+}
+
 export interface DesignAuditTelemetry {
   readonly viewport: string;
   readonly docOverflowX: number;
   readonly aboveFoldMainRatio: number;
   readonly aboveFoldChromeRatio: number;
+  readonly aboveFoldContentYieldRatio?: number | undefined;
+  readonly firstContentY?: number | null | undefined;
+  readonly firstContentSelector?: string | null | undefined;
   readonly navLinkCount: number;
   readonly title: string;
   readonly h1Text: string;
@@ -136,6 +149,7 @@ export interface DesignAuditTelemetry {
   readonly viewportMeta: string;
   readonly interactives: readonly DesignAuditInteractiveSample[];
   readonly textSamples: readonly DesignAuditTextSample[];
+  readonly displayTextSamples?: readonly DesignAuditDisplayTextSample[] | undefined;
   readonly focusIssues?: readonly DesignAuditFocusIssue[];
   readonly textSpacingClipped?: readonly DesignAuditClippedTextSample[];
   readonly axNodeCount?: number;

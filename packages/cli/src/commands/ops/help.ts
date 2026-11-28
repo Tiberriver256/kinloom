@@ -373,6 +373,7 @@ Options:
   --repo <dir>         Repository root for CSS and DTCG token discovery (default: cwd)
   --archetype <id>     UI archetype: editorial (default), saas, ecommerce, or mobile-app
   --routes <csv>       Comma-separated or repeatable route paths (default: /)
+  --auto-routes        Discover core, deceased /person/<slug>, /place/<slug>, and enabled plugin routes from /api/bundle
   --themes <csv>       Color schemes: light, dark, more-contrast (default: light,dark)
   --states <csv>       UI Stack states: ideal, loading, empty-first, empty-zero, partial, error
   --css <path>         Explicit CSS file path(s) to audit (repeatable or comma-separated)
@@ -381,6 +382,7 @@ Options:
   --baseline <sarif>   Baseline SARIF 2.1.0 file for ratchet regression diffing
   --auth-cookie <str>  Optional Cookie header for authenticated private-archive audits (never saved)
   --auth-header <hdr>  Optional HTTP header (\`Name: value\`, repeatable, never saved)
+  --invite-token <tok> Redeem a viewer invite token into a session cookie before route discovery and capture (never saved)
   --with-temp-auth     Mint and auto-revoke a temporary D1 viewer invite via Wrangler
   --static-only        Skip browser capture and run static CSS/DTCG checks only
   --fail-on-error      Exit with code 1 when any blocking error finding is detected

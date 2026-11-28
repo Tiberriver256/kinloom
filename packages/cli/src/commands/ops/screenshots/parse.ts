@@ -1,4 +1,5 @@
 import { CliValidationError } from '../../../errors.js';
+import { buildAuthRequestHeaders, normalizeRoutePath } from '../shared/routeDiscovery.js';
 import type {
   AuthHeader,
   IncludeScope,
@@ -7,6 +8,8 @@ import type {
   ScreenshotTheme,
   ViewportSpec,
 } from './types.js';
+
+export { buildAuthRequestHeaders, normalizeRoutePath };
 
 export const DEFAULT_OUT_DIR = './kinloom-screenshots';
 export const DEFAULT_WAIT_MS = 350;
@@ -116,21 +119,6 @@ export function validateTargetBaseUrl(raw: string): string {
   }
   const cleanPath = trimTrailingChar(parsed.pathname, '/');
   return `${parsed.origin}${cleanPath}`;
-}
-
-export function normalizeRoutePath(raw: string): string {
-  const trimmed = raw.trim();
-  if (!trimmed) {
-    throw new CliValidationError('Route path cannot be empty.');
-  }
-  if (/^[a-zA-Z][a-zA-Z0-9+.-]*:/.test(trimmed)) {
-    throw new CliValidationError(`Route '${raw}' must be a relative path starting with '/'.`);
-  }
-  const withSlash = trimmed.startsWith('/') ? trimmed : `/${trimmed}`;
-  const withoutHash = withSlash.split('#')[0] ?? '';
-  const [pathnamePart = '', queryPart] = withoutHash.split('?');
-  const collapsedPath = trimTrailingChar(pathnamePart.replace(/\/+/g, '/'), '/') || '/';
-  return queryPart ? `${collapsedPath}?${queryPart}` : collapsedPath;
 }
 
 export function routeToSlug(route: string): string {
@@ -323,22 +311,6 @@ export function sanitizeUrlForReport(rawUrl: string): string {
   } catch {
     return rawUrl.replace(/(token|secret|auth|cookie|key)=[^&\s]+/gi, '$1=[redacted]');
   }
-}
-
-export function buildAuthRequestHeaders(options: {
-  readonly authCookie?: string | undefined;
-  readonly authHeaders?: readonly AuthHeader[] | undefined;
-}): Record<string, string> {
-  const headers: Record<string, string> = {};
-  if (options.authHeaders) {
-    for (const header of options.authHeaders) {
-      headers[header.name] = header.value;
-    }
-  }
-  if (options.authCookie?.trim()) {
-    headers['Cookie'] = options.authCookie.trim();
-  }
-  return headers;
 }
 
 export function parseBoundedTimeoutEnv(

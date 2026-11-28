@@ -132,6 +132,10 @@ export async function runDesignAudit(rest: readonly string[], ctx: CliDispatchCo
         url: { type: 'string' },
         archetype: { type: 'string' },
         routes: { type: 'string', multiple: true },
+        'auto-routes': { type: 'boolean', default: false },
+        'auth-cookie': { type: 'string' },
+        'auth-header': { type: 'string', multiple: true },
+        'invite-token': { type: 'string' },
         repo: { type: 'string' },
         force: { type: 'boolean', default: false },
         json: { type: 'boolean', default: false },
@@ -139,7 +143,35 @@ export async function runDesignAudit(rest: readonly string[], ctx: CliDispatchCo
     });
     const outPath = path.resolve(ctx.cwd, values.out ?? 'design-audit.plan.json');
     const arch = values.archetype ? mod.resolveDesignAuditArchetype(values.archetype).id : undefined;
-    const routes = splitCsvFlags(values.routes);
+    let routes: readonly string[] = splitCsvFlags(values.routes);
+    if (values['auto-routes'] && values.url) {
+      if (values['auth-cookie']?.trim() && values['invite-token']?.trim()) {
+        throw new CliValidationError('Specify either `--auth-cookie` or `--invite-token`, not both.');
+      }
+      const authHeaders = parseDesignAuditAuthHeaders(values['auth-header']);
+      let authCookie = values['auth-cookie'];
+      if (values['invite-token'] !== undefined) {
+        if (/[\r\n]/.test(values['invite-token']) || !values['invite-token'].trim()) {
+          throw new CliValidationError(
+            'Option `--invite-token` must be a non-empty string without CR or LF characters.'
+          );
+        }
+        const { redeemEphemeralInviteSession } = await import('../commands/ops/shared/ephemeralAuth.js');
+        authCookie = await redeemEphemeralInviteSession({
+          baseUrl: values.url,
+          inviteToken: values['invite-token'].trim(),
+          fetchImpl: ctx.fetchImpl,
+        });
+      }
+      const auto = await mod.discoverDesignAuditAutoRoutes({
+        baseUrl: values.url,
+        explicitRoutes: routes.length > 0 ? routes : undefined,
+        authCookie,
+        authHeaders,
+        fetchImpl: ctx.fetchImpl,
+      });
+      routes = auto.routes;
+    }
     const result = mod.initDesignAuditPlan({
       outPath,
       baseUrl: values.url,
@@ -243,15 +275,23 @@ export async function runDesignAudit(rest: readonly string[], ctx: CliDispatchCo
       baseline: { type: 'string' },
       'auth-cookie': { type: 'string' },
       'auth-header': { type: 'string', multiple: true },
+      'invite-token': { type: 'string' },
       'with-temp-auth': { type: 'boolean', default: false },
+      'auto-routes': { type: 'boolean', default: false },
       'static-only': { type: 'boolean', default: false },
       'fail-on-error': { type: 'boolean', default: false },
       json: { type: 'boolean', default: false },
     },
   });
 
-  if (values['with-temp-auth'] && values['auth-cookie']?.trim()) {
-    throw new CliValidationError('Specify either `--auth-cookie` or `--with-temp-auth`, not both.');
+  const authModeCount =
+    Number(Boolean(values['with-temp-auth'])) +
+    Number(Boolean(values['auth-cookie']?.trim())) +
+    Number(Boolean(values['invite-token']?.trim()));
+  if (authModeCount > 1) {
+    throw new CliValidationError(
+      'Specify at most one of `--auth-cookie`, `--invite-token`, or `--with-temp-auth`.'
+    );
   }
 
   const arch = values.archetype ? mod.resolveDesignAuditArchetype(values.archetype).id : undefined;
@@ -274,6 +314,7 @@ export async function runDesignAudit(rest: readonly string[], ctx: CliDispatchCo
         repoRoot: values.repo ? path.resolve(ctx.cwd, values.repo) : ctx.cwd,
         archetype: arch,
         routes: routes.length > 0 ? routes : undefined,
+        autoRoutes: values['auto-routes'],
         themes: parseThemes(values.themes),
         states: parseUiStates(values.states),
         cssPaths: splitCsvFlags(values.css),
@@ -281,6 +322,7 @@ export async function runDesignAudit(rest: readonly string[], ctx: CliDispatchCo
         baselinePath: values.baseline ? path.resolve(ctx.cwd, values.baseline) : undefined,
         withTempAuth: values['with-temp-auth'],
         authCookie: values['auth-cookie'],
+        inviteToken: values['invite-token'],
         authHeaders,
         fetchImpl: ctx.fetchImpl,
         execWrangler: ctx.execWrangler,

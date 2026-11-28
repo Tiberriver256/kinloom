@@ -15,10 +15,13 @@ Run a deterministic-first, reference-anchored UI/UX audit across twelve universa
 
 \`\`\`bash
 kinloom design-audit --url http://127.0.0.1:4173 --routes /,/tree,/places --archetype editorial
+kinloom design-audit run --url https://archive.example --with-temp-auth --auto-routes --themes light,dark
 \`\`\`
 
+- Supports authenticated private-archive audits via \`--with-temp-auth\` (mints and auto-revokes an ephemeral D1 viewer invite via Wrangler), \`--invite-token <token>\` (redeems into a session cookie before discovery and capture), \`--auth-cookie <cookie>\`, and repeatable \`--auth-header <Name: value>\` flags. Credentials are never written to plans, manifests, or SARIF output.
+- Pass \`--auto-routes\` to discover core routes (\`/\`, \`/places\`, \`/evidence\`, \`/time\`, \`/tree\`, \`/map\`, \`/kinship\`, \`/changes\`), one representative confirmed-deceased \`/person/<slug>\` (never living people), one \`/place/<slug>\`, and enabled plugin routes (\`/recipes\`, \`/support\`, etc.) from \`/api/bundle\` and live navigation links, with graceful fallback if \`/api/bundle\` is unavailable.
 - Captures archetype viewports in \`light\` and \`dark\` modes plus live \`prefers-reduced-motion: reduce\` checks.
-- Evaluates APCA \`0.0.98G-4g-base-W3\` perceptual contrast (public-beta WCAG 3 candidate) paired with WCAG 2.2 AA/AAA contrast ratios, dark-mode large-text halation (> Lc 90), WCAG 1.4.10 horizontal reflow, WCAG 2.5.8 touch target bounds, WCAG 2.4.11/2.4.13 focus occlusion & perimeter, and WCAG 1.4.12 text-spacing clipping.
+- Measures above-the-fold \`firstContentY\` and content-to-chrome yield (\`DA-01-ABOVE-THE-FOLD-YIELD\`), APCA \`0.0.98G-4g-base-W3\` perceptual contrast (public-beta WCAG 3 candidate) paired with WCAG 2.2 AA/AAA contrast ratios, dark-mode large display text halation (\`DA-09-DARK-HALATION\` when \`|Lc| > 90\` on text \`>= 24px\`), WCAG 1.4.10 horizontal reflow, WCAG 2.5.8 touch target bounds, WCAG 2.4.11/2.4.13 focus occlusion & perimeter, and WCAG 1.4.12 text-spacing clipping.
 - Runs static CSS entropy and W3C DTCG 2025.10 \`.tokens.json\` / \`.resolver.json\` checks.
 - Emits OASIS SARIF 2.1.0 (\`design-audit.sarif\`) with SHA-256 \`partialFingerprints\` and baseline ratchet diffing, plus an Executive Dossier (\`audit-dossier.md\`).
 - Automatically degrades to \`static-degraded\` mode when \`--static-only\` is passed or a browser/URL is unavailable.
@@ -27,6 +30,7 @@ kinloom design-audit --url http://127.0.0.1:4173 --routes /,/tree,/places --arch
 
 \`\`\`bash
 kinloom design-audit init --url http://127.0.0.1:4173 --archetype editorial --routes /,/tree,/map
+kinloom design-audit init --url https://archive.example --invite-token <token> --auto-routes
 \`\`\`
 
 ### 3. Run offline CSS & DTCG token checks (\`css\`)

@@ -1,6 +1,7 @@
 import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
+import { classifyDiscoveredNavLinks, type DiscoveredNavLink } from '../shared/routeDiscovery.js';
 import { resolveDesignAuditArchetype } from './archetypes.js';
 import type {
   DesignAuditCaptureRecord,
@@ -70,6 +71,7 @@ interface PlaywrightLauncherModule {
 
 interface RawTelemetryWithStylesheets extends DesignAuditTelemetry {
   stylesheets?: ReadonlyArray<{ readonly href: string; readonly cssText: string }>;
+  navLinks?: readonly DiscoveredNavLink[];
 }
 
 function sha256File(filePath: string): string {
@@ -110,6 +112,46 @@ const COLLECT_TELEMETRY_EXPR = `(() => {
   const mainArea = rectAreaInFold(mainEl);
   const chromeArea = chromeEls.reduce((acc, el) => acc + rectAreaInFold(el), 0);
   const foldArea = vw * vh || 1;
+  const aboveFoldContentYieldRatio = mainArea > 0 ? Number((mainArea / Math.max(1, mainArea + chromeArea)).toFixed(4)) : 0;
+  const resolveOpaqueBg = (el) => {
+    let bg = getComputedStyle(el).backgroundColor;
+    let cur = el.parentElement;
+    while ((bg === 'rgba(0, 0, 0, 0)' || bg === 'transparent') && cur) {
+      bg = getComputedStyle(cur).backgroundColor;
+      cur = cur.parentElement;
+    }
+    return bg || 'rgb(255, 255, 255)';
+  };
+  let firstContentY = null;
+  let firstContentSelector = null;
+  const primaryRoot = mainEl || document.body;
+  if (primaryRoot) {
+    const primaryCandidates = [
+      ...primaryRoot.querySelectorAll(
+        'article, [role="article"], [data-primary-content], [class*="card"], section, table, h1, h2'
+      ),
+    ];
+    for (const el of primaryCandidates) {
+      const r = el.getBoundingClientRect();
+      const cs = getComputedStyle(el);
+      if (r.width <= 0 || r.height <= 0 || r.bottom <= 0 || cs.visibility === 'hidden' || cs.display === 'none') {
+        continue;
+      }
+      const topY = Math.round(r.top);
+      if (firstContentY === null || topY < firstContentY) {
+        firstContentY = topY;
+        const cls = typeof el.className === 'string' && el.className.trim() ? '.' + el.className.trim().split(/\\s+/)[0] : '';
+        firstContentSelector = el.tagName.toLowerCase() + cls;
+      }
+    }
+    if (firstContentY === null && mainEl) {
+      const mr = mainEl.getBoundingClientRect();
+      if (mr.width > 0 && mr.height > 0) {
+        firstContentY = Math.round(mr.top);
+        firstContentSelector = mainEl.tagName.toLowerCase();
+      }
+    }
+  }
   const interactives = [...document.querySelectorAll('a[href], button, input, select, textarea, [role="button"], [tabindex]:not([tabindex="-1"])')]
     .map((el) => {
       const r = el.getBoundingClientRect();
@@ -130,12 +172,6 @@ const COLLECT_TELEMETRY_EXPR = `(() => {
     .map((el) => {
       const r = el.getBoundingClientRect();
       const cs = getComputedStyle(el);
-      let bg = cs.backgroundColor;
-      let cur = el.parentElement;
-      while ((bg === 'rgba(0, 0, 0, 0)' || bg === 'transparent') && cur) {
-        bg = getComputedStyle(cur).backgroundColor;
-        cur = cur.parentElement;
-      }
       return {
         tag: el.tagName.toLowerCase(),
         text: (el.innerText || '').trim().slice(0, 80),
@@ -147,11 +183,32 @@ const COLLECT_TELEMETRY_EXPR = `(() => {
         textTransform: cs.textTransform,
         fontFamily: cs.fontFamily,
         color: cs.color,
-        backgroundColor: bg || 'rgb(255, 255, 255)',
+        backgroundColor: resolveOpaqueBg(el),
         rect: [Math.round(r.x), Math.round(r.y), Math.round(r.width), Math.round(r.height)],
       };
     })
     .filter((s) => s.text.length > 0 && s.rect[2] > 0 && s.rect[3] > 0);
+  const displayTextSamples = [];
+  for (const el of document.querySelectorAll('h1, h2, h3, h4, blockquote, p, span, div, a, [class*="display"], [class*="hero"], [class*="title"]')) {
+    if (displayTextSamples.length >= 40) break;
+    const cs = getComputedStyle(el);
+    const fontSizePx = parseFloat(cs.fontSize) || 0;
+    if (fontSizePx < 24 || cs.visibility === 'hidden' || cs.display === 'none') continue;
+    const hasDirectText = [...el.childNodes].some((node) => node.nodeType === 3 && (node.textContent || '').trim().length > 0);
+    if (!hasDirectText && !/^H[1-4]$/.test(el.tagName)) continue;
+    const text = (el.innerText || '').trim().slice(0, 80);
+    const r = el.getBoundingClientRect();
+    if (!text || r.width <= 0 || r.height <= 0) continue;
+    displayTextSamples.push({
+      tag: el.tagName.toLowerCase(),
+      text,
+      fontSizePx,
+      fontWeight: parseInt(cs.fontWeight, 10) || 400,
+      color: cs.color,
+      backgroundColor: resolveOpaqueBg(el),
+      rect: [Math.round(r.x), Math.round(r.y), Math.round(r.width), Math.round(r.height)],
+    });
+  }
   const h1 = document.querySelector('h1');
   const title = document.title || '';
   const viewportMeta = document.querySelector('meta[name="viewport"]')?.getAttribute('content') || '';
@@ -162,7 +219,11 @@ const COLLECT_TELEMETRY_EXPR = `(() => {
       if (cssText.trim()) stylesheets.push({ href: sheet.href || 'inline', cssText });
     } catch {}
   }
-  const navLinks = [...document.querySelectorAll('header a, nav a')].length;
+  const navLinksCount = [...document.querySelectorAll('header a, nav a')].length;
+  const navLinks = [...document.querySelectorAll('header a[href], nav a[href], footer a[href]')].map((a) => ({
+    href: a.getAttribute('href') || '',
+    text: (a.textContent || '').trim(),
+  }));
   const h1Rect = h1 ? h1.getBoundingClientRect() : null;
   const h1Truncated = h1 ? h1.scrollWidth > h1.clientWidth + 2 : false;
   return {
@@ -170,7 +231,10 @@ const COLLECT_TELEMETRY_EXPR = `(() => {
     docOverflowX,
     aboveFoldMainRatio: Number((mainArea / foldArea).toFixed(4)),
     aboveFoldChromeRatio: Number((chromeArea / foldArea).toFixed(4)),
-    navLinkCount: navLinks,
+    aboveFoldContentYieldRatio,
+    firstContentY,
+    firstContentSelector,
+    navLinkCount: navLinksCount,
     title,
     h1Text: h1 ? h1.innerText.trim() : '',
     h1Truncated,
@@ -178,7 +242,9 @@ const COLLECT_TELEMETRY_EXPR = `(() => {
     viewportMeta,
     interactives,
     textSamples,
+    displayTextSamples,
     stylesheets,
+    navLinks,
   };
 })()`;
 
@@ -407,6 +473,7 @@ export async function runDesignAuditCaptureMatrix(options: {
   readonly loadingDelayMs?: number | undefined;
   readonly authCookie?: string | undefined;
   readonly authHeaders?: Readonly<Record<string, string>> | undefined;
+  readonly autoDiscoverPluginRoutes?: boolean | undefined;
 }): Promise<DesignAuditManifest> {
   const { plan, bundleDir } = options;
   const shotsDir = path.join(bundleDir, 'screenshots');
@@ -430,9 +497,16 @@ export async function runDesignAuditCaptureMatrix(options: {
   const browser = await (options.browserFactory ?? defaultBrowserFactory)();
   const captures: DesignAuditCaptureRecord[] = [];
   const cssExtracted = new Map<string, string>();
+  const routeQueue = [...plan.routes];
+  const seenRoutePaths = new Set(routeQueue.map((r) => r.path));
+  let inspectedRootPluginNav = false;
 
   try {
-    for (const routeCfg of plan.routes) {
+    for (let routeIdx = 0; routeIdx < routeQueue.length; routeIdx += 1) {
+      const routeCfg = routeQueue[routeIdx];
+      if (!routeCfg) {
+        continue;
+      }
       const arch = resolveDesignAuditArchetype(routeCfg.archetype);
       const themes: readonly DesignAuditTheme[] = plan.themes ?? ['light', 'dark'];
       const states: readonly DesignAuditUiState[] = routeCfg.uiStates ?? ['ideal'];
@@ -497,7 +571,27 @@ export async function runDesignAuditCaptureMatrix(options: {
               for (const sheet of rawTelemetry.stylesheets ?? []) {
                 cssExtracted.set(sheet.href, sheet.cssText);
               }
-              const { stylesheets: _omit, ...telemetryBase } = rawTelemetry;
+              if (
+                options.autoDiscoverPluginRoutes &&
+                !inspectedRootPluginNav &&
+                routeCfg.path === '/' &&
+                Array.isArray(rawTelemetry.navLinks) &&
+                rawTelemetry.navLinks.length > 0
+              ) {
+                inspectedRootPluginNav = true;
+                const { pluginRoutes } = classifyDiscoveredNavLinks(rawTelemetry.navLinks, plan.baseUrl);
+                for (const discovered of pluginRoutes) {
+                  if (!seenRoutePaths.has(discovered.route)) {
+                    seenRoutePaths.add(discovered.route);
+                    routeQueue.push({
+                      path: discovered.route,
+                      archetype: routeCfg.archetype,
+                      ...(routeCfg.uiStates ? { uiStates: routeCfg.uiStates } : {}),
+                    });
+                  }
+                }
+              }
+              const { stylesheets: _omitStyles, navLinks: _omitNav, ...telemetryBase } = rawTelemetry;
 
               let focusIssues: DesignAuditFocusIssue[] = [];
               let textSpacingClipped: DesignAuditClippedTextSample[] = [];
