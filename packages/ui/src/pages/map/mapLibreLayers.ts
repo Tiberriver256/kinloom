@@ -493,6 +493,17 @@ export function applyMapThemeToLayers(map: MapLibreMap, isDark: boolean): void {
       paintIfPresent(layer.id, 'background-color', palette.land);
     } else if (layer.type === 'fill' && 'source-layer' in layer && layer['source-layer'] === 'water_areas') {
       paintIfPresent(layer.id, 'fill-color', palette.water);
+    } else if (layer.type === 'line' && 'source-layer' in layer && layer['source-layer'] === 'water_lines') {
+      paintIfPresent(layer.id, 'line-color', palette.water);
+    } else if (
+      layer.type === 'line' &&
+      'source-layer' in layer &&
+      layer['source-layer'] === 'land_ohm_lines'
+    ) {
+      paintIfPresent(layer.id, 'line-color', palette.futureStopStroke);
+    } else if (!hasOfflineBasemap && layer.type === 'symbol' && 'source-layer' in layer) {
+      paintIfPresent(layer.id, 'text-color', palette.labelColor);
+      paintIfPresent(layer.id, 'text-halo-color', palette.labelHalo);
     }
   }
 

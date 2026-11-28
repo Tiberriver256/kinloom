@@ -293,7 +293,7 @@ describe('TreeKinshipLoom component & TreePage integration (#72, #123)', () => {
 
     expect(container.textContent).toContain('Kinship Loom');
     expect(container.textContent).toContain('1790–1830');
-    expect(container.textContent).toContain('Tap or hover any person to trace their thread');
+    expect(container.textContent).toContain('Select any person to trace their thread');
 
     // Redundant Detail Chart / Reading Roll buttons removed from bar
     const barButtons = [...container.querySelectorAll<HTMLButtonElement>('button')].map((b) =>
@@ -448,6 +448,27 @@ describe('TreeKinshipLoom component & TreePage integration (#72, #123)', () => {
     expect(main?.getAttribute('data-surface')).toBe('loom');
     expect(container.querySelector('section[aria-label*="Kinship Loom"]')).not.toBeNull();
 
+    // While on Loom, Direct Line / Full Tree and Trace from anchor picker are hidden
+    expect(container.querySelector('[role="group"][aria-label="Lineage scope"]')).toBeNull();
+    expect(container.querySelector('.tree-anchor-picker')).toBeNull();
+
+    // Switch back to Chart: scope controls return, TreeZoomControls omits duplicate Loom button, and zooming out stays on Chart
+    act(() => {
+      chartBtn?.click();
+    });
+    expect(container.querySelector('[role="group"][aria-label="Lineage scope"]')).not.toBeNull();
+    const zoomBtns = [...container.querySelectorAll<HTMLButtonElement>('.tree-zoom-controls button')];
+    expect(zoomBtns.map((b) => b.textContent?.trim())).toEqual(['+', '−', 'Fit', '1:1']);
+    const zoomOutBtn = container.querySelector<HTMLButtonElement>(
+      '.tree-zoom-controls button[aria-label="Zoom out"]'
+    );
+    for (let i = 0; i < 6; i += 1) {
+      act(() => {
+        zoomOutBtn?.click();
+      });
+    }
+    expect(main?.getAttribute('data-surface')).toBe('diagram');
+
     // Switch to List via primary toolbar segmented control
     act(() => {
       listBtn?.click();
@@ -455,5 +476,48 @@ describe('TreeKinshipLoom component & TreePage integration (#72, #123)', () => {
     expect(listBtn?.getAttribute('aria-pressed')).toBe('true');
     expect(main?.getAttribute('data-surface')).toBe('roll');
     expect(container.querySelector('section[aria-label*="Kinship Loom"]')).toBeNull();
+  });
+
+  it('initializes fit zoom on mobile viewports and renders focal anchor label at rest on large trees', () => {
+    const origWidth = window.innerWidth;
+    Object.defineProperty(window, 'innerWidth', { configurable: true, value: 390 });
+    try {
+      const manyPeople: Person[] = Array.from({ length: 30 }, (_, idx) =>
+        makePerson({
+          id: `per_many_${idx}`,
+          slug: `person-${idx}`,
+          full_name: `Ancestor ${idx}`,
+          surname: 'Alder',
+          branch: 'alder',
+          birth_year: 1780 + idx * 4,
+          birth_edtf: String(1780 + idx * 4),
+          death_year: 1840 + idx * 4,
+          death_edtf: String(1840 + idx * 4),
+          lineage_group: idx === 10 ? 'pivot_ancestor' : 'ancestor',
+        })
+      );
+      const largeModel = buildArchivalTreeModel({
+        people: manyPeople,
+        kinship: [],
+        mode: 'full',
+        anchorPersonId: 'per_many_10',
+      });
+      const container = mountEl(
+        <TreeKinshipLoom
+          model={largeModel}
+          selectedPersonId={null}
+          familyLabel="Alder"
+          onSelectPerson={vi.fn()}
+        />
+      );
+      const section = container.querySelector<HTMLElement>('section[aria-label*="Kinship Loom"]');
+      const svg = container.querySelector<SVGSVGElement>('svg');
+      expect(section?.getAttribute('data-zoom-mode')).toBe('fit');
+      expect(svg?.classList.contains('is-fit')).toBe(true);
+      const anchorNode = container.querySelector<SVGGElement>('[data-person-id="per_many_10"]');
+      expect(anchorNode?.textContent).toContain('Ancestor 10');
+    } finally {
+      Object.defineProperty(window, 'innerWidth', { configurable: true, value: origWidth });
+    }
   });
 });
