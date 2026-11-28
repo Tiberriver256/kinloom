@@ -28,7 +28,9 @@
     "bench": "node benchmarks/run-benchmarks.mjs",
     "check:changelogs": "node scripts/check-changelogs.mjs",
     "tutorials:verify": "node tools/tutorials-video/src/renderTutorials.ts --dry-run --tts silent",
-    "tutorials:render": "node tools/tutorials-video/src/renderTutorials.ts"
+    "tutorials:render": "node tools/tutorials-video/src/renderTutorials.ts",
+    "tokens:sync": "node scripts/sync-tokens.mjs",
+    "check:tokens": "node scripts/sync-tokens.mjs --check"
   },
   "devDependencies": {
     "@biomejs/biome": "2.6.9",

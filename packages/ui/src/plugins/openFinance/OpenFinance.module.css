@@ -11,7 +11,7 @@
 .of-eyebrow {
   margin: 0 0 6px;
   font-family: var(--font-ui);
-  font-size: 0.75rem;
+  font-size: var(--text-2xs);
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.06em;
@@ -21,7 +21,7 @@
 .of-title {
   margin: 0 0 10px;
   font-family: var(--font-serif);
-  font-size: clamp(1.45rem, 2.5vw, 1.95rem);
+  font-size: var(--text-2xl);
   line-height: 1.2;
   color: var(--surface-header);
 }
@@ -29,7 +29,7 @@
 .of-message {
   margin: 0;
   font-family: var(--font-serif);
-  font-size: 0.98rem;
+  font-size: var(--text-sm);
   line-height: 1.55;
   color: var(--text-primary);
   max-width: 66ch;
@@ -38,7 +38,7 @@
 .of-custody-note {
   margin: 12px 0 0;
   font-family: var(--font-ui);
-  font-size: 0.88rem;
+  font-size: var(--text-sm);
   color: var(--text-secondary);
   line-height: 1.5;
   max-width: 66ch;
@@ -62,7 +62,7 @@
 .of-kpi-label {
   display: block;
   font-family: var(--font-ui);
-  font-size: 0.76rem;
+  font-size: var(--text-xs);
   font-weight: 600;
   letter-spacing: 0.02em;
   color: var(--text-secondary);
@@ -72,7 +72,7 @@
 .of-kpi-value {
   display: block;
   font-family: var(--font-serif);
-  font-size: 1.4rem;
+  font-size: var(--text-2xl);
   font-weight: 700;
   font-variant-numeric: tabular-nums;
   color: var(--surface-header);
@@ -83,7 +83,7 @@
   display: block;
   margin-top: 4px;
   font-family: var(--font-ui);
-  font-size: 0.78rem;
+  font-size: var(--text-xs);
   color: var(--text-secondary);
 }
 
@@ -107,13 +107,13 @@
 .of-section-title {
   margin: 0;
   font-family: var(--font-serif);
-  font-size: 1.15rem;
+  font-size: var(--text-lg);
   color: var(--surface-header);
 }
 
 .of-section-meta {
   font-family: var(--font-ui);
-  font-size: 0.78rem;
+  font-size: var(--text-xs);
   color: var(--text-secondary);
 }
 
@@ -130,13 +130,13 @@
 .of-goal-label {
   font-family: var(--font-serif);
   font-weight: 600;
-  font-size: 1rem;
+  font-size: var(--text-base);
   color: var(--surface-header);
 }
 
 .of-goal-figures {
   font-family: var(--font-mono);
-  font-size: 0.82rem;
+  font-size: var(--text-xs);
   font-variant-numeric: tabular-nums;
   color: var(--text-primary);
 }
@@ -172,7 +172,7 @@
 .of-goal-footnote {
   margin: 8px 0 0;
   font-family: var(--font-ui);
-  font-size: 0.84rem;
+  font-size: var(--text-xs);
   line-height: 1.45;
   color: var(--text-secondary);
 }
@@ -210,13 +210,13 @@
 .of-platform-name {
   font-family: var(--font-serif);
   font-weight: 700;
-  font-size: 1.02rem;
+  font-size: var(--text-base);
   color: var(--surface-header);
 }
 
 .of-primary-badge {
   font-family: var(--font-mono);
-  font-size: 0.7rem;
+  font-size: var(--text-2xs);
   text-transform: uppercase;
   letter-spacing: 0.04em;
   padding: 2px 7px;
@@ -228,14 +228,14 @@
 
 .of-platform-host {
   font-family: var(--font-mono);
-  font-size: 0.74rem;
+  font-size: var(--text-2xs);
   color: var(--text-secondary);
   overflow-wrap: anywhere;
 }
 
 .of-platform-desc {
   margin: 0;
-  font-size: 0.86rem;
+  font-size: var(--text-sm);
   color: var(--text-secondary);
   line-height: 1.45;
 }
@@ -248,7 +248,7 @@
   padding: 8px 14px;
   border-radius: var(--radius-sm);
   font-family: var(--font-mono);
-  font-size: 0.82rem;
+  font-size: var(--text-xs);
   font-weight: 600;
   text-decoration: none;
   border: 1px solid var(--border-control);
@@ -300,7 +300,7 @@
   width: 100%;
   border-collapse: separate;
   border-spacing: 0;
-  font-size: 0.86rem;
+  font-size: var(--text-sm);
 }
 
 .of-table thead {
@@ -313,7 +313,7 @@
   background: var(--surface-linen);
   color: var(--surface-header);
   font-family: var(--font-mono);
-  font-size: 0.74rem;
+  font-size: var(--text-2xs);
   text-align: left;
   padding: 8px 10px;
   border-bottom: 1px solid var(--border-decorative);
@@ -360,7 +360,7 @@
 .of-item-notes {
   display: block;
   margin-top: 3px;
-  font-size: 0.78rem;
+  font-size: var(--text-xs);
   font-weight: 400;
   color: var(--text-secondary);
 }
@@ -371,7 +371,7 @@
   padding: 1px 7px;
   border-radius: var(--radius-sm);
   font-family: var(--font-mono);
-  font-size: 0.72rem;
+  font-size: var(--text-2xs);
   font-weight: 600;
   background: var(--surface-linen);
   color: var(--surface-header);
@@ -418,7 +418,7 @@
     content: attr(data-label) ": ";
     display: inline-block;
     font-family: var(--font-mono);
-    font-size: 0.72rem;
+    font-size: var(--text-2xs);
     font-weight: 700;
     color: var(--text-secondary);
     text-transform: uppercase;
@@ -433,7 +433,7 @@
   border-bottom: 2px solid transparent;
   text-decoration: none;
   font-family: var(--font-serif);
-  font-size: 0.96rem;
+  font-size: var(--text-sm);
   font-weight: 500;
   color: var(--text-secondary);
   white-space: nowrap;
@@ -455,7 +455,7 @@
 
 .of-footer-link {
   font-family: var(--font-mono);
-  font-size: 0.76rem;
+  font-size: var(--text-xs);
   color: var(--text-secondary);
   text-decoration: none;
   border-bottom: 1px dotted var(--border-control);
@@ -479,7 +479,7 @@
 
 .of-admin-subtitle {
   margin: 0;
-  font-size: 0.9rem;
+  font-size: var(--text-sm);
   color: var(--text-secondary);
   line-height: 1.45;
 }
@@ -496,7 +496,7 @@
   padding: 0 6px;
   font-family: var(--font-serif);
   font-weight: 700;
-  font-size: 0.98rem;
+  font-size: var(--text-sm);
   color: var(--surface-header);
 }
 
@@ -515,7 +515,7 @@
 
 .of-admin-label {
   font-family: var(--font-mono);
-  font-size: 0.76rem;
+  font-size: var(--text-xs);
   font-weight: 600;
   color: var(--surface-header);
 }
@@ -531,14 +531,14 @@
   background: var(--surface-card);
   color: var(--text-primary);
   font-family: var(--font-mono);
-  font-size: 0.82rem;
+  font-size: var(--text-xs);
 }
 
 .of-admin-textarea {
   min-height: 70px;
   resize: vertical;
   font-family: var(--font-serif);
-  font-size: 0.92rem;
+  font-size: var(--text-sm);
 }
 
 .of-admin-input:focus-visible,
@@ -562,7 +562,7 @@
   min-height: 44px;
   cursor: pointer;
   font-family: var(--font-mono);
-  font-size: 0.8rem;
+  font-size: var(--text-xs);
   color: var(--surface-header);
 }
 
@@ -599,13 +599,13 @@
 
 .of-field-error {
   font-family: var(--font-mono);
-  font-size: 0.74rem;
+  font-size: var(--text-2xs);
   color: var(--diff-del-fg);
 }
 
 .of-field-help {
   font-family: var(--font-mono);
-  font-size: 0.72rem;
+  font-size: var(--text-2xs);
   color: var(--text-secondary);
 }
 
@@ -620,7 +620,7 @@
 
 .of-status-msg {
   font-family: var(--font-mono);
-  font-size: 0.8rem;
+  font-size: var(--text-xs);
   font-weight: 600;
 }
 

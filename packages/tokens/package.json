@@ -18,10 +18,16 @@
   },
   "exports": {
     "./tokens.json": "./tokens.json",
+    "./kinloom.tokens.json": "./kinloom.tokens.json",
+    "./kinloom.dark.tokens.json": "./kinloom.dark.tokens.json",
+    "./kinloom.resolver.json": "./kinloom.resolver.json",
     "./kinloom.css": "./kinloom.css"
   },
   "files": [
     "kinloom.css",
+    "kinloom.tokens.json",
+    "kinloom.dark.tokens.json",
+    "kinloom.resolver.json",
     "tokens.json"
   ]
 }

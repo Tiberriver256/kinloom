@@ -38,7 +38,7 @@
 .drawer-top h2 {
   font-family: var(--font-serif);
   margin: 0;
-  font-size: 1.32rem;
+  font-size: var(--text-xl);
   color: var(--surface-header);
 }
 

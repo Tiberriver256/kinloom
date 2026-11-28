@@ -2,7 +2,7 @@
 
 .wiki-relative-hint {
   margin: 0;
-  font-size: 0.88rem;
+  font-size: var(--text-sm);
   color: var(--text-secondary);
 }
 
@@ -60,13 +60,13 @@
 
 .wiki-drawer-footer-hint {
   font-family: var(--font-mono);
-  font-size: 0.76rem;
+  font-size: var(--text-xs);
   color: var(--text-secondary);
 }
 
 .wiki-drawer-subtitle {
   font-family: var(--font-mono);
-  font-size: 0.76rem;
+  font-size: var(--text-xs);
   color: var(--text-secondary);
 }
 
@@ -125,7 +125,7 @@
 
 .wiki-field-label {
   font-family: var(--font-mono);
-  font-size: 0.76rem;
+  font-size: var(--text-xs);
   font-weight: 600;
   color: var(--surface-header);
 }
@@ -140,25 +140,25 @@
   border: 1px solid var(--border-control);
   border-radius: var(--radius-md);
   font-family: inherit;
-  font-size: 0.94rem;
+  font-size: var(--text-sm);
 }
 
 .wiki-input-lg {
   min-height: 46px;
-  font-size: 1rem;
+  font-size: var(--text-base);
   padding: 10px 12px;
 }
 
 .wiki-mono {
   font-family: var(--font-mono);
-  font-size: 0.8rem;
+  font-size: var(--text-xs);
 }
 
 .wiki-checkbox-row {
   display: flex;
   align-items: flex-start;
   gap: 10px;
-  font-size: 0.9rem;
+  font-size: var(--text-sm);
   line-height: 1.45;
   flex-wrap: nowrap;
 }
@@ -189,7 +189,7 @@
   align-items: center;
   gap: 8px;
   flex-wrap: wrap;
-  font-size: 0.86rem;
+  font-size: var(--text-sm);
 }
 
 .wiki-radio-desc {
@@ -253,7 +253,7 @@
 
   .wiki-input,
   .wiki-textarea {
-    font-size: 1rem;
+    font-size: var(--text-base);
   }
 
   .wiki-inline-form {

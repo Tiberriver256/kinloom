@@ -120,11 +120,13 @@ describe('Issue #108: full-viewport invite banner offset, Tree minimap/padding, 
     );
 
     const minimapFillMatches = [
-      ...tokensCss.matchAll(/--tree-minimap-viewport-fill:\s*rgba\([^,]+,[^,]+,[^,]+,\s*([0-9.]+)\);/g),
+      ...tokensCss.matchAll(
+        /--tree-minimap-viewport-fill:\s*(?:rgba\([^,]+,[^,]+,[^,]+,\s*([0-9.]+)\)|color-mix\([^,]+,[^%]+?([0-9.]+)%,\s*transparent\));/g
+      ),
     ];
     expect(minimapFillMatches.length).toBeGreaterThanOrEqual(3);
     for (const match of minimapFillMatches) {
-      const alpha = Number(match[1]);
+      const alpha = match[1] ? Number(match[1]) : Number(match[2]) / 100;
       expect(alpha).toBeGreaterThan(0);
       expect(alpha).toBeLessThanOrEqual(0.15);
     }

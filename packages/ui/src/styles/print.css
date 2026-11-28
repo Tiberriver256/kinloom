@@ -9,17 +9,17 @@
     /* biome-ignore lint/correctness/noUnknownFunction: CSS GCPM Level 3 running title progressive enhancement */
     content: string(folio-running-title);
     font-family: var(--font-mono);
-    font-size: 8pt;
-    color: #4e4a42;
+    font-size: var(--text-2xs);
+    color: var(--text-secondary);
     letter-spacing: 0.04em;
   }
 
   @bottom-center {
     content: "Page " counter(page) " of " counter(pages);
     font-family: var(--font-mono);
-    font-size: 8.5pt;
+    font-size: var(--text-2xs);
     font-variant-numeric: tabular-nums;
-    color: #4e4a42;
+    color: var(--text-secondary);
   }
 }
 
@@ -36,9 +36,9 @@
 
   html,
   body {
-    background: #ffffff;
-    color: #000000;
-    font-size: 10.5pt;
+    background: white;
+    color: black;
+    font-size: var(--text-sm);
     line-height: 1.52;
     font-variant-numeric: oldstyle-nums;
   }
@@ -121,7 +121,7 @@
       background: transparent;
       padding: 0;
       text-align: left;
-      color: #000000;
+      color: black;
     }
 
     .kinloom-app:has(.tree-shell-diagram),
@@ -141,7 +141,7 @@
       break-inside: avoid;
       page-break-inside: avoid;
       box-shadow: none;
-      background: #ffffff;
+      background: white;
       border-color: var(--border-control);
     }
 
@@ -183,11 +183,11 @@
       display: flex;
       flex-direction: column;
       gap: 6pt;
-      border-left: 0.5pt solid #827a6a;
+      border-left: 0.5pt solid var(--border-control);
       padding-left: 8pt;
-      font-size: 8pt;
+      font-size: var(--text-2xs);
       line-height: 1.38;
-      color: #23272e;
+      color: var(--text-primary);
     }
 
     .folio-marginalia-item {
@@ -196,7 +196,7 @@
     }
 
     .folio-marginalia-item.is-discrepancy {
-      border-left: 1.5pt solid #8f2d24;
+      border-left: 1.5pt solid var(--status-conflict);
       padding-left: 6pt;
     }
 
@@ -219,7 +219,7 @@
       break-after: avoid;
       page-break-after: avoid;
       hyphens: none;
-      color: #000000;
+      color: black;
     }
 
     p,
@@ -242,7 +242,7 @@
     }
 
     .person-header {
-      background: #ffffff;
+      background: white;
       border-bottom: 1px solid var(--border-control);
       box-shadow: none;
       margin-bottom: 10pt;
@@ -260,7 +260,7 @@
     .time-lane,
     .evidence-source-row,
     .folio-marginalia-item {
-      background: #ffffff;
+      background: white;
       box-shadow: none;
       break-inside: avoid;
       page-break-inside: avoid;
@@ -272,7 +272,7 @@
     }
 
     a {
-      color: #000000;
+      color: black;
       text-decoration: none;
     }
   }

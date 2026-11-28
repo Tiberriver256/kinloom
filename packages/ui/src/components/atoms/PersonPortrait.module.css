@@ -99,26 +99,26 @@
 .person-portrait.variant-print .person-portrait-monogram {
   border: 1px solid var(--border-decorative);
   font-family: var(--font-serif);
-  font-size: 1.02rem;
+  font-size: var(--text-base);
   letter-spacing: 0.04em;
 }
 
 .person-portrait.variant-print.size-sm .person-portrait-monogram {
-  font-size: 0.85rem;
+  font-size: var(--text-xs);
 }
 
 .person-portrait.variant-circle .person-portrait-monogram {
   font-family: var(--font-mono);
-  font-size: 0.7rem;
+  font-size: var(--text-2xs);
   font-weight: 700;
 }
 
 .person-portrait.variant-circle.size-sm .person-portrait-monogram {
-  font-size: 0.72rem;
+  font-size: var(--text-2xs);
 }
 
 .person-portrait.variant-circle.size-md .person-portrait-monogram {
-  font-size: 0.74rem;
+  font-size: var(--text-2xs);
 }
 
 .person-portrait-img {

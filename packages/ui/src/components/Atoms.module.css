@@ -3,7 +3,7 @@
    ========================================================================== */
 .folio-kicker {
   font-family: var(--font-mono);
-  font-size: 0.74rem;
+  font-size: var(--text-2xs);
   text-transform: uppercase;
   letter-spacing: 0.09em;
   color: var(--radar-copresence);
@@ -27,7 +27,7 @@
 .folio-title {
   font-family: var(--font-serif);
   font-weight: 600;
-  font-size: clamp(1.75rem, 2.8vw, 2.35rem);
+  font-size: var(--text-3xl);
   line-height: 1.18;
   color: var(--surface-header);
   margin: 0 0 8px;
@@ -37,7 +37,7 @@
 .folio-lead {
   margin: 0;
   color: var(--text-secondary);
-  font-size: 1.02rem;
+  font-size: var(--text-base);
   max-width: 56ch;
 }
 
@@ -49,13 +49,13 @@
 }
 
 .axis-page-header .folio-title {
-  font-size: clamp(1.42rem, 2.4vw, 1.95rem);
+  font-size: var(--text-2xl);
   margin: 0 0 4px;
   line-height: 1.15;
 }
 
 .axis-page-header .folio-lead {
-  font-size: 0.94rem;
+  font-size: var(--text-sm);
   line-height: 1.4;
   max-width: 66ch;
 }
@@ -86,7 +86,7 @@
 
 .folio-metrics {
   font-family: var(--font-mono);
-  font-size: 0.8rem;
+  font-size: var(--text-xs);
   text-align: right;
   color: var(--text-secondary);
   line-height: 1.6;
@@ -106,7 +106,7 @@
 
 .folio-count-note {
   font-family: var(--font-mono);
-  font-size: 0.78rem;
+  font-size: var(--text-xs);
   color: var(--text-secondary);
 }
 
@@ -119,7 +119,7 @@
   border: none;
   color: var(--surface-header);
   font-family: var(--font-serif);
-  font-size: 0.94rem;
+  font-size: var(--text-sm);
   font-weight: 600;
   text-decoration: underline solid var(--border-control);
   text-underline-offset: 3px;
@@ -156,7 +156,7 @@
   display: inline-block;
   font-family: var(--font-hand);
   font-variant-numeric: tabular-nums;
-  font-size: 1.38rem;
+  font-size: var(--text-xl);
   font-weight: 700;
   line-height: 1.05;
   padding: 0;
@@ -171,7 +171,7 @@
   gap: 5px;
   font-family: var(--font-mono);
   font-variant-numeric: tabular-nums;
-  font-size: 0.78rem;
+  font-size: var(--text-xs);
   padding: 1px 0;
   border: none;
   border-bottom: 1px dotted var(--border-control);
@@ -219,7 +219,7 @@
   align-items: center;
   justify-content: center;
   font-family: var(--font-serif);
-  font-size: 1.05rem;
+  font-size: var(--text-base);
   font-weight: 600;
   letter-spacing: 0.04em;
 }
@@ -249,7 +249,7 @@
 
 .wireframe-photo-label {
   font-family: var(--font-mono);
-  font-size: 0.72rem;
+  font-size: var(--text-2xs);
   text-transform: uppercase;
   letter-spacing: 0.08em;
   color: var(--radar-copresence);
@@ -258,7 +258,7 @@
 .wireframe-photo-caption {
   font-family: var(--font-serif);
   font-style: italic;
-  font-size: 0.92rem;
+  font-size: var(--text-sm);
   color: var(--text-secondary);
 }
 
@@ -271,7 +271,7 @@
   background: var(--surface-overlay-soft);
   border-radius: var(--radius-sm);
   font-family: var(--font-serif);
-  font-size: 0.88rem;
+  font-size: var(--text-sm);
   cursor: pointer;
   text-align: left;
   transition:
@@ -318,7 +318,7 @@
   align-items: center;
   justify-content: center;
   font-family: var(--font-mono);
-  font-size: 0.7rem;
+  font-size: var(--text-2xs);
   font-weight: 600;
   flex-shrink: 0;
 }
@@ -337,7 +337,7 @@
   border-radius: 0;
   padding: 2px 0;
   font-family: var(--font-ui);
-  font-size: 0.76rem;
+  font-size: var(--text-xs);
   color: var(--text-secondary);
   cursor: pointer;
   display: inline-flex;
@@ -356,7 +356,7 @@
 .conflict-pill {
   display: inline-block;
   font-family: var(--font-ui);
-  font-size: 0.75rem;
+  font-size: var(--text-2xs);
   font-weight: 600;
   line-height: 1.3;
   padding: 4px 8px;
@@ -373,7 +373,7 @@
   margin-top: 10px;
   padding: 10px 0 0 12px;
   border-left: 2px solid var(--border-decorative);
-  font-size: 0.9rem;
+  font-size: var(--text-sm);
   color: var(--text-secondary);
   min-width: 0;
   max-width: min(56ch, 100%);
@@ -423,7 +423,7 @@
   padding: 0;
   color: var(--radar-copresence);
   font-family: var(--font-mono);
-  font-size: 0.72rem;
+  font-size: var(--text-2xs);
   font-weight: 600;
 }
 
@@ -468,12 +468,12 @@
   }
 
   .axis-page-header .folio-title {
-    font-size: 1.38rem;
+    font-size: var(--text-xl);
     margin-bottom: 3px;
   }
 
   .axis-page-header .folio-lead {
-    font-size: 0.86rem;
+    font-size: var(--text-sm);
     line-height: 1.38;
   }
 
@@ -504,7 +504,7 @@
 
   .ink-filter-bar :global(.pill-btn) {
     flex-shrink: 0;
-    font-size: 0.78rem;
+    font-size: var(--text-xs);
     padding: 6px 10px;
     min-height: 44px;
     white-space: nowrap;
@@ -512,7 +512,7 @@
 
   .places-search-bar :global(.search-input) {
     padding: 8px 4px;
-    font-size: 1rem;
+    font-size: var(--text-base);
     min-height: 44px;
     width: 100%;
     min-width: 0;

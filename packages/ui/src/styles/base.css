@@ -22,7 +22,7 @@ body {
   background-color: var(--surface-canvas);
   color: var(--text-primary);
   font-family: var(--font-serif);
-  font-size: 16.5px;
+  font-size: var(--text-base);
   line-height: 1.5;
   -webkit-font-smoothing: antialiased;
 }
@@ -109,7 +109,7 @@ select {
   background: var(--surface-card);
   color: var(--text-secondary);
   font-family: var(--font-mono);
-  font-size: 0.72rem;
+  font-size: var(--text-2xs);
   font-weight: 600;
   line-height: 1.25;
 }
@@ -117,7 +117,7 @@ select {
 @media (max-width: 768px) {
   input:not([type="checkbox"]):not([type="radio"]):not([type="range"]),
   select {
-    font-size: 16px;
+    font-size: var(--text-base);
   }
 }
 

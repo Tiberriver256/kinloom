@@ -30,14 +30,14 @@
 .person-header h1 {
   font-family: var(--font-hand);
   margin: 0 0 2px;
-  font-size: clamp(2rem, 3.2vw, 2.55rem);
+  font-size: var(--text-3xl);
   font-weight: 700;
   line-height: 1.05;
   color: var(--surface-header);
 }
 
 .person-alt-names {
-  font-size: 0.84rem;
+  font-size: var(--text-xs);
   color: var(--text-secondary);
   margin-top: 4px;
   grid-column: 1 / -1;
@@ -55,7 +55,7 @@
 
 .person-section-jump-link {
   font-family: var(--font-ui);
-  font-size: 0.84rem;
+  font-size: var(--text-xs);
   font-weight: 600;
   color: var(--jump-active-fg, var(--accent-primary));
   text-decoration: none;
@@ -96,7 +96,7 @@
   background: var(--surface-card);
   color: var(--text-secondary);
   font-family: var(--font-mono);
-  font-size: 0.72rem;
+  font-size: var(--text-2xs);
   font-weight: 500;
   line-height: 1.4;
 }
@@ -131,7 +131,7 @@
 .person-completeness-invite-copy {
   margin: 0;
   font-family: var(--font-serif);
-  font-size: 0.9rem;
+  font-size: var(--text-sm);
   line-height: 1.45;
   color: var(--text-secondary);
   flex: 1 1 260px;
@@ -189,7 +189,7 @@
   color: var(--text-secondary);
   font-family: var(--font-hand);
   font-variant-numeric: tabular-nums;
-  font-size: 1.16rem;
+  font-size: var(--text-lg);
   font-weight: 600;
   min-width: max-content;
   padding: 2px 6px;
@@ -236,14 +236,14 @@
   display: inline-block;
   padding: 0;
   font-family: var(--font-mono);
-  font-size: 0.72rem;
+  font-size: var(--text-2xs);
   font-weight: 500;
   color: var(--radar-local);
 }
 
 .person-card-branch {
   font-family: var(--font-mono);
-  font-size: 0.75rem;
+  font-size: var(--text-2xs);
   text-transform: uppercase;
   letter-spacing: 0.05em;
   color: var(--radar-local);
@@ -295,7 +295,7 @@
   align-items: center;
   gap: 4px 8px;
   font-family: var(--font-mono);
-  font-size: 0.84rem;
+  font-size: var(--text-xs);
   color: var(--text-secondary);
 }
 
@@ -324,7 +324,7 @@
 
 .person-family-label {
   font-family: var(--font-mono);
-  font-size: 0.72rem;
+  font-size: var(--text-2xs);
   font-weight: 600;
   letter-spacing: 0.05em;
   text-transform: uppercase;
@@ -349,7 +349,7 @@
   background: transparent;
   color: var(--surface-header);
   font-family: var(--font-serif);
-  font-size: 0.94rem;
+  font-size: var(--text-sm);
   text-decoration: underline dotted var(--border-control);
   text-underline-offset: 3px;
   text-decoration-thickness: 1px;
@@ -360,7 +360,7 @@
 
 .person-family-chip span {
   font-family: var(--font-mono);
-  font-size: 0.72rem;
+  font-size: var(--text-2xs);
   color: var(--text-secondary);
   text-decoration: none;
 }
@@ -385,7 +385,7 @@
   background: var(--surface-linen);
   color: var(--text-secondary);
   font-family: var(--font-ui);
-  font-size: 0.75rem;
+  font-size: var(--text-2xs);
   font-weight: 600;
   letter-spacing: 0.04em;
   text-transform: uppercase;
@@ -401,7 +401,7 @@
   background: var(--surface-card);
   color: var(--surface-header);
   font-family: var(--font-ui);
-  font-size: 0.75rem;
+  font-size: var(--text-2xs);
   font-weight: 500;
   line-height: 1.4;
   cursor: pointer;
@@ -434,7 +434,7 @@
   }
 
   .person-header h1 {
-    font-size: 1.72rem;
+    font-size: var(--text-3xl);
   }
 
   .timeline-layout {
@@ -475,7 +475,7 @@
 
   .timeline-spine .scrubber-tick {
     flex-shrink: 0;
-    font-size: 1.15rem;
+    font-size: var(--text-lg);
     padding: 4px 6px;
     min-height: 44px;
     text-align: center;

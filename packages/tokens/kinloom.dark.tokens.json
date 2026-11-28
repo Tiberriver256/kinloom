@@ -1,0 +1,40 @@
+{
+  "$description": "Kinloom Design Tokens — W3C DTCG 2025.10 nocturnal theme modifier overrides (orthogonal semantic mappings referencing base primitives).",
+  "color": {
+    "$type": "color",
+    "semantic": {
+      "surface-canvas": { "$value": "{color.primitive.charcoal-folio}" },
+      "surface-card": { "$value": "{color.primitive.slate-card}" },
+      "surface-subtle": { "$value": "{color.primitive.slate-card}" },
+      "surface-linen": { "$value": "{color.primitive.smoked-linen}" },
+      "surface-muted": { "$value": "{color.primitive.smoked-linen}" },
+      "surface-header": { "$value": "{color.primitive.parchment-heading}" },
+      "surface-chrome-bar": { "$value": "{color.primitive.charcoal-folio}" },
+      "surface-action-primary": { "$value": "{color.primitive.smoked-linen}" },
+      "surface-action-primary-hover": { "$value": "{color.primitive.smoked-linen}" },
+      "text-primary": { "$value": "{color.primitive.parchment-heading}" },
+      "text-secondary": { "$value": "{color.primitive.warm-stone}" },
+      "text-inverse": { "$value": "{color.primitive.charcoal-folio}" },
+      "text-chrome-bar": { "$value": "{color.primitive.parchment-heading}" },
+      "text-on-action-primary": { "$value": "{color.primitive.parchment-heading}" },
+      "text-on-action-primary-muted": { "$value": "{color.primitive.parchment-heading}" },
+      "accent-primary": { "$value": "{color.primitive.warm-brass}" },
+      "accent-secondary": { "$value": "{color.primitive.verdigris-sage}" },
+      "action-focus": { "$value": "{color.primitive.archival-sky}" },
+      "status-conflict": { "$value": "{color.primitive.vermilion-tint}" },
+      "border-strong": { "$value": "{color.primitive.parchment-heading}" },
+      "border-control": { "$value": "{color.primitive.pewter-taupe}" },
+      "border-decorative": { "$value": "{color.primitive.smoked-linen}" },
+      "border-action-primary": { "$value": "{color.primitive.warm-brass}" },
+      "diff-add-bg": { "$value": "{color.primitive.slate-card}" },
+      "diff-add-fg": { "$value": "{color.primitive.verdigris-sage}" },
+      "diff-del-bg": { "$value": "{color.primitive.slate-card}" },
+      "diff-del-fg": { "$value": "{color.primitive.vermilion-tint}" },
+      "badge-memory-bg": { "$value": "{color.primitive.smoked-linen}" },
+      "badge-memory-fg": { "$value": "{color.primitive.warm-brass}" },
+      "badge-cited-bg": { "$value": "{color.primitive.slate-card}" },
+      "badge-cited-fg": { "$value": "{color.primitive.verdigris-sage}" },
+      "jump-active-fg": { "$value": "{color.primitive.warm-brass}" }
+    }
+  }
+}

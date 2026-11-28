@@ -86,7 +86,7 @@ html:global(.tree-viewport-lock) body {
 
 .tree-zoom-readout {
   font-family: var(--font-mono);
-  font-size: 0.75rem;
+  font-size: var(--text-2xs);
   font-weight: 600;
   color: var(--text-secondary);
   background: var(--surface-card);
@@ -314,7 +314,7 @@ html:global(.tree-viewport-lock) body {
 
 .tree-minimap-title {
   font-family: var(--font-ui);
-  font-size: 0.72rem;
+  font-size: var(--text-2xs);
   font-weight: 600;
   color: var(--text-secondary);
   letter-spacing: 0.02em;
@@ -329,7 +329,7 @@ html:global(.tree-viewport-lock) body {
   min-height: 24px;
   padding: 2px 8px;
   font-family: var(--font-ui);
-  font-size: 0.72rem;
+  font-size: var(--text-2xs);
   font-weight: 600;
   border: var(--border-width-thin) solid var(--border-control);
   border-radius: var(--radius-control);

@@ -30,14 +30,14 @@
 
 .kinship-loom-title {
   font-family: var(--font-serif);
-  font-size: 1rem;
+  font-size: var(--text-base);
   font-weight: 700;
   color: var(--surface-header);
 }
 
 .kinship-loom-span {
   font-family: var(--font-mono);
-  font-size: 0.78rem;
+  font-size: var(--text-xs);
   font-variant-numeric: tabular-nums;
   color: var(--text-secondary);
 }
@@ -45,7 +45,7 @@
 .kinship-loom-trace,
 .kinship-loom-hint {
   font-family: var(--font-mono);
-  font-size: 0.76rem;
+  font-size: var(--text-xs);
   font-variant-numeric: tabular-nums;
   color: var(--text-secondary);
 }
@@ -88,7 +88,7 @@
 
 .kinship-loom-year-label {
   font-family: var(--font-mono);
-  font-size: 11px;
+  font-size: var(--text-2xs);
   font-variant-numeric: tabular-nums;
   fill: var(--text-secondary);
 }
@@ -153,7 +153,7 @@
 
 .kinship-loom-node-label {
   font-family: var(--font-serif);
-  font-size: 11px;
+  font-size: var(--text-2xs);
   fill: var(--text-primary);
   pointer-events: none;
 }

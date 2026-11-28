@@ -17,7 +17,7 @@
   border: 0;
   width: auto;
   height: auto;
-  font-size: 1rem;
+  font-size: var(--text-base);
   font-weight: 600;
   line-height: 1.5;
   overflow: visible;
@@ -48,7 +48,7 @@
   box-shadow: var(--shadow-card);
   touch-action: manipulation;
   font-family: var(--font-mono);
-  font-size: 0.78rem;
+  font-size: var(--text-xs);
   font-weight: 600;
 }
 

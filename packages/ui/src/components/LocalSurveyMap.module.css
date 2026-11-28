@@ -6,7 +6,7 @@
 
 .local-survey-caption {
   font-family: var(--font-ui);
-  font-size: 0.78rem;
+  font-size: var(--text-xs);
   line-height: 1.4;
   color: var(--text-secondary);
 }
@@ -20,7 +20,7 @@
 
 .local-survey-nearby-label {
   font-family: var(--font-ui);
-  font-size: 0.72rem;
+  font-size: var(--text-2xs);
   text-transform: uppercase;
   letter-spacing: 0.05em;
   color: var(--text-secondary);
@@ -35,7 +35,7 @@
   background: var(--surface-subtle);
   color: var(--text-primary);
   font-family: var(--font-ui);
-  font-size: 0.74rem;
+  font-size: var(--text-2xs);
   text-decoration: none;
   transition:
     border-color 0.14s ease,

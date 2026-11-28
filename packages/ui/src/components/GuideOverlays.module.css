@@ -11,7 +11,7 @@
   max-width: none;
   max-height: none;
   border: none;
-  background: var(--scrim-modal, rgba(20, 22, 26, 0.56));
+  background: var(--backdrop-modal);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -44,14 +44,14 @@
 .guide-dialog-title {
   margin: 0;
   font-family: var(--font-serif);
-  font-size: 1.2rem;
+  font-size: var(--text-lg);
   font-weight: 700;
   color: var(--surface-header);
 }
 
 .guide-dialog-desc {
   margin: 6px 0 0;
-  font-size: 0.9rem;
+  font-size: var(--text-sm);
   color: var(--text-secondary);
 }
 
@@ -64,7 +64,7 @@
   background: var(--surface-card);
   color: var(--surface-header);
   font-family: var(--font-mono);
-  font-size: 0.78rem;
+  font-size: var(--text-xs);
   font-weight: 600;
   cursor: pointer;
 }
@@ -93,7 +93,7 @@
   border: 1px solid var(--border-decorative);
   border-radius: var(--radius-sm);
   background: var(--surface-linen);
-  font-size: 0.9rem;
+  font-size: var(--text-sm);
 }
 
 .guide-kbd-group {
@@ -101,7 +101,7 @@
   align-items: center;
   gap: 6px;
   font-family: var(--font-mono);
-  font-size: 0.78rem;
+  font-size: var(--text-xs);
   font-weight: 600;
 }
 

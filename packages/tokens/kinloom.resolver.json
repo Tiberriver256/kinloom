@@ -1,0 +1,29 @@
+{
+  "name": "Kinloom Design Tokens Resolver",
+  "version": "2025.10",
+  "description": "W3C DTCG 2025.10 resolver ordering the Kinloom Paper & Ink base set and orthogonal theme mode modifier.",
+  "sets": {
+    "base": {
+      "description": "Canonical primitive palette, Paper & Ink light semantic colors, 9-step modular typography scale, and geometry tokens.",
+      "sources": [
+        { "$ref": "./kinloom.tokens.json" }
+      ]
+    }
+  },
+  "modifiers": {
+    "theme": {
+      "description": "Orthogonal color-scheme modifier switching between Paper & Ink Light and Warm Archival Dark.",
+      "default": "light",
+      "contexts": {
+        "light": [],
+        "dark": [
+          { "$ref": "./kinloom.dark.tokens.json" }
+        ]
+      }
+    }
+  },
+  "resolutionOrder": [
+    { "$ref": "#/sets/base" },
+    { "$ref": "#/modifiers/theme" }
+  ]
+}

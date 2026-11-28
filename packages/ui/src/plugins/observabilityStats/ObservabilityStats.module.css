@@ -16,7 +16,7 @@
 
 .obs-subtitle {
   margin: 0;
-  font-size: 0.9rem;
+  font-size: var(--text-sm);
   color: var(--text-secondary);
   line-height: 1.45;
 }
@@ -52,7 +52,7 @@
 .obs-kpi-label {
   display: block;
   font-family: var(--font-mono);
-  font-size: 0.72rem;
+  font-size: var(--text-2xs);
   text-transform: uppercase;
   letter-spacing: 0.04em;
   color: var(--text-secondary);
@@ -62,7 +62,7 @@
 .obs-kpi-value {
   display: block;
   font-family: var(--font-serif);
-  font-size: 1.35rem;
+  font-size: var(--text-xl);
   font-weight: 700;
   color: var(--surface-header);
   line-height: 1.2;
@@ -72,7 +72,7 @@
   display: block;
   margin-top: 3px;
   font-family: var(--font-mono);
-  font-size: 0.74rem;
+  font-size: var(--text-2xs);
   color: var(--text-secondary);
   overflow-wrap: anywhere;
 }
@@ -92,14 +92,14 @@
 
 .obs-block-title {
   font-family: var(--font-serif);
-  font-size: 1rem;
+  font-size: var(--text-base);
   margin: 0;
   color: var(--surface-header);
 }
 
 .obs-block-meta {
   font-family: var(--font-mono);
-  font-size: 0.74rem;
+  font-size: var(--text-2xs);
   color: var(--text-secondary);
 }
 
@@ -139,7 +139,7 @@
 .obs-chart-axis-label {
   fill: var(--text-secondary);
   font-family: var(--font-mono);
-  font-size: 10px;
+  font-size: var(--text-2xs);
 }
 
 .obs-table-wrapper {
@@ -161,7 +161,7 @@
   width: 100%;
   border-collapse: separate;
   border-spacing: 0;
-  font-size: 0.84rem;
+  font-size: var(--text-xs);
 }
 
 .obs-table thead {
@@ -174,7 +174,7 @@
   background: var(--surface-linen);
   color: var(--surface-header);
   font-family: var(--font-mono);
-  font-size: 0.74rem;
+  font-size: var(--text-2xs);
   text-align: left;
   padding: 7px 10px;
   border-bottom: 1px solid var(--border-decorative);
@@ -213,7 +213,7 @@
 
 .obs-mono {
   font-family: var(--font-mono);
-  font-size: 0.76rem;
+  font-size: var(--text-xs);
   color: var(--text-secondary);
 }
 
@@ -223,7 +223,7 @@
   padding: 1px 7px;
   border-radius: var(--radius-sm);
   font-family: var(--font-mono);
-  font-size: 0.72rem;
+  font-size: var(--text-2xs);
   font-weight: 600;
   background: var(--surface-linen);
   color: var(--surface-header);
@@ -263,7 +263,7 @@
 
 .obs-switch-label {
   font-family: var(--font-mono);
-  font-size: 0.82rem;
+  font-size: var(--text-xs);
   font-weight: 600;
   color: var(--surface-header);
   cursor: pointer;
@@ -271,14 +271,14 @@
 
 .obs-pref-help {
   margin: 4px 0 0;
-  font-size: 0.82rem;
+  font-size: var(--text-xs);
   color: var(--text-secondary);
   line-height: 1.45;
 }
 
 .obs-status-msg {
   font-family: var(--font-mono);
-  font-size: 0.78rem;
+  font-size: var(--text-xs);
   font-weight: 600;
 }
 
@@ -302,7 +302,7 @@
   background: var(--surface-canvas);
   color: var(--text-secondary);
   font-family: var(--font-mono);
-  font-size: 0.74rem;
+  font-size: var(--text-2xs);
   line-height: 1.4;
 }
 
@@ -356,7 +356,7 @@
     content: attr(data-label) ": ";
     display: inline-block;
     font-family: var(--font-mono);
-    font-size: 0.72rem;
+    font-size: var(--text-2xs);
     font-weight: 700;
     color: var(--text-secondary);
     text-transform: uppercase;

@@ -1,16 +1,17 @@
+/* Generated from packages/tokens/kinloom.tokens.json + kinloom.dark.tokens.json via scripts/sync-tokens.mjs */
 :root {
   color-scheme: light dark;
 
   --surface-canvas: #f5efe2;
   --surface-card: #fcf9f2;
-  --surface-subtle: #efe7d7;
+  --surface-subtle: #f5efe2;
   --surface-linen: #eae1ce;
   --surface-radar: var(--surface-linen);
-  --surface-muted: #e5dac5;
+  --surface-muted: #eae1ce;
   --surface-header: #1b2a41;
   --surface-chrome-bar: #1b2a41;
   --surface-action-primary: #1b2a41;
-  --surface-action-primary-hover: #273954;
+  --surface-action-primary-hover: #1b2a41;
 
   --text-primary: #23272e;
   --text-secondary: #4e4a42;
@@ -20,52 +21,62 @@
   --text-on-action-primary-muted: #eae1ce;
 
   --accent-primary: var(--site-accent-light, #562e07);
-  --accent-secondary: #2f5245;
+  --accent-secondary: #244a3c;
   --radar-copresence: var(--accent-primary);
   --radar-local: var(--accent-secondary);
   --radar-macro: var(--surface-header);
 
   --action-focus: #1d4e89;
-  --status-conflict: #8f2d24;
+  --status-conflict: #7f231b;
 
   --border-strong: #23272e;
   --border-control: #827a6a;
-  --border-decorative: #d6cebe;
+  --border-decorative: #eae1ce;
   --border-action-primary: #1b2a41;
 
   --diff-add-bg: #e2efe7;
-  --diff-add-fg: #1f4d3a;
+  --diff-add-fg: #244a3c;
   --diff-del-bg: #f6e2df;
   --diff-del-fg: #7f231b;
-  --badge-memory-bg: #f3e4c8;
-  --badge-memory-fg: #6b3d0e;
-  --badge-cited-bg: #dfece6;
+  --badge-memory-bg: #eae1ce;
+  --badge-memory-fg: #562e07;
+  --badge-cited-bg: #e2efe7;
   --badge-cited-fg: #244a3c;
-  --jump-active-fg: #6b3d0e;
+  --jump-active-fg: #562e07;
 
-  --surface-topbar: rgba(245, 239, 226, 0.95);
-  --surface-overlay-card: rgba(252, 249, 242, 0.96);
-  --surface-overlay-soft: rgba(252, 249, 242, 0.8);
-  --surface-tint-subtle: rgba(234, 225, 206, 0.34);
-  --surface-tint-hover: rgba(234, 225, 206, 0.5);
-  --surface-tint-active: rgba(234, 225, 206, 0.72);
-  --surface-canvas-fade: rgba(245, 239, 226, 0);
-  --surface-survey-ring-fill: rgba(47, 82, 69, 0.08);
-  --tree-minimap-viewport-fill: rgba(86, 46, 7, 0.12);
-  --backdrop-drawer: rgba(35, 39, 46, 0.42);
-  --backdrop-modal: rgba(27, 42, 65, 0.52);
-  --backdrop-lightbox: rgba(20, 29, 44, 0.78);
-  --border-mat: rgba(130, 122, 106, 0.38);
-  --border-chrome-bar: rgba(252, 249, 242, 0.28);
-  --surface-chrome-bar-hover: rgba(252, 249, 242, 0.16);
-  --badge-photo-default: rgba(27, 42, 65, 0.9);
-  --badge-photo-portrait: rgba(47, 82, 69, 0.92);
-  --badge-photo-headstone: rgba(78, 74, 66, 0.9);
-  --badge-photo-scan: rgba(86, 46, 7, 0.92);
+  --surface-topbar: color-mix(in srgb, var(--surface-canvas) 95%, transparent);
+  --surface-overlay-card: color-mix(in srgb, var(--surface-card) 96%, transparent);
+  --surface-overlay-soft: color-mix(in srgb, var(--surface-card) 80%, transparent);
+  --surface-tint-subtle: color-mix(in srgb, var(--surface-linen) 34%, transparent);
+  --surface-tint-hover: color-mix(in srgb, var(--surface-linen) 50%, transparent);
+  --surface-tint-active: color-mix(in srgb, var(--surface-linen) 72%, transparent);
+  --surface-canvas-fade: color-mix(in srgb, var(--surface-canvas) 0%, transparent);
+  --surface-survey-ring-fill: color-mix(in srgb, var(--accent-secondary) 8%, transparent);
+  --tree-minimap-viewport-fill: color-mix(in srgb, var(--accent-primary) 12%, transparent);
+  --backdrop-drawer: color-mix(in srgb, var(--text-primary) 42%, transparent);
+  --backdrop-modal: color-mix(in srgb, var(--surface-header) 52%, transparent);
+  --backdrop-lightbox: color-mix(in srgb, var(--surface-header) 78%, transparent);
+  --border-mat: color-mix(in srgb, var(--border-control) 38%, transparent);
+  --border-chrome-bar: color-mix(in srgb, var(--text-chrome-bar) 28%, transparent);
+  --surface-chrome-bar-hover: color-mix(in srgb, var(--text-chrome-bar) 16%, transparent);
+  --badge-photo-default: color-mix(in srgb, var(--surface-header) 90%, transparent);
+  --badge-photo-portrait: color-mix(in srgb, var(--accent-secondary) 92%, transparent);
+  --badge-photo-headstone: color-mix(in srgb, var(--text-secondary) 90%, transparent);
+  --badge-photo-scan: color-mix(in srgb, var(--accent-primary) 92%, transparent);
 
   --font-serif: 'Newsreader', Georgia, 'Times New Roman', serif;
   --font-ui: ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
   --font-mono: 'IBM Plex Mono', ui-monospace, 'SFMono-Regular', Menlo, monospace;
+
+  --text-2xs: 0.75rem;
+  --text-xs: 0.8125rem;
+  --text-sm: 0.9375rem;
+  --text-base: 1rem;
+  --text-lg: 1.125rem;
+  --text-xl: 1.3125rem;
+  --text-2xl: 1.5rem;
+  --text-3xl: clamp(1.75rem, 3vw, 2.4rem);
+  --text-4xl: clamp(2.25rem, 4vw, 3rem);
 
   --topbar-height: 58px;
   --auth-banner-height: 0px;
@@ -80,12 +91,12 @@
   --control-height-touch: 44px;
   --border-width-thin: 1px;
   --border-width-emphasis: 2px;
-  --shadow-print: 0 2px 10px rgba(35, 39, 46, 0.14), 0 1px 2px rgba(35, 39, 46, 0.08);
-  --shadow-card: 0 1px 3px rgba(35, 39, 46, 0.07);
-  --shadow-active: 0 6px 22px rgba(35, 39, 46, 0.13);
-  --shadow-modal: 0 22px 54px rgba(27, 42, 65, 0.32);
-  --shadow-dock: 0 -6px 20px rgba(27, 42, 65, 0.14);
-  --shadow-drawer: -8px 0 28px rgba(35, 39, 46, 0.18);
+  --shadow-print: 0 2px 10px color-mix(in srgb, var(--text-primary) 14%, transparent), 0 1px 2px color-mix(in srgb, var(--text-primary) 8%, transparent);
+  --shadow-card: 0 1px 3px color-mix(in srgb, var(--text-primary) 7%, transparent);
+  --shadow-active: 0 6px 22px color-mix(in srgb, var(--text-primary) 13%, transparent);
+  --shadow-modal: 0 22px 54px color-mix(in srgb, var(--surface-header) 32%, transparent);
+  --shadow-dock: 0 -6px 20px color-mix(in srgb, var(--surface-header) 14%, transparent);
+  --shadow-drawer: -8px 0 28px color-mix(in srgb, var(--text-primary) 18%, transparent);
 }
 
 :root[data-theme='light'] {
@@ -98,20 +109,20 @@
 
     --surface-canvas: #171614;
     --surface-card: #1f1d1a;
-    --surface-subtle: #22201c;
+    --surface-subtle: #1f1d1a;
     --surface-linen: #2a2723;
-    --surface-muted: #34302b;
+    --surface-muted: #2a2723;
     --surface-header: #e4ddd0;
-    --surface-chrome-bar: #11100e;
-    --surface-action-primary: #2d261c;
-    --surface-action-primary-hover: #382f22;
+    --surface-chrome-bar: #171614;
+    --surface-action-primary: #2a2723;
+    --surface-action-primary-hover: #2a2723;
 
-    --text-primary: #eae3d5;
+    --text-primary: #e4ddd0;
     --text-secondary: #bdb3a3;
     --text-inverse: #171614;
-    --text-chrome-bar: #eae3d5;
-    --text-on-action-primary: #eae3d5;
-    --text-on-action-primary-muted: #dbd3c5;
+    --text-chrome-bar: #e4ddd0;
+    --text-on-action-primary: #e4ddd0;
+    --text-on-action-primary-muted: #e4ddd0;
 
     --accent-primary: var(--site-accent-dark, #f6d191);
     --accent-secondary: #7cc2a6;
@@ -119,47 +130,47 @@
     --action-focus: #7db6f2;
     --status-conflict: #f39287;
 
-    --border-strong: #eae3d5;
+    --border-strong: #e4ddd0;
     --border-control: #8e8577;
-    --border-decorative: #3d3832;
+    --border-decorative: #2a2723;
     --border-action-primary: #f6d191;
 
-    --diff-add-bg: #182d24;
-    --diff-add-fg: #a8e2c8;
-    --diff-del-bg: #361b19;
-    --diff-del-fg: #f7b3aa;
-    --badge-memory-bg: #332615;
-    --badge-memory-fg: #efc083;
-    --badge-cited-bg: #192d26;
-    --badge-cited-fg: #a6dfc7;
-    --jump-active-fg: #f5cc8f;
+    --diff-add-bg: #1f1d1a;
+    --diff-add-fg: #7cc2a6;
+    --diff-del-bg: #1f1d1a;
+    --diff-del-fg: #f39287;
+    --badge-memory-bg: #2a2723;
+    --badge-memory-fg: #f6d191;
+    --badge-cited-bg: #1f1d1a;
+    --badge-cited-fg: #7cc2a6;
+    --jump-active-fg: #f6d191;
 
-    --surface-topbar: rgba(23, 22, 20, 0.94);
-    --surface-overlay-card: rgba(31, 29, 26, 0.96);
-    --surface-overlay-soft: rgba(31, 29, 26, 0.84);
-    --surface-tint-subtle: rgba(42, 39, 35, 0.55);
-    --surface-tint-hover: rgba(52, 48, 43, 0.72);
-    --surface-tint-active: rgba(52, 48, 43, 0.92);
-    --surface-canvas-fade: rgba(23, 22, 20, 0);
-    --surface-survey-ring-fill: rgba(124, 194, 166, 0.12);
-    --tree-minimap-viewport-fill: rgba(246, 209, 145, 0.14);
-    --backdrop-drawer: rgba(8, 8, 7, 0.64);
-    --backdrop-modal: rgba(8, 8, 7, 0.72);
-    --backdrop-lightbox: rgba(6, 6, 5, 0.88);
-    --border-mat: rgba(142, 133, 119, 0.35);
-    --border-chrome-bar: rgba(234, 227, 213, 0.24);
-    --surface-chrome-bar-hover: rgba(234, 227, 213, 0.14);
-    --badge-photo-default: rgba(17, 16, 14, 0.88);
-    --badge-photo-portrait: rgba(25, 45, 38, 0.92);
-    --badge-photo-headstone: rgba(42, 39, 35, 0.92);
-    --badge-photo-scan: rgba(72, 46, 16, 0.92);
+    --surface-topbar: color-mix(in srgb, var(--surface-canvas) 94%, transparent);
+    --surface-overlay-card: color-mix(in srgb, var(--surface-card) 96%, transparent);
+    --surface-overlay-soft: color-mix(in srgb, var(--surface-card) 84%, transparent);
+    --surface-tint-subtle: color-mix(in srgb, var(--surface-linen) 55%, transparent);
+    --surface-tint-hover: color-mix(in srgb, var(--surface-linen) 72%, transparent);
+    --surface-tint-active: color-mix(in srgb, var(--surface-linen) 92%, transparent);
+    --surface-canvas-fade: color-mix(in srgb, var(--surface-canvas) 0%, transparent);
+    --surface-survey-ring-fill: color-mix(in srgb, var(--accent-secondary) 12%, transparent);
+    --tree-minimap-viewport-fill: color-mix(in srgb, var(--accent-primary) 14%, transparent);
+    --backdrop-drawer: color-mix(in srgb, var(--surface-canvas) 64%, transparent);
+    --backdrop-modal: color-mix(in srgb, var(--surface-canvas) 72%, transparent);
+    --backdrop-lightbox: color-mix(in srgb, var(--surface-canvas) 88%, transparent);
+    --border-mat: color-mix(in srgb, var(--border-control) 35%, transparent);
+    --border-chrome-bar: color-mix(in srgb, var(--text-chrome-bar) 24%, transparent);
+    --surface-chrome-bar-hover: color-mix(in srgb, var(--text-chrome-bar) 14%, transparent);
+    --badge-photo-default: color-mix(in srgb, var(--surface-canvas) 88%, transparent);
+    --badge-photo-portrait: color-mix(in srgb, var(--surface-card) 92%, transparent);
+    --badge-photo-headstone: color-mix(in srgb, var(--surface-linen) 92%, transparent);
+    --badge-photo-scan: color-mix(in srgb, var(--surface-linen) 92%, transparent);
 
-    --shadow-print: 0 2px 12px rgba(0, 0, 0, 0.45), 0 1px 3px rgba(0, 0, 0, 0.32);
-    --shadow-card: 0 1px 4px rgba(0, 0, 0, 0.35);
-    --shadow-active: 0 8px 28px rgba(0, 0, 0, 0.55);
-    --shadow-modal: 0 24px 60px rgba(0, 0, 0, 0.7);
-    --shadow-dock: 0 -6px 24px rgba(0, 0, 0, 0.52);
-    --shadow-drawer: -8px 0 32px rgba(0, 0, 0, 0.6);
+    --shadow-print: 0 2px 12px color-mix(in srgb, black 45%, transparent), 0 1px 3px color-mix(in srgb, black 32%, transparent);
+    --shadow-card: 0 1px 4px color-mix(in srgb, black 35%, transparent);
+    --shadow-active: 0 8px 28px color-mix(in srgb, black 55%, transparent);
+    --shadow-modal: 0 24px 60px color-mix(in srgb, black 70%, transparent);
+    --shadow-dock: 0 -6px 24px color-mix(in srgb, black 52%, transparent);
+    --shadow-drawer: -8px 0 32px color-mix(in srgb, black 60%, transparent);
   }
 }
 
@@ -168,20 +179,20 @@
 
   --surface-canvas: #171614;
   --surface-card: #1f1d1a;
-  --surface-subtle: #22201c;
+  --surface-subtle: #1f1d1a;
   --surface-linen: #2a2723;
-  --surface-muted: #34302b;
+  --surface-muted: #2a2723;
   --surface-header: #e4ddd0;
-  --surface-chrome-bar: #11100e;
-  --surface-action-primary: #2d261c;
-  --surface-action-primary-hover: #382f22;
+  --surface-chrome-bar: #171614;
+  --surface-action-primary: #2a2723;
+  --surface-action-primary-hover: #2a2723;
 
-  --text-primary: #eae3d5;
+  --text-primary: #e4ddd0;
   --text-secondary: #bdb3a3;
   --text-inverse: #171614;
-  --text-chrome-bar: #eae3d5;
-  --text-on-action-primary: #eae3d5;
-  --text-on-action-primary-muted: #dbd3c5;
+  --text-chrome-bar: #e4ddd0;
+  --text-on-action-primary: #e4ddd0;
+  --text-on-action-primary-muted: #e4ddd0;
 
   --accent-primary: var(--site-accent-dark, #f6d191);
   --accent-secondary: #7cc2a6;
@@ -189,45 +200,45 @@
   --action-focus: #7db6f2;
   --status-conflict: #f39287;
 
-  --border-strong: #eae3d5;
+  --border-strong: #e4ddd0;
   --border-control: #8e8577;
-  --border-decorative: #3d3832;
+  --border-decorative: #2a2723;
   --border-action-primary: #f6d191;
 
-  --diff-add-bg: #182d24;
-  --diff-add-fg: #a8e2c8;
-  --diff-del-bg: #361b19;
-  --diff-del-fg: #f7b3aa;
-  --badge-memory-bg: #332615;
-  --badge-memory-fg: #efc083;
-  --badge-cited-bg: #192d26;
-  --badge-cited-fg: #a6dfc7;
-  --jump-active-fg: #f5cc8f;
+  --diff-add-bg: #1f1d1a;
+  --diff-add-fg: #7cc2a6;
+  --diff-del-bg: #1f1d1a;
+  --diff-del-fg: #f39287;
+  --badge-memory-bg: #2a2723;
+  --badge-memory-fg: #f6d191;
+  --badge-cited-bg: #1f1d1a;
+  --badge-cited-fg: #7cc2a6;
+  --jump-active-fg: #f6d191;
 
-  --surface-topbar: rgba(23, 22, 20, 0.94);
-  --surface-overlay-card: rgba(31, 29, 26, 0.96);
-  --surface-overlay-soft: rgba(31, 29, 26, 0.84);
-  --surface-tint-subtle: rgba(42, 39, 35, 0.55);
-  --surface-tint-hover: rgba(52, 48, 43, 0.72);
-  --surface-tint-active: rgba(52, 48, 43, 0.92);
-  --surface-canvas-fade: rgba(23, 22, 20, 0);
-  --surface-survey-ring-fill: rgba(124, 194, 166, 0.12);
-  --tree-minimap-viewport-fill: rgba(246, 209, 145, 0.14);
-  --backdrop-drawer: rgba(8, 8, 7, 0.64);
-  --backdrop-modal: rgba(8, 8, 7, 0.72);
-  --backdrop-lightbox: rgba(6, 6, 5, 0.88);
-  --border-mat: rgba(142, 133, 119, 0.35);
-  --border-chrome-bar: rgba(234, 227, 213, 0.24);
-  --surface-chrome-bar-hover: rgba(234, 227, 213, 0.14);
-  --badge-photo-default: rgba(17, 16, 14, 0.88);
-  --badge-photo-portrait: rgba(25, 45, 38, 0.92);
-  --badge-photo-headstone: rgba(42, 39, 35, 0.92);
-  --badge-photo-scan: rgba(72, 46, 16, 0.92);
+  --surface-topbar: color-mix(in srgb, var(--surface-canvas) 94%, transparent);
+  --surface-overlay-card: color-mix(in srgb, var(--surface-card) 96%, transparent);
+  --surface-overlay-soft: color-mix(in srgb, var(--surface-card) 84%, transparent);
+  --surface-tint-subtle: color-mix(in srgb, var(--surface-linen) 55%, transparent);
+  --surface-tint-hover: color-mix(in srgb, var(--surface-linen) 72%, transparent);
+  --surface-tint-active: color-mix(in srgb, var(--surface-linen) 92%, transparent);
+  --surface-canvas-fade: color-mix(in srgb, var(--surface-canvas) 0%, transparent);
+  --surface-survey-ring-fill: color-mix(in srgb, var(--accent-secondary) 12%, transparent);
+  --tree-minimap-viewport-fill: color-mix(in srgb, var(--accent-primary) 14%, transparent);
+  --backdrop-drawer: color-mix(in srgb, var(--surface-canvas) 64%, transparent);
+  --backdrop-modal: color-mix(in srgb, var(--surface-canvas) 72%, transparent);
+  --backdrop-lightbox: color-mix(in srgb, var(--surface-canvas) 88%, transparent);
+  --border-mat: color-mix(in srgb, var(--border-control) 35%, transparent);
+  --border-chrome-bar: color-mix(in srgb, var(--text-chrome-bar) 24%, transparent);
+  --surface-chrome-bar-hover: color-mix(in srgb, var(--text-chrome-bar) 14%, transparent);
+  --badge-photo-default: color-mix(in srgb, var(--surface-canvas) 88%, transparent);
+  --badge-photo-portrait: color-mix(in srgb, var(--surface-card) 92%, transparent);
+  --badge-photo-headstone: color-mix(in srgb, var(--surface-linen) 92%, transparent);
+  --badge-photo-scan: color-mix(in srgb, var(--surface-linen) 92%, transparent);
 
-  --shadow-print: 0 2px 12px rgba(0, 0, 0, 0.45), 0 1px 3px rgba(0, 0, 0, 0.32);
-  --shadow-card: 0 1px 4px rgba(0, 0, 0, 0.35);
-  --shadow-active: 0 8px 28px rgba(0, 0, 0, 0.55);
-  --shadow-modal: 0 24px 60px rgba(0, 0, 0, 0.7);
-  --shadow-dock: 0 -6px 24px rgba(0, 0, 0, 0.52);
-  --shadow-drawer: -8px 0 32px rgba(0, 0, 0, 0.6);
+  --shadow-print: 0 2px 12px color-mix(in srgb, black 45%, transparent), 0 1px 3px color-mix(in srgb, black 32%, transparent);
+  --shadow-card: 0 1px 4px color-mix(in srgb, black 35%, transparent);
+  --shadow-active: 0 8px 28px color-mix(in srgb, black 55%, transparent);
+  --shadow-modal: 0 24px 60px color-mix(in srgb, black 70%, transparent);
+  --shadow-dock: 0 -6px 24px color-mix(in srgb, black 52%, transparent);
+  --shadow-drawer: -8px 0 32px color-mix(in srgb, black 60%, transparent);
 }
