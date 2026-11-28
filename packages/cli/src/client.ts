@@ -238,7 +238,7 @@ export class KinloomApiClient {
     this.baseUrl = normalizeBaseUrl(options.baseUrl);
     this.token = options.token?.trim() || undefined;
     this.fetchImpl = options.fetchImpl ?? globalThis.fetch;
-    this.userAgent = options.userAgent ?? 'kinloom-cli/0.71.0';
+    this.userAgent = options.userAgent ?? 'kinloom-cli/0.72.0';
   }
 
   private buildHeaders(extra?: Record<string, string>): Headers {
