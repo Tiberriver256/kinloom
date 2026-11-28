@@ -196,12 +196,30 @@
   display: none;
 }
 
+.kinship-results-flow {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.kinship-examples-bar {
+  margin: 0;
+}
+
+.kinship-examples-label {
+  font-family: var(--font-ui);
+  font-size: 0.78rem;
+  font-weight: 500;
+  color: var(--text-secondary);
+}
+
 .kinship-examples-bar :global(.pill-btn) {
   text-align: left;
   border: 1px solid var(--border-decorative);
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius-md);
   padding: 5px 10px;
-  background: var(--surface-card);
+  background: var(--surface-subtle);
+  font-family: var(--font-ui);
 }
 
 .kinship-result-heading {
@@ -274,26 +292,40 @@
     padding: 2px 8px;
   }
 
+  .kinship-result-section {
+    order: 1;
+  }
+
   .kinship-examples-bar {
-    flex-wrap: wrap;
+    order: 2;
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    scrollbar-width: none;
     gap: 8px;
+    padding-bottom: 4px;
+  }
+
+  .kinship-examples-bar::-webkit-scrollbar {
+    display: none;
   }
 
   .kinship-examples-bar :global(.pill-btn) {
-    white-space: normal;
+    flex-shrink: 0;
+    white-space: nowrap;
     text-align: left;
     min-height: 44px;
-    border: 1px solid var(--border-control);
-    border-radius: var(--radius-sm);
-    padding: 6px 10px;
-    background: var(--surface-card);
+    border: 1px solid var(--border-decorative);
+    border-radius: var(--radius-md);
+    padding: 6px 12px;
+    background: var(--surface-subtle);
+    font-family: var(--font-ui);
   }
 
   .kinship-examples-label {
     flex-shrink: 0;
-    width: 100%;
-    font-family: var(--font-mono);
-    font-size: 0.75rem;
+    white-space: nowrap;
+    font-family: var(--font-ui);
+    font-size: 0.78rem;
     color: var(--text-secondary);
   }
 }

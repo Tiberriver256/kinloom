@@ -292,256 +292,268 @@ export const KinshipPage: React.FC = () => {
               </div>
             </section>
 
-            {resolvedPresets.length > 0 && (
-              <div
-                className={joinClasses(
-                  cx(controlStyles, 'filter-bar print-hide'),
-                  cx(kinshipStyles, 'kinship-examples-bar')
-                )}
-                style={{ marginTop: 12, marginBottom: 14 }}
-              >
-                <span className={cx(kinshipStyles, 'kinship-examples-label')}>Examples:</span>
-                {resolvedPresets.map((preset) => (
-                  <button
-                    key={preset.label}
-                    type="button"
-                    className={cx(controlStyles, 'pill-btn kinship-example-chip')}
-                    title={preset.note}
-                    onClick={() => {
-                      setFromId(preset.fromId);
-                      setToId(preset.toId);
-                    }}
-                  >
-                    {preset.label}
-                  </button>
-                ))}
-              </div>
-            )}
-
-            {result && personA && personB && presentation && (
-              <section className={cx(layoutStyles, 'place-map-box')} style={{ marginTop: 18 }}>
-                <h2 className={cx(kinshipStyles, 'kinship-result-heading')}>
-                  {presentation.headingPrefix}
-                  <span style={{ color: 'var(--radar-copresence)' }}>{presentation.highlight}</span>
-                  {presentation.headingSuffix}
-                </h2>
-                <p
-                  style={{
-                    margin: '0 0 12px',
-                    fontFamily: 'var(--font-mono)',
-                    fontSize: '0.78rem',
-                    color: 'var(--text-secondary)',
-                  }}
+            <div className={cx(kinshipStyles, 'kinship-results-flow')}>
+              {resolvedPresets.length > 0 && (
+                <div
+                  className={joinClasses(
+                    cx(controlStyles, 'filter-bar print-hide'),
+                    cx(kinshipStyles, 'kinship-examples-bar')
+                  )}
                 >
-                  {presentation.subtitle}
-                </p>
-
-                <div className={cx(kinshipStyles, 'kinship-stats-row')}>
-                  <div className={cx(kinshipStyles, 'kinship-stat-box')}>
-                    <div className={cx(kinshipStyles, 'kinship-stat-label')}>GENERATIONAL / KINSHIP HOPS</div>
-                    <div className={cx(kinshipStyles, 'kinship-stat-value')}>{presentation.hopsValue}</div>
-                  </div>
-                  <div className={cx(kinshipStyles, 'kinship-stat-box')}>
-                    <div className={cx(kinshipStyles, 'kinship-stat-label')}>OVERLAPPING YEARS ALIVE</div>
-                    {result.overlapYears ? (
-                      <Link
-                        to={`/time?year=${result.overlapYears.start}`}
-                        className={cx(kinshipStyles, 'kinship-overlap-link')}
-                        aria-label={`Inspect family snapshot in ${result.overlapYears.start}`}
-                      >
-                        <div className={cx(kinshipStyles, 'kinship-stat-value')}>
-                          {result.overlapYears.start}–{result.overlapYears.end} (
-                          {result.overlapYears.durationYears} yrs) →
-                        </div>
-                        {sparkline && (
-                          <KinshipOverlapSparklineSvg
-                            sparkline={sparkline}
-                            personAName={personA.full_name}
-                            personBName={personB.full_name}
-                          />
-                        )}
-                      </Link>
-                    ) : (
-                      <>
-                        <div className={cx(kinshipStyles, 'kinship-stat-value')}>No lifespan overlap</div>
-                        {sparkline && (
-                          <KinshipOverlapSparklineSvg
-                            sparkline={sparkline}
-                            personAName={personA.full_name}
-                            personBName={personB.full_name}
-                          />
-                        )}
-                      </>
-                    )}
-                  </div>
-                  <div className={cx(kinshipStyles, 'kinship-stat-box')}>
-                    <div className={cx(kinshipStyles, 'kinship-stat-label')}>SHARED PLACES</div>
-                    <div className={cx(kinshipStyles, 'kinship-stat-value')}>
-                      {result.sharedPlaces.length > 0
-                        ? `${result.sharedPlaces.length} shared place${result.sharedPlaces.length === 1 ? '' : 's'}`
-                        : presentation.sharedPlacesEmptyText}
-                    </div>
-                  </div>
-                </div>
-
-                {result.connected && result.steps.length > 0 && topology && (
-                  <div style={{ marginTop: 18 }}>
-                    <div className={cx(kinshipStyles, 'kinship-path-header')}>
-                      <div className={cx(kinshipStyles, 'kinship-path-hint')}>
-                        {KINLOOM_VOCABULARY.kinship.shortestPathHint}
-                      </div>
-                      {treePathUrl && (
-                        <Link
-                          to={treePathUrl}
-                          className={joinClasses(
-                            cx(controlStyles, 'pill-btn print-hide'),
-                            cx(kinshipStyles, 'kinship-tree-highlight-link')
-                          )}
-                        >
-                          Highlight Path in Tree →
-                        </Link>
-                      )}
-                    </div>
-
-                    <ol
-                      className={cx(
-                        kinshipStyles,
-                        topology.topology === 'v'
-                          ? 'kinship-chain kinship-chain--v'
-                          : 'kinship-chain kinship-chain--linear'
-                      )}
-                      aria-label="Kinship lineage path"
-                    >
-                      {topology.orderedNodes.map((node) => {
-                        const p = peopleById.get(node.personId);
-                        if (!p) {
-                          return null;
-                        }
-                        const isV = topology.topology === 'v';
-                        let relText = '';
-                        let desktopArrow = '→';
-                        let mobileArrow = '↓';
-                        if (node.edgeFromPrev === 'parent') {
-                          relText = 'parent of';
-                          desktopArrow = isV ? '↓' : '→';
-                          mobileArrow = '↓';
-                        } else if (node.edgeFromPrev === 'child') {
-                          relText = 'child of';
-                          desktopArrow = isV ? '↑' : '→';
-                          mobileArrow = '↓';
-                        } else if (node.edgeFromPrev === 'spouse') {
-                          relText = 'married to';
-                          desktopArrow = '↔';
-                          mobileArrow = '↕';
-                        }
-
-                        let itemRoleClass = 'kinship-step-item';
-                        let gridStyle: React.CSSProperties | undefined;
-                        if (isV) {
-                          const ascendCount = topology.ascending.length;
-                          if (node.role === 'apex') {
-                            itemRoleClass = 'kinship-step-item is-apex';
-                            gridStyle = { gridColumn: 2, gridRow: 1 };
-                          } else if (node.index < ascendCount) {
-                            itemRoleClass = 'kinship-step-item is-ascending';
-                            gridStyle = { gridColumn: 1, gridRow: ascendCount + 1 - node.index };
-                          } else {
-                            const descOffset = node.index - ascendCount;
-                            itemRoleClass = 'kinship-step-item is-descending';
-                            gridStyle = { gridColumn: 3, gridRow: descOffset + 1 };
-                          }
-                        }
-
-                        const isEndpoint =
-                          node.index === 0 || node.index === topology.orderedNodes.length - 1;
-                        const pillClass =
-                          node.role === 'apex'
-                            ? 'kinship-node-pill is-apex'
-                            : isEndpoint
-                              ? 'kinship-node-pill endpoint'
-                              : 'kinship-node-pill';
-
-                        return (
-                          <li
-                            key={node.personId}
-                            className={cx(kinshipStyles, itemRoleClass)}
-                            style={gridStyle}
-                          >
-                            {node.edgeFromPrev && (
-                              <span className={cx(kinshipStyles, 'kinship-edge-badge')}>
-                                <span>{relText}</span>{' '}
-                                <span
-                                  className={cx(kinshipStyles, 'kinship-arrow-desktop')}
-                                  aria-hidden="true"
-                                >
-                                  {desktopArrow}
-                                </span>
-                                <span
-                                  className={cx(kinshipStyles, 'kinship-arrow-mobile')}
-                                  aria-hidden="true"
-                                >
-                                  {mobileArrow}
-                                </span>
-                              </span>
-                            )}
-                            <Link to={`/person/${p.slug}`} className={cx(kinshipStyles, pillClass)}>
-                              <PersonPortrait
-                                name={p.full_name}
-                                src={personThumbMap.get(p.id) || p.portrait_url}
-                                baseUrl={baseUrl}
-                                variant="circle"
-                                size="sm"
-                                loading="eager"
-                              />
-                              <span className={cx(kinshipStyles, 'kinship-node-body')}>
-                                {node.role === 'apex' && (
-                                  <span className={cx(kinshipStyles, 'kinship-mrca-badge')}>
-                                    Most Recent Common Ancestor
-                                  </span>
-                                )}
-                                <strong>{p.full_name}</strong>
-                                <span className={cx(kinshipStyles, 'kinship-node-years')}>
-                                  {p.birth_year || '?'}–{p.death_year || '?'}
-                                </span>
-                              </span>
-                            </Link>
-                          </li>
-                        );
-                      })}
-                    </ol>
-                  </div>
-                )}
-
-                {result.sharedPlaces.length > 0 && (
-                  <div
-                    style={{ marginTop: 18, paddingTop: 14, borderTop: '1px solid var(--border-decorative)' }}
-                  >
-                    <div
-                      style={{
-                        fontFamily: 'var(--font-mono)',
-                        fontSize: '0.78rem',
-                        color: 'var(--text-secondary)',
-                        marginBottom: 8,
+                  <span className={cx(kinshipStyles, 'kinship-examples-label')}>Examples:</span>
+                  {resolvedPresets.map((preset) => (
+                    <button
+                      key={preset.label}
+                      type="button"
+                      className={cx(controlStyles, 'pill-btn kinship-example-chip')}
+                      title={preset.note}
+                      onClick={() => {
+                        setFromId(preset.fromId);
+                        setToId(preset.toId);
                       }}
                     >
-                      {KINLOOM_VOCABULARY.kinship.sharedPlacesHeading}
+                      {preset.label}
+                    </button>
+                  ))}
+                </div>
+              )}
+
+              {result && personA && personB && presentation && (
+                <section
+                  className={joinClasses(
+                    cx(layoutStyles, 'place-map-box'),
+                    cx(kinshipStyles, 'kinship-result-section')
+                  )}
+                >
+                  <h2 className={cx(kinshipStyles, 'kinship-result-heading')}>
+                    {presentation.headingPrefix}
+                    <span style={{ color: 'var(--radar-copresence)' }}>{presentation.highlight}</span>
+                    {presentation.headingSuffix}
+                  </h2>
+                  <p
+                    style={{
+                      margin: '0 0 12px',
+                      fontFamily: 'var(--font-mono)',
+                      fontSize: '0.78rem',
+                      color: 'var(--text-secondary)',
+                    }}
+                  >
+                    {presentation.subtitle}
+                  </p>
+
+                  <div className={cx(kinshipStyles, 'kinship-stats-row')}>
+                    <div className={cx(kinshipStyles, 'kinship-stat-box')}>
+                      <div className={cx(kinshipStyles, 'kinship-stat-label')}>
+                        GENERATIONAL / KINSHIP HOPS
+                      </div>
+                      <div className={cx(kinshipStyles, 'kinship-stat-value')}>{presentation.hopsValue}</div>
                     </div>
-                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-                      {result.sharedPlaces.map(({ place }) => (
+                    <div className={cx(kinshipStyles, 'kinship-stat-box')}>
+                      <div className={cx(kinshipStyles, 'kinship-stat-label')}>OVERLAPPING YEARS ALIVE</div>
+                      {result.overlapYears ? (
                         <Link
-                          key={place.id}
-                          to={`/place/${place.slug}`}
-                          className={cx(controlStyles, 'pill-btn')}
-                          style={{ textDecoration: 'none' }}
+                          to={`/time?year=${result.overlapYears.start}`}
+                          className={cx(kinshipStyles, 'kinship-overlap-link')}
+                          aria-label={`Inspect family snapshot in ${result.overlapYears.start}`}
                         >
-                          {place.full_name} →
+                          <div className={cx(kinshipStyles, 'kinship-stat-value')}>
+                            {result.overlapYears.start}–{result.overlapYears.end} (
+                            {result.overlapYears.durationYears} yrs) →
+                          </div>
+                          {sparkline && (
+                            <KinshipOverlapSparklineSvg
+                              sparkline={sparkline}
+                              personAName={personA.full_name}
+                              personBName={personB.full_name}
+                            />
+                          )}
                         </Link>
-                      ))}
+                      ) : (
+                        <>
+                          <div className={cx(kinshipStyles, 'kinship-stat-value')}>No lifespan overlap</div>
+                          {sparkline && (
+                            <KinshipOverlapSparklineSvg
+                              sparkline={sparkline}
+                              personAName={personA.full_name}
+                              personBName={personB.full_name}
+                            />
+                          )}
+                        </>
+                      )}
+                    </div>
+                    <div className={cx(kinshipStyles, 'kinship-stat-box')}>
+                      <div className={cx(kinshipStyles, 'kinship-stat-label')}>SHARED PLACES</div>
+                      <div className={cx(kinshipStyles, 'kinship-stat-value')}>
+                        {result.sharedPlaces.length > 0
+                          ? `${result.sharedPlaces.length} shared place${result.sharedPlaces.length === 1 ? '' : 's'}`
+                          : presentation.sharedPlacesEmptyText}
+                      </div>
                     </div>
                   </div>
-                )}
-              </section>
-            )}
+
+                  {result.connected && result.steps.length > 0 && topology && (
+                    <div style={{ marginTop: 18 }}>
+                      <div className={cx(kinshipStyles, 'kinship-path-header')}>
+                        <div className={cx(kinshipStyles, 'kinship-path-hint')}>
+                          {KINLOOM_VOCABULARY.kinship.shortestPathHint}
+                        </div>
+                        {treePathUrl && (
+                          <Link
+                            to={treePathUrl}
+                            className={joinClasses(
+                              cx(controlStyles, 'pill-btn print-hide'),
+                              cx(kinshipStyles, 'kinship-tree-highlight-link')
+                            )}
+                          >
+                            Highlight Path in Tree →
+                          </Link>
+                        )}
+                      </div>
+
+                      <ol
+                        className={cx(
+                          kinshipStyles,
+                          topology.topology === 'v'
+                            ? 'kinship-chain kinship-chain--v'
+                            : 'kinship-chain kinship-chain--linear'
+                        )}
+                        aria-label="Kinship lineage path"
+                      >
+                        {topology.orderedNodes.map((node) => {
+                          const p = peopleById.get(node.personId);
+                          if (!p) {
+                            return null;
+                          }
+                          const isV = topology.topology === 'v';
+                          let relText = '';
+                          let desktopArrow = '→';
+                          let mobileArrow = '↓';
+                          if (node.edgeFromPrev === 'parent') {
+                            relText = 'parent of';
+                            desktopArrow = isV ? '↓' : '→';
+                            mobileArrow = '↓';
+                          } else if (node.edgeFromPrev === 'child') {
+                            relText = 'child of';
+                            desktopArrow = isV ? '↑' : '→';
+                            mobileArrow = '↓';
+                          } else if (node.edgeFromPrev === 'spouse') {
+                            relText = 'married to';
+                            desktopArrow = '↔';
+                            mobileArrow = '↕';
+                          }
+
+                          let itemRoleClass = 'kinship-step-item';
+                          let gridStyle: React.CSSProperties | undefined;
+                          if (isV) {
+                            const ascendCount = topology.ascending.length;
+                            if (node.role === 'apex') {
+                              itemRoleClass = 'kinship-step-item is-apex';
+                              gridStyle = { gridColumn: 2, gridRow: 1 };
+                            } else if (node.index < ascendCount) {
+                              itemRoleClass = 'kinship-step-item is-ascending';
+                              gridStyle = { gridColumn: 1, gridRow: ascendCount + 1 - node.index };
+                            } else {
+                              const descOffset = node.index - ascendCount;
+                              itemRoleClass = 'kinship-step-item is-descending';
+                              gridStyle = { gridColumn: 3, gridRow: descOffset + 1 };
+                            }
+                          }
+
+                          const isEndpoint =
+                            node.index === 0 || node.index === topology.orderedNodes.length - 1;
+                          const pillClass =
+                            node.role === 'apex'
+                              ? 'kinship-node-pill is-apex'
+                              : isEndpoint
+                                ? 'kinship-node-pill endpoint'
+                                : 'kinship-node-pill';
+
+                          return (
+                            <li
+                              key={node.personId}
+                              className={cx(kinshipStyles, itemRoleClass)}
+                              style={gridStyle}
+                            >
+                              {node.edgeFromPrev && (
+                                <span className={cx(kinshipStyles, 'kinship-edge-badge')}>
+                                  <span>{relText}</span>{' '}
+                                  <span
+                                    className={cx(kinshipStyles, 'kinship-arrow-desktop')}
+                                    aria-hidden="true"
+                                  >
+                                    {desktopArrow}
+                                  </span>
+                                  <span
+                                    className={cx(kinshipStyles, 'kinship-arrow-mobile')}
+                                    aria-hidden="true"
+                                  >
+                                    {mobileArrow}
+                                  </span>
+                                </span>
+                              )}
+                              <Link to={`/person/${p.slug}`} className={cx(kinshipStyles, pillClass)}>
+                                <PersonPortrait
+                                  name={p.full_name}
+                                  src={personThumbMap.get(p.id) || p.portrait_url}
+                                  baseUrl={baseUrl}
+                                  variant="circle"
+                                  size="sm"
+                                  loading="eager"
+                                />
+                                <span className={cx(kinshipStyles, 'kinship-node-body')}>
+                                  {node.role === 'apex' && (
+                                    <span className={cx(kinshipStyles, 'kinship-mrca-badge')}>
+                                      Most Recent Common Ancestor
+                                    </span>
+                                  )}
+                                  <strong>{p.full_name}</strong>
+                                  <span className={cx(kinshipStyles, 'kinship-node-years')}>
+                                    {p.birth_year || '?'}–{p.death_year || '?'}
+                                  </span>
+                                </span>
+                              </Link>
+                            </li>
+                          );
+                        })}
+                      </ol>
+                    </div>
+                  )}
+
+                  {result.sharedPlaces.length > 0 && (
+                    <div
+                      style={{
+                        marginTop: 18,
+                        paddingTop: 14,
+                        borderTop: '1px solid var(--border-decorative)',
+                      }}
+                    >
+                      <div
+                        style={{
+                          fontFamily: 'var(--font-mono)',
+                          fontSize: '0.78rem',
+                          color: 'var(--text-secondary)',
+                          marginBottom: 8,
+                        }}
+                      >
+                        {KINLOOM_VOCABULARY.kinship.sharedPlacesHeading}
+                      </div>
+                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                        {result.sharedPlaces.map(({ place }) => (
+                          <Link
+                            key={place.id}
+                            to={`/place/${place.slug}`}
+                            className={cx(controlStyles, 'pill-btn')}
+                            style={{ textDecoration: 'none' }}
+                          >
+                            {place.full_name} →
+                          </Link>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </section>
+              )}
+            </div>
           </>
         )}
       </main>

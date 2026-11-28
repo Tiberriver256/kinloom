@@ -156,7 +156,6 @@ select.pill-btn option {
 :global(.person-header-actions) .pill-btn,
 :global(.index-filter-actions) .pill-btn,
 :global(.ink-filter-bar) .pill-btn,
-:global(.evidence-tabs) .pill-btn,
 .empty-state-notice-action .pill-btn {
   border: 1px solid var(--border-decorative);
   border-radius: var(--radius-md);
@@ -173,7 +172,6 @@ select.pill-btn option {
   :global(.person-header-actions) .pill-btn:hover,
   :global(.index-filter-actions) .pill-btn:hover,
   :global(.ink-filter-bar) .pill-btn:hover,
-  :global(.evidence-tabs) .pill-btn:hover,
   .empty-state-notice-action .pill-btn:hover {
     background: var(--surface-linen);
     border-color: var(--surface-header);
@@ -182,8 +180,7 @@ select.pill-btn option {
 
 :global(.person-header-actions) .pill-btn:global(.active),
 :global(.index-filter-actions) .pill-btn:global(.active),
-:global(.ink-filter-bar) .pill-btn:global(.active),
-:global(.evidence-tabs) .pill-btn:global(.active) {
+:global(.ink-filter-bar) .pill-btn:global(.active) {
   background: var(--surface-linen);
   border-color: var(--radar-copresence);
   border-bottom: 2px solid var(--radar-copresence);
@@ -286,5 +283,43 @@ select.pill-btn option {
     display: inline-flex;
     align-items: center;
     justify-content: center;
+  }
+}
+
+:global(.evidence-tabs) {
+  border-bottom: 1px solid var(--border-decorative);
+  gap: 4px 16px;
+  padding-bottom: 0;
+}
+
+:global(.evidence-tabs) .pill-btn {
+  border: none;
+  border-bottom: 2px solid transparent;
+  border-radius: 0;
+  padding: 6px 2px 8px;
+  background: transparent;
+  color: var(--text-secondary);
+  font-family: var(--font-ui);
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+:global(.evidence-tabs) .pill-btn:global(.active) {
+  background: transparent;
+  border-bottom-color: var(--radar-copresence);
+  color: var(--jump-active-fg);
+  font-weight: 600;
+}
+
+@media (max-width: 768px) {
+  :global(.evidence-tabs) {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    scrollbar-width: none;
+    gap: 14px;
+  }
+
+  :global(.evidence-tabs)::-webkit-scrollbar {
+    display: none;
   }
 }

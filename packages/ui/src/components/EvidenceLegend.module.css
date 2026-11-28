@@ -11,22 +11,24 @@
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  min-height: 28px;
-  padding: 3px 10px;
-  border: 1px solid var(--border-control);
-  border-radius: var(--radius-sm);
-  background: var(--surface-card);
-  color: var(--surface-header);
-  font-family: var(--font-mono);
-  font-size: 0.75rem;
-  font-weight: 600;
+  min-height: 32px;
+  padding: 4px 2px;
+  border: none;
+  border-radius: 0;
+  background: transparent;
+  color: var(--text-secondary);
+  font-family: var(--font-ui);
+  font-size: 0.82rem;
+  font-weight: 500;
   line-height: 1.3;
+  text-decoration: underline dotted;
+  text-underline-offset: 3px;
   cursor: pointer;
 }
 
 .evidence-legend-toggle:hover {
-  background: var(--surface-linen);
-  border-color: var(--surface-header);
+  color: var(--accent-primary);
+  text-decoration-style: solid;
 }
 
 .evidence-legend-toggle:focus-visible {
@@ -104,7 +106,7 @@
 }
 
 .evidence-legend-label {
-  font-family: var(--font-mono);
+  font-family: var(--font-ui);
   font-size: 0.76rem;
   font-weight: 600;
   line-height: 1.3;

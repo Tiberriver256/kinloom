@@ -93,11 +93,11 @@
   display: flex;
   align-items: baseline;
   justify-content: space-between;
-  flex-wrap: wrap;
-  gap: 6px 14px;
+  flex-wrap: nowrap;
+  gap: 8px 14px;
   margin: 26px 0 6px;
   padding-bottom: 6px;
-  border-bottom: 1px solid var(--border-control);
+  border-bottom: 1px solid var(--border-decorative);
 }
 
 .places-section-header:global(.is-first) {
@@ -108,15 +108,16 @@
   display: flex;
   align-items: baseline;
   gap: 8px;
+  min-width: 0;
 }
 
 .places-section-heading {
   margin: 0;
-  font-family: var(--font-mono);
-  font-size: 0.88rem;
+  font-family: var(--font-serif);
+  font-size: 1.08rem;
   font-weight: 600;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
+  letter-spacing: 0;
+  text-transform: none;
   color: var(--surface-header);
 }
 
@@ -128,11 +129,14 @@
 }
 
 .places-section-scent {
-  font-family: var(--font-mono);
-  font-size: 0.76rem;
+  font-family: var(--font-ui);
+  font-size: 0.8rem;
+  font-weight: 500;
   color: var(--accent-primary);
   text-decoration: none;
   border-bottom: 1px solid transparent;
+  flex-shrink: 0;
+  white-space: nowrap;
 }
 
 .places-section-expand-row {
@@ -177,7 +181,7 @@
 }
 
 .place-ledger-full {
-  font-family: var(--font-mono);
+  font-family: var(--font-ui);
   font-size: 0.76rem;
   color: var(--text-secondary);
   margin-top: 2px;
@@ -217,7 +221,7 @@
 }
 
 .place-ledger-people-label {
-  font-family: var(--font-mono);
+  font-family: var(--font-ui);
   font-size: 0.72rem;
   text-transform: uppercase;
   letter-spacing: 0.06em;
@@ -246,7 +250,7 @@
 }
 
 .place-resident-more {
-  font-family: var(--font-mono);
+  font-family: var(--font-ui);
   font-size: 0.76rem;
   color: var(--radar-copresence);
   text-decoration: none;
