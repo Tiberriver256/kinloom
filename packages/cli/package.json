@@ -1,6 +1,6 @@
 {
   "name": "@kinloom/cli",
-  "version": "0.61.0",
+  "version": "0.62.0",
   "type": "module",
   "license": "MIT",
   "description": "Operator and AI research agent CLI for initializing, slicing GEDCOM, seeding, submitting batches, and exporting Kinloom archives.",
@@ -32,8 +32,8 @@
     "typecheck": "tsc --noEmit -p tsconfig.json"
   },
   "dependencies": {
-    "@kinloom/core": "^0.61.0",
-    "@kinloom/server": "^0.61.0",
+    "@kinloom/core": "^0.62.0",
+    "@kinloom/server": "^0.62.0",
     "cheerio": "^1.2.0",
     "fast-xml-parser": "^5.12.1",
     "fflate": "^0.8.3",
