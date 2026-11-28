@@ -336,3 +336,36 @@ Options:
   --concurrency <N>           Parallel viewport/theme contexts (default: 2, max: 8)
   --json                      Emit structured JSON summary and manifest
   -h, --help                  Show this help message`;
+
+export const DESIGN_AUDIT_HELP = `Usage: kinloom design-audit [subcommand] [options]
+
+Run deterministic-first UI/UX design audits (APCA 0.0.98G-4g-base-W3, WCAG 2.2 AA/AAA,
+W3C DTCG 2025.10 tokens, CSS entropy, UI Stack states, OASIS SARIF 2.1.0, and Executive Dossier).
+
+Subcommands:
+  run (default)        Run full Playwright capture + deterministic probes + CSS/DTCG + SARIF 2.1.0
+  init                 Scaffold a starter design-audit plan JSON file
+  css                  Run offline CSS entropy and W3C DTCG 2025.10 token checks
+  sarif                Aggregate bundle findings into SARIF 2.1.0 + Executive Dossier with baseline ratchet
+  archetypes           Inspect calibrated UI archetypes (editorial, saas, ecommerce, mobile-app)
+  standards            Print pinned WCAG/APCA/DTCG/ISO/SARIF standards
+
+Options:
+  --url <baseUrl>      Target server URL (e.g. http://127.0.0.1:4173); omits live capture if absent
+  --plan <path>        Path to an existing design-audit plan JSON
+  --out-dir <dir>      Output artifact bundle directory (default: .audit-artifacts/<run-id>)
+  --repo <dir>         Repository root for CSS and DTCG token discovery (default: cwd)
+  --archetype <id>     UI archetype: editorial (default), saas, ecommerce, or mobile-app
+  --routes <csv>       Comma-separated or repeatable route paths (default: /)
+  --themes <csv>       Color schemes: light, dark, more-contrast (default: light,dark)
+  --states <csv>       UI Stack states: ideal, loading, empty-first, empty-zero, partial, error
+  --css <path>         Explicit CSS file path(s) to audit (repeatable or comma-separated)
+  --tokens <path>      Explicit .tokens.json or .resolver.json path(s) (repeatable or comma-separated)
+  --bundle <dir>       Existing artifact bundle directory (for \`css\` and \`sarif\`)
+  --baseline <sarif>   Baseline SARIF 2.1.0 file for ratchet regression diffing
+  --static-only        Skip browser capture and run static CSS/DTCG checks only
+  --fail-on-error      Exit with code 1 when any blocking error finding is detected
+  --force              Overwrite existing plan file in \`init\`
+  --json               Emit structured JSON output
+  --guide              Show the embedded design-audit workflow guide
+  -h, --help           Show this help message`;

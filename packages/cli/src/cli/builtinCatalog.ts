@@ -2,6 +2,7 @@ import {
   AUDIT_HELP,
   CONTEXT_HELP,
   DATES_HELP,
+  DESIGN_AUDIT_HELP,
   INTEGRATE_HELP,
   MEDIA_HELP,
   MIGRATE_HELP,
@@ -224,6 +225,12 @@ Options:
     help: SCREENSHOTS_HELP,
   },
   {
+    name: 'design-audit',
+    category: 'ops',
+    summary: 'Run deterministic UI/UX design audits (APCA, WCAG 2.2, DTCG tokens, SARIF 2.1.0)',
+    help: DESIGN_AUDIT_HELP,
+  },
+  {
     name: 'guide',
     category: 'ops',
     summary: 'Browse embedded research, archive, OCR, and workflow guides',
@@ -232,7 +239,7 @@ Options:
 Browse all embedded Kinloom archival, scan-prep, OCR, audio, and workflow guides.
 
 Examples:
-  kinloom guide                              List all 26 embedded guides by category
+  kinloom guide                              List all 27 embedded guides by category
   kinloom guide nara                         Show the National Archives (NARA) workflow guide
   kinloom guide ocr                          Show the safe batch OCR workflow guide
   kinloom guide pronounce                    Show the pronunciation lookup & audit guide

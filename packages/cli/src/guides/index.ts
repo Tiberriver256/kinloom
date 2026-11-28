@@ -4,6 +4,7 @@ import { CYNDIS_LIST_GUIDE } from './directories/cyndis-list.js';
 import { NARRATIVE_AUDIO_GUIDE } from './media/narrative-audio.js';
 import { OCR_GUIDE } from './media/ocr.js';
 import { PREP_SCAN_GUIDE } from './media/prep-scan.js';
+import { DESIGN_AUDIT_GUIDE } from './ops/design-audit.js';
 import { PRONOUNCE_GUIDE } from './ops/pronounce.js';
 import { ARCHIVE_ORG_GUIDE } from './records/archive-org.js';
 import { CA_ARCHIVES_GUIDE } from './records/ca-archives.js';
@@ -81,8 +82,9 @@ export const EMBEDDED_GUIDES: readonly EmbeddedGuide[] = [
   PREP_SCAN_GUIDE,
   OCR_GUIDE,
 
-  // Archive operations & pronunciation (1)
+  // Archive operations, pronunciation & design audit (2)
   PRONOUNCE_GUIDE,
+  DESIGN_AUDIT_GUIDE,
 ];
 
 const GUIDE_BY_KEY = new Map<string, EmbeddedGuide>();

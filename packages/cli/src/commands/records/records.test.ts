@@ -98,7 +98,7 @@ describe('record command registry and discovery', () => {
     ]);
     expect(guideOnlyCommands).toEqual(['blm-glo', 'cyndis-list']);
     expect(RECORD_COMMAND_SPECS).toHaveLength(25);
-    expect(EMBEDDED_GUIDES).toHaveLength(26);
+    expect(EMBEDDED_GUIDES).toHaveLength(27);
 
     for (const spec of RECORD_COMMAND_SPECS) {
       const guide = resolveEmbeddedGuide(spec.command);
@@ -850,8 +850,8 @@ describe('native TypeScript OCR, alias routing, and ubiquitous-language parity',
       { label: 'deprecated anchor years', regex: /\banchor years\b/i },
     ];
 
-    // Verify all 26 compiled embedded guides stay scrubbed and clean.
-    expect(EMBEDDED_GUIDES).toHaveLength(26);
+    // Verify all 27 compiled embedded guides stay scrubbed and clean.
+    expect(EMBEDDED_GUIDES).toHaveLength(27);
     for (const guide of EMBEDDED_GUIDES) {
       for (const { label, regex } of forbiddenPatterns) {
         expect(guide.body, `guide '${guide.id}' contains ${label}`).not.toMatch(regex);

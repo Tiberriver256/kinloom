@@ -86,6 +86,7 @@ export {
   type WeekdayName,
   type YearsMonthsDays,
 } from './dates.js';
+export * from './design-audit.js';
 export { MIGRATE_HELP, PRONOUNCE_HELP } from './help.js';
 export {
   applyKinshipRemovals,
