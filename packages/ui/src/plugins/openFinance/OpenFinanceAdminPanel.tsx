@@ -124,11 +124,11 @@ function buildConfigInputFromDraft(
 
   const pageTitle = draft.pageTitle.trim();
   if (!pageTitle) {
-    errors.pageTitle = 'Support page title is required.';
+    errors['pageTitle'] = 'Support page title is required.';
   }
   const navLabel = draft.navLabel.trim();
   if (!navLabel) {
-    errors.navLabel = 'Navigation label is required.';
+    errors['navLabel'] = 'Navigation label is required.';
   }
 
   const platformsPayload: {
@@ -191,13 +191,13 @@ function buildConfigInputFromDraft(
     const targetCents = parseDecimalMoneyToCents(draft.goalTargetText);
     const receivedCents = parseDecimalMoneyToCents(draft.goalReceivedText);
     if (targetCents === null) {
-      errors.goalTarget = 'Target amount must be a valid non-negative amount.';
+      errors['goalTarget'] = 'Target amount must be a valid non-negative amount.';
     }
     if (receivedCents === null) {
-      errors.goalReceived = 'Received amount must be a valid non-negative amount.';
+      errors['goalReceived'] = 'Received amount must be a valid non-negative amount.';
     }
     if (draft.goalAsOfDate.trim() && !/^\d{4}-\d{2}-\d{2}$/.test(draft.goalAsOfDate.trim())) {
-      errors.goalAsOfDate = 'As-of date must use YYYY-MM-DD format.';
+      errors['goalAsOfDate'] = 'As-of date must use YYYY-MM-DD format.';
     }
     if (targetCents !== null && receivedCents !== null) {
       fundingGoalPayload = {
@@ -570,8 +570,8 @@ export const OpenFinanceAdminPanel: React.FC = () => {
                 value={draft.pageTitle}
                 onChange={(e) => setDraft((prev) => ({ ...prev, pageTitle: e.target.value }))}
               />
-              {fieldErrors.pageTitle && (
-                <span className={cx(styles, 'of-field-error')}>{fieldErrors.pageTitle}</span>
+              {fieldErrors['pageTitle'] && (
+                <span className={cx(styles, 'of-field-error')}>{fieldErrors['pageTitle']}</span>
               )}
             </div>
 
@@ -586,8 +586,8 @@ export const OpenFinanceAdminPanel: React.FC = () => {
                 value={draft.navLabel}
                 onChange={(e) => setDraft((prev) => ({ ...prev, navLabel: e.target.value }))}
               />
-              {fieldErrors.navLabel && (
-                <span className={cx(styles, 'of-field-error')}>{fieldErrors.navLabel}</span>
+              {fieldErrors['navLabel'] && (
+                <span className={cx(styles, 'of-field-error')}>{fieldErrors['navLabel']}</span>
               )}
             </div>
 
@@ -1004,8 +1004,8 @@ export const OpenFinanceAdminPanel: React.FC = () => {
                   value={draft.goalTargetText}
                   onChange={(e) => setDraft((prev) => ({ ...prev, goalTargetText: e.target.value }))}
                 />
-                {fieldErrors.goalTarget && (
-                  <span className={cx(styles, 'of-field-error')}>{fieldErrors.goalTarget}</span>
+                {fieldErrors['goalTarget'] && (
+                  <span className={cx(styles, 'of-field-error')}>{fieldErrors['goalTarget']}</span>
                 )}
               </div>
               <div className={cx(styles, 'of-admin-field')}>
@@ -1020,8 +1020,8 @@ export const OpenFinanceAdminPanel: React.FC = () => {
                   value={draft.goalReceivedText}
                   onChange={(e) => setDraft((prev) => ({ ...prev, goalReceivedText: e.target.value }))}
                 />
-                {fieldErrors.goalReceived && (
-                  <span className={cx(styles, 'of-field-error')}>{fieldErrors.goalReceived}</span>
+                {fieldErrors['goalReceived'] && (
+                  <span className={cx(styles, 'of-field-error')}>{fieldErrors['goalReceived']}</span>
                 )}
               </div>
               <div className={cx(styles, 'of-admin-field')}>
@@ -1048,8 +1048,8 @@ export const OpenFinanceAdminPanel: React.FC = () => {
                   value={draft.goalAsOfDate}
                   onChange={(e) => setDraft((prev) => ({ ...prev, goalAsOfDate: e.target.value }))}
                 />
-                {fieldErrors.goalAsOfDate && (
-                  <span className={cx(styles, 'of-field-error')}>{fieldErrors.goalAsOfDate}</span>
+                {fieldErrors['goalAsOfDate'] && (
+                  <span className={cx(styles, 'of-field-error')}>{fieldErrors['goalAsOfDate']}</span>
                 )}
               </div>
             </div>

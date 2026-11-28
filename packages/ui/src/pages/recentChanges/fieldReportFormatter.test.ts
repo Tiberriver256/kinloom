@@ -14,6 +14,11 @@ import {
   isFeedGroupReviewed,
 } from './recentChangesViewModel.js';
 
+function must<T>(val: T | undefined, label = 'value'): T {
+  if (val === undefined) throw new Error(`Expected ${label}`);
+  return val;
+}
+
 const SITE_CONFIG = parseKinloomConfig({
   site: {
     title: 'Barton Historical Archive',
@@ -379,7 +384,7 @@ describe('Research Field Report formatting, diff readability, empty states, and 
     expect(summary.batchReview).toEqual(batchStamp);
 
     const groups = groupRevisionsByBatch(batchRevs);
-    expect(isFeedGroupReviewed(groups[0])).toBe(true);
+    expect(isFeedGroupReviewed(must(groups[0]))).toBe(true);
 
     const emptyBatchSummary = formatBatchReportSummary([], linkMap);
     expect(emptyBatchSummary.headline).toBe('Research Field Report: 0 changes');

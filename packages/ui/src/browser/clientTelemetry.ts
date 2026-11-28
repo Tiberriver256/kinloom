@@ -8,11 +8,11 @@ export type ClientErrorKind =
 export interface ClientErrorReport {
   kind: ClientErrorKind;
   message: string;
-  stack?: string;
-  componentStack?: string;
+  stack?: string | undefined;
+  componentStack?: string | undefined;
   route: string;
   buildId: string;
-  assetUrl?: string;
+  assetUrl?: string | undefined;
   timestamp: string;
 }
 

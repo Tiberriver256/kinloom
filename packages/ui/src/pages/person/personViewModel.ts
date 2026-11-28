@@ -37,7 +37,7 @@ export function extractBirthYearForLiving(person: Pick<Person, 'birth_year' | 'b
     return person.birth_year;
   }
   const match = /^(\d{4})/.exec((person.birth_edtf ?? '').trim());
-  return match ? Number.parseInt(match[1], 10) : null;
+  return match?.[1] ? Number.parseInt(match[1], 10) : null;
 }
 
 export interface TimelineScrubberTick {

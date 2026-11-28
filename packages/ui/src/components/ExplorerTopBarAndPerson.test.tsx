@@ -304,7 +304,7 @@ describe('ExplorerTopBar mobile & account menu behavior', () => {
     const archiveBtn = kinshipView.container.querySelector<HTMLButtonElement>(
       'button[aria-label="Archive menu"]'
     );
-    expect(archiveBtn?.dataset.activeSection).toBe('Kinship');
+    expect(archiveBtn?.dataset['activeSection']).toBe('Kinship');
     expect(archiveBtn?.getAttribute('aria-description')).toBe('Current section: Kinship');
     expect(archiveBtn?.className).toContain('topbar-menu-active-mobile');
     expect(kinshipView.container.querySelectorAll('nav[aria-label="Primary"] a.nav-axis')).toHaveLength(0);
@@ -335,7 +335,7 @@ describe('ExplorerTopBar mobile & account menu behavior', () => {
     const accountBtn = changesView.container.querySelector<HTMLButtonElement>(
       'button[aria-label="Account menu for Morgan Reid"]'
     );
-    expect(accountBtn?.dataset.activeSection).toBe('Revision History');
+    expect(accountBtn?.dataset['activeSection']).toBe('Revision History');
     expect(accountBtn?.className).toContain('topbar-menu-active-mobile');
     expect(accountBtn?.className).toContain('topbar-menu-active-desktop');
     changesView.unmount();

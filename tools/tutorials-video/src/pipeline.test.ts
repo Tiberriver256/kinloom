@@ -265,14 +265,19 @@ describe('tools/tutorials-video isolated Remotion + Gemini TTS pipeline', () => 
     expect(resolveCaptureRouteUrl('http://127.0.0.1:4173/', '/tree')).toBe('http://127.0.0.1:4173/tree');
 
     const scripts = loadTutorialScripts(path.join(TOOL_ROOT, 'scripts'), 'core-tree-pedigree');
+    const firstScript = scripts[0];
+    const firstStep = firstScript?.steps[0];
+    if (!firstScript || !firstStep) {
+      throw new Error('Expected core-tree-pedigree script with at least one step');
+    }
     const dryFrames = await captureDemoFramesForStep({
-      script: scripts[0],
-      step: scripts[0].steps[0],
+      script: firstScript,
+      step: firstStep,
       demoUrl: 'http://127.0.0.1:4173',
       cacheDir,
       dryRun: true,
     });
     expect(dryFrames).toHaveLength(2);
-    expect(dryFrames[0].name).toBe('tree-chart');
+    expect(dryFrames[0]?.name).toBe('tree-chart');
   });
 });

@@ -75,10 +75,16 @@ export const TutorialModal: React.FC<TutorialModalProps> = ({ reducedMotionOverr
     return null;
   }
 
-  const activeChapter: CompiledKinloomTutorialChapter =
+  const activeChapter =
     catalog.chapters.find((chapter) => chapter.id === selectedChapterId) ?? catalog.chapters[0];
+  if (!activeChapter) {
+    return null;
+  }
   const clampedStepIndex = Math.min(stepIndex, activeChapter.steps.length - 1);
   const activeStep = activeChapter.steps[clampedStepIndex];
+  if (!activeStep) {
+    return null;
+  }
   const isChapterComplete = completedSet.has(activeChapter.id);
   const isLastStep = clampedStepIndex >= activeChapter.steps.length - 1;
   const mediaBaseUrl = siteConfig.tutorials?.mediaBaseUrl;

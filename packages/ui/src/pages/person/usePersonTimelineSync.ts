@@ -33,7 +33,7 @@ export function usePersonTimelineSync(
     if (qEvt && personEvents.some((e) => e.id === qEvt)) {
       setActiveEventId(qEvt);
     } else if (personEvents.length > 0) {
-      setActiveEventId(personEvents[0].id);
+      if (personEvents[0]) setActiveEventId(personEvents[0].id);
     } else {
       setActiveEventId(null);
     }

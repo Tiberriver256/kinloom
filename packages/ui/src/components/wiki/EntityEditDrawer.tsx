@@ -24,16 +24,16 @@ export type EntityEditDrawerSection = 'pronunciation';
 
 export interface EntityEditDrawerProps {
   open: boolean;
-  initialSection?: EntityEditDrawerSection;
+  initialSection?: EntityEditDrawerSection | undefined;
   entityType: EntityType;
   entityId: string;
   revisionId: number;
   initialData: EntityPayload;
-  hasPrimarySource?: boolean;
-  title?: string;
+  hasPrimarySource?: boolean | undefined;
+  title?: string | undefined;
   onClose: () => void;
-  onSaved?: (revisionId: number, snapshot: EntityPayload) => void;
-  onDeleted?: () => void;
+  onSaved?: ((revisionId: number, snapshot: EntityPayload) => void) | undefined;
+  onDeleted?: (() => void) | undefined;
 }
 
 export const EntityEditDrawer: React.FC<EntityEditDrawerProps> = ({
@@ -188,7 +188,7 @@ export const EntityEditDrawer: React.FC<EntityEditDrawerProps> = ({
     send({ type: 'EDIT_FIELD', draft: nextDraft });
   };
 
-  const draftPronunciation = readDraftPronunciation(draft?.pronunciation);
+  const draftPronunciation = readDraftPronunciation(draft?.['pronunciation']);
   const pronunciationEntityType = formEntry.pronunciationEntityType;
   const canEditPronunciation = Boolean(pronunciationEntityType && formEntry.supportsPronunciation?.(draft));
   const pronunciationPreviewLabel =
@@ -338,10 +338,10 @@ export const EntityEditDrawer: React.FC<EntityEditDrawerProps> = ({
                 <PronunciationEditorSection
                   entityType={pronunciationEntityType}
                   entityId={entityId}
-                  fullName={asString(draft.full_name)}
-                  givenName={asString(draft.given_name)}
-                  surname={asString(draft.surname)}
-                  placeName={asString(draft.name)}
+                  fullName={asString(draft['full_name'])}
+                  givenName={asString(draft['given_name'])}
+                  surname={asString(draft['surname'])}
+                  placeName={asString(draft['name'])}
                   previewLabel={pronunciationPreviewLabel}
                   draftPronunciation={draftPronunciation}
                   pronunciations={pronunciations}

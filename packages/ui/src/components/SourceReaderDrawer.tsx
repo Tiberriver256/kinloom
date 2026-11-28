@@ -487,7 +487,7 @@ export const SourceReaderDrawer: React.FC = () => {
                         setPageIdx(idx);
                       }}
                     >
-                      p. {currentDoc.pages[idx].page}
+                      p. {currentDoc.pages[idx]?.page}
                     </button>
                   ))}
                 </div>

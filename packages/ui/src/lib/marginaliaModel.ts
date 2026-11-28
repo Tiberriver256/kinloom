@@ -33,8 +33,8 @@ export interface FolioMarginaliaCitation {
   readonly isReadable: boolean;
   readonly scanUrl: string | null;
   readonly scanTitle: string | null;
-  readonly confidence?: 'high' | 'medium' | 'low';
-  readonly claimedDate?: string | null;
+  readonly confidence?: 'high' | 'medium' | 'low' | undefined;
+  readonly claimedDate?: string | null | undefined;
 }
 
 export interface FolioMarginaliaDiscrepancy {
@@ -72,10 +72,10 @@ export function partitionMarkdownBlockMarginalia(params: {
   readonly narrativeSourceIds: readonly string[];
   readonly sourcesById: ReadonlyMap<string, SourceRecord>;
   readonly readableSourceIds: ReadonlySet<string>;
-  readonly mediaItems?: readonly MediaItem[];
-  readonly events?: readonly ArchiveEvent[];
-  readonly subjectPersonId?: string;
-  readonly resolveScanUrl?: (media: MediaItem) => string | null;
+  readonly mediaItems?: readonly MediaItem[] | undefined;
+  readonly events?: readonly ArchiveEvent[] | undefined;
+  readonly subjectPersonId?: string | undefined;
+  readonly resolveScanUrl?: ((media: MediaItem) => string | null) | undefined;
 }): PartitionedMarkdownMarginalia {
   const {
     blocks,
@@ -169,9 +169,9 @@ export function partitionMarkdownBlockMarginalia(params: {
  */
 export function buildEventMarginaliaItems(params: {
   readonly sources: readonly EventSourceRef[];
-  readonly alternateDates?: readonly AlternateDate[];
-  readonly alternatePlaces?: readonly AlternatePlace[];
-  readonly factConflicts?: readonly FactConflict[];
+  readonly alternateDates?: readonly AlternateDate[] | undefined;
+  readonly alternatePlaces?: readonly AlternatePlace[] | undefined;
+  readonly factConflicts?: readonly FactConflict[] | undefined;
   readonly sourcesById: ReadonlyMap<string, SourceRecord>;
   readonly readableSourceIds: ReadonlySet<string>;
 }): readonly FolioMarginaliaItem[] {

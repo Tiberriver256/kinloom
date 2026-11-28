@@ -978,14 +978,14 @@ describe('createOpenFinancePlugin default-off and public/admin UI', () => {
         return [buildSettingsSnapshot()];
       },
       async updatePluginSettings(_pluginId, input) {
-        if (typeof input.values?.show_support_page === 'boolean') {
-          showSupportPage = input.values.show_support_page;
+        if (typeof input.values?.['show_support_page'] === 'boolean') {
+          showSupportPage = input.values['show_support_page'];
         }
-        if (typeof input.values?.show_in_nav === 'boolean') {
-          showInNav = input.values.show_in_nav;
+        if (typeof input.values?.['show_in_nav'] === 'boolean') {
+          showInNav = input.values['show_in_nav'];
         }
-        if (typeof input.values?.show_in_footer === 'boolean') {
-          showInFooter = input.values.show_in_footer;
+        if (typeof input.values?.['show_in_footer'] === 'boolean') {
+          showInFooter = input.values['show_in_footer'];
         }
         return buildSettingsSnapshot();
       },

@@ -20,7 +20,7 @@ const PersonEditFields: React.FC<EntityEditFieldProps> = ({
         <input
           type="text"
           className={cx(uiStyles, 'wiki-input')}
-          value={asString(draft.full_name)}
+          value={asString(draft['full_name'])}
           onChange={(e) => {
             updateField('full_name', e.target.value);
           }}
@@ -32,7 +32,7 @@ const PersonEditFields: React.FC<EntityEditFieldProps> = ({
         <input
           type="text"
           className={cx(uiStyles, 'wiki-input')}
-          value={asString(draft.given_name)}
+          value={asString(draft['given_name'])}
           onChange={(e) => {
             updateField('given_name', e.target.value);
           }}
@@ -44,7 +44,7 @@ const PersonEditFields: React.FC<EntityEditFieldProps> = ({
         <input
           type="text"
           className={cx(uiStyles, 'wiki-input')}
-          value={asString(draft.surname)}
+          value={asString(draft['surname'])}
           onChange={(e) => {
             updateField('surname', e.target.value);
           }}
@@ -57,7 +57,7 @@ const PersonEditFields: React.FC<EntityEditFieldProps> = ({
           type="text"
           className={cx(uiStyles, 'wiki-input')}
           placeholder="e.g. 1850-04-12 or 1850"
-          value={asString(draft.birth_edtf)}
+          value={asString(draft['birth_edtf'])}
           onChange={(e) => {
             updateField('birth_edtf', e.target.value);
           }}
@@ -70,7 +70,7 @@ const PersonEditFields: React.FC<EntityEditFieldProps> = ({
           type="text"
           className={cx(uiStyles, 'wiki-input')}
           placeholder="Leave blank if living or unknown"
-          value={asString(draft.death_edtf)}
+          value={asString(draft['death_edtf'])}
           onChange={(e) => {
             updateField('death_edtf', e.target.value);
           }}
@@ -83,7 +83,7 @@ const PersonEditFields: React.FC<EntityEditFieldProps> = ({
           type="text"
           className={cx(uiStyles, 'wiki-input')}
           placeholder="Separate multiple names with commas"
-          value={asStringArray(draft.alt_names).join(', ')}
+          value={asStringArray(draft['alt_names']).join(', ')}
           onChange={(e) => {
             const list = e.target.value
               .split(',')
@@ -98,7 +98,7 @@ const PersonEditFields: React.FC<EntityEditFieldProps> = ({
     <label className={cx(uiStyles, 'wiki-checkbox-row')}>
       <input
         type="checkbox"
-        checked={Boolean(draft.is_living)}
+        checked={Boolean(draft['is_living'])}
         onChange={(e) => {
           updateField('is_living', e.target.checked);
         }}
@@ -121,7 +121,7 @@ const PlaceEditFields: React.FC<EntityEditFieldProps> = ({
       <input
         type="text"
         className={cx(uiStyles, 'wiki-input')}
-        value={asString(draft.name)}
+        value={asString(draft['name'])}
         onChange={(e) => {
           updateField('name', e.target.value);
         }}
@@ -133,7 +133,7 @@ const PlaceEditFields: React.FC<EntityEditFieldProps> = ({
       <input
         type="text"
         className={cx(uiStyles, 'wiki-input')}
-        value={asString(draft.full_name)}
+        value={asString(draft['full_name'])}
         onChange={(e) => {
           updateField('full_name', e.target.value);
         }}
@@ -146,7 +146,7 @@ const PlaceEditFields: React.FC<EntityEditFieldProps> = ({
         type="number"
         step="any"
         className={cx(uiStyles, 'wiki-input')}
-        value={typeof draft.lat === 'number' ? draft.lat : 0}
+        value={typeof draft['lat'] === 'number' ? draft['lat'] : 0}
         onChange={(e) => {
           updateField('lat', Number(e.target.value));
         }}
@@ -159,7 +159,7 @@ const PlaceEditFields: React.FC<EntityEditFieldProps> = ({
         type="number"
         step="any"
         className={cx(uiStyles, 'wiki-input')}
-        value={typeof draft.lng === 'number' ? draft.lng : 0}
+        value={typeof draft['lng'] === 'number' ? draft['lng'] : 0}
         onChange={(e) => {
           updateField('lng', Number(e.target.value));
         }}
@@ -171,7 +171,7 @@ const PlaceEditFields: React.FC<EntityEditFieldProps> = ({
       <textarea
         className={cx(uiStyles, 'wiki-textarea')}
         rows={5}
-        value={asString(draft.summary)}
+        value={asString(draft['summary'])}
         onChange={(e) => {
           updateField('summary', e.target.value);
         }}
@@ -193,7 +193,7 @@ const EventEditFields: React.FC<EntityEditFieldProps> = ({
       <input
         type="text"
         className={cx(uiStyles, 'wiki-input')}
-        value={asString(draft.title)}
+        value={asString(draft['title'])}
         onChange={(e) => {
           updateField('title', e.target.value);
         }}
@@ -205,7 +205,7 @@ const EventEditFields: React.FC<EntityEditFieldProps> = ({
       <input
         type="text"
         className={cx(uiStyles, 'wiki-input')}
-        value={asString(draft.edtf_date)}
+        value={asString(draft['edtf_date'])}
         onChange={(e) => {
           updateField('edtf_date', e.target.value);
         }}
@@ -217,7 +217,7 @@ const EventEditFields: React.FC<EntityEditFieldProps> = ({
       <textarea
         className={cx(uiStyles, 'wiki-textarea')}
         rows={5}
-        value={asString(draft.summary)}
+        value={asString(draft['summary'])}
         onChange={(e) => {
           updateField('summary', e.target.value);
         }}
@@ -239,7 +239,7 @@ const NarrativeEditFields: React.FC<EntityEditFieldProps> = ({
       <input
         type="text"
         className={cx(uiStyles, 'wiki-input')}
-        value={asString(draft.title)}
+        value={asString(draft['title'])}
         onChange={(e) => {
           updateField('title', e.target.value);
         }}
@@ -251,7 +251,7 @@ const NarrativeEditFields: React.FC<EntityEditFieldProps> = ({
       <textarea
         className={cx(uiStyles, 'wiki-textarea')}
         rows={8}
-        value={asString(draft.body_md)}
+        value={asString(draft['body_md'])}
         onChange={(e) => {
           updateField('body_md', e.target.value);
         }}
@@ -320,8 +320,8 @@ const JsonFallbackEditFields: React.FC<EntityEditFieldProps> = ({
 };
 
 function preparePronunciationDraft(draft: EntityPayload, forceNull: boolean): EntityPayload | null {
-  const cleanedPronunciation = forceNull ? null : cleanPronunciation(draft.pronunciation, true);
-  if (JSON.stringify(cleanedPronunciation) === JSON.stringify(draft.pronunciation ?? null)) {
+  const cleanedPronunciation = forceNull ? null : cleanPronunciation(draft['pronunciation'], true);
+  if (JSON.stringify(cleanedPronunciation) === JSON.stringify(draft['pronunciation'] ?? null)) {
     return null;
   }
   return {
@@ -338,16 +338,17 @@ export const ENTITY_EDIT_FORM_REGISTRY: Readonly<Partial<Record<EntityType, Enti
   person: {
     Fields: PersonEditFields,
     pronunciationEntityType: 'person',
-    supportsPronunciation: (draft) => !draft?.is_living && asString(draft?.full_name) !== 'Living',
-    getPronunciationPreviewLabel: (draft, title, entityId) => asString(draft.full_name) || title || entityId,
-    prepareSubmitDraft: (draft) => preparePronunciationDraft(draft, Boolean(draft.is_living)),
+    supportsPronunciation: (draft) => !draft?.['is_living'] && asString(draft?.['full_name']) !== 'Living',
+    getPronunciationPreviewLabel: (draft, title, entityId) =>
+      asString(draft['full_name']) || title || entityId,
+    prepareSubmitDraft: (draft) => preparePronunciationDraft(draft, Boolean(draft['is_living'])),
   },
   place: {
     Fields: PlaceEditFields,
     pronunciationEntityType: 'place',
     supportsPronunciation: () => true,
     getPronunciationPreviewLabel: (draft, title, entityId) =>
-      asString(draft.name) || asString(draft.full_name) || title || entityId,
+      asString(draft['name']) || asString(draft['full_name']) || title || entityId,
     prepareSubmitDraft: (draft) => preparePronunciationDraft(draft, false),
   },
   event: {

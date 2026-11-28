@@ -93,15 +93,14 @@ export function buildLayeredGraphWithDummyChannels(
   const personLocation = new Map<string, PersonUnitLocation>();
   const cardStride = ARCHIVAL_NODE_W + ARCHIVAL_SPOUSE_GAP;
 
-  for (let gSlot = 0; gSlot < numLayers; gSlot += 1) {
-    const units = model.generations[gSlot].units;
-    const layer: LayerItem[] = new Array(units.length);
-    for (let uIdx = 0; uIdx < units.length; uIdx += 1) {
-      const unit = units[uIdx];
+  for (const [gSlot, gen] of model.generations.entries()) {
+    const units = gen.units;
+    const layer: LayerItem[] = [];
+    for (const unit of units) {
       const portSlots = resolveUnitUnionPorts(model, unit);
       const portMap = new Map<string, UnionPortSlot>();
-      for (let p = 0; p < portSlots.length; p += 1) {
-        portMap.set(portSlots[p].unionId, portSlots[p]);
+      for (const slot of portSlots) {
+        portMap.set(slot.unionId, slot);
       }
       portsByUnitId.set(unit.id, portMap);
 
@@ -114,16 +113,15 @@ export function buildLayeredGraphWithDummyChannels(
         width: footprint.width,
         memberOffsetX: footprint.memberOffsetX,
       };
-      layer[uIdx] = item;
+      layer.push(item);
       unitItemById.set(unit.id, item);
 
-      for (let u = 0; u < unit.unionIds.length; u += 1) {
-        unitByUnionId.set(unit.unionIds[u], item);
+      for (const unionId of unit.unionIds) {
+        unitByUnionId.set(unionId, item);
       }
 
       const memberCount = unit.orderedMemberIds.length;
-      for (let m = 0; m < memberCount; m += 1) {
-        const pid = unit.orderedMemberIds[m];
+      for (const [m, pid] of unit.orderedMemberIds.entries()) {
         const centerOffsetX = Math.round(footprint.memberOffsetX + m * cardStride + ARCHIVAL_NODE_W / 2);
         const normalizedOffset = memberCount <= 1 ? 0 : (m / (memberCount - 1) - 0.5) * 0.6;
         personLocation.set(pid, {
@@ -141,8 +139,7 @@ export function buildLayeredGraphWithDummyChannels(
   const dummyChainsByEdgeKey = new Map<string, DummyChainEntry[]>();
   const dummyCenterX = Math.round(DUMMY_CHANNEL_WIDTH / 2);
 
-  for (let u = 0; u < model.unions.length; u += 1) {
-    const union = model.unions[u];
+  for (const union of model.unions) {
     if (union.visibleChildIds.length === 0) {
       continue;
     }
@@ -157,8 +154,7 @@ export function buildLayeredGraphWithDummyChannels(
     const sourcePortOffsetX = sourceUnit.memberOffsetX + portSlot.relativeX;
     const sourcePortNorm = portSlot.normalizedOffset;
 
-    for (let c = 0; c < union.visibleChildIds.length; c += 1) {
-      const childId = union.visibleChildIds[c];
+    for (const childId of union.visibleChildIds) {
       const targetLoc = personLocation.get(childId);
       if (!targetLoc || targetLoc.layerIndex <= sourceUnit.layerIndex) {
         continue;
@@ -202,7 +198,7 @@ export function buildLayeredGraphWithDummyChannels(
           sourceUnitId: sourceUnit.id,
           targetUnitId: targetLoc.unitId,
         };
-        layers[s].push(dummyItem);
+        layers[s]?.push(dummyItem);
         chain.push({ layerIndex: s, dummyId });
 
         edges.push({
@@ -262,10 +258,10 @@ function countPairCrossings(
   posInLayer: Int32Array
 ): number {
   let crossings = 0;
-  for (let i = 0; i < leftRefs.length; i += 1) {
-    const aPos = posInLayer[leftRefs[i].neighborIdx] + leftRefs[i].neighborPortNorm;
-    for (let j = 0; j < rightRefs.length; j += 1) {
-      const bPos = posInLayer[rightRefs[j].neighborIdx] + rightRefs[j].neighborPortNorm;
+  for (const leftRef of leftRefs) {
+    const aPos = (posInLayer[leftRef.neighborIdx] ?? 0) + leftRef.neighborPortNorm;
+    for (const rightRef of rightRefs) {
+      const bPos = (posInLayer[rightRef.neighborIdx] ?? 0) + rightRef.neighborPortNorm;
       if (aPos > bPos + 1e-6) {
         crossings += 1;
       }
@@ -282,14 +278,19 @@ function countAllGraphCrossings(
   let total = 0;
   for (let l = 0; l < rowIndicesByLayer.length - 1; l += 1) {
     const row = rowIndicesByLayer[l];
+    if (!row) continue;
     for (let i = 0; i < row.length; i += 1) {
-      const aDown = downRefs[row[i]];
-      if (aDown.length === 0) {
+      const ri = row[i];
+      if (ri === undefined) continue;
+      const aDown = downRefs[ri];
+      if (!aDown || aDown.length === 0) {
         continue;
       }
       for (let j = i + 1; j < row.length; j += 1) {
-        const bDown = downRefs[row[j]];
-        if (bDown.length === 0) {
+        const rj = row[j];
+        if (rj === undefined) continue;
+        const bDown = downRefs[rj];
+        if (!bDown || bDown.length === 0) {
           continue;
         }
         total += countPairCrossings(aDown, bDown, posInLayer);
@@ -313,16 +314,15 @@ function computeNodeSpanAtPos(
   const upDenom = Math.max(1, upLen - 1);
   const downDenom = Math.max(1, downLen - 1);
   let penalty = 0;
-  const ups = upRefs[nodeIdx];
-  for (let k = 0; k < ups.length; k += 1) {
-    const ref = ups[k];
-    const normNbr = upLen <= 1 ? 0.5 : (posInLayer[ref.neighborIdx] + ref.neighborPortNorm) / upDenom;
+  const ups = upRefs[nodeIdx] ?? [];
+  for (const ref of ups) {
+    const normNbr = upLen <= 1 ? 0.5 : ((posInLayer[ref.neighborIdx] ?? 0) + ref.neighborPortNorm) / upDenom;
     penalty += Math.abs(normSelf - normNbr);
   }
-  const downs = downRefs[nodeIdx];
-  for (let k = 0; k < downs.length; k += 1) {
-    const ref = downs[k];
-    const normNbr = downLen <= 1 ? 0.5 : (posInLayer[ref.neighborIdx] + ref.neighborPortNorm) / downDenom;
+  const downs = downRefs[nodeIdx] ?? [];
+  for (const ref of downs) {
+    const normNbr =
+      downLen <= 1 ? 0.5 : ((posInLayer[ref.neighborIdx] ?? 0) + ref.neighborPortNorm) / downDenom;
     penalty += Math.abs(normSelf - normNbr);
   }
   return penalty;
@@ -335,50 +335,47 @@ function computeNodeSpanAtPos(
 export function minimizeLayeredCrossings(graph: LayeredGraph): LayeredGraph {
   const numLayers = graph.layers.length;
   let totalItems = 0;
-  for (let l = 0; l < numLayers; l += 1) {
-    totalItems += graph.layers[l].length;
+  for (const layer of graph.layers) {
+    totalItems += layer.length;
   }
   if (totalItems <= 1 || graph.edges.length === 0) {
     return graph;
   }
 
-  const allItems: LayerItem[] = new Array(totalItems);
+  const allItems: LayerItem[] = [];
   const idToIdx = new Map<string, number>();
-  const rowIndicesByLayer: number[][] = new Array(numLayers);
+  const rowIndicesByLayer: number[][] = [];
   const posInLayer = new Int32Array(totalItems);
   const bary = new Float64Array(totalItems);
 
   let cursor = 0;
-  for (let l = 0; l < numLayers; l += 1) {
-    const layer = graph.layers[l];
-    const row = new Array<number>(layer.length);
-    for (let r = 0; r < layer.length; r += 1) {
-      const item = layer[r];
-      allItems[cursor] = item;
+  for (const layer of graph.layers) {
+    const row: number[] = [];
+    for (const [r, item] of layer.entries()) {
+      allItems.push(item);
       idToIdx.set(item.id, cursor);
-      row[r] = cursor;
+      row.push(cursor);
       posInLayer[cursor] = r;
       cursor += 1;
     }
-    rowIndicesByLayer[l] = row;
+    rowIndicesByLayer.push(row);
   }
 
   const upRefs: PortEdgeRef[][] = Array.from({ length: totalItems }, () => []);
   const downRefs: PortEdgeRef[][] = Array.from({ length: totalItems }, () => []);
 
-  for (let e = 0; e < graph.edges.length; e += 1) {
-    const edge = graph.edges[e];
+  for (const edge of graph.edges) {
     const srcIdx = idToIdx.get(edge.sourceId);
     const tgtIdx = idToIdx.get(edge.targetId);
     if (srcIdx === undefined || tgtIdx === undefined) {
       continue;
     }
-    downRefs[srcIdx].push({
+    downRefs[srcIdx]?.push({
       neighborIdx: tgtIdx,
       neighborPortNorm: edge.targetPortNorm,
       selfPortNorm: edge.sourcePortNorm,
     });
-    upRefs[tgtIdx].push({
+    upRefs[tgtIdx]?.push({
       neighborIdx: srcIdx,
       neighborPortNorm: edge.sourcePortNorm,
       selfPortNorm: edge.targetPortNorm,
@@ -386,11 +383,11 @@ export function minimizeLayeredCrossings(graph: LayeredGraph): LayeredGraph {
   }
 
   const byBarycenter = (a: number, b: number): number => {
-    const diff = bary[a] - bary[b];
+    const diff = (bary[a] ?? 0) - (bary[b] ?? 0);
     if (Math.abs(diff) > 1e-6) {
       return diff;
     }
-    return posInLayer[a] - posInLayer[b];
+    return (posInLayer[a] ?? 0) - (posInLayer[b] ?? 0);
   };
 
   const refineLayerBarycenter = (
@@ -399,6 +396,7 @@ export function minimizeLayeredCrossings(graph: LayeredGraph): LayeredGraph {
     adjLayerLen: number
   ): boolean => {
     const row = rowIndicesByLayer[layerIdx];
+    if (!row) return false;
     const curLen = row.length;
     if (curLen <= 1) {
       return false;
@@ -407,19 +405,17 @@ export function minimizeLayeredCrossings(graph: LayeredGraph): LayeredGraph {
     let prevVal = Number.NEGATIVE_INFINITY;
     const scale = adjLayerLen > 1 && curLen > 1 ? (adjLayerLen - 1) / (curLen - 1) : 1;
 
-    for (let r = 0; r < curLen; r += 1) {
-      const idx = row[r];
-      const list = refs[idx];
+    for (const idx of row) {
+      const list = refs[idx] ?? [];
       let val: number;
       if (list.length > 0) {
         let sum = 0;
-        for (let k = 0; k < list.length; k += 1) {
-          const ref = list[k];
-          sum += posInLayer[ref.neighborIdx] + ref.neighborPortNorm - ref.selfPortNorm;
+        for (const ref of list) {
+          sum += (posInLayer[ref.neighborIdx] ?? 0) + ref.neighborPortNorm - ref.selfPortNorm;
         }
         val = sum / list.length;
       } else {
-        val = posInLayer[idx] * scale;
+        val = (posInLayer[idx] ?? 0) * scale;
       }
       bary[idx] = val;
       if (val < prevVal - 1e-6) {
@@ -432,9 +428,9 @@ export function minimizeLayeredCrossings(graph: LayeredGraph): LayeredGraph {
     let changed = false;
     if (outOfOrder) {
       row.sort(byBarycenter);
-      for (let r = 0; r < curLen; r += 1) {
-        if (posInLayer[row[r]] !== r) {
-          posInLayer[row[r]] = r;
+      for (const [r, idx] of row.entries()) {
+        if (posInLayer[idx] !== r) {
+          posInLayer[idx] = r;
           changed = true;
         }
       }
@@ -444,6 +440,7 @@ export function minimizeLayeredCrossings(graph: LayeredGraph): LayeredGraph {
 
   const greedySwitchLayer = (layerIdx: number): boolean => {
     const row = rowIndicesByLayer[layerIdx];
+    if (!row) return false;
     const curLen = row.length;
     if (curLen <= 1) {
       return false;
@@ -455,15 +452,18 @@ export function minimizeLayeredCrossings(graph: LayeredGraph): LayeredGraph {
       for (let r = 0; r < curLen - 1; r += 1) {
         const a = row[r];
         const b = row[r + 1];
+        if (a === undefined || b === undefined) continue;
+        const aUp = upRefs[a] ?? [];
+        const bUp = upRefs[b] ?? [];
+        const aDown = downRefs[a] ?? [];
+        const bDown = downRefs[b] ?? [];
         const curCross =
-          countPairCrossings(upRefs[a], upRefs[b], posInLayer) +
-          countPairCrossings(downRefs[a], downRefs[b], posInLayer);
+          countPairCrossings(aUp, bUp, posInLayer) + countPairCrossings(aDown, bDown, posInLayer);
         if (curCross === 0) {
           continue;
         }
         const swapCross =
-          countPairCrossings(upRefs[b], upRefs[a], posInLayer) +
-          countPairCrossings(downRefs[b], downRefs[a], posInLayer);
+          countPairCrossings(bUp, aUp, posInLayer) + countPairCrossings(bDown, aDown, posInLayer);
         if (swapCross < curCross) {
           row[r] = b;
           row[r + 1] = a;
@@ -481,6 +481,7 @@ export function minimizeLayeredCrossings(graph: LayeredGraph): LayeredGraph {
   let crossAtPosBuf = new Int32Array(64);
   const siftLayerIncremental = (layerIdx: number): boolean => {
     const row = rowIndicesByLayer[layerIdx];
+    if (!row) return false;
     const curLen = row.length;
     if (curLen <= 2) {
       return false;
@@ -488,19 +489,18 @@ export function minimizeLayeredCrossings(graph: LayeredGraph): LayeredGraph {
     if (crossAtPosBuf.length < curLen) {
       crossAtPosBuf = new Int32Array(curLen);
     }
-    const upLen = layerIdx > 0 ? rowIndicesByLayer[layerIdx - 1].length : 0;
-    const downLen = layerIdx < numLayers - 1 ? rowIndicesByLayer[layerIdx + 1].length : 0;
+    const upLen = layerIdx > 0 ? (rowIndicesByLayer[layerIdx - 1]?.length ?? 0) : 0;
+    const downLen = layerIdx < numLayers - 1 ? (rowIndicesByLayer[layerIdx + 1]?.length ?? 0) : 0;
     const snapshot = row.slice();
     let changed = false;
 
-    for (let s = 0; s < snapshot.length; s += 1) {
-      const x = snapshot[s];
-      const xUp = upRefs[x];
-      const xDown = downRefs[x];
+    for (const x of snapshot) {
+      const xUp = upRefs[x] ?? [];
+      const xDown = downRefs[x] ?? [];
       if (xUp.length === 0 && xDown.length === 0) {
         continue;
       }
-      const origPos = posInLayer[x];
+      const origPos = posInLayer[x] ?? 0;
       row.splice(origPos, 1);
 
       let relCross = 0;
@@ -508,10 +508,13 @@ export function minimizeLayeredCrossings(graph: LayeredGraph): LayeredGraph {
       crossAtPosBuf[0] = 0;
       for (let p = 0; p < curLen - 1; p += 1) {
         const y = row[p];
+        if (y === undefined) continue;
+        const yUp = upRefs[y] ?? [];
+        const yDown = downRefs[y] ?? [];
         const xBeforeY =
-          countPairCrossings(xUp, upRefs[y], posInLayer) + countPairCrossings(xDown, downRefs[y], posInLayer);
+          countPairCrossings(xUp, yUp, posInLayer) + countPairCrossings(xDown, yDown, posInLayer);
         const yBeforeX =
-          countPairCrossings(upRefs[y], xUp, posInLayer) + countPairCrossings(downRefs[y], xDown, posInLayer);
+          countPairCrossings(yUp, xUp, posInLayer) + countPairCrossings(yDown, xDown, posInLayer);
         relCross += yBeforeX - xBeforeY;
         crossAtPosBuf[p + 1] = relCross;
         if (p + 1 === origPos) {
@@ -527,7 +530,7 @@ export function minimizeLayeredCrossings(graph: LayeredGraph): LayeredGraph {
         if (candPos === origPos) {
           continue;
         }
-        const candCross = crossAtPosBuf[candPos];
+        const candCross = crossAtPosBuf[candPos] ?? 0;
         if (candCross < bestCross) {
           bestCross = candCross;
           bestSpan = computeNodeSpanAtPos(x, candPos, curLen, upRefs, downRefs, posInLayer, upLen, downLen);
@@ -555,7 +558,10 @@ export function minimizeLayeredCrossings(graph: LayeredGraph): LayeredGraph {
         const lo = Math.min(origPos, bestPos);
         const hi = Math.max(origPos, bestPos);
         for (let r = lo; r <= hi; r += 1) {
-          posInLayer[row[r]] = r;
+          const rowItem = row[r];
+          if (rowItem !== undefined) {
+            posInLayer[rowItem] = r;
+          }
         }
         changed = true;
       }
@@ -577,7 +583,7 @@ export function minimizeLayeredCrossings(graph: LayeredGraph): LayeredGraph {
   for (let sweep = 0; sweep < 4; sweep += 1) {
     let changed = false;
     for (let l = 1; l < numLayers; l += 1) {
-      if (refineLayerBarycenter(l, upRefs, rowIndicesByLayer[l - 1].length)) {
+      if (refineLayerBarycenter(l, upRefs, rowIndicesByLayer[l - 1]?.length ?? 0)) {
         changed = true;
       }
       if (greedySwitchLayer(l)) {
@@ -587,7 +593,7 @@ export function minimizeLayeredCrossings(graph: LayeredGraph): LayeredGraph {
     maybeRecordBest();
 
     for (let l = numLayers - 2; l >= 0; l -= 1) {
-      if (refineLayerBarycenter(l, downRefs, rowIndicesByLayer[l + 1].length)) {
+      if (refineLayerBarycenter(l, downRefs, rowIndicesByLayer[l + 1]?.length ?? 0)) {
         changed = true;
       }
       if (greedySwitchLayer(l)) {
@@ -603,9 +609,10 @@ export function minimizeLayeredCrossings(graph: LayeredGraph): LayeredGraph {
 
   // Restore best barycenter ordering, then run one fast O(k^2) top-down + bottom-up sifting pass.
   for (let l = 0; l < numLayers; l += 1) {
-    rowIndicesByLayer[l] = bestSnapshot[l].slice();
-    for (let r = 0; r < rowIndicesByLayer[l].length; r += 1) {
-      posInLayer[rowIndicesByLayer[l][r]] = r;
+    const restored = bestSnapshot[l]?.slice() ?? [];
+    rowIndicesByLayer[l] = restored;
+    for (const [r, idx] of restored.entries()) {
+      posInLayer[idx] = r;
     }
   }
 
@@ -616,15 +623,16 @@ export function minimizeLayeredCrossings(graph: LayeredGraph): LayeredGraph {
     siftLayerIncremental(l);
   }
 
-  const orderedLayers: LayerItem[][] = new Array(numLayers);
-  for (let l = 0; l < numLayers; l += 1) {
-    const row = rowIndicesByLayer[l];
-    const out = new Array<LayerItem>(row.length);
-    for (let r = 0; r < row.length; r += 1) {
-      out[r] = allItems[row[r]];
+  const orderedLayers: LayerItem[][] = rowIndicesByLayer.map((row) => {
+    const out: LayerItem[] = [];
+    for (const idx of row) {
+      const item = allItems[idx];
+      if (item) {
+        out.push(item);
+      }
     }
-    orderedLayers[l] = out;
-  }
+    return out;
+  });
 
   return {
     layers: orderedLayers,

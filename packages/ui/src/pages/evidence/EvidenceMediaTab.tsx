@@ -280,7 +280,7 @@ export const EvidenceMediaLightbox: React.FC<EvidenceMediaLightboxProps> = ({
           return;
         }
         const delta = e.key === 'ArrowRight' ? 1 : -1;
-        onSetLightboxItem(navMedia[(idx + delta + navMedia.length) % navMedia.length]);
+        onSetLightboxItem(navMedia[(idx + delta + navMedia.length) % navMedia.length] ?? null);
       }
     };
     window.addEventListener('keydown', onKey);
@@ -338,7 +338,7 @@ export const EvidenceMediaLightbox: React.FC<EvidenceMediaLightboxProps> = ({
                   type="button"
                   className={cx(controlStyles, 'pill-btn')}
                   onClick={() => {
-                    onSetLightboxItem(navMedia[(curIdx - 1 + navMedia.length) % navMedia.length]);
+                    onSetLightboxItem(navMedia[(curIdx - 1 + navMedia.length) % navMedia.length] ?? null);
                   }}
                 >
                   ← Prev
@@ -347,7 +347,7 @@ export const EvidenceMediaLightbox: React.FC<EvidenceMediaLightboxProps> = ({
                   type="button"
                   className={cx(controlStyles, 'pill-btn')}
                   onClick={() => {
-                    onSetLightboxItem(navMedia[(curIdx + 1) % navMedia.length]);
+                    onSetLightboxItem(navMedia[(curIdx + 1) % navMedia.length] ?? null);
                   }}
                 >
                   Next →

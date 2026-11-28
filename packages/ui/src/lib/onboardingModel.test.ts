@@ -249,7 +249,7 @@ describe('onboardingModel pure view-model helpers', () => {
     expect(vm.resolvedCount).toBe(3);
     expect(vm.showInviteRetentionNote).toBe(true);
     expect(vm.allResolved).toBe(false);
-    expect(vm.overflowPluginItems[0].resolvedAction).toEqual({
+    expect(vm.overflowPluginItems[0]?.resolvedAction).toEqual({
       kind: 'tutorial',
       chapterId: 'plugin-a:guide',
       label: 'Open Guide',

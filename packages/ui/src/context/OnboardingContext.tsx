@@ -37,8 +37,8 @@ import { useArchiveUi } from './ArchiveUiContext.js';
 export type TutorialLauncher = (chapterId?: string) => void;
 
 export interface OpenTutorialOptions {
-  readonly chapterId?: string;
-  readonly autoOpened?: boolean;
+  readonly chapterId?: string | undefined;
+  readonly autoOpened?: boolean | undefined;
 }
 
 export interface CloseTutorialOptions {

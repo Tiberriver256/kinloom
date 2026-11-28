@@ -14,13 +14,13 @@ export interface BookPublishingUiPluginOptions {
    * When false, returns an inert disabled plugin with zero provider, zero routes, zero slots,
    * and zero network requests. Defaults to true when the factory is explicitly invoked.
    */
-  readonly enabled?: boolean;
+  readonly enabled?: boolean | undefined;
   /** Optional custom plugin ID override. */
-  readonly id?: string;
+  readonly id?: string | undefined;
   /** Optional API base URL passed to the default HTTP client. */
-  readonly apiBaseUrl?: string;
+  readonly apiBaseUrl?: string | undefined;
   /** Optional injected transport client for hermetic tests or custom backends. */
-  readonly client?: BookPublishingClient;
+  readonly client?: BookPublishingClient | undefined;
 }
 
 /**

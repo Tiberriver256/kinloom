@@ -215,19 +215,19 @@ export const RecipeEditorForm: React.FC<RecipeEditorFormProps> = ({
   };
 
   const focusFirstInvalidField = (errors: Readonly<Record<string, string>>): void => {
-    if (errors.title) {
+    if (errors['title']) {
       titleInputRef.current?.focus();
       return;
     }
-    if (errors.slug) {
+    if (errors['slug']) {
       slugInputRef.current?.focus();
       return;
     }
-    if (errors.prep_minutes) {
+    if (errors['prep_minutes']) {
       prepInputRef.current?.focus();
       return;
     }
-    if (errors.cook_minutes) {
+    if (errors['cook_minutes']) {
       cookInputRef.current?.focus();
       return;
     }
@@ -550,8 +550,8 @@ export const RecipeEditorForm: React.FC<RecipeEditorFormProps> = ({
                 minLength={2}
                 maxLength={140}
                 value={draft.title}
-                aria-invalid={fieldErrors.title ? 'true' : 'false'}
-                aria-describedby={fieldErrors.title ? `${titleInputId}-error` : undefined}
+                aria-invalid={fieldErrors['title'] ? 'true' : 'false'}
+                aria-describedby={fieldErrors['title'] ? `${titleInputId}-error` : undefined}
                 placeholder="e.g. Oatmeal Honey Biscuits"
                 className={cx(recipeStyles, 'recipe-filter-input')}
                 onChange={(e) => {
@@ -562,9 +562,9 @@ export const RecipeEditorForm: React.FC<RecipeEditorFormProps> = ({
                   validateSingleFieldOnBlur('title');
                 }}
               />
-              {fieldErrors.title && (
+              {fieldErrors['title'] && (
                 <p id={`${titleInputId}-error`} className={cx(recipeStyles, 'recipe-field-error')}>
-                  Error: {fieldErrors.title}
+                  Error: {fieldErrors['title']}
                 </p>
               )}
             </div>
@@ -611,9 +611,9 @@ export const RecipeEditorForm: React.FC<RecipeEditorFormProps> = ({
                   autoCapitalize="none"
                   spellCheck={false}
                   value={draft.slug}
-                  aria-invalid={fieldErrors.slug ? 'true' : 'false'}
+                  aria-invalid={fieldErrors['slug'] ? 'true' : 'false'}
                   aria-describedby={
-                    fieldErrors.slug ? `${slugInputId}-hint ${slugInputId}-error` : `${slugInputId}-hint`
+                    fieldErrors['slug'] ? `${slugInputId}-hint ${slugInputId}-error` : `${slugInputId}-hint`
                   }
                   placeholder="oatmeal-honey-biscuits"
                   className={cx(recipeStyles, 'recipe-filter-input')}
@@ -625,9 +625,9 @@ export const RecipeEditorForm: React.FC<RecipeEditorFormProps> = ({
                     validateSingleFieldOnBlur('slug');
                   }}
                 />
-                {fieldErrors.slug && (
+                {fieldErrors['slug'] && (
                   <p id={`${slugInputId}-error`} className={cx(recipeStyles, 'recipe-field-error')}>
-                    Error: {fieldErrors.slug}
+                    Error: {fieldErrors['slug']}
                   </p>
                 )}
               </div>
@@ -643,8 +643,8 @@ export const RecipeEditorForm: React.FC<RecipeEditorFormProps> = ({
                 rows={2}
                 maxLength={400}
                 value={draft.summary}
-                aria-invalid={fieldErrors.summary ? 'true' : 'false'}
-                aria-describedby={fieldErrors.summary ? `${summaryInputId}-error` : undefined}
+                aria-invalid={fieldErrors['summary'] ? 'true' : 'false'}
+                aria-describedby={fieldErrors['summary'] ? `${summaryInputId}-error` : undefined}
                 placeholder="One-line description displayed on catalog cards."
                 className={cx(recipeStyles, 'recipe-editor-textarea')}
                 onChange={(e) => {
@@ -652,9 +652,9 @@ export const RecipeEditorForm: React.FC<RecipeEditorFormProps> = ({
                   clearFieldError('summary');
                 }}
               />
-              {fieldErrors.summary && (
+              {fieldErrors['summary'] && (
                 <p id={`${summaryInputId}-error`} className={cx(recipeStyles, 'recipe-field-error')}>
-                  Error: {fieldErrors.summary}
+                  Error: {fieldErrors['summary']}
                 </p>
               )}
             </div>
@@ -675,8 +675,8 @@ export const RecipeEditorForm: React.FC<RecipeEditorFormProps> = ({
                   type="text"
                   inputMode="numeric"
                   value={draft.prep_minutes}
-                  aria-invalid={fieldErrors.prep_minutes ? 'true' : 'false'}
-                  aria-describedby={fieldErrors.prep_minutes ? `${prepInputId}-error` : undefined}
+                  aria-invalid={fieldErrors['prep_minutes'] ? 'true' : 'false'}
+                  aria-describedby={fieldErrors['prep_minutes'] ? `${prepInputId}-error` : undefined}
                   placeholder="15"
                   className={cx(recipeStyles, 'recipe-filter-input')}
                   onChange={(e) => {
@@ -687,9 +687,9 @@ export const RecipeEditorForm: React.FC<RecipeEditorFormProps> = ({
                     validateSingleFieldOnBlur('prep_minutes');
                   }}
                 />
-                {fieldErrors.prep_minutes && (
+                {fieldErrors['prep_minutes'] && (
                   <p id={`${prepInputId}-error`} className={cx(recipeStyles, 'recipe-field-error')}>
-                    Error: {fieldErrors.prep_minutes}
+                    Error: {fieldErrors['prep_minutes']}
                   </p>
                 )}
               </div>
@@ -705,8 +705,8 @@ export const RecipeEditorForm: React.FC<RecipeEditorFormProps> = ({
                   type="text"
                   inputMode="numeric"
                   value={draft.cook_minutes}
-                  aria-invalid={fieldErrors.cook_minutes ? 'true' : 'false'}
-                  aria-describedby={fieldErrors.cook_minutes ? `${cookInputId}-error` : undefined}
+                  aria-invalid={fieldErrors['cook_minutes'] ? 'true' : 'false'}
+                  aria-describedby={fieldErrors['cook_minutes'] ? `${cookInputId}-error` : undefined}
                   placeholder="25"
                   className={cx(recipeStyles, 'recipe-filter-input')}
                   onChange={(e) => {
@@ -717,9 +717,9 @@ export const RecipeEditorForm: React.FC<RecipeEditorFormProps> = ({
                     validateSingleFieldOnBlur('cook_minutes');
                   }}
                 />
-                {fieldErrors.cook_minutes && (
+                {fieldErrors['cook_minutes'] && (
                   <p id={`${cookInputId}-error`} className={cx(recipeStyles, 'recipe-field-error')}>
-                    Error: {fieldErrors.cook_minutes}
+                    Error: {fieldErrors['cook_minutes']}
                   </p>
                 )}
               </div>
@@ -860,8 +860,8 @@ export const RecipeEditorForm: React.FC<RecipeEditorFormProps> = ({
                   type="text"
                   maxLength={40}
                   value={tagInput}
-                  aria-invalid={tagError || fieldErrors.tags ? 'true' : 'false'}
-                  aria-describedby={tagError || fieldErrors.tags ? `${tagInputId}-error` : undefined}
+                  aria-invalid={tagError || fieldErrors['tags'] ? 'true' : 'false'}
+                  aria-describedby={tagError || fieldErrors['tags'] ? `${tagInputId}-error` : undefined}
                   placeholder="e.g. holiday, heirloom, winter"
                   className={cx(recipeStyles, 'recipe-filter-input')}
                   onChange={(e) => {
@@ -880,9 +880,9 @@ export const RecipeEditorForm: React.FC<RecipeEditorFormProps> = ({
                 Add Tag
               </button>
             </div>
-            {(tagError || fieldErrors.tags) && (
+            {(tagError || fieldErrors['tags']) && (
               <p id={`${tagInputId}-error`} className={cx(recipeStyles, 'recipe-field-error')}>
-                Error: {tagError ?? fieldErrors.tags}
+                Error: {tagError ?? fieldErrors['tags']}
               </p>
             )}
             {draft.tags.length > 0 && (
@@ -1267,9 +1267,9 @@ export const RecipeEditorForm: React.FC<RecipeEditorFormProps> = ({
                   rows={6}
                   maxLength={16000}
                   value={draft.story_md}
-                  aria-invalid={fieldErrors.story_md ? 'true' : 'false'}
+                  aria-invalid={fieldErrors['story_md'] ? 'true' : 'false'}
                   aria-describedby={
-                    fieldErrors.story_md
+                    fieldErrors['story_md']
                       ? `${storyTextareaId}-hint ${storyTextareaId}-error`
                       : `${storyTextareaId}-hint`
                   }
@@ -1280,9 +1280,9 @@ export const RecipeEditorForm: React.FC<RecipeEditorFormProps> = ({
                     clearFieldError('story_md');
                   }}
                 />
-                {fieldErrors.story_md && (
+                {fieldErrors['story_md'] && (
                   <p id={`${storyTextareaId}-error`} className={cx(recipeStyles, 'recipe-field-error')}>
-                    Error: {fieldErrors.story_md}
+                    Error: {fieldErrors['story_md']}
                   </p>
                 )}
               </div>

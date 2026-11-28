@@ -240,6 +240,11 @@ import {
   useTreeViewportTransform,
 } from './tree/useTreeViewportTransform.js';
 
+function must<T>(val: T | undefined, label = 'value'): T {
+  if (val === undefined) throw new Error(`Expected ${label}`);
+  return val;
+}
+
 declare global {
   var IS_REACT_ACT_ENVIRONMENT: boolean | undefined;
 }
@@ -766,7 +771,7 @@ const ErrorBoundaryBomb: React.FC<{ err?: Error }> = ({ err }) => {
 };
 
 const TimelineSyncHarness: React.FC<{ events: readonly ArchiveEvent[] }> = ({ events }) => {
-  const { activeEvent, cardRefs } = usePersonTimelineSync('henry-alder', RICH_BUNDLE.people[0], events);
+  const { activeEvent, cardRefs } = usePersonTimelineSync('henry-alder', must(RICH_BUNDLE.people[0]), events);
   const [, setTick] = useState(0);
   return (
     <div>
@@ -913,8 +918,8 @@ afterEach(() => {
 
 describe('useMigrationMapController branch coverage', () => {
   function makeStops(): MigrationStop[] {
-    const p1 = RICH_BUNDLE.places[0];
-    const p2 = RICH_BUNDLE.places[1];
+    const p1 = must(RICH_BUNDLE.places[0]);
+    const p2 = must(RICH_BUNDLE.places[1]);
     return [
       {
         id: 'stop-1',
@@ -1076,7 +1081,7 @@ describe('useMigrationMapController branch coverage', () => {
           attachHost={true}
           override={{
             bundle: liveBundle,
-            selectedStop: stops[1],
+            selectedStop: stops[1] ?? null,
             selectedStopId: 'stop-2',
             playing: false,
           }}
@@ -1109,7 +1114,7 @@ describe('useMigrationMapController branch coverage', () => {
           attachHost={true}
           override={{
             bundle: liveBundle,
-            selectedStop: stops[1],
+            selectedStop: stops[1] ?? null,
             selectedStopId: 'stop-2',
             playing: true,
             drawerExpanded: true,
@@ -1148,7 +1153,7 @@ describe('useMigrationMapController branch coverage', () => {
           attachHost={true}
           override={{
             bundle: liveBundle,
-            selectedStop: stops[0],
+            selectedStop: stops[0] ?? null,
             selectedStopId: 'stop-1',
             playing: false,
             drawerExpanded: false,
@@ -1263,8 +1268,8 @@ describe('useMigrationMapController branch coverage', () => {
 
 describe('useTreeViewportTransform & useTreeCanvasInteractions branch coverage', () => {
   function makeDiagramLayout(): ArchivalDiagramLayout {
-    const henry = RICH_BUNDLE.people[0];
-    const arthur = RICH_BUNDLE.people[2];
+    const henry = must(RICH_BUNDLE.people[0]);
+    const arthur = must(RICH_BUNDLE.people[2]);
     const nodeHenry = {
       person: henry,
       x: 200,
@@ -1566,31 +1571,31 @@ describe('InlineEntityMention branch coverage', () => {
   it('covers person/place mentions, living redaction, hover/focus/blur, Escape, outside click, and non-router links', () => {
     vi.useFakeTimers();
     const personNoEdtf: Person = {
-      ...RICH_BUNDLE.people[2],
+      ...must(RICH_BUNDLE.people[2]),
       birth_edtf: '',
       death_edtf: '',
       birth_year: 1882,
       death_year: 1950,
     };
     const personUnknown: Person = {
-      ...RICH_BUNDLE.people[3],
+      ...must(RICH_BUNDLE.people[3]),
       birth_edtf: '',
       death_edtf: '',
       birth_year: null,
       death_year: null,
     };
     const placeHomestead: Place = {
-      ...RICH_BUNDLE.places[0],
+      ...must(RICH_BUNDLE.places[0]),
       place_type: 'homestead',
     };
     const placeCounty: Place = {
-      ...RICH_BUNDLE.places[1],
+      ...must(RICH_BUNDLE.places[1]),
       place_type: 'county',
     };
 
     // Living person -> plain span
     const livingMount = mountEl(
-      <InlineEntityMention kind="person" person={RICH_BUNDLE.people[5]} displayText="Living" />
+      <InlineEntityMention kind="person" person={must(RICH_BUNDLE.people[5])} displayText="Living" />
     );
     expect(livingMount.container.textContent).toBe('Living');
 
@@ -1694,7 +1699,7 @@ describe('KinshipPage branch coverage', () => {
     // 2. Fewer than 2 selectable people
     const singleBundle: ArchiveBundle = {
       ...RICH_BUNDLE,
-      people: [RICH_BUNDLE.people[0], RICH_BUNDLE.people[5]],
+      people: [must(RICH_BUNDLE.people[0]), must(RICH_BUNDLE.people[5])],
     };
     const emptyMount = mountEl(
       <MemoryRouter initialEntries={['/kinship']}>
@@ -1735,8 +1740,8 @@ describe('KinshipPage branch coverage', () => {
 
     // Select Henry -> Arthur (parent edge) and swap (child edge)
     const selects = fullMount.container.querySelectorAll<HTMLSelectElement>('select');
-    setFieldValue(selects[0], 'per_henry');
-    setFieldValue(selects[1], 'per_arthur');
+    setFieldValue(must(selects[0]), 'per_henry');
+    setFieldValue(must(selects[1]), 'per_arthur');
     expect(fullMount.container.textContent).toContain('parent of');
     expect(fullMount.container.textContent).toContain('1 shared place');
 
@@ -1749,7 +1754,7 @@ describe('KinshipPage branch coverage', () => {
     expect(fullMount.container.textContent).toContain('child of');
 
     // Select person with null dates -> "No lifespan overlap"
-    setFieldValue(selects[1], 'per_nodates');
+    setFieldValue(must(selects[1]), 'per_nodates');
     expect(fullMount.container.textContent).toContain('No lifespan overlap');
   });
 });
@@ -2310,8 +2315,7 @@ describe('TreePage, ArchiveDataContext, and IndexPage branch coverage', () => {
         canManageSite: false,
       },
     };
-    const ds1 = makeMemoryDataSource({
-      loadMediaChecklist: undefined,
+    const { loadMediaChecklist: _omitChecklist, ...ds1 } = makeMemoryDataSource({
       getSession: vi.fn(async () => anonSessionResponse),
     });
     const ds2 = makeMemoryDataSource({
@@ -2336,7 +2340,7 @@ describe('TreePage, ArchiveDataContext, and IndexPage branch coverage', () => {
     act(() => {
       ctxHolder.current?.setPronunciations({ Birch: { phonetic: 'BURCH' } });
     });
-    expect(ctxHolder.current?.pronunciations.Birch?.phonetic).toBe('BURCH');
+    expect(ctxHolder.current?.pronunciations['Birch']?.phonetic).toBe('BURCH');
 
     // Swap dataSource, remove explicit session prop, update capabilities -> sync effects run
     mounted.rerender(
@@ -2681,7 +2685,7 @@ describe('SourceReaderDrawer, SourceCitationTag, and LocalSurveyMap branch cover
   });
 
   it('exercises LocalSurveyMap narrow/wide, ResizeObserver fallback, scope modes, clustered pins, and keyboard nav', () => {
-    const center = RICH_BUNDLE.places[0];
+    const center = must(RICH_BUNDLE.places[0]);
     // Add places clustered close together and blocking right/left center labels
     const nearby: Place[] = [
       ...RICH_BUNDLE.places,
@@ -3514,7 +3518,7 @@ describe('Wave 2 branch coverage: telemetry, evidence, audio plugin, popovers, m
 
     // 2. Filtered empty with active query ("Clear filter") + 26 unverified events
     const manyUnverified: ArchiveEvent[] = Array.from({ length: 26 }, (_, i) => ({
-      ...RICH_BUNDLE.events[0],
+      ...must(RICH_BUNDLE.events[0]),
       id: `evt_unv_${i}`,
       title: `Unverified Event ${i}`,
       display_date: i === 0 ? '' : `${1870 + i}`,
@@ -3633,7 +3637,7 @@ describe('Wave 2 branch coverage: telemetry, evidence, audio plugin, popovers, m
         renderHeader({
           ...baseSlotCtx,
           narrative: baseNarrative,
-          person: RICH_BUNDLE.people[5],
+          person: must(RICH_BUNDLE.people[5]),
         })
       ).toBeNull();
       const el = renderHeader({
@@ -3746,7 +3750,7 @@ describe('Wave 2 branch coverage: telemetry, evidence, audio plugin, popovers, m
       year: 1860,
       displayDate: '1860',
       title: 'Southern Port',
-      place: { ...RICH_BUNDLE.places[0], lat: -33.86, lng: 151.2 },
+      place: { ...must(RICH_BUNDLE.places[0]), lat: -33.86, lng: 151.2 },
       personNames: ['Henry Alder'],
       personSlugs: ['henry-alder'],
       eventId: 'evt_1880',
@@ -3815,7 +3819,7 @@ describe('Wave 2 branch coverage: telemetry, evidence, audio plugin, popovers, m
     const onSelectCard = vi.fn();
     const onPivot = vi.fn();
     const cardEvent: ArchiveEvent = {
-      ...RICH_BUNDLE.events[0],
+      ...must(RICH_BUNDLE.events[0]),
       photo_url: '/media/mill.jpg',
       photo_placeholder_caption: '',
     };
@@ -3828,13 +3832,13 @@ describe('Wave 2 branch coverage: telemetry, evidence, audio plugin, popovers, m
         >
           <MilestoneStoryCard
             event={cardEvent}
-            place={RICH_BUNDLE.places[0]}
+            place={must(RICH_BUNDLE.places[0])}
             isActive={true}
             sourcesById={new Map(RICH_BUNDLE.sources.map((s) => [s.id, s]))}
             onSelect={onSelectCard}
             alsoHere={[
               {
-                person: RICH_BUNDLE.people[1],
+                person: must(RICH_BUNDLE.people[1]),
                 tier: 'Confirmed',
                 distanceMiles: 0,
                 sameHousehold: true,
@@ -3847,7 +3851,11 @@ describe('Wave 2 branch coverage: telemetry, evidence, audio plugin, popovers, m
             onPivotPerson={onPivot}
           />
           <MilestoneStoryCard
-            event={{ ...RICH_BUNDLE.events[1], photo_url: null, photo_placeholder_caption: 'Mill Sketch' }}
+            event={{
+              ...must(RICH_BUNDLE.events[1]),
+              photo_url: null,
+              photo_placeholder_caption: 'Mill Sketch',
+            }}
             place={undefined}
             isActive={false}
             sourcesById={new Map()}
@@ -3878,7 +3886,7 @@ describe('Wave 2 branch coverage: telemetry, evidence, audio plugin, popovers, m
           initialReadings={SAMPLE_READINGS}
         >
           <PlaceHistoricalProfileSection
-            place={RICH_BUNDLE.places[0]}
+            place={must(RICH_BUNDLE.places[0])}
             placePhotoSrc=""
             placePhotoMedia={null}
             sourcesById={new Map()}
@@ -3886,7 +3894,7 @@ describe('Wave 2 branch coverage: telemetry, evidence, audio plugin, popovers, m
           />
           <PlaceHistoricalProfileSection
             place={{
-              ...RICH_BUNDLE.places[0],
+              ...must(RICH_BUNDLE.places[0]),
               summary: 'River settlement.',
               historical_names: [
                 { name: 'Old Harbor', valid_from: '1850', valid_to: null },
@@ -4287,12 +4295,12 @@ describe('Wave 3 branch coverage: GlobalSearchModal, SourceCitationTag scans, Ar
       anchorPersonId: null,
     };
     const livingWithMedia: Person = {
-      ...RICH_BUNDLE.people[4],
+      ...must(RICH_BUNDLE.people[4]),
       primary_place_id: 'unknown_place_id',
       media_count: 2,
     };
     const ancestorNoGiven: Person = {
-      ...RICH_BUNDLE.people[0],
+      ...must(RICH_BUNDLE.people[0]),
       given_name: '',
       full_name: 'Alder Patriarch',
     };
@@ -4305,7 +4313,7 @@ describe('Wave 3 branch coverage: GlobalSearchModal, SourceCitationTag scans, Ar
       immediateChildIds: new Set(['per_arthur']),
       immediateParentIds: new Set(),
       highlightedUnionIds: new Set(),
-      breadcrumb: [ancestorNoGiven, RICH_BUNDLE.people[2]],
+      breadcrumb: [ancestorNoGiven, must(RICH_BUNDLE.people[2])],
       relationshipToPivot: null,
       pivotName: null,
     };
@@ -4323,7 +4331,7 @@ describe('Wave 3 branch coverage: GlobalSearchModal, SourceCitationTag scans, Ar
           onClearFocus={vi.fn()}
         />
         <TreeFocusDrawer
-          person={RICH_BUNDLE.people[2]}
+          person={must(RICH_BUNDLE.people[2])}
           model={emptyTreeModel}
           spotlight={multiSpouseSpotlight}
           placesById={new Map()}
@@ -4344,7 +4352,7 @@ describe('Wave 3 branch coverage: GlobalSearchModal, SourceCitationTag scans, Ar
       <MemoryRouter>
         <PersonProfileHeader
           person={{
-            ...RICH_BUNDLE.people[4],
+            ...must(RICH_BUNDLE.people[4]),
             birth_edtf: '',
             death_edtf: '',
             has_primary_source: true,
@@ -4408,7 +4416,7 @@ describe('Wave 3 branch coverage: GlobalSearchModal, SourceCitationTag scans, Ar
           onOpenRelativeModal={vi.fn()}
         />
         <PersonProfileHeader
-          person={RICH_BUNDLE.people[0]}
+          person={must(RICH_BUNDLE.people[0])}
           branchLabel={null}
           routePlaceCount={2}
           canEdit={false}

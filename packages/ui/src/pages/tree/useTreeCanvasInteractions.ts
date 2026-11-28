@@ -157,6 +157,7 @@ export function useTreeCanvasInteractions({
         lastCanvasTapRef.current = null;
         velocitySamplesRef.current = [];
         const [p1, p2] = [...activePointersRef.current.values()];
+        if (!p1 || !p2) return;
         setDraggingClass(false);
         dragStartRef.current = null;
         pinchStartRef.current = {
@@ -185,6 +186,7 @@ export function useTreeCanvasInteractions({
 
       if (activePointersRef.current.size === 2 && pinchStartRef.current) {
         const [p1, p2] = [...activePointersRef.current.values()];
+        if (!p1 || !p2) return;
         didDragMoveRef.current = true;
         const next = clampTransform(
           computePinchTransform({
@@ -221,7 +223,10 @@ export function useTreeCanvasInteractions({
 
         const samples = velocitySamplesRef.current;
         samples.push({ x: localPt.x, y: localPt.y, t: now });
-        while (samples.length > 8 || (samples.length > 2 && now - samples[0].t > 95)) {
+        while (
+          samples.length > 8 ||
+          (samples.length > 2 && samples[0] !== undefined && now - samples[0].t > 95)
+        ) {
           samples.shift();
         }
 
@@ -256,6 +261,7 @@ export function useTreeCanvasInteractions({
           pinchReleaseAtRef.current = performance.now();
         }
         const [remaining] = [...activePointersRef.current.values()];
+        if (!remaining) return;
         const { current } = transformRef;
         velocitySamplesRef.current = [{ x: remaining.x, y: remaining.y, t: performance.now() }];
         dragStartRef.current = {
@@ -277,8 +283,8 @@ export function useTreeCanvasInteractions({
         if (!isCancel && moved && now - pinchReleaseAtRef.current > 140 && samples.length >= 2) {
           const newest = samples.at(-1);
           const [oldest] = samples;
-          const dt = newest ? newest.t - oldest.t : 0;
-          if (newest && now - newest.t < 65 && dt >= 8) {
+          const dt = newest && oldest ? newest.t - oldest.t : 0;
+          if (newest && oldest && now - newest.t < 65 && dt >= 8) {
             const rawVx = (newest.x - oldest.x) / dt;
             const rawVy = (newest.y - oldest.y) / dt;
             const speed = Math.hypot(rawVx, rawVy);

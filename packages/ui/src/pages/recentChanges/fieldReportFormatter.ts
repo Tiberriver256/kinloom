@@ -66,14 +66,14 @@ function resolvePrimaryParticipantName(
   payload: EntityPayload | null,
   entityLinkByKey: ReadonlyMap<string, ResolvedEntityLink>
 ): string | null {
-  if (!payload || !Array.isArray(payload.participants)) {
+  if (!payload || !Array.isArray(payload['participants'])) {
     return null;
   }
-  for (const raw of payload.participants) {
+  for (const raw of payload['participants']) {
     if (typeof raw !== 'object' || raw === null || Array.isArray(raw)) {
       continue;
     }
-    const personId = (raw as Record<string, unknown>).person_id;
+    const personId = (raw as Record<string, unknown>)['person_id'];
     if (typeof personId !== 'string') {
       continue;
     }
@@ -109,7 +109,7 @@ function joinListPlainEnglish(items: readonly string[]): string {
     return '';
   }
   if (items.length === 1) {
-    return items[0];
+    return items[0] ?? '';
   }
   if (items.length === 2) {
     return `${items[0]} and ${items[1]}`;
@@ -240,7 +240,8 @@ export function formatBatchReportSummary(
   const explicitBatchReview =
     revisions.find((r) => r.review && r.review.target_kind === 'batch')?.review ?? null;
   const allIndividuallyReviewed = revisions.length > 0 && revisions.every((r) => Boolean(r.review));
-  const batchReview = explicitBatchReview ?? (allIndividuallyReviewed ? (revisions[0].review ?? null) : null);
+  const batchReview =
+    explicitBatchReview ?? (allIndividuallyReviewed ? (revisions[0]?.review ?? null) : null);
 
   return {
     headline,
@@ -286,7 +287,7 @@ function extractMilestoneStems(title: string): Set<string> {
   MILESTONE_KEYWORD_RE.lastIndex = 0;
   let match = MILESTONE_KEYWORD_RE.exec(title);
   while (match !== null) {
-    const mapped = MILESTONE_CANONICAL_MAP[match[1].toLowerCase()];
+    const mapped = match[1] ? MILESTONE_CANONICAL_MAP[match[1].toLowerCase()] : undefined;
     if (mapped) {
       stems.add(mapped);
     }
@@ -374,28 +375,30 @@ export function detectDuplicateEventWarnings(
       if (candidatesById.has(rev.entity_id) || !rev.after_json) {
         continue;
       }
-      const scope = rev.after_json.scope;
+      const scope = rev.after_json['scope'];
       if (scope !== undefined && scope !== 'personal' && scope !== 'family') {
         continue;
       }
-      const year = extractYearFromEdtf(rev.after_json.edtf_date ?? rev.after_json.year);
-      const participants = Array.isArray(rev.after_json.participants) ? rev.after_json.participants : [];
+      const year = extractYearFromEdtf(rev.after_json['edtf_date'] ?? rev.after_json['year']);
+      const participants = Array.isArray(rev.after_json['participants'])
+        ? rev.after_json['participants']
+        : [];
       const firstParticipant = participants[0];
       const primaryPersonId =
         typeof firstParticipant === 'object' &&
         firstParticipant !== null &&
-        typeof (firstParticipant as Record<string, unknown>).person_id === 'string'
-          ? String((firstParticipant as Record<string, unknown>).person_id)
+        typeof (firstParticipant as Record<string, unknown>)['person_id'] === 'string'
+          ? String((firstParticipant as Record<string, unknown>)['person_id'])
           : null;
       if (year === null || !primaryPersonId) {
         continue;
       }
       const title =
-        typeof rev.after_json.title === 'string' && rev.after_json.title.trim().length > 0
-          ? rev.after_json.title.trim()
+        typeof rev.after_json['title'] === 'string' && rev.after_json['title'].trim().length > 0
+          ? rev.after_json['title'].trim()
           : rev.entity_id;
       const category =
-        typeof rev.after_json.category === 'string' ? rev.after_json.category.trim().toLowerCase() : '';
+        typeof rev.after_json['category'] === 'string' ? rev.after_json['category'].trim().toLowerCase() : '';
       candidatesById.set(rev.entity_id, {
         id: rev.entity_id,
         title,
@@ -427,7 +430,7 @@ export function detectDuplicateEventWarnings(
       for (let j = i + 1; j < sorted.length; j += 1) {
         const first = sorted[i];
         const second = sorted[j];
-        if (!areLikelyDuplicateEvents(first, second)) {
+        if (!first || !second || !areLikelyDuplicateEvents(first, second)) {
           continue;
         }
         const person = peopleById.get(first.primaryPersonId);

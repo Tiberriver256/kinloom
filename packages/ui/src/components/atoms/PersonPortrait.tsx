@@ -9,21 +9,21 @@ export type PersonPortraitSize = 'xs' | 'sm' | 'md' | 'card' | 'lg';
 
 export interface PersonPortraitProps {
   readonly name: string;
-  readonly src?: string | null;
-  readonly baseUrl?: string;
+  readonly src?: string | null | undefined;
+  readonly baseUrl?: string | undefined;
   /** Accessible alt text. Leave empty string when parent link/card already labels the person. */
-  readonly alt?: string;
-  readonly variant?: PersonPortraitVariant;
-  readonly size?: PersonPortraitSize;
-  readonly loading?: 'eager' | 'lazy';
-  readonly fetchPriority?: 'high' | 'low';
-  readonly selected?: boolean;
-  readonly decorative?: boolean;
-  readonly className?: string;
-  readonly style?: React.CSSProperties;
-  readonly imgClassName?: string;
-  readonly onLoad?: React.ReactEventHandler<HTMLImageElement>;
-  readonly onError?: React.ReactEventHandler<HTMLImageElement>;
+  readonly alt?: string | undefined;
+  readonly variant?: PersonPortraitVariant | undefined;
+  readonly size?: PersonPortraitSize | undefined;
+  readonly loading?: 'eager' | 'lazy' | undefined;
+  readonly fetchPriority?: 'high' | 'low' | undefined;
+  readonly selected?: boolean | undefined;
+  readonly decorative?: boolean | undefined;
+  readonly className?: string | undefined;
+  readonly style?: React.CSSProperties | undefined;
+  readonly imgClassName?: string | undefined;
+  readonly onLoad?: React.ReactEventHandler<HTMLImageElement> | undefined;
+  readonly onError?: React.ReactEventHandler<HTMLImageElement> | undefined;
 }
 
 export const PersonPortrait: React.FC<PersonPortraitProps> = ({

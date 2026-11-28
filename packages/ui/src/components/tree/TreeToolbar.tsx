@@ -268,7 +268,7 @@ export const TreeToolbar: React.FC<TreeToolbarProps> = ({
               }}
             >
               <option value="all">
-                {KINLOOM_VOCABULARY.tree.allBranches} ({branchCounts.all || 0})
+                {KINLOOM_VOCABULARY.tree.allBranches} ({branchCounts['all'] || 0})
               </option>
               {populatedBranches.map((branch) => (
                 <option key={branch.id} value={branch.id}>

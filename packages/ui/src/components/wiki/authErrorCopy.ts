@@ -103,14 +103,14 @@ export function parseInviteInput(raw: string): ParsedInviteInput {
     const segments = parsed.pathname.split('/').filter(Boolean);
     let rawSegment: string | null = null;
     if (segments.length === 2 && segments[0] === 'invite') {
-      rawSegment = segments[1];
+      rawSegment = segments[1] ?? null;
     } else if (
       segments.length === 4 &&
       segments[0] === 'api' &&
       segments[1] === 'auth' &&
       segments[2] === 'invite'
     ) {
-      rawSegment = segments[3];
+      rawSegment = segments[3] ?? null;
     }
 
     if (!rawSegment) {

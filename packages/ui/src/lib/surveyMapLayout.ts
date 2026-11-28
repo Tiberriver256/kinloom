@@ -166,7 +166,7 @@ export function bearingToCardinal(bearingDeg: number): {
   readonly arrow: string;
 } {
   const idx = Math.round((((bearingDeg % 360) + 360) % 360) / 45) % 8;
-  return CARDINAL_DIRS[idx];
+  return CARDINAL_DIRS[idx] ?? { cardinal: 'N', arrow: '↑' };
 }
 
 function intersectRayWithFrame(
@@ -246,7 +246,7 @@ export function projectAdaptiveSurveyPlaces(params: {
   readonly highlightRadiusMiles?: number;
   readonly limit?: number;
   readonly maxEdgeIndicators?: number;
-  readonly excludeIds?: ReadonlySet<string>;
+  readonly excludeIds?: ReadonlySet<string> | undefined;
 }): SurveyProjectionResult {
   const {
     center,
@@ -513,7 +513,13 @@ export function computeCenterLabelPlacement(params: {
     }
   }
 
-  return candidates[2].box.y1 >= 6 ? candidates[2] : candidates[0];
+  const c0 = candidates[0];
+  const c2 = candidates[2];
+  const fallback = c2 && c2.box.y1 >= 6 ? c2 : (c0 ?? c2);
+  if (!fallback) {
+    throw new Error('Expected label placement candidate');
+  }
+  return fallback;
 }
 
 function makeLabelBox(
@@ -586,17 +592,19 @@ export function computeSurveyLabelLayout(params: {
   const clusterCounts = new Map<string, number>();
   const skippedIds = new Set<string>();
   for (let i = 0; i < markers.length; i += 1) {
-    if (skippedIds.has(markers[i].place.id)) {
+    const mi = markers[i];
+    if (!mi || skippedIds.has(mi.place.id)) {
       continue;
     }
     let extras = 0;
     for (let j = i + 1; j < markers.length; j += 1) {
-      if (Math.hypot(markers[i].x - markers[j].x, markers[i].y - markers[j].y) < 7) {
-        skippedIds.add(markers[j].place.id);
+      const mj = markers[j];
+      if (mj && Math.hypot(mi.x - mj.x, mi.y - mj.y) < 7) {
+        skippedIds.add(mj.place.id);
         extras += 1;
       }
     }
-    clusterCounts.set(markers[i].place.id, extras);
+    clusterCounts.set(mi.place.id, extras);
   }
 
   const prioritized = [...markers]
@@ -646,30 +654,34 @@ export function computeSurveyLabelLayout(params: {
     const textW = estimateMonoTextWidth(text, fontSize);
     const preferRight = m.x >= cx;
 
-    const orderedImmediate = preferRight
-      ? immediateDirs
-      : [
-          immediateDirs[1],
-          immediateDirs[0],
-          immediateDirs[3],
-          immediateDirs[2],
-          immediateDirs[5],
-          immediateDirs[4],
-          immediateDirs[6],
-          immediateDirs[7],
-        ];
-    const orderedLeader = preferRight
-      ? leaderDirs
-      : [
-          leaderDirs[1],
-          leaderDirs[0],
-          leaderDirs[3],
-          leaderDirs[2],
-          leaderDirs[5],
-          leaderDirs[4],
-          leaderDirs[6],
-          leaderDirs[7],
-        ];
+    const orderedImmediate = (
+      preferRight
+        ? immediateDirs
+        : [
+            immediateDirs[1],
+            immediateDirs[0],
+            immediateDirs[3],
+            immediateDirs[2],
+            immediateDirs[5],
+            immediateDirs[4],
+            immediateDirs[6],
+            immediateDirs[7],
+          ]
+    ).filter((d): d is (typeof immediateDirs)[number] => d !== undefined);
+    const orderedLeader = (
+      preferRight
+        ? leaderDirs
+        : [
+            leaderDirs[1],
+            leaderDirs[0],
+            leaderDirs[3],
+            leaderDirs[2],
+            leaderDirs[5],
+            leaderDirs[4],
+            leaderDirs[6],
+            leaderDirs[7],
+          ]
+    ).filter((d): d is (typeof leaderDirs)[number] => d !== undefined);
 
     const allCandidates: {
       readonly lx: number;
@@ -737,7 +749,7 @@ export function computeSurveyLabelLayout(params: {
             anchor: c.anchor,
             extraCount: extras,
             box,
-            leader,
+            ...(leader ? { leader } : {}),
           },
         };
         if (score === 0) {

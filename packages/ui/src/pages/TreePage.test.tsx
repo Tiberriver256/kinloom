@@ -509,9 +509,9 @@ describe('TreePage', () => {
     const scrollCalls: Array<{ id: string; block?: string }> = [];
     const origScrollIntoView = Element.prototype.scrollIntoView;
     Element.prototype.scrollIntoView = function mockScroll(arg?: boolean | ScrollIntoViewOptions) {
-      const id = (this as HTMLElement).dataset?.personId ?? '';
+      const id = (this as HTMLElement).dataset?.['personId'] ?? '';
       const block = typeof arg === 'object' && arg ? arg.block : undefined;
-      scrollCalls.push({ id, block });
+      scrollCalls.push({ id, ...(block !== undefined ? { block } : {}) });
     };
 
     try {
@@ -576,7 +576,7 @@ describe('TreePage', () => {
     expect(main).not.toBeNull();
 
     // Initial zoom on 145-person / 12-gen archive stays legible (>= 0.75) instead of shrinking to 28%
-    const initialZoom = Number(main?.dataset.zoom ?? '0');
+    const initialZoom = Number(main?.dataset['zoom'] ?? '0');
     expect(initialZoom).toBeGreaterThanOrEqual(0.75);
 
     // Interactive minimap renders expanded on desktop with viewport rectangle
@@ -602,7 +602,7 @@ describe('TreePage', () => {
           toJSON: () => ({}),
         }) as DOMRect;
     }
-    const beforePanX = Number(main?.dataset.panX ?? '0');
+    const beforePanX = Number(main?.dataset['panX'] ?? '0');
     act(() => {
       minimapSurface?.dispatchEvent(
         new window.MouseEvent('pointerdown', { clientX: 165, clientY: 80, bubbles: true })
@@ -614,7 +614,7 @@ describe('TreePage', () => {
         new window.MouseEvent('pointerup', { clientX: 20, clientY: 15, bubbles: true })
       );
     });
-    const afterMinimapPanX = Number(main?.dataset.panX ?? '0');
+    const afterMinimapPanX = Number(main?.dataset['panX'] ?? '0');
     expect(afterMinimapPanX).not.toBe(beforePanX);
 
     // Keyboard navigation and collapse toggle on minimap
@@ -710,14 +710,14 @@ describe('TreePage', () => {
     expect(filtersBtn?.querySelector('.tree-filters-badge')).toBeNull();
 
     const filtersPanel = container.querySelector<HTMLElement>('.tree-toolbar-filters-panel');
-    expect(filtersPanel?.dataset.filtersOpen).toBe('false');
+    expect(filtersPanel?.dataset['filtersOpen']).toBe('false');
 
     // Open Filters popover
     act(() => {
       filtersBtn?.click();
     });
     expect(filtersBtn?.getAttribute('aria-expanded')).toBe('true');
-    expect(filtersPanel?.dataset.filtersOpen).toBe('true');
+    expect(filtersPanel?.dataset['filtersOpen']).toBe('true');
     expect(filtersPanel?.querySelector('input.tree-search-input')).not.toBeNull();
     expect(filtersPanel?.querySelector('select.tree-branch-select')).not.toBeNull();
     expect(filtersPanel?.querySelector('.tree-anchor-picker')).not.toBeNull();
@@ -770,7 +770,7 @@ describe('TreePage', () => {
       document.dispatchEvent(new window.KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
     });
     expect(filtersBtn?.getAttribute('aria-expanded')).toBe('false');
-    expect(filtersPanel?.dataset.filtersOpen).toBe('false');
+    expect(filtersPanel?.dataset['filtersOpen']).toBe('false');
 
     // Opaque zoom controls hook classes are present on diagram view (including Loom toggle)
     const zoomControls = container.querySelector('.tree-controls.tree-zoom-controls');
@@ -1197,8 +1197,8 @@ describe('TreePage', () => {
 
     const main = container.querySelector<HTMLElement>('main.tree-page');
     expect(main).not.toBeNull();
-    expect(main?.classList.contains(canvasSurfaceStyles['tree-page'])).toBe(true);
-    expect(main?.classList.contains(treePageStyles['tree-page-roll'])).toBe(true);
+    expect(main?.classList.contains(canvasSurfaceStyles['tree-page'] ?? '')).toBe(true);
+    expect(main?.classList.contains(treePageStyles['tree-page-roll'] ?? '')).toBe(true);
     expect(main?.getAttribute('data-has-selection')).toBeNull();
 
     const arthurCard = container.querySelector<HTMLButtonElement>(
@@ -1217,9 +1217,9 @@ describe('TreePage', () => {
     expect(main?.getAttribute('data-has-selection')).toBe('true');
     const drawer = container.querySelector<HTMLElement>('aside[aria-label="Lineage focus for Arthur Hale"]');
     expect(drawer).not.toBeNull();
-    expect(drawer?.classList.contains(canvasSurfaceStyles['tree-popover'])).toBe(true);
-    expect(drawer?.classList.contains(treeFocusStyles['tree-focus-drawer'])).toBe(true);
-    expect(drawer?.classList.contains(treeFocusStyles['tree-focus-drawer-roll'])).toBe(true);
+    expect(drawer?.classList.contains(canvasSurfaceStyles['tree-popover'] ?? '')).toBe(true);
+    expect(drawer?.classList.contains(treeFocusStyles['tree-focus-drawer'] ?? '')).toBe(true);
+    expect(drawer?.classList.contains(treeFocusStyles['tree-focus-drawer-roll'] ?? '')).toBe(true);
     expect(drawer?.querySelector('a[href="/person/arthur-hale"]')?.textContent).toBe('Open Profile →');
     expect(drawer?.querySelector('.tree-focus-close-glyph')?.textContent).toBe('×');
 
@@ -1253,7 +1253,7 @@ describe('TreePage', () => {
     act(() => {
       chartBtn?.click();
     });
-    expect(main?.classList.contains(treePageStyles['tree-page-diagram'])).toBe(true);
+    expect(main?.classList.contains(treePageStyles['tree-page-diagram'] ?? '')).toBe(true);
 
     const henryNode = container.querySelector<SVGGElement>(
       '.tree-node-card[aria-label="Inspect Henry Hale"]'
@@ -1266,7 +1266,7 @@ describe('TreePage', () => {
       'aside[aria-label="Lineage focus for Henry Hale"]'
     );
     expect(chartDrawer).not.toBeNull();
-    expect(chartDrawer?.classList.contains(treeFocusStyles['tree-focus-drawer'])).toBe(true);
-    expect(chartDrawer?.classList.contains(treeFocusStyles['tree-focus-drawer-diagram'])).toBe(true);
+    expect(chartDrawer?.classList.contains(treeFocusStyles['tree-focus-drawer'] ?? '')).toBe(true);
+    expect(chartDrawer?.classList.contains(treeFocusStyles['tree-focus-drawer-diagram'] ?? '')).toBe(true);
   });
 });

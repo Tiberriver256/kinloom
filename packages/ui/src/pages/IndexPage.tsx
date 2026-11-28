@@ -604,7 +604,7 @@ export const IndexPage: React.FC = () => {
                           handleBranchChange(e.target.value);
                         }}
                       >
-                        <option value="all">All Branches ({model.branchCounts.all})</option>
+                        <option value="all">All Branches ({model.branchCounts['all']})</option>
                         {model.populatedBranches.map((branchOption) => (
                           <option key={branchOption.id} value={branchOption.id}>
                             {branchOption.label} ({model.branchCounts[branchOption.id] || 0})

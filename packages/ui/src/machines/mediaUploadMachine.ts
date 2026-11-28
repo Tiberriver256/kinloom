@@ -100,7 +100,7 @@ export const mediaUploadMachine = setup({
         sizeBytes: event.file.size,
         targetHasLiving: event.targetHasLiving,
         allowAudioVideo,
-        maxUploadBytes,
+        ...(maxUploadBytes !== undefined ? { maxUploadBytes } : {}),
       });
       return {
         uploadGen: context.uploadGen + 1,

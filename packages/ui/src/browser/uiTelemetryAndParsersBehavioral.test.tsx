@@ -75,7 +75,7 @@ describe('clientTelemetry browser lifecycle, sanitization, and transport fallbac
     expect(telemetry.isChunkLoadError({ detail: 'Unable to preload CSS chunk' })).toBe(true);
 
     const circular: Record<string, unknown> = {};
-    circular.self = circular;
+    circular['self'] = circular;
     expect(telemetry.isChunkLoadError(circular)).toBe(false);
 
     // Malformed URL fallback in sanitizeRoute and stripSensitiveUrl
@@ -141,7 +141,7 @@ describe('clientTelemetry browser lifecycle, sanitization, and transport fallbac
       })
     );
     expect(captured).toHaveLength(1);
-    expect(JSON.parse(captured[0])).toMatchObject({
+    expect(JSON.parse(captured[0] ?? '')).toMatchObject({
       kind: 'chunk_preload',
       assetUrl: '/assets/tree.js',
     });
@@ -153,7 +153,7 @@ describe('clientTelemetry browser lifecycle, sanitization, and transport fallbac
     });
     window.dispatchEvent(rejectionEvent);
     expect(captured).toHaveLength(2);
-    expect(JSON.parse(captured[1])).toMatchObject({
+    expect(JSON.parse(captured[1] ?? '')).toMatchObject({
       kind: 'chunk_preload',
       message: 'Loading chunk 7 failed',
     });
@@ -389,8 +389,8 @@ describe('httpWiki responseParsers validation and collection mapping behaviors',
         },
       ],
     });
-    expect(invites[0].token).toBe('inv_oak_1');
-    expect(invites[0].uses).toBe(2);
+    expect(invites[0]?.token).toBe('inv_oak_1');
+    expect(invites[0]?.uses).toBe(2);
 
     const tokens = parseAgentTokensListResponse({
       tokens: [

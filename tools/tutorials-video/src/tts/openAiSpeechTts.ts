@@ -5,7 +5,7 @@ export const DEFAULT_OPENAI_SPEECH_MODEL = 'tts-1';
 
 export interface OpenAiSpeechTutorialTtsOptions {
   readonly endpointUrl: string;
-  readonly apiKey?: string;
+  readonly apiKey?: string | undefined;
   readonly model?: string;
   readonly fetchImpl?: typeof fetch;
 }
@@ -14,7 +14,7 @@ export class OpenAiSpeechTutorialTtsProvider implements TutorialTtsProvider {
   readonly providerName = 'openai-speech';
   readonly modelName: string;
   readonly #endpointUrl: string;
-  readonly #apiKey?: string;
+  readonly #apiKey: string | undefined;
   readonly #fetchImpl: typeof fetch;
 
   constructor(options: OpenAiSpeechTutorialTtsOptions) {
@@ -33,7 +33,7 @@ export class OpenAiSpeechTutorialTtsProvider implements TutorialTtsProvider {
       'content-type': 'application/json',
     };
     if (this.#apiKey) {
-      headers.authorization = `Bearer ${this.#apiKey}`;
+      headers['authorization'] = `Bearer ${this.#apiKey}`;
     }
 
     const response = await this.#fetchImpl(this.#endpointUrl, {

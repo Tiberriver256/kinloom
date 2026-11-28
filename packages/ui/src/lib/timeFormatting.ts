@@ -122,7 +122,7 @@ export function buildRidgelineGeometry(
     return { areaPath: '', linePath: '', activeX: 0, hasData: false };
   }
 
-  const minYear = density[0].year;
+  const minYear = density[0]?.year ?? 0;
   const maxYear = density.at(-1)?.year ?? minYear + 1;
   const span = Math.max(1, maxYear - minYear);
   const clampedActive = Math.max(minYear, Math.min(maxYear, activeYear));
@@ -153,8 +153,9 @@ export function buildRidgelineGeometry(
     const endIdx = Math.max(startIdx + 1, Math.floor(((i + 1) * density.length) / bucketCount));
     let peak = 0;
     for (let j = startIdx; j < endIdx && j < weights.length; j += 1) {
-      if (weights[j] > peak) {
-        peak = weights[j];
+      const w = weights[j] ?? 0;
+      if (w > peak) {
+        peak = w;
       }
     }
     const x = bucketCount === 1 ? 0 : (i / (bucketCount - 1)) * width;

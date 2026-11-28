@@ -143,7 +143,7 @@ export function resolveTutorialMediaMode(params: {
   readonly step: KinloomTutorialStep;
   readonly reducedMotion: boolean;
   readonly videoFailed: boolean;
-  readonly mediaBaseUrl?: string;
+  readonly mediaBaseUrl?: string | undefined;
   readonly baseUrl: string;
 }): TutorialMediaDisplayMode {
   const { step, reducedMotion, videoFailed, mediaBaseUrl, baseUrl } = params;

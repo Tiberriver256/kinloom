@@ -48,8 +48,8 @@ export function resolveUnitUnionPorts(
   const rawEntries: RawPortEntry[] = [];
   const cardStride = ARCHIVAL_NODE_W + ARCHIVAL_SPOUSE_GAP;
 
-  for (let i = 0; i < unit.unionIds.length; i += 1) {
-    const union = model.unionsById.get(unit.unionIds[i]);
+  for (const unionId of unit.unionIds) {
+    const union = model.unionsById.get(unionId);
     if (!union) {
       continue;
     }
@@ -117,27 +117,32 @@ export function resolveUnitUnionPorts(
   // Separate any coincident port X positions symmetrically so stems stay distinct.
   let runStart = 0;
   while (runStart < rawEntries.length) {
+    const startEntry = rawEntries[runStart];
+    if (!startEntry) {
+      break;
+    }
     let runEnd = runStart + 1;
-    while (runEnd < rawEntries.length && rawEntries[runEnd].relativeX === rawEntries[runStart].relativeX) {
+    while (runEnd < rawEntries.length && rawEntries[runEnd]?.relativeX === startEntry.relativeX) {
       runEnd += 1;
     }
     const runLen = runEnd - runStart;
     if (runLen > 1) {
-      const baseCenter = rawEntries[runStart].relativeX;
+      const baseCenter = startEntry.relativeX;
       const halfSpan = ((runLen - 1) * PORT_COLLISION_STEP_PX) / 2;
       for (let k = 0; k < runLen; k += 1) {
-        rawEntries[runStart + k].relativeX = Math.round(baseCenter - halfSpan + k * PORT_COLLISION_STEP_PX);
+        const target = rawEntries[runStart + k];
+        if (target) {
+          target.relativeX = Math.round(baseCenter - halfSpan + k * PORT_COLLISION_STEP_PX);
+        }
       }
     }
     runStart = runEnd;
   }
 
   const totalSlots = rawEntries.length;
-  const slots: UnionPortSlot[] = new Array(totalSlots);
-  for (let i = 0; i < totalSlots; i += 1) {
-    const entry = rawEntries[i];
+  const slots: UnionPortSlot[] = rawEntries.map((entry, i) => {
     const normalizedOffset = totalSlots <= 1 ? 0 : (i / (totalSlots - 1) - 0.5) * 0.8;
-    slots[i] = {
+    return {
       unionId: entry.unionId,
       slotIndex: i,
       totalSlots,
@@ -149,6 +154,6 @@ export function resolveUnitUnionPorts(
       leftRelX: entry.leftRelX,
       rightRelX: entry.rightRelX,
     };
-  }
+  });
   return slots;
 }

@@ -13,7 +13,7 @@ export function formatLineageGroupLabel(group: string): string {
   return group
     .split('_')
     .filter(Boolean)
-    .map((part) => part[0].toUpperCase() + part.slice(1))
+    .map((part) => (part[0] ?? '').toUpperCase() + part.slice(1))
     .join(' ');
 }
 

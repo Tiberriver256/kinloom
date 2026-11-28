@@ -13,11 +13,11 @@ export interface NarrativeAudioLabels {
 
 export interface NarrativeAudioTrackMeta {
   readonly file: string;
-  readonly duration_seconds?: number;
-  readonly editor_notes_start_seconds?: number;
-  readonly story_voice?: string;
-  readonly notes_voice?: string;
-  readonly label?: string;
+  readonly duration_seconds?: number | undefined;
+  readonly editor_notes_start_seconds?: number | undefined;
+  readonly story_voice?: string | undefined;
+  readonly notes_voice?: string | undefined;
+  readonly label?: string | undefined;
 }
 
 export interface ActiveNarrativeAudioTrack {
@@ -255,7 +255,7 @@ export const NarrativeAudioProvider: React.FC<{ children: React.ReactNode }> = (
   const cycleSpeed = useCallback(() => {
     setPlaybackRate((prev) => {
       const idx = PLAYBACK_SPEEDS.indexOf(prev as (typeof PLAYBACK_SPEEDS)[number]);
-      return PLAYBACK_SPEEDS[(idx + 1) % PLAYBACK_SPEEDS.length];
+      return PLAYBACK_SPEEDS[(idx + 1) % PLAYBACK_SPEEDS.length] ?? 1;
     });
   }, []);
 

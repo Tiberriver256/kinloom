@@ -307,7 +307,7 @@ export const AdminPage: React.FC<AdminPageProps> = ({ adminClient, extraSettings
       const parsedDays = Number(inviteDays);
       const res = await client.createInvite({
         label: inviteLabel.trim(),
-        expires_in_days: Number.isFinite(parsedDays) && parsedDays > 0 ? parsedDays : undefined,
+        ...(Number.isFinite(parsedDays) && parsedDays > 0 ? { expires_in_days: parsedDays } : {}),
       });
       setCreatedInviteUrl(res.invite_url);
       setInviteLabel('');

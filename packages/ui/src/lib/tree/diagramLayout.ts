@@ -124,12 +124,11 @@ function buildObstacleSpatialIndex(all: readonly ObstacleRect[], maxCoordY: numb
   for (let i = 0; i < numStripes; i += 1) {
     stripes[i] = [];
   }
-  for (let i = 0; i < all.length; i += 1) {
-    const obs = all[i];
+  for (const obs of all) {
     const s0 = Math.max(0, (obs.top - OBSTACLE_PAD_Y) >> Y_STRIPE_SHIFT);
     const s1 = Math.min(numStripes - 1, Math.max(0, (obs.bottom + OBSTACLE_PAD_Y) >> Y_STRIPE_SHIFT));
     for (let s = s0; s <= s1; s += 1) {
-      stripes[s].push(obs);
+      stripes[s]?.push(obs);
     }
   }
   return {
@@ -157,8 +156,8 @@ function hasAnyVerticalBlocker(
 
   for (let s = s0; s <= s1; s += 1) {
     const bucket = stripes[s];
-    for (let i = 0; i < bucket.length; i += 1) {
-      const rect = bucket[i];
+    if (!bucket) continue;
+    for (const rect of bucket) {
       if (
         x >= rect.left - OBSTACLE_PAD_X &&
         x <= rect.right + OBSTACLE_PAD_X &&
@@ -193,8 +192,8 @@ function queryBandObstacles(
 
   for (let s = s0; s <= s1; s += 1) {
     const bucket = stripes[s];
-    for (let i = 0; i < bucket.length; i += 1) {
-      const obs = bucket[i];
+    if (!bucket) continue;
+    for (const obs of bucket) {
       if (seen[obs.idx] === stamp) {
         continue;
       }
@@ -212,19 +211,18 @@ function queryBandObstacles(
 
 function collapsePoints(raw: readonly DiagramPoint[]): DiagramPoint[] {
   const out: DiagramPoint[] = [];
-  for (let i = 0; i < raw.length; i += 1) {
-    const pt = raw[i];
+  for (const pt of raw) {
     const rx = Math.round(pt.x);
     const ry = Math.round(pt.y);
     const len = out.length;
     if (len > 0) {
       const prev = out[len - 1];
-      if (prev.x === rx && prev.y === ry) {
+      if (prev && prev.x === rx && prev.y === ry) {
         continue;
       }
-      if (len > 1) {
+      if (len > 1 && prev) {
         const prev2 = out[len - 2];
-        if ((prev2.x === prev.x && prev.x === rx) || (prev2.y === prev.y && prev.y === ry)) {
+        if (prev2 && ((prev2.x === prev.x && prev.x === rx) || (prev2.y === prev.y && prev.y === ry))) {
           out[len - 1] = { x: rx, y: ry };
           continue;
         }
@@ -264,8 +262,7 @@ function findBlockingObstaclesOnVertical(
   obstacles: readonly ObstacleRect[]
 ): ObstacleRect[] {
   const blockers: ObstacleRect[] = [];
-  for (let i = 0; i < obstacles.length; i += 1) {
-    const obs = obstacles[i];
+  for (const obs of obstacles) {
     if (verticalSegmentHitsRect(x, y1, y2, obs)) {
       blockers.push(obs);
     }
@@ -279,8 +276,8 @@ function hasBlockingObstacleOnVertical(
   y2: number,
   obstacles: readonly ObstacleRect[]
 ): boolean {
-  for (let i = 0; i < obstacles.length; i += 1) {
-    if (verticalSegmentHitsRect(x, y1, y2, obstacles[i])) {
+  for (const obs of obstacles) {
+    if (verticalSegmentHitsRect(x, y1, y2, obs)) {
       return true;
     }
   }
@@ -293,8 +290,8 @@ function hasHorizontalCollision(
   y: number,
   obstacles: readonly ObstacleRect[]
 ): boolean {
-  for (let i = 0; i < obstacles.length; i += 1) {
-    if (horizontalSegmentHitsRect(x1, x2, y, obstacles[i])) {
+  for (const obs of obstacles) {
+    if (horizontalSegmentHitsRect(x1, x2, y, obs)) {
       return true;
     }
   }
@@ -308,6 +305,7 @@ function polylineHitsAnyObstacle(
   for (let i = 0; i < points.length - 1; i += 1) {
     const a = points[i];
     const b = points[i + 1];
+    if (!a || !b) continue;
     if (a.x === b.x) {
       if (hasBlockingObstacleOnVertical(a.x, a.y, b.y, obstacles)) {
         return true;
@@ -333,8 +331,7 @@ function collectCorridorCandidates(params: {
   const minY = Math.min(y1, y2);
   const maxY = Math.max(y1, y2);
   const relevant: ObstacleRect[] = [];
-  for (let i = 0; i < obstacles.length; i += 1) {
-    const obs = obstacles[i];
+  for (const obs of obstacles) {
     if (maxY > obs.top + OBSTACLE_PAD_Y && minY < obs.bottom - OBSTACLE_PAD_Y) {
       relevant.push(obs);
     }
@@ -342,15 +339,17 @@ function collectCorridorCandidates(params: {
   relevant.sort((a, b) => a.left - b.left);
 
   const candidates = new Set<number>();
-  for (let i = 0; i < relevant.length; i += 1) {
-    const obs = relevant[i];
+  for (const obs of relevant) {
     candidates.add(Math.round(obs.left - 10));
     candidates.add(Math.round(obs.right + 10));
   }
 
   for (let i = 0; i < relevant.length - 1; i += 1) {
-    const gapLeft = relevant[i].right;
-    const gapRight = relevant[i + 1].left;
+    const cur = relevant[i];
+    const nxt = relevant[i + 1];
+    if (!cur || !nxt) continue;
+    const gapLeft = cur.right;
+    const gapRight = nxt.left;
     if (gapRight - gapLeft >= 12) {
       candidates.add(Math.round((gapLeft + gapRight) / 2));
     }
@@ -415,19 +414,21 @@ function routeStemAroundObstacles(params: {
   const maxBandY = Math.max(hubY, busY) + 16;
   const obstacles = queryBandObstacles(spatialIndex, minBandY, maxBandY, skipParent1, skipParent2);
   const blockers = findBlockingObstaclesOnVertical(hubX, hubY, busY, obstacles);
-  if (blockers.length === 0) {
+  const firstBlocker = blockers[0];
+  if (!firstBlocker) {
     return collapsePoints([
       { x: hubX, y: hubY },
       { x: hubX, y: busY },
     ]);
   }
 
-  let blockTop = blockers[0].top;
-  let blockBottom = blockers[0].bottom;
-  let blockLeft = blockers[0].left;
-  let blockRight = blockers[0].right;
+  let blockTop = firstBlocker.top;
+  let blockBottom = firstBlocker.bottom;
+  let blockLeft = firstBlocker.left;
+  let blockRight = firstBlocker.right;
   for (let i = 1; i < blockers.length; i += 1) {
     const b = blockers[i];
+    if (!b) continue;
     if (b.top < blockTop) blockTop = b.top;
     if (b.bottom > blockBottom) blockBottom = b.bottom;
     if (b.left < blockLeft) blockLeft = b.left;
@@ -456,8 +457,7 @@ function routeStemAroundObstacles(params: {
   const allCandidates = [...new Set([...primaryCandidates, ...fallbackCandidates])];
   let chosenX = Math.round(maxContentX + 24);
 
-  for (let i = 0; i < allCandidates.length; i += 1) {
-    const candX = allCandidates[i];
+  for (const candX of allCandidates) {
     if (candX < MIN_SAFE_CORRIDOR_X) {
       continue;
     }
@@ -493,31 +493,39 @@ function routeMultiGenDropThroughCorridors(params: {
   readonly spatialIndex: ObstacleSpatialIndex;
 }): DiagramPoint[] | null {
   const { busY, childCenterX, toY, childId, dummyChain, itemXById, genBands, spatialIndex } = params;
-  const corridorXs: number[] = new Array(dummyChain.length);
-  for (let i = 0; i < dummyChain.length; i += 1) {
-    const dummyLeft = itemXById.get(dummyChain[i].dummyId);
+  const corridorXs: number[] = [];
+  for (const entry of dummyChain) {
+    const dummyLeft = itemXById.get(entry.dummyId);
     if (dummyLeft === undefined) {
       return null;
     }
-    corridorXs[i] = Math.round(dummyLeft + DUMMY_CHANNEL_WIDTH / 2);
+    corridorXs.push(Math.round(dummyLeft + DUMMY_CHANNEL_WIDTH / 2));
+  }
+  const firstCorridorX = corridorXs[0];
+  if (firstCorridorX === undefined) {
+    return null;
   }
 
   const obstacles = queryBandObstacles(spatialIndex, Math.min(busY, toY), Math.max(busY, toY), childId, null);
 
   const buildPathWithEntryY = (entryY: number): DiagramPoint[] => {
-    const pts: DiagramPoint[] = [{ x: corridorXs[0], y: busY }];
+    const pts: DiagramPoint[] = [{ x: firstCorridorX, y: busY }];
     for (let i = 0; i < corridorXs.length - 1; i += 1) {
-      if (corridorXs[i] !== corridorXs[i + 1]) {
-        const bandA = genBands[dummyChain[i].layerIndex];
-        const bandB = genBands[dummyChain[i + 1].layerIndex];
+      const cx = corridorXs[i];
+      const nx = corridorXs[i + 1];
+      if (cx !== undefined && nx !== undefined && cx !== nx) {
+        const entryA = dummyChain[i];
+        const entryB = dummyChain[i + 1];
+        const bandA = entryA ? genBands[entryA.layerIndex] : undefined;
+        const bandB = entryB ? genBands[entryB.layerIndex] : undefined;
         const midChannelY =
           bandA && bandB
             ? Math.round((bandA.y + bandA.height + bandB.y) / 2)
             : Math.round((busY + entryY) / 2);
-        pts.push({ x: corridorXs[i], y: midChannelY }, { x: corridorXs[i + 1], y: midChannelY });
+        pts.push({ x: cx, y: midChannelY }, { x: nx, y: midChannelY });
       }
     }
-    const lastX = corridorXs[corridorXs.length - 1];
+    const lastX = corridorXs[corridorXs.length - 1] ?? firstCorridorX;
     if (lastX !== childCenterX) {
       pts.push({ x: lastX, y: entryY }, { x: childCenterX, y: entryY });
     }
@@ -532,8 +540,8 @@ function routeMultiGenDropThroughCorridors(params: {
     Math.round(Math.max(busY, toY - 4)),
   ];
 
-  for (let i = 0; i < entryCandidates.length; i += 1) {
-    const candidate = buildPathWithEntryY(entryCandidates[i]);
+  for (const entryY of entryCandidates) {
+    const candidate = buildPathWithEntryY(entryY);
     if (!polylineHitsAnyObstacle(candidate, obstacles)) {
       return candidate;
     }
@@ -573,8 +581,9 @@ function routeChildDropAroundObstacles(params: {
     ]);
   }
 
+  const primaryReturnY = Math.round(Math.max(busY, toY - 10));
   const returnYCandidates = [
-    Math.round(Math.max(busY, toY - 10)),
+    primaryReturnY,
     Math.round(Math.max(busY, toY - 6)),
     Math.round(Math.max(busY, toY - 14)),
     Math.round(Math.max(busY, toY - 4)),
@@ -583,16 +592,14 @@ function routeChildDropAroundObstacles(params: {
   const candidates = collectCorridorCandidates({
     preferredX: targetX,
     y1: busY,
-    y2: returnYCandidates[0],
+    y2: primaryReturnY,
     obstacles,
     maxContentX,
     usedCorridorCounts,
   });
 
-  for (let yIdx = 0; yIdx < returnYCandidates.length; yIdx += 1) {
-    const returnY = returnYCandidates[yIdx];
-    for (let i = 0; i < candidates.length; i += 1) {
-      const candX = candidates[i];
+  for (const returnY of returnYCandidates) {
+    for (const candX of candidates) {
       if (candX < MIN_SAFE_CORRIDOR_X) {
         continue;
       }
@@ -615,13 +622,13 @@ function routeChildDropAroundObstacles(params: {
 
   // Guaranteed clear outer corridor past the rightmost obstacle in the band.
   let maxObsRight = maxContentX;
-  for (let i = 0; i < obstacles.length; i += 1) {
-    if (obstacles[i].right > maxObsRight) {
-      maxObsRight = obstacles[i].right;
+  for (const obs of obstacles) {
+    if (obs.right > maxObsRight) {
+      maxObsRight = obs.right;
     }
   }
   const outerX = Math.round(maxObsRight + 16 + (usedCorridorCounts.size % 6) * 8);
-  const safeReturnY = returnYCandidates[0];
+  const safeReturnY = primaryReturnY;
   usedCorridorCounts.set(outerX, (usedCorridorCounts.get(outerX) ?? 0) + 1);
   return collapsePoints([
     { x: dropX, y: busY },
@@ -644,8 +651,8 @@ function computeUnitFootprint(
   let minRelX = 0;
   let maxRelX = memberSpan;
 
-  for (let i = 0; i < unit.unionIds.length; i += 1) {
-    const union = model.unionsById.get(unit.unionIds[i]);
+  for (const unionId of unit.unionIds) {
+    const union = model.unionsById.get(unionId);
     if (!union) {
       continue;
     }
@@ -740,8 +747,7 @@ function buildOrthogonalBuses(params: {
   const draftsByGen = new Map<number, BusDraft[]>();
   const orderedGens: number[] = [];
 
-  for (let u = 0; u < model.unions.length; u += 1) {
-    const union = model.unions[u];
+  for (const union of model.unions) {
     if (union.visibleChildIds.length === 0) {
       continue;
     }
@@ -757,8 +763,7 @@ function buildOrthogonalBuses(params: {
     let railMaxX = hub.x;
     let anyDirectDrop = false;
 
-    for (let i = 0; i < union.visibleChildIds.length; i += 1) {
-      const cid = union.visibleChildIds[i];
+    for (const cid of union.visibleChildIds) {
       const childNode = byId.get(cid);
       if (!childNode) {
         continue;
@@ -766,8 +771,9 @@ function buildOrthogonalBuses(params: {
       const childCenterX = Math.round(childNode.x + childNode.width / 2);
       const dummyChain = dummyChainsByEdgeKey.get(makeLayeredEdgeKey(union.id, cid));
       let railAttachX = childCenterX;
-      if (dummyChain && dummyChain.length > 0) {
-        const firstDummyLeft = itemXById.get(dummyChain[0].dummyId);
+      const firstDummy = dummyChain?.[0];
+      if (firstDummy) {
+        const firstDummyLeft = itemXById.get(firstDummy.dummyId);
         if (firstDummyLeft !== undefined) {
           railAttachX = Math.round(firstDummyLeft + DUMMY_CHANNEL_WIDTH / 2);
         }
@@ -813,38 +819,30 @@ function buildOrthogonalBuses(params: {
   const buses: DiagramOrthogonalBus[] = [];
   const usedCorridorCounts = new Map<number, number>();
 
-  for (let gIdx = 0; gIdx < orderedGens.length; gIdx += 1) {
-    const gen = orderedGens[gIdx];
+  for (const gen of orderedGens) {
     const drafts = draftsByGen.get(gen);
     if (!drafts || drafts.length === 0) {
       continue;
     }
 
     const draftById = new Map<string, BusDraft>();
-    const constraintInputs: BusConstraintInput[] = new Array(drafts.length);
-    for (let i = 0; i < drafts.length; i += 1) {
-      const d = drafts[i];
+    const constraintInputs: BusConstraintInput[] = drafts.map((d) => {
       draftById.set(d.union.id, d);
-      const dropXs = new Array<number>(d.rawDrops.length);
-      for (let k = 0; k < d.rawDrops.length; k += 1) {
-        dropXs[k] = d.rawDrops[k].railAttachX;
-      }
-      constraintInputs[i] = {
+      return {
         id: d.union.id,
         hubX: d.hub.x,
-        dropXs,
+        dropXs: d.rawDrops.map((drop) => drop.railAttachX),
         railMinX: d.railMinX,
         railMaxX: d.railMaxX,
       };
-    }
+    });
 
     const trackAssignments = assignBusTracksWithConstraintGraph(constraintInputs);
     const genBandIdx = genBandIdxByGen.get(gen) ?? -1;
     const genBand = genBandIdx >= 0 ? genBands[genBandIdx] : undefined;
     const nextBand = genBandIdx >= 0 ? genBands[genBandIdx + 1] : undefined;
 
-    for (let tIdx = 0; tIdx < trackAssignments.length; tIdx += 1) {
-      const assignment = trackAssignments[tIdx];
+    for (const assignment of trackAssignments) {
       const draft = draftById.get(assignment.id);
       if (!draft) {
         continue;
@@ -873,11 +871,10 @@ function buildOrthogonalBuses(params: {
         usedCorridorCounts,
       });
 
-      const childDrops: DiagramOrthogonalDrop[] = new Array(rawDrops.length);
-      const childIds: string[] = new Array(rawDrops.length);
-      for (let i = 0; i < rawDrops.length; i += 1) {
-        const drop = rawDrops[i];
-        childIds[i] = drop.childId;
+      const childDrops: DiagramOrthogonalDrop[] = [];
+      const childIds: string[] = [];
+      for (const drop of rawDrops) {
+        childIds.push(drop.childId);
         let points: DiagramPoint[] | null = null;
         if (drop.dummyChain && drop.dummyChain.length > 0) {
           points = routeMultiGenDropThroughCorridors({
@@ -903,13 +900,13 @@ function buildOrthogonalBuses(params: {
             usedCorridorCounts,
           });
         }
-        childDrops[i] = {
+        childDrops.push({
           childId: drop.childId,
           x: drop.railAttachX,
           toY: drop.toY,
           isDirect: drop.isDirect,
           points,
-        };
+        });
       }
 
       buses.push({
@@ -944,32 +941,27 @@ function computeDiagramBounds(params: {
   let maxX = params.maxRightX + params.leftPad;
   let maxY = params.cursorY + 32;
 
-  for (let i = 0; i < params.nodes.length; i += 1) {
-    const n = params.nodes[i];
+  for (const n of params.nodes) {
     if (n.x + n.width + 64 > maxX) maxX = n.x + n.width + 64;
     if (n.y + n.height + 64 > maxY) maxY = n.y + n.height + 64;
     if (n.x - 40 < minX) minX = n.x - 40;
   }
-  for (let i = 0; i < params.earlyLossStrips.length; i += 1) {
-    const s = params.earlyLossStrips[i];
+  for (const s of params.earlyLossStrips) {
     if (s.x + s.width + 48 > maxX) maxX = s.x + s.width + 48;
     if (s.y + s.height + 48 > maxY) maxY = s.y + s.height + 48;
   }
-  for (let i = 0; i < params.siblingToggles.length; i += 1) {
-    const t = params.siblingToggles[i];
+  for (const t of params.siblingToggles) {
     if (t.x + t.width + 48 > maxX) maxX = t.x + t.width + 48;
     if (t.y + t.height + 48 > maxY) maxY = t.y + t.height + 48;
   }
-  for (let i = 0; i < params.buses.length; i += 1) {
-    const b = params.buses[i];
-    for (let p = 0; p < b.stemPoints.length; p += 1) {
-      const px = b.stemPoints[p].x + 32;
+  for (const b of params.buses) {
+    for (const pt of b.stemPoints) {
+      const px = pt.x + 32;
       if (px > maxX) maxX = px;
     }
-    for (let d = 0; d < b.childDrops.length; d += 1) {
-      const pts = b.childDrops[d].points;
-      for (let p = 0; p < pts.length; p += 1) {
-        const px = pts[p].x + 32;
+    for (const drop of b.childDrops) {
+      for (const pt of drop.points) {
+        const px = pt.x + 32;
         if (px > maxX) maxX = px;
       }
     }
@@ -1008,8 +1000,7 @@ export function computeArchivalDiagramLayout(model: ArchivalTreeModel): Archival
   const itemXById = assignBrandesKopfX(layeredGraph, leftPad);
 
   const activeBusCountByGen = new Map<number, number>();
-  for (let u = 0; u < model.unions.length; u += 1) {
-    const union = model.unions[u];
+  for (const union of model.unions) {
     if (union.visibleChildIds.length > 0) {
       activeBusCountByGen.set(union.gen, (activeBusCountByGen.get(union.gen) ?? 0) + 1);
     }
@@ -1028,14 +1019,12 @@ export function computeArchivalDiagramLayout(model: ArchivalTreeModel): Archival
   let cursorY = topPad;
   let maxRightX = leftPad;
 
-  for (let gIdx = 0; gIdx < numGens; gIdx += 1) {
-    const g = model.generations[gIdx];
-    const layerItems = layeredGraph.layers[gIdx];
+  for (const [gIdx, g] of model.generations.entries()) {
+    const layerItems = layeredGraph.layers[gIdx] ?? [];
     const rowTopY = cursorY;
     let rowBottomY = rowTopY + ARCHIVAL_NODE_H;
 
-    for (let itemIdx = 0; itemIdx < layerItems.length; itemIdx += 1) {
-      const layerItem = layerItems[itemIdx];
+    for (const layerItem of layerItems) {
       const itemLeftX = itemXById.get(layerItem.id) ?? leftPad;
       if (itemLeftX + layerItem.width > maxRightX) {
         maxRightX = itemLeftX + layerItem.width;
@@ -1048,8 +1037,7 @@ export function computeArchivalDiagramLayout(model: ArchivalTreeModel): Archival
       const memberStartX = itemLeftX + layerItem.memberOffsetX;
       const unitPorts = layeredGraph.portsByUnitId.get(unit.id);
 
-      for (let idx = 0; idx < unit.orderedMemberIds.length; idx += 1) {
-        const pid = unit.orderedMemberIds[idx];
+      for (const [idx, pid] of unit.orderedMemberIds.entries()) {
         const person = model.peopleById.get(pid);
         if (!person) {
           continue;
@@ -1072,8 +1060,7 @@ export function computeArchivalDiagramLayout(model: ArchivalTreeModel): Archival
       const unitPlacedRects: { left: number; right: number; bottom: number }[] = [];
       const resolveAttachmentTopY = (left: number, right: number, baseTopY: number): number => {
         let y = baseTopY;
-        for (let r = 0; r < unitPlacedRects.length; r += 1) {
-          const prior = unitPlacedRects[r];
+        for (const prior of unitPlacedRects) {
           if (left < prior.right + 14 && right > prior.left - 14 && prior.bottom + 14 > y) {
             y = prior.bottom + 14;
           }
@@ -1082,8 +1069,8 @@ export function computeArchivalDiagramLayout(model: ArchivalTreeModel): Archival
       };
 
       let priorHangingBottomY: number | null = null;
-      for (let u = 0; u < unit.unionIds.length; u += 1) {
-        const union = model.unionsById.get(unit.unionIds[u]);
+      for (const unionId of unit.unionIds) {
+        const union = model.unionsById.get(unionId);
         if (!union) {
           continue;
         }
@@ -1151,8 +1138,7 @@ export function computeArchivalDiagramLayout(model: ArchivalTreeModel): Archival
           const stripY = Math.round(resolveAttachmentTopY(stripX, stripX + stripW, baseAttachmentY));
 
           const chips: DiagramEarlyLossChip[] = [];
-          for (let cIdx = 0; cIdx < union.earlyLossChildIds.length; cIdx += 1) {
-            const cid = union.earlyLossChildIds[cIdx];
+          for (const [cIdx, cid] of union.earlyLossChildIds.entries()) {
             const child = model.peopleById.get(cid);
             if (!child) {
               continue;
@@ -1253,8 +1239,7 @@ export function computeArchivalDiagramLayout(model: ArchivalTreeModel): Archival
           let maxGridY = gridTopY;
           let maxTickY = gridTopY;
 
-          for (let hIdx = 0; hIdx < union.hangingChildIds.length; hIdx += 1) {
-            const cid = union.hangingChildIds[hIdx];
+          for (const [hIdx, cid] of union.hangingChildIds.entries()) {
             const child = model.peopleById.get(cid);
             if (!child) {
               continue;
@@ -1342,8 +1327,7 @@ export function computeArchivalDiagramLayout(model: ArchivalTreeModel): Archival
   let maxObstacleY = cursorY;
   let oCursor = 0;
 
-  for (let i = 0; i < nodes.length; i += 1) {
-    const n = nodes[i];
+  for (const n of nodes) {
     const right = n.x + n.width;
     const bottom = n.y + n.height;
     if (right > maxContentX) maxContentX = right;
@@ -1359,8 +1343,7 @@ export function computeArchivalDiagramLayout(model: ArchivalTreeModel): Archival
     };
     oCursor += 1;
   }
-  for (let i = 0; i < earlyLossStrips.length; i += 1) {
-    const s = earlyLossStrips[i];
+  for (const s of earlyLossStrips) {
     const right = s.x + s.width;
     const bottom = s.y + s.height;
     if (right > maxContentX) maxContentX = right;
@@ -1376,8 +1359,7 @@ export function computeArchivalDiagramLayout(model: ArchivalTreeModel): Archival
     };
     oCursor += 1;
   }
-  for (let i = 0; i < siblingToggles.length; i += 1) {
-    const t = siblingToggles[i];
+  for (const t of siblingToggles) {
     const right = t.x + t.width;
     const bottom = t.y + t.height;
     if (right > maxContentX) maxContentX = right;

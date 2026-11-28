@@ -145,8 +145,7 @@ export function formatVttTimestamp(seconds: number): string {
 
 export function buildWebVtt(cues: readonly TimedCaptionCue[]): string {
   const lines: string[] = ['WEBVTT', ''];
-  for (let i = 0; i < cues.length; i += 1) {
-    const cue = cues[i];
+  for (const [i, cue] of cues.entries()) {
     if (cue.endSeconds <= cue.startSeconds) {
       throw new RangeError(`Caption cue ${i + 1} has non-positive duration.`);
     }
@@ -188,8 +187,9 @@ export function validateWebVttMonotonicity(vttText: string): {
       continue;
     }
     cueCount += 1;
-    const start = parseTs(match[1], match[2], match[3], match[4]);
-    const end = parseTs(match[5], match[6], match[7], match[8]);
+    const [, h1 = '0', m1 = '0', s1 = '0', ms1 = '0', h2 = '0', m2 = '0', s2 = '0', ms2 = '0'] = match;
+    const start = parseTs(h1, m1, s1, ms1);
+    const end = parseTs(h2, m2, s2, ms2);
     if (end <= start) {
       errors.push(`Cue ${cueCount} end (${end}) must be greater than start (${start}).`);
     }

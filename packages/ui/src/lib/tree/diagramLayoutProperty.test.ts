@@ -17,6 +17,11 @@ import {
   toRomanNumeral,
 } from '../archivalTreeModel.js';
 
+function must<T>(val: T | undefined, label = 'value'): T {
+  if (val === undefined) throw new Error(`Expected ${label}`);
+  return val;
+}
+
 const TREE_PROP_SEED = 20261130;
 
 interface SyntheticDagSpec {
@@ -248,7 +253,7 @@ function buildSyntheticDag(spec: SyntheticDagSpec): {
     );
     kinship.push(
       { from: firstFounder.a, to: spanChildId, relation: 'parent' },
-      { from: g1Couples[0].a, to: spanChildId, relation: 'parent' }
+      { from: must(g1Couples[0]).a, to: spanChildId, relation: 'parent' }
     );
   }
 
@@ -343,6 +348,7 @@ function polylineIntersectsRect(
   for (let i = 0; i < points.length - 1; i += 1) {
     const a = points[i];
     const b = points[i + 1];
+    if (!a || !b) continue;
     if (a.x === b.x) {
       const minY = Math.min(a.y, b.y);
       const maxY = Math.max(a.y, b.y);
@@ -460,7 +466,7 @@ describe('Tree layout property-based invariants (deterministic seed)', () => {
         ];
         for (let i = 0; i < allRects.length; i += 1) {
           for (let j = i + 1; j < allRects.length; j += 1) {
-            expect(rectsOverlap(allRects[i], allRects[j])).toBe(false);
+            expect(rectsOverlap(must(allRects[i]), must(allRects[j]))).toBe(false);
           }
         }
 
@@ -485,12 +491,13 @@ describe('Tree layout property-based invariants (deterministic seed)', () => {
         // 5. Generation bands are strictly increasing vertically with finite heights
         for (let i = 0; i < layout1.genBands.length; i += 1) {
           const band = layout1.genBands[i];
+          if (!band) continue;
           expect(Number.isFinite(band.y)).toBe(true);
           expect(Number.isFinite(band.height)).toBe(true);
           expect(band.height).toBeGreaterThanOrEqual(ARCHIVAL_NODE_H);
           if (i > 0) {
             const prev = layout1.genBands[i - 1];
-            expect(band.y).toBeGreaterThan(prev.y + prev.height);
+            if (prev) expect(band.y).toBeGreaterThan(prev.y + prev.height);
           }
         }
 
@@ -539,7 +546,7 @@ describe('Tree layout property-based invariants (deterministic seed)', () => {
         for (const laneYs of busesByGen.values()) {
           const sorted = [...laneYs].sort((a, b) => a - b);
           for (let i = 1; i < sorted.length; i += 1) {
-            expect(sorted[i] - sorted[i - 1]).toBeGreaterThanOrEqual(14);
+            expect((sorted[i] ?? 0) - (sorted[i - 1] ?? 0)).toBeGreaterThanOrEqual(14);
           }
         }
         for (const rail of layout1.hangingRails) {
@@ -571,9 +578,9 @@ describe('Tree layout property-based invariants (deterministic seed)', () => {
 
         const visible = model.visiblePeople;
         if (visible.length > 0) {
-          const target = visible[visible.length - 1];
+          const target = must(visible[visible.length - 1]);
           const spotlight = computeLineageSpotlight({
-            selectedPersonId: target.id,
+            selectedPersonId: must(target).id,
             model,
             bundle,
             placesById,
@@ -657,7 +664,7 @@ describe('Tree layout property-based invariants (deterministic seed)', () => {
         if (visibleCandidates.length === 0) {
           return;
         }
-        const chosenAnchor = visibleCandidates[anchorSeed % visibleCandidates.length];
+        const chosenAnchor = must(visibleCandidates[anchorSeed % visibleCandidates.length]);
         const model = buildArchivalTreeModel({
           people,
           kinship,
@@ -677,7 +684,7 @@ describe('Tree layout property-based invariants (deterministic seed)', () => {
 
         for (let i = 0; i < layout.nodes.length; i += 1) {
           for (let j = i + 1; j < layout.nodes.length; j += 1) {
-            expect(boxesOverlap(layout.nodes[i], layout.nodes[j])).toBe(false);
+            expect(boxesOverlap(must(layout.nodes[i]), must(layout.nodes[j]))).toBe(false);
           }
         }
       }),
@@ -720,7 +727,7 @@ describe('Tree layout property-based invariants (deterministic seed)', () => {
       [f0, f0s3],
     ];
     for (let m = 0; m < founderPairs.length; m += 1) {
-      const [pa, pb] = founderPairs[m];
+      const [pa, pb] = must(founderPairs[m]);
       for (let c = 0; c < 2; c += 1) {
         const cid = add(
           makePerson(`w_g1_${m}_${c}`, `GenOne${m}C${c} Alder`, {
@@ -741,7 +748,7 @@ describe('Tree layout property-based invariants (deterministic seed)', () => {
     }
 
     for (let u = 0; u < g1Unions.length; u += 1) {
-      const [pa, pb] = g1Unions[u];
+      const [pa, pb] = must(g1Unions[u]);
       for (let k = 0; k < 3; k += 1) {
         const cid = add(
           makePerson(`w_g2_${u}_${k}`, `GenTwo${u}K${k} Alder`, {
@@ -781,6 +788,7 @@ describe('Tree layout property-based invariants (deterministic seed)', () => {
         for (let i = 0; i < pts.length - 1; i += 1) {
           const a = pts[i];
           const b = pts[i + 1];
+          if (!a || !b) continue;
           if (a.y === b.y && a.x !== b.x) {
             horiz.push({ unionId: bus.unionId, y: a.y, x1: Math.min(a.x, b.x), x2: Math.max(a.x, b.x) });
           } else if (a.x === b.x && a.y !== b.y) {

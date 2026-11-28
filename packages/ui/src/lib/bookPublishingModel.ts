@@ -291,61 +291,61 @@ function parseShippingLevel(value: unknown): UiBookShippingLevel {
 }
 
 function parsePrintJob(raw: unknown): UiBookPrintJob {
-  if (!isRecord(raw) || typeof raw.jobId !== 'string') {
+  if (!isRecord(raw) || typeof raw['jobId'] !== 'string') {
     throw new Error('Malformed print job record.');
   }
-  const trackingRaw = Array.isArray(raw.trackingUrls) ? raw.trackingUrls : [];
+  const trackingRaw = Array.isArray(raw['trackingUrls']) ? raw['trackingUrls'] : [];
   return {
-    providerId: asString(raw.providerId, 'mock'),
-    jobId: raw.jobId,
-    externalId: asString(raw.externalId),
-    title: asString(raw.title, 'Archival Hardcover Book'),
-    status: asString(raw.status, 'created'),
-    ...(typeof raw.statusDetail === 'string' ? { statusDetail: raw.statusDetail } : {}),
+    providerId: asString(raw['providerId'], 'mock'),
+    jobId: raw['jobId'],
+    externalId: asString(raw['externalId']),
+    title: asString(raw['title'], 'Archival Hardcover Book'),
+    status: asString(raw['status'], 'created'),
+    ...(typeof raw['statusDetail'] === 'string' ? { statusDetail: raw['statusDetail'] } : {}),
     trackingUrls: trackingRaw.filter((u): u is string => typeof u === 'string'),
-    sandbox: asBoolean(raw.sandbox, true),
-    quantity: asNumber(raw.quantity, 1),
-    updatedAt: asString(raw.updatedAt),
+    sandbox: asBoolean(raw['sandbox'], true),
+    quantity: asNumber(raw['quantity'], 1),
+    updatedAt: asString(raw['updatedAt']),
   };
 }
 
 export function parseUiBookStatusResponse(raw: unknown): UiBookStatusResponse {
-  if (!isRecord(raw) || typeof raw.plugin_id !== 'string' || typeof raw.active_publisher !== 'string') {
+  if (!isRecord(raw) || typeof raw['plugin_id'] !== 'string' || typeof raw['active_publisher'] !== 'string') {
     throw new Error('Malformed book publishing status response.');
   }
-  const defaultsRaw = isRecord(raw.defaults) ? raw.defaults : {};
-  const branchesRaw = Array.isArray(raw.branches) ? raw.branches : [];
-  const jobsRaw = Array.isArray(raw.jobs) ? raw.jobs : [];
-  const readinessRaw = isRecord(raw.readiness) ? raw.readiness : null;
+  const defaultsRaw = isRecord(raw['defaults']) ? raw['defaults'] : {};
+  const branchesRaw = Array.isArray(raw['branches']) ? raw['branches'] : [];
+  const jobsRaw = Array.isArray(raw['jobs']) ? raw['jobs'] : [];
+  const readinessRaw = isRecord(raw['readiness']) ? raw['readiness'] : null;
 
   return {
-    plugin_id: raw.plugin_id,
-    active_publisher: raw.active_publisher,
-    publisher_provider: asString(raw.publisher_provider, 'mock'),
-    environment: raw.environment === 'production' ? 'production' : 'sandbox',
-    pdf_renderer: asString(raw.pdf_renderer, 'deterministic-pdf'),
-    lulu_credentials_configured: asBoolean(raw.lulu_credentials_configured, false),
+    plugin_id: raw['plugin_id'],
+    active_publisher: raw['active_publisher'],
+    publisher_provider: asString(raw['publisher_provider'], 'mock'),
+    environment: raw['environment'] === 'production' ? 'production' : 'sandbox',
+    pdf_renderer: asString(raw['pdf_renderer'], 'deterministic-pdf'),
+    lulu_credentials_configured: asBoolean(raw['lulu_credentials_configured'], false),
     defaults: {
-      trim_preset: parseTrimPreset(defaultsRaw.trim_preset),
-      binding: parseBinding(defaultsRaw.binding),
-      paper_stock: parsePaperStock(defaultsRaw.paper_stock),
-      shipping_level: parseShippingLevel(defaultsRaw.shipping_level),
-      contact_email: asString(defaultsRaw.contact_email),
+      trim_preset: parseTrimPreset(defaultsRaw['trim_preset']),
+      binding: parseBinding(defaultsRaw['binding']),
+      paper_stock: parsePaperStock(defaultsRaw['paper_stock']),
+      shipping_level: parseShippingLevel(defaultsRaw['shipping_level']),
+      contact_email: asString(defaultsRaw['contact_email']),
     },
     branches: branchesRaw
-      .filter((b): b is Record<string, unknown> => isRecord(b) && typeof b.id === 'string')
-      .map((b) => ({ id: asString(b.id), label: asString(b.label, asString(b.id)) })),
+      .filter((b): b is Record<string, unknown> => isRecord(b) && typeof b['id'] === 'string')
+      .map((b) => ({ id: asString(b['id']), label: asString(b['label'], asString(b['id'])) })),
     readiness: readinessRaw
       ? {
-          included_people: asNumber(readinessRaw.included_people),
-          excluded_living_people: asNumber(readinessRaw.excluded_living_people),
-          included_media: asNumber(readinessRaw.included_media),
-          excluded_living_media: asNumber(readinessRaw.excluded_living_media),
-          estimated_pages: asNumber(readinessRaw.estimated_pages, 24),
-          spine_width_in: asNumber(readinessRaw.spine_width_in, 0.25),
-          allow_spine_text: asBoolean(readinessRaw.allow_spine_text),
-          provider_sku: asString(readinessRaw.provider_sku),
-          review_flags_detected: asNumber(readinessRaw.review_flags_detected),
+          included_people: asNumber(readinessRaw['included_people']),
+          excluded_living_people: asNumber(readinessRaw['excluded_living_people']),
+          included_media: asNumber(readinessRaw['included_media']),
+          excluded_living_media: asNumber(readinessRaw['excluded_living_media']),
+          estimated_pages: asNumber(readinessRaw['estimated_pages'], 24),
+          spine_width_in: asNumber(readinessRaw['spine_width_in'], 0.25),
+          allow_spine_text: asBoolean(readinessRaw['allow_spine_text']),
+          provider_sku: asString(readinessRaw['provider_sku']),
+          review_flags_detected: asNumber(readinessRaw['review_flags_detected']),
         }
       : null,
     jobs: jobsRaw.map((j) => parsePrintJob(j)),
@@ -353,83 +353,83 @@ export function parseUiBookStatusResponse(raw: unknown): UiBookStatusResponse {
 }
 
 export function parseUiBookCompileResponse(raw: unknown): UiBookCompileResponse {
-  if (!isRecord(raw) || !isRecord(raw.report) || !isRecord(raw.artifacts)) {
+  if (!isRecord(raw) || !isRecord(raw['report']) || !isRecord(raw['artifacts'])) {
     throw new Error('Malformed book compile response.');
   }
-  const report = raw.report;
-  const counts = isRecord(report.counts) ? report.counts : {};
-  const cover = isRecord(report.coverDimensions) ? report.coverDimensions : {};
-  const warningsRaw = Array.isArray(report.warnings) ? report.warnings : [];
-  const artifacts = raw.artifacts;
+  const report = raw['report'];
+  const counts = isRecord(report['counts']) ? report['counts'] : {};
+  const cover = isRecord(report['coverDimensions']) ? report['coverDimensions'] : {};
+  const warningsRaw = Array.isArray(report['warnings']) ? report['warnings'] : [];
+  const artifacts = raw['artifacts'];
 
   return {
-    renderer: asString(raw.renderer, 'deterministic-pdf'),
+    renderer: asString(raw['renderer'], 'deterministic-pdf'),
     report: {
-      title: asString(report.title),
-      subtitle: asString(report.subtitle),
-      edition: report.edition === 'private' ? 'private' : 'public',
-      colophonNotice: asString(report.colophonNotice),
+      title: asString(report['title']),
+      subtitle: asString(report['subtitle']),
+      edition: report['edition'] === 'private' ? 'private' : 'public',
+      colophonNotice: asString(report['colophonNotice']),
       counts: {
-        includedPeople: asNumber(counts.includedPeople),
-        excludedLivingPeople: asNumber(counts.excludedLivingPeople),
-        includedMedia: asNumber(counts.includedMedia),
-        excludedLivingMedia: asNumber(counts.excludedLivingMedia),
-        rawContentPages: asNumber(counts.rawContentPages),
-        paddingPages: asNumber(counts.paddingPages),
-        finalPageCount: asNumber(counts.finalPageCount, 24),
+        includedPeople: asNumber(counts['includedPeople']),
+        excludedLivingPeople: asNumber(counts['excludedLivingPeople']),
+        includedMedia: asNumber(counts['includedMedia']),
+        excludedLivingMedia: asNumber(counts['excludedLivingMedia']),
+        rawContentPages: asNumber(counts['rawContentPages']),
+        paddingPages: asNumber(counts['paddingPages']),
+        finalPageCount: asNumber(counts['finalPageCount'], 24),
       },
       coverDimensions: {
-        totalWidthIn: asNumber(cover.totalWidthIn),
-        totalHeightIn: asNumber(cover.totalHeightIn),
-        spineWidthIn: asNumber(cover.spineWidthIn),
-        allowSpineText: asBoolean(cover.allowSpineText),
-        providerSku: asString(cover.providerSku),
+        totalWidthIn: asNumber(cover['totalWidthIn']),
+        totalHeightIn: asNumber(cover['totalHeightIn']),
+        spineWidthIn: asNumber(cover['spineWidthIn']),
+        allowSpineText: asBoolean(cover['allowSpineText']),
+        providerSku: asString(cover['providerSku']),
       },
       warnings: warningsRaw
         .filter((w): w is Record<string, unknown> => isRecord(w))
-        .map((w) => ({ code: asString(w.code), message: asString(w.message) })),
+        .map((w) => ({ code: asString(w['code']), message: asString(w['message']) })),
     },
     artifacts: {
-      interior_pdf_url: asString(artifacts.interior_pdf_url),
-      cover_pdf_url: asString(artifacts.cover_pdf_url),
-      interior_bytes: asNumber(artifacts.interior_bytes),
-      cover_bytes: asNumber(artifacts.cover_bytes),
-      expires_at: asString(artifacts.expires_at),
+      interior_pdf_url: asString(artifacts['interior_pdf_url']),
+      cover_pdf_url: asString(artifacts['cover_pdf_url']),
+      interior_bytes: asNumber(artifacts['interior_bytes']),
+      cover_bytes: asNumber(artifacts['cover_bytes']),
+      expires_at: asString(artifacts['expires_at']),
     },
   };
 }
 
 export function parseUiBookEstimateResponse(raw: unknown): UiBookEstimateResponse {
-  if (!isRecord(raw) || !isRecord(raw.quote) || !isRecord(raw.cover_dimensions)) {
+  if (!isRecord(raw) || !isRecord(raw['quote']) || !isRecord(raw['cover_dimensions'])) {
     throw new Error('Malformed book cost estimate response.');
   }
-  const quote = raw.quote;
-  const cover = raw.cover_dimensions;
+  const quote = raw['quote'];
+  const cover = raw['cover_dimensions'];
   return {
     quote: {
-      providerId: asString(quote.providerId),
-      providerSku: asString(quote.providerSku),
-      currency: asString(quote.currency, 'USD'),
-      manufacturingCostCents: asNumber(quote.manufacturingCostCents),
-      shippingCostCents: asNumber(quote.shippingCostCents),
-      fulfillmentFeeCents: asNumber(quote.fulfillmentFeeCents),
-      taxCents: asNumber(quote.taxCents),
-      totalCostCents: asNumber(quote.totalCostCents),
-      sandbox: asBoolean(quote.sandbox, true),
+      providerId: asString(quote['providerId']),
+      providerSku: asString(quote['providerSku']),
+      currency: asString(quote['currency'], 'USD'),
+      manufacturingCostCents: asNumber(quote['manufacturingCostCents']),
+      shippingCostCents: asNumber(quote['shippingCostCents']),
+      fulfillmentFeeCents: asNumber(quote['fulfillmentFeeCents']),
+      taxCents: asNumber(quote['taxCents']),
+      totalCostCents: asNumber(quote['totalCostCents']),
+      sandbox: asBoolean(quote['sandbox'], true),
     },
     cover_dimensions: {
-      totalWidthIn: asNumber(cover.totalWidthIn),
-      totalHeightIn: asNumber(cover.totalHeightIn),
-      spineWidthIn: asNumber(cover.spineWidthIn),
-      allowSpineText: asBoolean(cover.allowSpineText),
-      providerSku: asString(cover.providerSku),
+      totalWidthIn: asNumber(cover['totalWidthIn']),
+      totalHeightIn: asNumber(cover['totalHeightIn']),
+      spineWidthIn: asNumber(cover['spineWidthIn']),
+      allowSpineText: asBoolean(cover['allowSpineText']),
+      providerSku: asString(cover['providerSku']),
     },
   };
 }
 
 export function parseUiBookSubmitJobResponse(raw: unknown): UiBookSubmitJobResponse {
-  if (!isRecord(raw) || !isRecord(raw.job)) {
+  if (!isRecord(raw) || !isRecord(raw['job'])) {
     throw new Error('Malformed book print job response.');
   }
-  return { job: parsePrintJob(raw.job) };
+  return { job: parsePrintJob(raw['job']) };
 }

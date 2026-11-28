@@ -2,7 +2,7 @@ export interface RecentlyViewedItem {
   readonly kind: 'person' | 'place';
   readonly slug: string;
   readonly label: string;
-  readonly meta?: string;
+  readonly meta?: string | undefined;
 }
 
 const STORAGE_KEY = 'kinloom:recently-viewed:v1';

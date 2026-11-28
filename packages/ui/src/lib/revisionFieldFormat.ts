@@ -80,15 +80,15 @@ function formatSourceEntry(entry: unknown, sourcesById?: ReadonlyMap<string, Sou
   if (!isPlainRecord(entry)) {
     return String(entry);
   }
-  const sourceId = typeof entry.source_id === 'string' ? entry.source_id : 'Unknown source';
+  const sourceId = typeof entry['source_id'] === 'string' ? entry['source_id'] : 'Unknown source';
   const rec = sourcesById?.get(sourceId);
   const label = rec ? rec.citation : sourceId;
   const parts = [label];
-  if (typeof entry.confidence === 'string' && entry.confidence.length > 0) {
-    parts.push(`${entry.confidence} confidence`);
+  if (typeof entry['confidence'] === 'string' && entry['confidence'].length > 0) {
+    parts.push(`${entry['confidence']} confidence`);
   }
-  if (typeof entry.citation_detail === 'string' && entry.citation_detail.trim().length > 0) {
-    parts.push(entry.citation_detail.trim());
+  if (typeof entry['citation_detail'] === 'string' && entry['citation_detail'].trim().length > 0) {
+    parts.push(entry['citation_detail'].trim());
   }
   return parts.join(' · ');
 }
@@ -97,10 +97,11 @@ function formatParticipantEntry(entry: unknown, peopleById?: ReadonlyMap<string,
   if (!isPlainRecord(entry)) {
     return String(entry);
   }
-  const personId = typeof entry.person_id === 'string' ? entry.person_id : 'Unknown person';
+  const personId = typeof entry['person_id'] === 'string' ? entry['person_id'] : 'Unknown person';
   const person = peopleById?.get(personId);
   const name = person ? person.full_name : personId;
-  const role = typeof entry.role === 'string' && entry.role.trim().length > 0 ? entry.role.trim() : null;
+  const role =
+    typeof entry['role'] === 'string' && entry['role'].trim().length > 0 ? entry['role'].trim() : null;
   return role ? `${name} (${role})` : name;
 }
 
@@ -109,12 +110,13 @@ function formatDiscrepancyEntry(entry: unknown, sourcesById?: ReadonlyMap<string
     return String(entry);
   }
   const claim =
-    (typeof entry.edtf_date === 'string' && entry.edtf_date) ||
-    (typeof entry.place_name === 'string' && entry.place_name) ||
-    (typeof entry.claim === 'string' && entry.claim) ||
+    (typeof entry['edtf_date'] === 'string' && entry['edtf_date']) ||
+    (typeof entry['place_name'] === 'string' && entry['place_name']) ||
+    (typeof entry['claim'] === 'string' && entry['claim']) ||
     'Alternate claim';
-  const note = typeof entry.note === 'string' && entry.note.trim().length > 0 ? entry.note.trim() : '';
-  const sourceId = typeof entry.source_id === 'string' ? entry.source_id : '';
+  const note =
+    typeof entry['note'] === 'string' && entry['note'].trim().length > 0 ? entry['note'].trim() : '';
+  const sourceId = typeof entry['source_id'] === 'string' ? entry['source_id'] : '';
   const sourceLabel = sourceId ? (sourcesById?.get(sourceId)?.citation ?? sourceId) : '';
   const withNote = note ? `${claim} — ${note}` : claim;
   return sourceLabel ? `${withNote} (${sourceLabel})` : withNote;
@@ -137,8 +139,8 @@ function summarizeNarrativeText(text: string): string {
 }
 
 export interface ReadableDiffFormatContext {
-  readonly peopleById?: ReadonlyMap<string, Person>;
-  readonly sourcesById?: ReadonlyMap<string, SourceRecord>;
+  readonly peopleById?: ReadonlyMap<string, Person> | undefined;
+  readonly sourcesById?: ReadonlyMap<string, SourceRecord> | undefined;
 }
 
 /**

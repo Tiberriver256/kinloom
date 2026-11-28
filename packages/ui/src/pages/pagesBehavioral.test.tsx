@@ -29,6 +29,11 @@ import { PlacePage } from './PlacePage.js';
 import { PlacesIndexPage } from './PlacesIndexPage.js';
 import { TimePage } from './TimePage.js';
 
+function must<T>(val: T | undefined, label = 'value'): T {
+  if (val === undefined) throw new Error(`Expected ${label}`);
+  return val;
+}
+
 declare global {
   var IS_REACT_ACT_ENVIRONMENT: boolean | undefined;
 }
@@ -419,13 +424,13 @@ describe('Explorer pages behavioral suite (Time, Kinship, Evidence, Places, Inde
     }
 
     // Select disconnected person (Ezra Bramwell) to exercise no-path state
-    setInputValue(selects[0], 'per_henry');
-    setInputValue(selects[1], 'per_drifter');
+    setInputValue(must(selects[0]), 'per_henry');
+    setInputValue(must(selects[1]), 'per_drifter');
     await flushUi();
     expect(container.textContent).toMatch(/no documented|no connection|not connected/i);
 
     // Select same person on both sides
-    setInputValue(selects[1], 'per_henry');
+    setInputValue(must(selects[1]), 'per_henry');
     await flushUi();
     expect(container.textContent).toMatch(/same person|select two different/i);
 
@@ -462,15 +467,15 @@ describe('Explorer pages behavioral suite (Time, Kinship, Evidence, Places, Inde
     const tabs = Array.from(container.querySelectorAll('[role="tab"]')) as HTMLElement[];
     expect(tabs.length).toBeGreaterThanOrEqual(3);
     act(() => {
-      tabs[0].dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true }));
+      tabs[0]?.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true }));
     });
     await flushUi();
     act(() => {
-      tabs[0].dispatchEvent(new KeyboardEvent('keydown', { key: 'End', bubbles: true }));
+      tabs[0]?.dispatchEvent(new KeyboardEvent('keydown', { key: 'End', bubbles: true }));
     });
     await flushUi();
     act(() => {
-      tabs[0].dispatchEvent(new KeyboardEvent('keydown', { key: 'Home', bubbles: true }));
+      tabs[0]?.dispatchEvent(new KeyboardEvent('keydown', { key: 'Home', bubbles: true }));
     });
     await flushUi();
 
@@ -501,7 +506,7 @@ describe('Explorer pages behavioral suite (Time, Kinship, Evidence, Places, Inde
       );
       if (mediaButtons[0]) {
         act(() => {
-          mediaButtons[0].click();
+          mediaButtons[0]?.click();
         });
         await flushUi();
         const closeBtn = Array.from(container.querySelectorAll('button')).find((b) =>

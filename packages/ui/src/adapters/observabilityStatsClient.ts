@@ -18,8 +18,8 @@ export interface ObservabilityStatsClient {
   ): Promise<UiAdminObservabilityStats | null>;
   setPublicBadgesEnabled(enabled: boolean): Promise<boolean>;
   getPublicConfig?(options?: {
-    readonly signal?: AbortSignal;
-    readonly cache?: RequestCache;
+    readonly signal?: AbortSignal | undefined;
+    readonly cache?: RequestCache | undefined;
   }): Promise<UiPublicObservabilityConfig | null>;
   getPublicPageVisitCount(
     params: { readonly kind: 'person' | 'place' | 'narrative'; readonly slug: string },
@@ -29,9 +29,9 @@ export interface ObservabilityStatsClient {
 }
 
 export interface HttpObservabilityStatsClientOptions {
-  readonly apiBaseUrl?: string;
-  readonly fetchImpl?: typeof fetch;
-  readonly credentials?: RequestCredentials;
+  readonly apiBaseUrl?: string | undefined;
+  readonly fetchImpl?: typeof fetch | undefined;
+  readonly credentials?: RequestCredentials | undefined;
 }
 
 /**
@@ -56,7 +56,7 @@ export function createHttpObservabilityStatsClient(
       const res = await fetchImpl(apiUrl(`/api/admin/observability/stats?${qs}`), {
         credentials,
         headers: { accept: 'application/json' },
-        signal: reqOptions?.signal,
+        ...(reqOptions?.signal ? { signal: reqOptions.signal } : {}),
       });
       if (res.status === 404) {
         return null;
@@ -105,22 +105,22 @@ export function createHttpObservabilityStatsClient(
         typeof raw.plugin.values === 'object' &&
         raw.plugin.values !== null &&
         'show_public_visit_badges' in raw.plugin.values &&
-        typeof (raw.plugin.values as Record<string, unknown>).show_public_visit_badges === 'boolean'
+        typeof (raw.plugin.values as Record<string, unknown>)['show_public_visit_badges'] === 'boolean'
       ) {
-        return (raw.plugin.values as Record<string, boolean>).show_public_visit_badges;
+        return (raw.plugin.values as Record<string, boolean>)['show_public_visit_badges'] ?? false;
       }
       return enabled;
     },
 
     async getPublicConfig(reqOptions?: {
-      readonly signal?: AbortSignal;
-      readonly cache?: RequestCache;
+      readonly signal?: AbortSignal | undefined;
+      readonly cache?: RequestCache | undefined;
     }): Promise<UiPublicObservabilityConfig | null> {
       try {
         const res = await fetchImpl(apiUrl('/api/observability/config'), {
           credentials,
           headers: { accept: 'application/json' },
-          signal: reqOptions?.signal,
+          ...(reqOptions?.signal ? { signal: reqOptions.signal } : {}),
           ...(reqOptions?.cache ? { cache: reqOptions.cache } : {}),
         });
         if (!res.ok) {
@@ -142,7 +142,7 @@ export function createHttpObservabilityStatsClient(
         const res = await fetchImpl(apiUrl(`/api/observability/page-visits?${qs}`), {
           credentials,
           headers: { accept: 'application/json' },
-          signal: reqOptions?.signal,
+          ...(reqOptions?.signal ? { signal: reqOptions.signal } : {}),
         });
         if (!res.ok) {
           return null;
@@ -168,7 +168,7 @@ export function createHttpObservabilityStatsClient(
             'content-type': 'application/json',
           },
           body: JSON.stringify({ path: trimmed }),
-          signal: reqOptions?.signal,
+          ...(reqOptions?.signal ? { signal: reqOptions.signal } : {}),
         });
       } catch {
         // Best-effort beacon: never disrupt navigation or throw into UI boundaries.

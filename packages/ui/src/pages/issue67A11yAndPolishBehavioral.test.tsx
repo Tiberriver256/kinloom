@@ -17,6 +17,11 @@ import { AdminPage } from './AdminPage.js';
 import { NotFoundPage } from './NotFoundPage.js';
 import { RecentChangesPage } from './RecentChangesPage.js';
 
+function must<T>(val: T | undefined, label = 'value'): T {
+  if (val === undefined) throw new Error(`Expected ${label}`);
+  return val;
+}
+
 declare global {
   var IS_REACT_ACT_ENVIRONMENT: boolean | undefined;
 }
@@ -284,7 +289,7 @@ describe('Issue #67: A11y hardening, keycaps, pedigree roll focus, and sticky fo
         <ArchiveProvider siteConfig={SITE_CONFIG} initialBundle={TEST_BUNDLE}>
           <ExplorerTopBar />
           <TreeFocusDrawer
-            person={person}
+            person={must(person)}
             model={model}
             spotlight={null}
             placesById={placesById}

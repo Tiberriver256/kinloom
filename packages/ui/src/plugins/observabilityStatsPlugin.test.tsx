@@ -752,7 +752,7 @@ describe('ObservabilityStats UI plugin (AdminSettingsShell dashboard & per-page 
         return [buildSnapshot(persistedBadges)];
       },
       async updatePluginSettings(_pluginId, input) {
-        persistedBadges = Boolean(input.values?.show_public_visit_badges);
+        persistedBadges = Boolean(input.values?.['show_public_visit_badges']);
         return buildSnapshot(persistedBadges);
       },
     };
@@ -834,7 +834,7 @@ describe('ObservabilityStats UI plugin (AdminSettingsShell dashboard & per-page 
     const calls: Array<{ url: string; init?: RequestInit }> = [];
     const fetchImpl = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
       const url = typeof input === 'string' ? input : input.toString();
-      calls.push({ url, init });
+      calls.push({ url, ...(init !== undefined ? { init } : {}) });
       if (url.endsWith('/api/observability/config')) {
         return new Response(
           JSON.stringify({ enabled: true, public_badges_enabled: true, record_spa_beacons: true }),
@@ -990,7 +990,7 @@ describe('ObservabilityStats UI plugin (AdminSettingsShell dashboard & per-page 
     if (origVisibility) {
       Object.defineProperty(document, 'visibilityState', origVisibility);
     } else {
-      delete (document as unknown as Record<string, unknown>).visibilityState;
+      delete (document as unknown as Record<string, unknown>)['visibilityState'];
     }
     window.history.replaceState({}, '', originalPathname);
     act(() => {

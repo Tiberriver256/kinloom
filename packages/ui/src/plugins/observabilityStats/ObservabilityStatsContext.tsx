@@ -88,7 +88,7 @@ export const ObservabilityStatsProvider: React.FC<ObservabilityStatsProviderProp
 
   useEffect(() => {
     return subscribePluginSettings(OBSERVABILITY_STATS_SERVER_PLUGIN_ID, (evt) => {
-      const nextFlag = evt.snapshot?.values.show_public_visit_badges;
+      const nextFlag = evt.snapshot?.values['show_public_visit_badges'];
       if (typeof nextFlag === 'boolean') {
         setShowPublicBadges(nextFlag);
         return;

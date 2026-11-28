@@ -196,7 +196,11 @@ describe('HttpWikiDataSource', () => {
       fetchImpl: async (input, init) => {
         const url = String(input);
         const method = init?.method ?? 'GET';
-        requests.push({ url, method, credentials: init?.credentials });
+        requests.push({
+          url,
+          method,
+          ...(init?.credentials !== undefined ? { credentials: init.credentials } : {}),
+        });
 
         if (url.endsWith('/api/pronunciations') && method === 'GET') {
           if (notFoundPronunciations) {
@@ -232,7 +236,7 @@ describe('HttpWikiDataSource', () => {
     });
 
     const loaded = await ds.loadPronunciations();
-    expect(loaded?.Alder?.phonetic).toBe('AWL-der');
+    expect(loaded?.['Alder']?.phonetic).toBe('AWL-der');
     expect(requests[0]).toEqual({
       url: 'https://archive.example.test/api/pronunciations',
       method: 'GET',
@@ -246,7 +250,7 @@ describe('HttpWikiDataSource', () => {
       phonetic: 'AHL-der',
       ipa: '/ˈɑːl.dər/',
     });
-    expect(upserted.pronunciations.Alder?.phonetic).toBe('AHL-der');
+    expect(upserted.pronunciations['Alder']?.phonetic).toBe('AHL-der');
 
     const generated = await ds.generatePronunciationAudio({
       entity_type: 'person',

@@ -118,7 +118,12 @@ export const KinshipPage: React.FC = () => {
       const pA = peopleById.get(pair.fromId) ?? peopleBySlug.get(pair.fromId);
       const pB = peopleById.get(pair.toId) ?? peopleBySlug.get(pair.toId);
       if (pA && pB) {
-        items.push({ label: pair.label, fromId: pA.id, toId: pB.id, note: pair.note });
+        items.push({
+          label: pair.label,
+          fromId: pA.id,
+          toId: pB.id,
+          ...(pair.note !== undefined ? { note: pair.note } : {}),
+        });
       }
     }
     return items;

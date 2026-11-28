@@ -58,7 +58,7 @@ export const ObservabilityStatsPanel: React.FC = () => {
       setLoading(true);
       setError(null);
       try {
-        const result = await client.getAdminStats(win, { signal });
+        const result = await client.getAdminStats(win, signal ? { signal } : {});
         if (signal?.aborted) {
           return;
         }
@@ -95,7 +95,7 @@ export const ObservabilityStatsPanel: React.FC = () => {
   useEffect(() => {
     return subscribePluginSettings(OBSERVABILITY_STATS_SERVER_PLUGIN_ID, (evt) => {
       if (evt.source === 'plugin-settings-section') {
-        const nextFlag = evt.snapshot?.values.show_public_visit_badges;
+        const nextFlag = evt.snapshot?.values['show_public_visit_badges'];
         if (typeof nextFlag === 'boolean') {
           setStats((prev) => (prev ? { ...prev, public_badges_enabled: nextFlag } : prev));
         }

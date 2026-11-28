@@ -36,7 +36,7 @@ export function computeTreeBranchCounts(
     if (isRedactedLivingPlaceholder(p)) {
       continue;
     }
-    counts.all += 1;
+    counts['all'] = (counts['all'] ?? 0) + 1;
     const b = p.branch || defaultBranchId;
     counts[b] = (counts[b] || 0) + 1;
   }

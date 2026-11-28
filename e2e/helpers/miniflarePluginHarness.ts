@@ -688,7 +688,7 @@ export async function startMiniflarePluginHarness(
         const webReq = new Request(reqUrl, {
           method,
           headers,
-          body: bodyBytes && bodyBytes.byteLength > 0 ? Buffer.from(bodyBytes) : undefined,
+          ...(bodyBytes && bodyBytes.byteLength > 0 ? { body: Buffer.from(bodyBytes) } : {}),
         });
 
         // Mirror Cloudflare Workers Static Assets (run_worker_first: false): serve hashed /assets/* directly.

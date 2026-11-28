@@ -216,8 +216,7 @@ function makeDataSource(
       session: {
         authenticated: capabilities.canEdit || capabilities.hasTalk,
         principal_kind: capabilities.canEdit ? 'user' : capabilities.hasTalk ? 'invite_viewer' : 'anonymous',
-        displayName: capabilities.canEdit ? 'Archive Steward' : undefined,
-        role: capabilities.canEdit ? 'editor' : undefined,
+        ...(capabilities.canEdit ? { displayName: 'Archive Steward', role: 'editor' as const } : {}),
       },
       capabilities,
     }),
@@ -792,7 +791,7 @@ describe('Issue #69 stewardship flows: EvidenceLegend, uncited CTA, completeness
     const fetchImpl: typeof fetch = async (input, init) => {
       const url = typeof input === 'string' ? input : input instanceof URL ? input.toString() : input.url;
       const method = init?.method ?? 'GET';
-      calls.push({ url, method, body: typeof init?.body === 'string' ? init.body : undefined });
+      calls.push({ url, method, ...(typeof init?.body === 'string' ? { body: init.body } : {}) });
       if (method === 'DELETE') {
         return new Response(null, { status: 204 });
       }

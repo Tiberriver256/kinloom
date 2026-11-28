@@ -41,11 +41,13 @@ export const SourceInspectorDrawer: React.FC = () => {
     () =>
       buildLibrarianCitation(sourceRecord, {
         source_id: activeSourceId,
-        confidence: sourceInspector?.confidence,
-        citation_detail: sourceInspector?.citationDetail,
-        claimed_date: sourceInspector?.claimedDate,
-        scan_url: sourceInspector?.scanUrl,
-        scan_title: sourceInspector?.scanTitle,
+        ...(sourceInspector?.confidence !== undefined ? { confidence: sourceInspector.confidence } : {}),
+        ...(sourceInspector?.citationDetail !== undefined
+          ? { citation_detail: sourceInspector.citationDetail }
+          : {}),
+        ...(sourceInspector?.claimedDate !== undefined ? { claimed_date: sourceInspector.claimedDate } : {}),
+        ...(sourceInspector?.scanUrl !== undefined ? { scan_url: sourceInspector.scanUrl } : {}),
+        ...(sourceInspector?.scanTitle !== undefined ? { scan_title: sourceInspector.scanTitle } : {}),
       }),
     [sourceRecord, activeSourceId, sourceInspector]
   );

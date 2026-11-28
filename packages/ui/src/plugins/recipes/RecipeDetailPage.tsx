@@ -293,6 +293,7 @@ export const RecipeDetailPage: React.FC = () => {
 
     for (let i = 0; i < filesToUpload.length; i += 1) {
       const file = filesToUpload[i];
+      if (!file) continue;
       setUploadProgress(
         filesToUpload.length > 1
           ? `Uploading photo ${i + 1} of ${filesToUpload.length} (${file.name})…`

@@ -351,8 +351,8 @@ describe('UI plugin onboarding seam validation and Narrative Audio reference ste
       { ...baseCtx, bundle: createSeededBundle(true) }
     );
     expect(withAudio).toHaveLength(1);
-    expect(withAudio[0].id).toBe('kinloom-narrative-audio:listen-biography');
-    expect(withAudio[0].action).toEqual({
+    expect(withAudio[0]?.id).toBe('kinloom-narrative-audio:listen-biography');
+    expect(withAudio[0]?.action).toEqual({
       kind: 'route',
       to: '/person/arthur-hale',
       label: 'Listen on Arthur Hale',

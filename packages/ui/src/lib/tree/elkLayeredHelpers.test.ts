@@ -20,6 +20,11 @@ import {
 import { resolveUnitUnionPorts } from './layeredPorts.js';
 import { ARCHIVAL_UNIT_GAP, type TreeFamilyUnit } from './types.js';
 
+function must<T>(val: T | undefined, label = 'value'): T {
+  if (val === undefined) throw new Error(`Expected ${label}`);
+  return val;
+}
+
 function makePerson(
   id: string,
   fullName: string,
@@ -71,19 +76,19 @@ describe('elk.layered pure TypeScript port helpers (#83)', () => {
       { from: 'p_sp3', to: 'p_c3', relation: 'parent' },
     ];
     const model = buildArchivalTreeModel({ people, kinship, mode: 'full' });
-    const unit = model.generations[0].units[0];
+    const unit = must(model.generations[0]?.units[0]);
     const ports = resolveUnitUnionPorts(model, unit);
     expect(ports).toHaveLength(3);
-    expect(ports[0].relativeX).toBeLessThan(ports[1].relativeX);
-    expect(ports[1].relativeX).toBeLessThan(ports[2].relativeX);
-    expect(ports[0].normalizedOffset).toBeLessThan(ports[1].normalizedOffset);
-    expect(ports[1].normalizedOffset).toBeLessThan(ports[2].normalizedOffset);
+    expect(must(ports[0]).relativeX).toBeLessThan(must(ports[1]).relativeX);
+    expect(must(ports[1]).relativeX).toBeLessThan(must(ports[2]).relativeX);
+    expect(must(ports[0]).normalizedOffset).toBeLessThan(must(ports[1]).normalizedOffset);
+    expect(must(ports[1]).normalizedOffset).toBeLessThan(must(ports[2]).normalizedOffset);
 
     const layout = computeArchivalDiagramLayout(model);
     const hubs = layout.hubs.toSorted((a, b) => a.x - b.x);
     expect(hubs).toHaveLength(3);
-    expect(hubs[0].x).toBeLessThan(hubs[1].x);
-    expect(hubs[1].x).toBeLessThan(hubs[2].x);
+    expect(must(hubs[0]).x).toBeLessThan(must(hubs[1]).x);
+    expect(must(hubs[1]).x).toBeLessThan(must(hubs[2]).x);
 
     // Child subtrees align left-to-right matching marriage port order (zero immediate stem crossings).
     const c1 = layout.byId.get('p_c1')!;
@@ -103,8 +108,8 @@ describe('elk.layered pure TypeScript port helpers (#83)', () => {
     };
     const revPorts = resolveUnitUnionPorts(model, reversedUnit);
     expect(revPorts).toHaveLength(3);
-    expect(revPorts[0].relativeX).toBeLessThan(revPorts[1].relativeX);
-    expect(revPorts[1].relativeX).toBeLessThan(revPorts[2].relativeX);
+    expect(must(revPorts[0]).relativeX).toBeLessThan(must(revPorts[1]).relativeX);
+    expect(must(revPorts[1]).relativeX).toBeLessThan(must(revPorts[2]).relativeX);
 
     const emptyUnit: TreeFamilyUnit = {
       id: 'empty',
@@ -120,9 +125,9 @@ describe('elk.layered pure TypeScript port helpers (#83)', () => {
     const syntheticSingleUnionsModel = {
       ...model,
       unionsById: new Map([
-        ['u2', { ...model.unions[0], id: 'u2', secondaryPartnerId: null, marriageOrder: 1 }],
-        ['u1', { ...model.unions[0], id: 'u1', secondaryPartnerId: null, marriageOrder: 1 }],
-        ['u3', { ...model.unions[0], id: 'u3', secondaryPartnerId: null, marriageOrder: 2 }],
+        ['u2', { ...must(model.unions[0]), id: 'u2', secondaryPartnerId: null, marriageOrder: 1 }],
+        ['u1', { ...must(model.unions[0]), id: 'u1', secondaryPartnerId: null, marriageOrder: 1 }],
+        ['u3', { ...must(model.unions[0]), id: 'u3', secondaryPartnerId: null, marriageOrder: 2 }],
       ]),
     };
     const coincidentPorts = resolveUnitUnionPorts(syntheticSingleUnionsModel, {
@@ -135,8 +140,8 @@ describe('elk.layered pure TypeScript port helpers (#83)', () => {
     });
     expect(coincidentPorts).toHaveLength(3);
     expect(coincidentPorts.map((p) => p.unionId)).toEqual(['u1', 'u2', 'u3']);
-    expect(coincidentPorts[1].relativeX - coincidentPorts[0].relativeX).toBe(16);
-    expect(coincidentPorts[2].relativeX - coincidentPorts[1].relativeX).toBe(16);
+    expect(must(coincidentPorts[1]).relativeX - must(coincidentPorts[0]).relativeX).toBe(16);
+    expect(must(coincidentPorts[2]).relativeX - must(coincidentPorts[1]).relativeX).toBe(16);
   });
 
   it('inserts multi-generation dummy channels and resolves Type-1 conflicts cleanly in Brandes-Kopf', () => {
@@ -280,8 +285,9 @@ describe('elk.layered pure TypeScript port helpers (#83)', () => {
       for (let i = 1; i < layer.length; i += 1) {
         const prev = layer[i - 1];
         const cur = layer[i];
-        expect(minCoords.get(cur.id)!).toBeGreaterThanOrEqual(
-          minCoords.get(prev.id)! + prev.width + minItemSeparation(prev, cur)
+        if (!prev || !cur) continue;
+        expect(must(minCoords.get(cur.id))).toBeGreaterThanOrEqual(
+          must(minCoords.get(prev.id)) + prev.width + minItemSeparation(prev, cur)
         );
       }
     }
@@ -314,7 +320,7 @@ describe('elk.layered pure TypeScript port helpers (#83)', () => {
     expect(layered.dummyChainsByEdgeKey.size).toBe(1);
     const [chain] = layered.dummyChainsByEdgeKey.values();
     expect(chain).toHaveLength(2);
-    expect(chain.map((e) => e.layerIndex)).toEqual([1, 2]);
+    expect(must(chain).map((e) => e.layerIndex)).toEqual([1, 2]);
   });
 
   it('breaks cycles cleanly in the vertical constraint graph and preserves >= 14px bus spacing', () => {
@@ -331,14 +337,14 @@ describe('elk.layered pure TypeScript port helpers (#83)', () => {
       { id: 'bus_b', hubX: 200, dropXs: [450, 460], railMinX: 200, railMaxX: 460 },
       { id: 'bus_c', hubX: 550, dropXs: [150, 160, 170], railMinX: 150, railMaxX: 550 },
     ];
-    expect(countBusOrderCrossings(cyclicBuses[1], cyclicBuses[0])).toBeLessThan(
-      countBusOrderCrossings(cyclicBuses[0], cyclicBuses[1])
+    expect(countBusOrderCrossings(must(cyclicBuses[1]), must(cyclicBuses[0]))).toBeLessThan(
+      countBusOrderCrossings(must(cyclicBuses[0]), must(cyclicBuses[1]))
     );
-    expect(countBusOrderCrossings(cyclicBuses[2], cyclicBuses[1])).toBeLessThan(
-      countBusOrderCrossings(cyclicBuses[1], cyclicBuses[2])
+    expect(countBusOrderCrossings(must(cyclicBuses[2]), must(cyclicBuses[1]))).toBeLessThan(
+      countBusOrderCrossings(must(cyclicBuses[1]), must(cyclicBuses[2]))
     );
-    expect(countBusOrderCrossings(cyclicBuses[0], cyclicBuses[2])).toBeLessThan(
-      countBusOrderCrossings(cyclicBuses[2], cyclicBuses[0])
+    expect(countBusOrderCrossings(must(cyclicBuses[0]), must(cyclicBuses[2]))).toBeLessThan(
+      countBusOrderCrossings(must(cyclicBuses[2]), must(cyclicBuses[0]))
     );
 
     const assigned = assignBusTracksWithConstraintGraph(cyclicBuses);

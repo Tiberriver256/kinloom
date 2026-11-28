@@ -59,10 +59,10 @@ export function normalizeSessionProp(session: ArchiveSession | null | undefined)
   return {
     authenticated: session.authenticated,
     principal_kind: inferredKind,
-    email: session.email,
-    displayName: session.displayName,
-    role: session.role,
-    inviteLabel: session.inviteLabel,
+    ...(session.email !== undefined ? { email: session.email } : {}),
+    ...(session.displayName !== undefined ? { displayName: session.displayName } : {}),
+    ...(session.role !== undefined ? { role: session.role } : {}),
+    ...(session.inviteLabel !== undefined ? { inviteLabel: session.inviteLabel } : {}),
   };
 }
 
@@ -90,7 +90,7 @@ export function wrapLegacyLoader(loader: ArchiveDataLoader): ArchiveDataSource {
       return { bundle, etag: null, notModified: false };
     },
     loadReadings: () => loader.loadReadings(),
-    loadMediaChecklist: loadChecklist ? () => loadChecklist() : undefined,
+    ...(loadChecklist ? { loadMediaChecklist: () => loadChecklist() } : {}),
   };
 }
 

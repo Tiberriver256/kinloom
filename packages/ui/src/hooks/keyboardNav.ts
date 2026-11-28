@@ -36,7 +36,7 @@ export function handleTablistKeyDown<T extends string>(
   event.preventDefault();
   event.stopPropagation();
   const nextItem = items[nextIdx];
-  onSelect(nextItem);
+  if (nextItem !== undefined) onSelect(nextItem);
 
   const tabs = event.currentTarget.querySelectorAll<HTMLElement>('[role="tab"]');
   tabs[nextIdx]?.focus();

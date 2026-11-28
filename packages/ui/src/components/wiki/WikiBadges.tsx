@@ -15,7 +15,10 @@ export interface CitationBadgeProps {
  * WCAG 1.4.1 compliant archival citation badge: icon + text + semantic token.
  */
 export const CitationBadge: React.FC<CitationBadgeProps> = ({ hasPrimarySource, sourceIds, className }) => {
-  const kind = deriveCitationBadge({ hasPrimarySource, sourceIds });
+  const kind = deriveCitationBadge({
+    ...(hasPrimarySource !== undefined ? { hasPrimarySource } : {}),
+    ...(sourceIds !== undefined ? { sourceIds } : {}),
+  });
   const isCited = kind === 'Cited';
 
   return (

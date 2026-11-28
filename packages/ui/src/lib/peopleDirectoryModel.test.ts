@@ -31,6 +31,11 @@ import {
   resolvePersonStoryHook,
 } from './peopleDirectoryModel.js';
 
+function must<T>(val: T | undefined, label = 'value'): T {
+  if (val === undefined) throw new Error(`Expected ${label}`);
+  return val;
+}
+
 function makePerson(overrides: Partial<Person> & { id: string; full_name: string }): Person {
   const parts = overrides.full_name.trim().split(/\s+/);
   const given_name = overrides.given_name ?? parts[0] ?? '';
@@ -297,9 +302,9 @@ describe('peopleDirectoryModel', () => {
       makePerson({ id: 'p5', full_name: 'Ada Fallback', given_name: 'Ada', surname: '', birth_year: 1875 }),
     ];
 
-    expect(extractSurnameSortKey(people[4])).toBe('Fallback');
-    expect(extractAlphabetBucket(people[0])).toBe('A');
-    expect(extractAlphabetBucket(people[3])).toBe('#');
+    expect(extractSurnameSortKey(must(people[4]))).toBe('Fallback');
+    expect(extractAlphabetBucket(must(people[0]))).toBe('A');
+    expect(extractAlphabetBucket(must(people[3]))).toBe('#');
     expect(
       extractAlphabetBucket(makePerson({ id: 'p_empty', full_name: '   ', given_name: '', surname: '' }))
     ).toBe('#');

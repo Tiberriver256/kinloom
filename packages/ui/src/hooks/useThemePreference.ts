@@ -38,12 +38,12 @@ export function readStoredThemePreference(): ThemePreference {
   } catch {
     // Restricted storage falls back to any active DOM theme override.
   }
-  return parseStoredThemePreference(document.documentElement.dataset.theme);
+  return parseStoredThemePreference(document.documentElement.dataset['theme']);
 }
 
 export function readResolvedDarkMode(): boolean {
   if (typeof document !== 'undefined') {
-    const domTheme = document.documentElement.dataset.theme;
+    const domTheme = document.documentElement.dataset['theme'];
     if (domTheme === 'dark' || domTheme === 'light') {
       return domTheme === 'dark';
     }
@@ -57,9 +57,9 @@ export function applyThemeToDocument(preference: ThemePreference): void {
   }
   const root = document.documentElement;
   if (preference === 'system') {
-    delete root.dataset.theme;
+    delete root.dataset['theme'];
   } else {
-    root.dataset.theme = preference;
+    root.dataset['theme'] = preference;
   }
   const meta = document.querySelector<HTMLMetaElement>('meta[name="color-scheme"]');
   if (meta) {

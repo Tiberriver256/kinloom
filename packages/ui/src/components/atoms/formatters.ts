@@ -56,7 +56,7 @@ export function initialsOf(name: string): string {
   }
 
   const tokens = [...rawTokens];
-  while (tokens.length > 1 && HONORIFIC_PREFIXES.has(tokens[0].toLowerCase())) {
+  while (tokens.length > 1 && HONORIFIC_PREFIXES.has((tokens[0] ?? '').toLowerCase())) {
     tokens.shift();
   }
   while (tokens.length > 1 && NAME_SUFFIXES.has((tokens.at(-1) ?? '').toLowerCase())) {
@@ -64,9 +64,9 @@ export function initialsOf(name: string): string {
   }
 
   if (tokens.length === 1) {
-    return tokens[0].slice(0, 2).toUpperCase();
+    return (tokens[0] ?? '').slice(0, 2).toUpperCase();
   }
-  return (tokens[0][0] + (tokens.at(-1) ?? '')[0]).toUpperCase();
+  return ((tokens[0]?.[0] ?? '') + ((tokens.at(-1) ?? '')[0] ?? '')).toUpperCase();
 }
 
 export function resolveAssetUrl(rel?: string | null, baseUrl?: string): string {
