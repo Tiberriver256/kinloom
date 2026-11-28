@@ -929,3 +929,10 @@
     padding-right: calc(10px + env(safe-area-inset-right, 0px));
   }
 }
+
+.map-canvas :global(.maplibregl-ctrl-attrib-inner a) {
+  display: inline-flex;
+  align-items: center;
+  min-height: 28px;
+  padding: 0 4px;
+}

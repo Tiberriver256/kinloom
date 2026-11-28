@@ -377,6 +377,7 @@
   padding: 5px 10px;
   background: var(--surface-linen);
   font-family: var(--font-ui);
+  color: var(--text-primary);
 }
 
 .kinship-result-heading {
