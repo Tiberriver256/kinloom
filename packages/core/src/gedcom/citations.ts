@@ -244,7 +244,8 @@ export function cleanEventSummaryProse(summary: string): string {
   if (mayHaveDayMonthYear(out) && RE_DAY_MONTH_YEAR_PROBE.test(out)) {
     out = out.replaceAll(
       RE_DAY_MONTH_YEAR,
-      (_, d: string, m: string, y: string) => `${d} ${(m[0] ?? '').toUpperCase()}${m.slice(1).toLowerCase()} ${y}`
+      (_, d: string, m: string, y: string) =>
+        `${d} ${(m[0] ?? '').toUpperCase()}${m.slice(1).toLowerCase()} ${y}`
     );
   }
   if (out.includes(' .')) {

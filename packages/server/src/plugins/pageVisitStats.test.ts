@@ -972,7 +972,6 @@ describe('Privacy-first Page Visit Stats plugin (Issue #39)', () => {
     // Public mode serves GET /api/observability/config with Cache-Control: no-cache and handles repositories without getEntityBySlug
     const fallbackRepo = {
       ...ports.repository,
-      
     };
     const publicStore = new InMemoryPageVisitStatsStore();
     const publicServer = createKinloomServer({

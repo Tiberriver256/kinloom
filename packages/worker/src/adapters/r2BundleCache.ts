@@ -251,10 +251,7 @@ export function coalesceDeltaMutations(
 
   const coalesced = [...byEntityKey.values()];
   const lastCoalesced = coalesced[coalesced.length - 1];
-  if (
-    maxRevisionRecord &&
-    (!lastCoalesced || lastCoalesced.revision_id < maxRevisionRecord.revision_id)
-  ) {
+  if (maxRevisionRecord && (!lastCoalesced || lastCoalesced.revision_id < maxRevisionRecord.revision_id)) {
     coalesced.push({
       ...maxRevisionRecord,
       action: 'delete',

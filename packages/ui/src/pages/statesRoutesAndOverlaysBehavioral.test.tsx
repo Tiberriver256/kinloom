@@ -555,15 +555,15 @@ describe('Loading/error states, KinloomApp routes, ExplorerTopBar, Atoms actions
     });
     await flushUi();
 
-    const evSources = mountEl(
-      <MemoryRouter initialEntries={['/evidence?tab=sources']}>
+    const evUncited = mountEl(
+      <MemoryRouter initialEntries={['/evidence?tab=uncited']}>
         <ArchiveProvider siteConfig={SITE_CONFIG} initialBundle={SAMPLE_BUNDLE} dataSource={ds}>
           <EvidencePage />
         </ArchiveProvider>
       </MemoryRouter>
     );
     await flushUi();
-    const showAllBtn = Array.from(evSources.querySelectorAll('button')).find((b) =>
+    const showAllBtn = Array.from(evUncited.querySelectorAll('button')).find((b) =>
       /show all/i.test(b.textContent || '')
     );
     act(() => {

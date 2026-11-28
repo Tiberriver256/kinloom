@@ -217,10 +217,11 @@ import {
 import { createNarrativeAudioPlugin, readNarrativeAudioMeta } from '../plugins/narrativeAudioPlugin.js';
 import { KinloomPluginProvider } from '../plugins/PluginContext.js';
 import { AdminPage } from './AdminPage.js';
+import { EvidenceNeedsCitationTab } from './evidence/EvidenceNeedsCitationTab.js';
 import { EvidenceSourcesTab } from './evidence/EvidenceSourcesTab.js';
 import { IndexPage } from './IndexPage.js';
 import { KinshipPage } from './KinshipPage.js';
-import { MapStageLegend, MapStopDrawerAndDock } from './map/MapStopDrawerAndDock.js';
+import { MapStopDrawerAndDock } from './map/MapStopDrawerAndDock.js';
 import { PAPER_STYLE, setPeriodBasemap, syncFamilyOverlay } from './map/mapLibreLayers.js';
 import {
   type MigrationMapController,
@@ -3487,9 +3488,11 @@ describe('Wave 2 branch coverage: telemetry, evidence, audio plugin, popovers, m
     expect(sent.length).toBeGreaterThanOrEqual(0);
   });
 
-  it('exercises EvidenceSourcesTab empty/filtered states, citations, and >25 unverified events toggle', () => {
+  it('exercises EvidenceSourcesTab and EvidenceNeedsCitationTab empty/filtered states, citations, and >25 unverified events toggle', () => {
     const onQuery = vi.fn();
+    const onUncitedQuery = vi.fn();
     const onToggle = vi.fn();
+    const onOpenRegistry = vi.fn();
     const onInspect = vi.fn();
     const onRead = vi.fn();
     const peopleById = new Map(RICH_BUNDLE.people.map((p) => [p.id, p]));
@@ -3503,18 +3506,46 @@ describe('Wave 2 branch coverage: telemetry, evidence, audio plugin, popovers, m
           sourceQuery=""
           sourceUsageCounts={new Map()}
           readableSourceIds={new Set()}
-          unverifiedEvents={[]}
-          showAllUnverified={false}
-          peopleById={peopleById}
           onSourceQueryChange={onQuery}
-          onToggleShowAllUnverified={onToggle}
           onOpenSourceInspector={onInspect}
           onOpenSourceReader={onRead}
+        />
+        <EvidenceNeedsCitationTab
+          totalSourceCount={0}
+          unverifiedEvents={[]}
+          showAllUnverified={false}
+          uncitedQuery=""
+          peopleById={peopleById}
+          onUncitedQueryChange={onUncitedQuery}
+          onToggleShowAllUnverified={onToggle}
         />
       </MemoryRouter>
     );
     expect(emptyMount.container.textContent).toContain('No sources have been cataloged yet.');
     expect(emptyMount.container.textContent).toContain('All events have primary citations.');
+
+    // Zero unverified events when catalog has sources shows Browse Source Registry CTA
+    emptyMount.rerender(
+      <MemoryRouter>
+        <EvidenceNeedsCitationTab
+          totalSourceCount={2}
+          unverifiedEvents={[]}
+          showAllUnverified={false}
+          uncitedQuery=""
+          peopleById={peopleById}
+          onUncitedQueryChange={onUncitedQuery}
+          onToggleShowAllUnverified={onToggle}
+          onOpenSourceRegistry={onOpenRegistry}
+        />
+      </MemoryRouter>
+    );
+    const browseRegistryBtn = [...emptyMount.container.querySelectorAll<HTMLButtonElement>('button')].find(
+      (b) => b.textContent?.includes('Browse Source Registry')
+    );
+    act(() => {
+      browseRegistryBtn?.click();
+    });
+    expect(onOpenRegistry).toHaveBeenCalledTimes(1);
 
     // 2. Filtered empty with active query ("Clear filter") + 26 unverified events
     const manyUnverified: ArchiveEvent[] = Array.from({ length: 26 }, (_, i) => ({
@@ -3536,13 +3567,19 @@ describe('Wave 2 branch coverage: telemetry, evidence, audio plugin, popovers, m
           sourceQuery="census"
           sourceUsageCounts={new Map()}
           readableSourceIds={new Set(['src_ledger'])}
-          unverifiedEvents={manyUnverified}
-          showAllUnverified={false}
-          peopleById={peopleById}
           onSourceQueryChange={onQuery}
-          onToggleShowAllUnverified={onToggle}
           onOpenSourceInspector={onInspect}
           onOpenSourceReader={onRead}
+        />
+        <EvidenceNeedsCitationTab
+          totalSourceCount={2}
+          unverifiedEvents={manyUnverified}
+          showAllUnverified={false}
+          uncitedQuery=""
+          peopleById={peopleById}
+          onUncitedQueryChange={onUncitedQuery}
+          onToggleShowAllUnverified={onToggle}
+          onOpenSourceRegistry={onOpenRegistry}
         />
       </MemoryRouter>
     );
@@ -3578,13 +3615,18 @@ describe('Wave 2 branch coverage: telemetry, evidence, audio plugin, popovers, m
           sourceQuery=""
           sourceUsageCounts={new Map()}
           readableSourceIds={new Set(['src_ledger'])}
-          unverifiedEvents={manyUnverified}
-          showAllUnverified={true}
-          peopleById={peopleById}
           onSourceQueryChange={onQuery}
-          onToggleShowAllUnverified={onToggle}
           onOpenSourceInspector={onInspect}
           onOpenSourceReader={onRead}
+        />
+        <EvidenceNeedsCitationTab
+          totalSourceCount={2}
+          unverifiedEvents={manyUnverified}
+          showAllUnverified={true}
+          uncitedQuery=""
+          peopleById={peopleById}
+          onUncitedQueryChange={onUncitedQuery}
+          onToggleShowAllUnverified={onToggle}
         />
       </MemoryRouter>
     );
@@ -3742,8 +3784,8 @@ describe('Wave 2 branch coverage: telemetry, evidence, audio plugin, popovers, m
     vi.useRealTimers();
   });
 
-  it('exercises MapStopDrawerAndDock, MapStageLegend, mapLibreLayers, MilestoneStoryCard, PlaceHistoricalProfileSection, BlankScreenWatchdog, ArchiveUiContext, RecentChangesPage, and ExplorerTopBar', async () => {
-    // 1. MapStageLegend & MapStopDrawerAndDock
+  it('exercises MapStopDrawerAndDock, mapLibreLayers, MilestoneStoryCard, PlaceHistoricalProfileSection, BlankScreenWatchdog, ArchiveUiContext, RecentChangesPage, and ExplorerTopBar', async () => {
+    // 1. MapStopDrawerAndDock
     const onClearFilters = vi.fn();
     const southernStop: MigrationStop = {
       id: 'stop-s',
@@ -3758,10 +3800,6 @@ describe('Wave 2 branch coverage: telemetry, evidence, audio plugin, popovers, m
     };
     const mapDockMount = mountEl(
       <MemoryRouter>
-        <MapStageLegend
-          migrationEras={[{ id: 'era_unmapped', label: 'Voyage', startYear: 1850, endYear: 1870 }]}
-          stageColorMap={new Map()}
-        />
         <MapStopDrawerAndDock
           dockRef={{ current: null }}
           cardRef={{ current: null }}

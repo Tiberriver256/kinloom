@@ -162,6 +162,7 @@ export const KINLOOM_VOCABULARY = {
     tablistAria: 'Evidence and sources sections',
     discrepanciesTab: 'Source Discrepancies',
     sourcesTab: 'Sources & Citations',
+    needsCitationTab: 'Needs Citation',
     mediaTab: 'Photos & Documents',
     sourceRegistryHeading: 'Source Registry',
     unverifiedHeading: 'Entries Needing Primary Citation',

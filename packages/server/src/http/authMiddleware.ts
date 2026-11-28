@@ -32,7 +32,9 @@ export async function resolveCallerPrincipal(params: {
   sessionSecret: string;
   repository: Pick<AccessControlStore, 'findActiveAgentTokenByHash' | 'getUser' | 'getInvite'>;
   clock: Clock;
-  telemetry?: (Pick<ServerRequestTelemetryTracker, 'now' | 'recordSpan'> & Partial<SecurityEventQueueTarget>) | undefined;
+  telemetry?:
+    | (Pick<ServerRequestTelemetryTracker, 'now' | 'recordSpan'> & Partial<SecurityEventQueueTarget>)
+    | undefined;
 }): Promise<ResolvedAuthContext> {
   const authHeader = params.request.headers.get('authorization');
   const trimmedAuth = authHeader?.trim() ?? '';

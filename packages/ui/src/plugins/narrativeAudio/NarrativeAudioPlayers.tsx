@@ -85,7 +85,7 @@ export const NarrativeAudioMarginBar: React.FC<{ readonly track: ActiveNarrative
               `narrative-audio-voice-label ${inNotes ? 'is-notes' : 'is-story'}`
             )}
           >
-            {inNotes ? `Editor's Notes · ${track.notesVoice}` : `${labels.marginLabel} · ${track.storyVoice}`}
+            {inNotes ? "Editor's Notes" : labels.marginLabel}
           </span>
           <span className={cx(audioPluginStyles, 'narrative-audio-time')}>
             {totalLabel ? `${currentLabel} / ${totalLabel}` : currentLabel}
@@ -248,9 +248,7 @@ export const NarrativeAudioDock: React.FC = () => {
               <span>{activeTrack.narrativeTitle}</span>
             </div>
             <div className={cx(audioPluginStyles, 'narrative-audio-dock-sub')}>
-              {inNotes
-                ? `Editor's Notes (${activeTrack.notesVoice})`
-                : `${labels.dockLabel} (${activeTrack.storyVoice})`}
+              {inNotes ? "Editor's Notes" : labels.dockLabel}
               {' · '}
               <span>{totalLabel ? `${currentLabel} / ${totalLabel}` : currentLabel}</span>
             </div>

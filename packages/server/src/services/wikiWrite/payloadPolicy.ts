@@ -93,7 +93,9 @@ export function extractSlug(entityType: EntityType, payload: EntityPayload | nul
   if (!payload || entityType === 'kinship_edge') {
     return null;
   }
-  return typeof payload['slug'] === 'string' && payload['slug'].trim().length > 0 ? payload['slug'].trim() : null;
+  return typeof payload['slug'] === 'string' && payload['slug'].trim().length > 0
+    ? payload['slug'].trim()
+    : null;
 }
 
 export function extractMediaEventId(payload: unknown): string | null {
@@ -263,7 +265,9 @@ export async function validateAndSanitizeEntityPayload(
   }
 
   const bodyId =
-    typeof candidate['id'] === 'string' && candidate['id'].trim().length > 0 ? candidate['id'].trim() : undefined;
+    typeof candidate['id'] === 'string' && candidate['id'].trim().length > 0
+      ? candidate['id'].trim()
+      : undefined;
 
   if (params.requireIdMatch && params.requestedEntityId && bodyId && bodyId !== params.requestedEntityId) {
     throw new KinloomHttpError(
@@ -325,8 +329,10 @@ export async function maybeGenerateEntityPronunciationAudio(
       resolveEffectiveLiving(
         {
           is_living: Boolean(params.sanitized['is_living']),
-          birth_edtf: typeof params.sanitized['birth_edtf'] === 'string' ? params.sanitized['birth_edtf'] : '',
-          death_edtf: typeof params.sanitized['death_edtf'] === 'string' ? params.sanitized['death_edtf'] : '',
+          birth_edtf:
+            typeof params.sanitized['birth_edtf'] === 'string' ? params.sanitized['birth_edtf'] : '',
+          death_edtf:
+            typeof params.sanitized['death_edtf'] === 'string' ? params.sanitized['death_edtf'] : '',
         },
         deps.siteConfig.privacy,
         deps.clock.currentYear()

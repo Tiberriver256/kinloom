@@ -264,7 +264,7 @@ export function createNarrativeAudioPlugin(options: NarrativeAudioPluginOptions 
               id: 'narrative-audio-margin-bar',
               title: 'Play a narrated biography from the margin bar',
               instructions: `Open ${targetPerson.full_name}'s Person Profile and press the Listen button in the archival margin bar to start playback.`,
-              transcript: `When a Person Profile includes recorded audio, an archival margin bar appears above the biography. Select Listen to hear the spoken biography in the primary narrator voice (${defaultStoryVoice}).`,
+              transcript: `When a Person Profile includes recorded audio, an archival margin bar appears above the biography. Select Listen to hear the spoken biography narration.`,
               targetRoute: `/person/${targetPerson.slug}`,
               targetRouteLabel: `Open ${targetPerson.full_name}`,
               highlights: [
@@ -277,7 +277,7 @@ export function createNarrativeAudioPlugin(options: NarrativeAudioPluginOptions 
               title: 'Jump to Editor’s Notes and browse with the persistent dock',
               instructions:
                 'Use the Editor’s Notes button to skip directly to research commentary, and keep listening in the compact bottom dock as you explore other pages.',
-              transcript: `Select Editor’s Notes to jump straight to source commentary read in a secondary voice (${defaultNotesVoice}). Once started, the persistent bottom audio dock stays open across routes so you can inspect the Family Tree or Migration Map without interrupting playback.`,
+              transcript: `Select Editor’s Notes to jump straight to source commentary. Once started, the persistent bottom audio dock stays open across routes so you can inspect the Family Tree or Migration Map without interrupting playback.`,
               targetRoute: '/tree',
               targetRouteLabel: 'Explore Family Tree',
               highlights: [

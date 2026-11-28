@@ -23,7 +23,7 @@ import { KINLOOM_VOCABULARY } from '../lib/vocabulary.js';
 import controlStyles from '../styles/Controls.module.css';
 import layoutStyles from '../styles/Layout.module.css';
 import mapStyles from './MapPage.module.css';
-import { MapStageLegend, MapStopDrawerAndDock, MapZoomControls } from './map/MapStopDrawerAndDock.js';
+import { MapStopDrawerAndDock, MapZoomControls } from './map/MapStopDrawerAndDock.js';
 import { MapToolbar } from './map/MapToolbar.js';
 import { buildFamilyOverlay, computeDefaultMapBounds } from './map/mapOverlayData.js';
 import { useMigrationMapController } from './map/useMigrationMapController.js';
@@ -198,11 +198,16 @@ export const MapPage: React.FC = () => {
     ? `${visibleStops.length} ${visibleStops.length === 1 ? 'stop' : 'stops'}`
     : `${totalMiles.toLocaleString()} mi`;
 
+  const pageHeading = siteConfig.site.familyName
+    ? `${siteConfig.site.familyName} ${KINLOOM_VOCABULARY.map.title}`
+    : KINLOOM_VOCABULARY.map.title;
+
   if (error) {
     return (
       <div className={cx(mapStyles, 'map-shell')}>
         <ExplorerTopBar />
         <main id="main-content" className={cx(layoutStyles, 'index-page')}>
+          <h1 className={cx(canvasSurfaceStyles, 'canvas-sr-heading')}>{pageHeading}</h1>
           <div className={cx(statusShellStyles, 'archive-error-box')} role="alert">
             <h2>Unable to load migration map</h2>
             <p>{error}</p>
@@ -226,6 +231,7 @@ export const MapPage: React.FC = () => {
       <div className={cx(mapStyles, 'map-shell')}>
         <ExplorerTopBar />
         <main id="main-content" className={cx(layoutStyles, 'index-page')}>
+          <h1 className={cx(canvasSurfaceStyles, 'canvas-sr-heading')}>{pageHeading}</h1>
           <output className={cx(statusShellStyles, 'archive-loading-shell')} aria-live="polite">
             <span className={cx(statusShellStyles, 'archive-loading-spinner')} aria-hidden="true" />
             <span>{KINLOOM_VOCABULARY.map.loading}</span>
@@ -242,14 +248,15 @@ export const MapPage: React.FC = () => {
         id="main-content"
         className={joinClasses(cx(canvasSurfaceStyles, 'tree-page'), cx(mapStyles, 'map-page'))}
       >
+        <h1 className={cx(canvasSurfaceStyles, 'canvas-sr-heading')}>{pageHeading}</h1>
         <div
           ref={controller.mapHostRef}
           className={'map-canvas'}
+          data-basemap-mode={
+            controller.historicalMap.kind === 'failed' ? 'offline' : controller.historicalMap.kind
+          }
           style={{ position: 'absolute', inset: 0 }}
         />
-        {controller.historicalMap.kind === 'failed' && (
-          <output className={cx(mapStyles, 'map-style-note')}>Showing offline paper basemap.</output>
-        )}
 
         {allStopsForPerson.length === 0 && selectedPersonId === 'all' && (
           <div className={cx(mapStyles, 'map-empty-canvas-overlay')}>
@@ -294,12 +301,11 @@ export const MapPage: React.FC = () => {
           allStopsCount={allStopsForPerson.length}
           migrationEras={migrationEras}
           eraStopCounts={eraStopCounts}
+          stageColorMap={stageColorMap}
           onSelectPersonId={setSelectedPersonId}
           onSelectEraId={setSelectedEraId}
           onSetRouteMode={setRouteMode}
         />
-
-        <MapStageLegend migrationEras={migrationEras} stageColorMap={stageColorMap} />
 
         <MapStopDrawerAndDock
           dockRef={controller.dockRef}

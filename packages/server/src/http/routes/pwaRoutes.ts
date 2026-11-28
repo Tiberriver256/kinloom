@@ -8,6 +8,7 @@ import {
   renderFaviconSvg,
   renderLightFaviconSvg,
   renderPrivacySafeServiceWorkerScript,
+  renderThemeInitScriptSource,
 } from '@kinloom/core';
 
 function isHtmlResponse(response: Response): boolean {
@@ -67,6 +68,9 @@ export function buildPublicPwaFallbackResponse(
       body = renderPrivacySafeServiceWorkerScript(
         siteConfig?.site.title !== undefined ? { siteTitle: siteConfig.site.title } : {}
       );
+      break;
+    case 'theme_init':
+      body = renderThemeInitScriptSource();
       break;
     case 'favicon_adaptive':
       body = renderFaviconSvg({

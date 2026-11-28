@@ -1,8 +1,20 @@
 import { expect, test } from '@playwright/test';
 
-test('time route updates town lanes when selecting anchor years and scrubbing slider', async ({ page }) => {
+test('time route updates town lanes when selecting anchor years, caps desktop chips behind More years, and scrubs slider', async ({
+  page,
+}) => {
   await page.goto('/time');
-  await expect(page.getByRole('heading', { name: /Lincoln & Todd Family in \d{4}/ })).toBeVisible();
+  await expect(page.getByRole('heading', { name: /Historical Snapshot \d{4}/ })).toBeVisible();
+
+  // Desktop caps flat milestone chips to <= 7 and puts extra years in More years popover (#101)
+  const flatChipCount = await page.locator('.time-anchor-btn').count();
+  expect(flatChipCount).toBeLessThanOrEqual(7);
+  const moreYearsBtn = page.locator('.time-more-years-btn');
+  await expect(moreYearsBtn).toBeVisible();
+  await moreYearsBtn.click();
+  await expect(page.locator('.time-more-years-popover')).toBeVisible();
+  await page.locator('.time-more-year-item', { hasText: '1637' }).click();
+  await expect(page.locator('.handwritten-year-hero')).toHaveText('1637');
 
   // Click the 1860 anchor year button
   await page.locator('.time-anchor-btn', { hasText: '1860' }).click();

@@ -353,4 +353,51 @@ describe('HttpWikiDataSource', () => {
       code: 'INVALID_API_RESPONSE',
     });
   });
+
+  it('skips /data/readings.json and /data/media-checklist.json fetches when capabilities or options disable them', async () => {
+    const requestedUrls: string[] = [];
+    const ds = new HttpWikiDataSource({
+      fetchImpl: async (input) => {
+        const url = String(input);
+        requestedUrls.push(url);
+        if (url === '/api/auth/me') {
+          return jsonResponse({
+            session: { authenticated: true, principal_kind: 'user', role: 'viewer', email: 'v@example.com' },
+            capabilities: {
+              canEdit: false,
+              canUploadMedia: false,
+              hasRevisionHistory: true,
+              hasTalk: false,
+              canManageSite: false,
+              canReadArchive: true,
+              hasReadings: false,
+              hasMediaChecklist: false,
+            },
+          });
+        }
+        return new Response('Not found', { status: 404 });
+      },
+    });
+
+    const sessionRes = await ds.getSession();
+    expect(sessionRes.capabilities.canReadArchive).toBe(true);
+    expect(sessionRes.capabilities.hasReadings).toBe(false);
+    expect(sessionRes.capabilities.hasMediaChecklist).toBe(false);
+
+    expect(await ds.loadReadings()).toBeNull();
+    expect(await ds.loadMediaChecklist()).toEqual([]);
+    expect(requestedUrls).toEqual(['/api/auth/me']);
+
+    const explicitOptDs = new HttpWikiDataSource({
+      hasReadings: false,
+      hasMediaChecklist: false,
+      fetchImpl: async (input) => {
+        requestedUrls.push(String(input));
+        return new Response('Not found', { status: 404 });
+      },
+    });
+    expect(await explicitOptDs.loadReadings()).toBeNull();
+    expect(await explicitOptDs.loadMediaChecklist()).toEqual([]);
+    expect(requestedUrls).toEqual(['/api/auth/me']);
+  });
 });

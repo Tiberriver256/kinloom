@@ -2,6 +2,7 @@ import { type AssetHandler, PUBLIC_PWA_STATIC_ASSET_PATHS, parseKinloomConfig } 
 import { describe, expect, it } from 'vitest';
 import { createInMemoryServerPorts } from '../adapters/inMemory.js';
 import { createKinloomServer } from './router.js';
+import { DEFAULT_CONTENT_SECURITY_POLICY } from './securityHeaders.js';
 
 function makePrivateSiteConfig() {
   return parseKinloomConfig({
@@ -60,6 +61,7 @@ describe('unauthenticated private-mode PWA asset serving on createKinloomServer'
     const expectedTypes: Record<string, string> = {
       '/site.webmanifest': 'application/manifest+json',
       '/sw.js': 'application/javascript; charset=utf-8',
+      '/theme-init.js': 'application/javascript; charset=utf-8',
       '/icon-192.png': 'image/png',
       '/icon-512.png': 'image/png',
       '/icon-maskable-512.png': 'image/png',
@@ -151,6 +153,26 @@ describe('unauthenticated private-mode PWA asset serving on createKinloomServer'
     expect(swText).toContain('"/media"');
     expect(swText).toContain('"/data"');
     expect(swText).not.toMatch(/\bcaches\.open\b/);
+
+    const themeInitRes = await server.fetch(new Request(`${origin}/theme-init.js`));
+    expect(themeInitRes.status).toBe(200);
+    expect(themeInitRes.headers.get('content-type')).toBe('application/javascript; charset=utf-8');
+    expect(themeInitRes.headers.get('content-security-policy')).toBe(DEFAULT_CONTENT_SECURITY_POLICY);
+    expect(DEFAULT_CONTENT_SECURITY_POLICY).toContain("script-src 'self'");
+    expect(DEFAULT_CONTENT_SECURITY_POLICY).toContain('https://fonts.googleapis.com');
+    expect(DEFAULT_CONTENT_SECURITY_POLICY).toContain('https://fonts.gstatic.com');
+    const themeInitText = await themeInitRes.text();
+    expect(themeInitText).toContain("localStorage.getItem('kinloom-theme')");
+
+    // Verify /api/auth/me exposes private-archive and optional-asset capability flags
+    const meRes = await server.fetch(new Request(`${origin}/api/auth/me`));
+    expect(meRes.status).toBe(200);
+    const meJson = (await meRes.json()) as {
+      capabilities: { canReadArchive?: boolean; hasReadings?: boolean; hasMediaChecklist?: boolean };
+    };
+    expect(meJson.capabilities.canReadArchive).toBe(false);
+    expect(meJson.capabilities.hasReadings).toBe(false);
+    expect(meJson.capabilities.hasMediaChecklist).toBe(false);
 
     for (const svgPath of ['/favicon.svg', '/favicon-light.svg', '/favicon-dark.svg']) {
       const svgRes = await server.fetch(new Request(`${origin}${svgPath}`));

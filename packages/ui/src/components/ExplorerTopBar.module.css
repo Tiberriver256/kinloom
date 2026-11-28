@@ -64,7 +64,7 @@
 .nav-pill {
   display: inline-flex;
   align-items: center;
-  gap: 5px;
+  gap: 7px;
   padding: 4px 2px;
   border: none;
   border-bottom: 2px solid transparent;
@@ -85,7 +85,68 @@
 .nav-pill-icon {
   display: inline-flex;
   align-items: center;
+  flex-shrink: 0;
   line-height: 1;
+}
+
+.topbar-more-wrap {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+}
+
+.nav-more-btn {
+  gap: 5px;
+}
+
+.topbar-more-caret {
+  display: inline-flex;
+  align-items: center;
+  color: var(--text-secondary);
+  flex-shrink: 0;
+}
+
+.topbar-more-menu {
+  left: 0;
+  right: auto;
+  min-width: 196px;
+}
+
+.topbar-mobile-scrim {
+  display: none;
+}
+
+.topbar-quiet-reset {
+  margin-top: 4px;
+  padding-top: 4px;
+  border-top: var(--border-width-thin) solid var(--border-decorative);
+}
+
+.topbar-quiet-reset-summary {
+  list-style: none;
+  display: flex;
+  align-items: center;
+  min-height: var(--control-height-sm);
+  padding: 6px 10px;
+  border-radius: var(--radius-control);
+  color: var(--text-secondary);
+  font-family: var(--font-ui);
+  font-size: 0.76rem;
+  cursor: pointer;
+}
+
+.topbar-quiet-reset-summary::-webkit-details-marker {
+  display: none;
+}
+
+.topbar-quiet-reset-summary:hover {
+  background: var(--surface-subtle);
+  color: var(--text-primary);
+}
+
+.topbar-quiet-secondary-item {
+  color: var(--text-secondary);
+  font-size: 0.78rem;
 }
 
 .nav-pill:hover {
@@ -104,11 +165,11 @@
   align-items: center;
   justify-content: center;
   gap: 6px;
-  height: 36px;
-  min-height: 36px;
+  height: var(--control-height-md);
+  min-height: var(--control-height-md);
   padding: 0 10px;
-  border: 1px solid transparent;
-  border-radius: var(--radius-md);
+  border: var(--border-width-thin) solid transparent;
+  border-radius: var(--radius-control);
   background: transparent;
   color: var(--text-secondary);
   font-family: var(--font-ui);
@@ -151,7 +212,7 @@
 .topbar-guide-badge {
   margin-left: auto;
   padding: 1px 6px;
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   background: var(--badge-cited-bg);
   color: var(--badge-cited-fg);
   font-size: 0.7rem;
@@ -192,14 +253,14 @@
 }
 
 .person-switcher {
-  background: transparent;
+  background: var(--surface-subtle);
   color: var(--text-primary);
-  border: none;
-  border-bottom: 1px solid var(--border-control);
-  border-radius: 0;
-  padding: 3px 4px;
-  font-family: var(--font-serif);
-  font-size: 0.9rem;
+  border: var(--border-width-thin) solid var(--border-control);
+  border-radius: var(--radius-control);
+  min-height: var(--control-height-sm);
+  padding: 0 8px;
+  font-family: var(--font-ui);
+  font-size: 0.84rem;
   max-width: 210px;
   cursor: pointer;
 }
@@ -216,7 +277,7 @@
   padding: 0 8px;
   margin-right: 4px;
   border: none;
-  border-radius: var(--radius-md);
+  border-radius: var(--radius-control);
   background: var(--surface-subtle);
   font-family: var(--font-mono);
   font-variant-numeric: tabular-nums;
@@ -343,20 +404,75 @@
   }
 
   .nav-links {
+    --nav-fade-size: 2rem;
     order: 3;
     flex-basis: 100%;
     flex-wrap: nowrap;
     gap: 6px 10px;
     margin-top: 2px;
-    padding: 0;
+    padding: 0 4px 0 0;
     border-top: 1px solid var(--border-decorative);
     overflow-x: auto;
     scrollbar-width: none;
+    scroll-padding-inline: var(--nav-fade-size);
     -webkit-overflow-scrolling: touch;
   }
 
   .nav-links::-webkit-scrollbar {
     display: none;
+  }
+
+  @supports (animation-timeline: scroll()) {
+    .nav-links {
+      mask:
+        linear-gradient(black, black) no-clip subtract,
+        linear-gradient(to right, black, transparent) 0 0 / var(--nav-fade-start) 100% no-repeat no-clip,
+        linear-gradient(to right, transparent, black) 100% 0 / var(--nav-fade-end) 100% no-repeat no-clip;
+    }
+
+    .nav-links:not([data-overflowing="false"]) {
+      animation-name: nav-fade-start, nav-fade-end;
+      animation-duration: auto, auto;
+      animation-timing-function: linear, linear;
+      animation-fill-mode: both, both;
+      animation-timeline: scroll(self inline);
+      animation-range:
+        0 var(--nav-fade-size),
+        calc(100% - var(--nav-fade-size)) 100%;
+    }
+  }
+
+  @supports not (animation-timeline: scroll()) {
+    .nav-links:global(.is-scrollable-end) {
+      mask-image: linear-gradient(to right, black calc(100% - var(--nav-fade-size)), transparent 100%);
+      -webkit-mask-image: linear-gradient(
+        to right,
+        black calc(100% - var(--nav-fade-size)),
+        transparent 100%
+      );
+    }
+
+    .nav-links:global(.is-scrollable-start) {
+      mask-image: linear-gradient(to right, transparent 0, black var(--nav-fade-size));
+      -webkit-mask-image: linear-gradient(to right, transparent 0, black var(--nav-fade-size));
+    }
+
+    .nav-links:global(.is-scrollable-start):global(.is-scrollable-end) {
+      mask-image: linear-gradient(
+        to right,
+        transparent 0,
+        black var(--nav-fade-size),
+        black calc(100% - var(--nav-fade-size)),
+        transparent 100%
+      );
+      -webkit-mask-image: linear-gradient(
+        to right,
+        transparent 0,
+        black var(--nav-fade-size),
+        black calc(100% - var(--nav-fade-size)),
+        transparent 100%
+      );
+    }
   }
 
   .nav-pill {
@@ -365,8 +481,8 @@
     font-size: 0.9rem;
     font-weight: 500;
     white-space: nowrap;
-    min-height: 44px;
-    min-width: 44px;
+    min-height: var(--control-height-touch);
+    min-width: var(--control-height-touch);
     display: inline-flex;
     align-items: center;
     justify-content: center;
@@ -402,12 +518,12 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 36px;
-  height: 36px;
-  min-width: 36px;
-  min-height: 36px;
+  width: var(--control-height-md);
+  height: var(--control-height-md);
+  min-width: var(--control-height-md);
+  min-height: var(--control-height-md);
   padding: 0;
-  border-radius: var(--radius-md);
+  border-radius: var(--radius-control);
   border: 1px solid transparent;
   background: transparent;
   color: var(--text-secondary);
@@ -435,11 +551,11 @@
 
 @media (max-width: 1023px) {
   .topbar-theme-btn {
-    width: 44px;
-    height: 44px;
-    min-width: 44px;
-    min-height: 44px;
-    border-radius: var(--radius-md);
+    width: var(--control-height-touch);
+    height: var(--control-height-touch);
+    min-width: var(--control-height-touch);
+    min-height: var(--control-height-touch);
+    border-radius: var(--radius-control);
     color: var(--surface-header);
   }
 
@@ -448,12 +564,12 @@
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    width: 44px;
-    height: 44px;
-    min-width: 44px;
-    min-height: 44px;
+    width: var(--control-height-touch);
+    height: var(--control-height-touch);
+    min-width: var(--control-height-touch);
+    min-height: var(--control-height-touch);
     padding: 0;
-    border-radius: var(--radius-md);
+    border-radius: var(--radius-control);
     border: 1px solid transparent;
     background: transparent;
     color: var(--surface-header);
@@ -495,6 +611,25 @@
 
   .topbar-account-item-mobile-only {
     display: flex;
+  }
+
+  .topbar-mobile-scrim {
+    display: block;
+    position: fixed;
+    inset: 0;
+    z-index: 35;
+    background: var(--backdrop-drawer);
+    backdrop-filter: blur(1px);
+  }
+
+  .topbar-quiet-reset-summary {
+    min-height: var(--control-height-touch);
+  }
+}
+
+@media (pointer: coarse) {
+  .topbar-shortcuts-item {
+    display: none;
   }
 }
 
@@ -548,5 +683,29 @@
     padding-top: calc(6px + env(safe-area-inset-top, 0px));
     padding-left: calc(12px + env(safe-area-inset-left, 0px));
     padding-right: calc(12px + env(safe-area-inset-right, 0px));
+  }
+}
+
+@property --nav-fade-start {
+  syntax: "<length>";
+  inherits: false;
+  initial-value: 0px;
+}
+
+@property --nav-fade-end {
+  syntax: "<length>";
+  inherits: false;
+  initial-value: 0px;
+}
+
+@keyframes nav-fade-start {
+  to {
+    --nav-fade-start: var(--nav-fade-size);
+  }
+}
+
+@keyframes nav-fade-end {
+  from {
+    --nav-fade-end: var(--nav-fade-size);
   }
 }

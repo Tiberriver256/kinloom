@@ -36,8 +36,8 @@
 .places-view-segmented {
   display: inline-flex;
   align-items: stretch;
-  border: 1px solid var(--border-decorative);
-  border-radius: var(--radius-md);
+  border: var(--border-width-thin) solid var(--border-decorative);
+  border-radius: var(--radius-control);
   background: var(--surface-subtle);
   overflow: hidden;
 }
@@ -50,7 +50,7 @@
   font-size: 0.84rem;
   font-weight: 500;
   padding: 6px 11px;
-  min-height: 36px;
+  min-height: var(--control-height-md);
   cursor: pointer;
   white-space: nowrap;
   transition:
@@ -70,10 +70,10 @@
 
 .places-stage-select {
   background: var(--surface-subtle);
-  border: 1px solid var(--border-decorative);
-  border-radius: var(--radius-md);
+  border: var(--border-width-thin) solid var(--border-decorative);
+  border-radius: var(--radius-control);
   padding: 6px 10px;
-  min-height: 36px;
+  min-height: var(--control-height-md);
   font-family: var(--font-ui);
   font-size: 0.84rem;
   color: var(--text-primary);
@@ -177,7 +177,7 @@
 
 .place-ledger-name a {
   text-decoration: none;
-  border-bottom: 1.5px solid transparent;
+  border-bottom: var(--border-width-emphasis) solid transparent;
 }
 
 .place-ledger-full {
@@ -301,7 +301,7 @@
 
   .places-search-wrap :global(.search-input) {
     font-size: 1rem;
-    min-height: 44px;
+    min-height: var(--control-height-touch);
   }
 
   .places-toolbar-controls {
@@ -318,20 +318,20 @@
   }
 
   .places-view-btn {
-    min-height: 44px;
+    min-height: var(--control-height-touch);
     padding: 6px 8px;
     text-align: center;
   }
 
   .places-stage-select {
     width: 100%;
-    min-height: 44px;
+    min-height: var(--control-height-touch);
     font-size: 1rem;
   }
 
   .places-toolbar-controls :global(.places-clear-btn) {
     width: 100%;
-    min-height: 44px;
+    min-height: var(--control-height-touch);
     justify-content: center;
   }
 
@@ -365,6 +365,11 @@
 
   .place-ledger-people {
     margin-top: 8px;
+  }
+
+  .place-resident-link {
+    border-bottom: none;
+    padding: 2px 0;
   }
 }
 

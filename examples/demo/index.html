@@ -9,16 +9,7 @@
       content="Explore ten generations of the Lincoln, Hanks, Todd, and Harlan families (1622–1985) with cited NARA &amp; Library of Congress records, maps, and trees."
     />
     <meta name="color-scheme" content="light dark" />
-    <script>
-      try {
-        var t = localStorage.getItem('kinloom-theme');
-        if (t === 'light' || t === 'dark') {
-          document.documentElement.dataset.theme = t;
-          var m = document.querySelector('meta[name="color-scheme"]');
-          if (m) m.content = t;
-        }
-      } catch (e) {}
-    </script>
+    <script src="/theme-init.js"></script>
     <meta name="theme-color" content="#F5EFE2" media="(prefers-color-scheme: light)" />
     <meta name="theme-color" content="#171614" media="(prefers-color-scheme: dark)" />
     <meta name="mobile-web-app-capable" content="yes" />
@@ -59,17 +50,9 @@
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
-      rel="preload"
-      as="style"
+      rel="stylesheet"
       href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;0,6..72,600;0,6..72,700;1,6..72,400&display=optional"
-      onload="this.onload=null;this.rel='stylesheet'"
     />
-    <noscript>
-      <link
-        href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;0,6..72,600;0,6..72,700;1,6..72,400&display=optional"
-        rel="stylesheet"
-      />
-    </noscript>
   </head>
   <body>
     <div id="root"></div>

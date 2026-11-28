@@ -1056,7 +1056,9 @@ describe('createCloudflareWorker full HTTP lifecycle (Miniflare)', () => {
       // Direct out-of-order write of rev 1 after rev 2 is also ignored
       const outOfOrderResult = await cacheRev2.rebuildAndStore(snapshot1);
       expect(outOfOrderResult.revision_id).toBe(asRevisionId(2));
-      expect((await fixture.bucket.head(DEFAULT_COMPILED_BUNDLE_KEY))?.customMetadata?.['revision']).toBe('2');
+      expect((await fixture.bucket.head(DEFAULT_COMPILED_BUNDLE_KEY))?.customMetadata?.['revision']).toBe(
+        '2'
+      );
 
       // 2. Stale R2 read healing via createCloudflareWorker:
       // Reset R2 to rev 1 while D1 is at rev 2, then verify both plain GET and stale If-None-Match heal R2 to rev 2

@@ -54,6 +54,7 @@ export const OpenFinanceProvider: React.FC<OpenFinanceProviderProps> = ({
   const session = archiveData?.session ?? null;
   const sessionAuthenticated = session?.authenticated ?? false;
   const sessionPrincipalKind = session?.principal_kind ?? null;
+  const canReadArchive = archiveData?.capabilities.canReadArchive;
 
   const fetchSummary = useCallback(
     async (options?: { readonly signal?: AbortSignal; readonly cache?: RequestCache }): Promise<void> => {
@@ -100,6 +101,12 @@ export const OpenFinanceProvider: React.FC<OpenFinanceProviderProps> = ({
     if (hasSessionLoader && sessionPrincipalKind === null) {
       return;
     }
+    if (hasSessionLoader && sessionPrincipalKind === 'anonymous' && canReadArchive === false) {
+      setSummary(fallbackSummary);
+      setLoading(false);
+      setError(null);
+      return;
+    }
     const controller = new AbortController();
     void fetchSummary({
       signal: controller.signal,
@@ -108,7 +115,14 @@ export const OpenFinanceProvider: React.FC<OpenFinanceProviderProps> = ({
     return () => {
       controller.abort();
     };
-  }, [fetchSummary, hasSessionLoader, sessionAuthenticated, sessionPrincipalKind]);
+  }, [
+    fetchSummary,
+    fallbackSummary,
+    hasSessionLoader,
+    sessionAuthenticated,
+    sessionPrincipalKind,
+    canReadArchive,
+  ]);
 
   const refreshPublicSummary = useCallback(async (): Promise<void> => {
     await fetchSummary({ cache: 'no-store' });

@@ -5,6 +5,29 @@
   background-color: var(--surface-canvas);
 }
 
+/* Non-clipping accessible heading landmark for full-viewport canvas routes (/map, /tree).
+ * Keeps natural text dimensions and overflow: visible so WCAG 1.4.12 / truncation telemetry
+ * never flags a 1px overflow-hidden box while remaining invisible to sighted users. */
+.canvas-sr-heading {
+  position: absolute;
+  top: 0;
+  left: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  width: auto;
+  height: auto;
+  font-size: 1rem;
+  font-weight: 600;
+  line-height: 1.5;
+  overflow: visible;
+  white-space: nowrap;
+  clip-path: inset(50%);
+  opacity: 0;
+  pointer-events: none;
+  user-select: none;
+}
+
 .tree-controls {
   position: absolute;
   right: 18px;
@@ -16,12 +39,12 @@
 }
 
 .tree-controls :global(.pill-btn) {
-  min-width: 40px;
-  min-height: 38px;
+  min-width: var(--control-height-md);
+  min-height: var(--control-height-md);
   text-align: center;
   background: var(--surface-overlay-card);
-  border: 1px solid var(--border-control);
-  border-radius: var(--radius-sm);
+  border: var(--border-width-thin) solid var(--border-control);
+  border-radius: var(--radius-control);
   box-shadow: var(--shadow-card);
   touch-action: manipulation;
   font-family: var(--font-mono);
@@ -36,15 +59,15 @@
   z-index: 25;
   width: 312px;
   background: var(--surface-card);
-  border: 1px solid var(--border-control);
-  border-radius: var(--radius-md);
+  border: var(--border-width-thin) solid var(--border-control);
+  border-radius: var(--radius-control);
   padding: 14px 16px;
   box-shadow: var(--shadow-active);
 }
 
 .map-bordered-btn {
-  border: 1px solid var(--border-decorative);
-  border-radius: var(--radius-sm);
+  border: var(--border-width-thin) solid var(--border-decorative);
+  border-radius: var(--radius-control);
   padding: 4px 9px;
   background: var(--surface-tint-subtle);
 }
@@ -77,8 +100,8 @@
   }
 
   .tree-controls :global(.pill-btn) {
-    min-width: 44px;
-    min-height: 44px;
+    min-width: var(--control-height-touch);
+    min-height: var(--control-height-touch);
     padding: 0;
     display: inline-flex;
     align-items: center;

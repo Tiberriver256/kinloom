@@ -3,6 +3,8 @@ import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useArchiveData } from '../context/ArchiveDataContext.js';
 import { useArchiveUi } from '../context/ArchiveUiContext.js';
 import { useOptionalOnboarding } from '../context/OnboardingContext.js';
+import { scrollBehaviorForMotion } from '../hooks/keyboardNav.js';
+import { useHorizontalScrollFade } from '../hooks/useHorizontalScrollFade.js';
 import { useThemePreference } from '../hooks/useThemePreference.js';
 import { cx, joinClasses } from '../lib/cx.js';
 import { isPluginNavRouteActive, selectVisiblePluginNavRoutes } from '../lib/pluginNav.js';
@@ -71,7 +73,14 @@ export const ExplorerTopBar: React.FC = () => {
   const { siteConfig, featuredDocumentId, capabilities, session, dataSource } = useArchiveData();
   const authActorRef = AuthSessionActorContext.useActorRef();
   const signingOut = AuthSessionActorContext.useSelector((state) => state.matches('signingOut'));
-  const { activeYear, pivotTrail, openSourceReader, openSearch } = useArchiveUi();
+  const {
+    activeYear,
+    pivotTrail,
+    openSourceReader,
+    openSearch,
+    inviteBannerVisible,
+    inlineGuideBannerVisible,
+  } = useArchiveUi();
   const onboarding = useOptionalOnboarding();
   const { preference, systemTheme, isDark, setPreference, toggleQuickTheme } = useThemePreference();
   const { routes: pluginRoutes } = useKinloomPlugins();
@@ -81,17 +90,23 @@ export const ExplorerTopBar: React.FC = () => {
 
   const disclosureMenuId = useId();
   const guideMenuId = useId();
+  const moreMenuId = useId();
   const [accountOpen, setAccountOpen] = useState(false);
   const [guideOpen, setGuideOpen] = useState(false);
+  const [moreOpen, setMoreOpen] = useState(false);
   const [chapterPickerOpen, setChapterPickerOpen] = useState(false);
   const [signInOpen, setSignInOpen] = useState(false);
   const headerRef = useRef<HTMLElement | null>(null);
+  const navLinksRef = useRef<HTMLElement | null>(null);
   const accountMenuRef = useRef<HTMLDivElement | null>(null);
   const accountTriggerRef = useRef<HTMLButtonElement | null>(null);
   const accountDropdownRef = useRef<HTMLElement | null>(null);
   const guideMenuRef = useRef<HTMLDivElement | null>(null);
   const guideTriggerRef = useRef<HTMLButtonElement | null>(null);
   const guideDropdownRef = useRef<HTMLDivElement | null>(null);
+  const moreMenuRef = useRef<HTMLDivElement | null>(null);
+  const moreTriggerRef = useRef<HTMLButtonElement | null>(null);
+  const moreDropdownRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
     const headerEl = headerRef.current;
@@ -132,14 +147,58 @@ export const ExplorerTopBar: React.FC = () => {
 
   const isSignedInMember = Boolean(session?.authenticated && session.principal_kind === 'user');
   const isInviteViewer = Boolean(session && session.principal_kind === 'invite_viewer');
+  const showInviteSignIn = isInviteViewer && !inviteBannerVisible;
   const memberLabel = session?.displayName || session?.email || 'Member';
+  const hasDesktopOverflowNav = navPluginRoutes.length > 0;
+  const isMoreNavActive =
+    hasDesktopOverflowNav &&
+    (location.pathname === '/kinship' ||
+      navPluginRoutes.some((route) => isPluginNavRouteActive(route, location.pathname)));
 
-  // biome-ignore lint/correctness/useExhaustiveDependencies: close menus when route pathname changes
+  const navOverflowKey = `primary:${navPluginRoutes.map((route) => route.path).join('|')}`;
+  useHorizontalScrollFade(navLinksRef, navOverflowKey);
+
+  // biome-ignore lint/correctness/useExhaustiveDependencies: close menus and center active mobile nav item on route change
   useEffect(() => {
     setAccountOpen(false);
     setGuideOpen(false);
+    setMoreOpen(false);
     setChapterPickerOpen(false);
-  }, [location.pathname]);
+    const activeLink = navLinksRef.current?.querySelector<HTMLElement>('[aria-current="page"]');
+    if (activeLink && typeof activeLink.scrollIntoView === 'function') {
+      activeLink.scrollIntoView({
+        behavior: scrollBehaviorForMotion(),
+        block: 'nearest',
+        inline: 'center',
+      });
+    }
+  }, [location.pathname, navOverflowKey]);
+
+  useEffect(() => {
+    if (!moreOpen) {
+      return undefined;
+    }
+    const firstItem = moreDropdownRef.current?.querySelector<HTMLElement>('a[href], button:not([disabled])');
+    firstItem?.focus();
+    const onPointerDown = (event: PointerEvent): void => {
+      if (moreMenuRef.current && !moreMenuRef.current.contains(event.target as Node)) {
+        setMoreOpen(false);
+      }
+    };
+    const onKeyDown = (event: KeyboardEvent): void => {
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        setMoreOpen(false);
+        moreTriggerRef.current?.focus();
+      }
+    };
+    document.addEventListener('pointerdown', onPointerDown);
+    document.addEventListener('keydown', onKeyDown);
+    return (): void => {
+      document.removeEventListener('pointerdown', onPointerDown);
+      document.removeEventListener('keydown', onKeyDown);
+    };
+  }, [moreOpen]);
 
   useEffect(() => {
     if (!guideOpen) {
@@ -279,7 +338,7 @@ export const ExplorerTopBar: React.FC = () => {
             {siteConfig.site.title}
           </Link>
 
-          <nav className={cx(topBarStyles, 'nav-links')} aria-label="Primary">
+          <nav ref={navLinksRef} className={cx(topBarStyles, 'nav-links')} aria-label="Primary">
             <Link
               to="/"
               className={cx(topBarStyles, `nav-pill ${isPeopleActive ? 'active' : ''}`)}
@@ -328,35 +387,108 @@ export const ExplorerTopBar: React.FC = () => {
             >
               {KINLOOM_VOCABULARY.nav.map}
             </Link>
-            <Link
-              to="/kinship"
-              className={cx(
-                topBarStyles,
-                `nav-pill nav-pill-desktop-only ${location.pathname === '/kinship' ? 'active' : ''}`
-              )}
-              aria-current={location.pathname === '/kinship' ? 'page' : undefined}
-            >
-              {KINLOOM_VOCABULARY.nav.kinship}
-            </Link>
-
-            {navPluginRoutes.map((route) => {
-              const isActive = isPluginNavRouteActive(route, location.pathname);
-              return (
-                <Link
-                  key={`${route.pluginId}:${route.path}`}
-                  to={route.path}
-                  className={cx(topBarStyles, `nav-pill ${isActive ? 'active' : ''}`)}
-                  aria-current={isActive ? 'page' : undefined}
-                >
-                  {route.navIcon && (
-                    <span className={cx(topBarStyles, 'nav-pill-icon')} aria-hidden="true">
-                      {route.navIcon}
-                    </span>
+            {hasDesktopOverflowNav ? (
+              <div className={cx(topBarStyles, 'topbar-more-wrap nav-pill-desktop-only')} ref={moreMenuRef}>
+                <button
+                  ref={moreTriggerRef}
+                  type="button"
+                  className={cx(
+                    topBarStyles,
+                    `nav-pill nav-more-btn ${isMoreNavActive || moreOpen ? 'active' : ''}`
                   )}
-                  <span>{route.navLabel}</span>
-                </Link>
-              );
-            })}
+                  aria-expanded={moreOpen}
+                  aria-controls={moreMenuId}
+                  aria-label="More archive sections"
+                  onClick={() => {
+                    setAccountOpen(false);
+                    setGuideOpen(false);
+                    setMoreOpen((open) => !open);
+                  }}
+                >
+                  <span>More</span>
+                  <svg
+                    className={cx(topBarStyles, 'topbar-more-caret')}
+                    width="10"
+                    height="10"
+                    viewBox="0 0 12 12"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="1.8"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    aria-hidden="true"
+                  >
+                    <path d="M3 4.5L6 7.5L9 4.5" />
+                  </svg>
+                </button>
+                {moreOpen && (
+                  <div
+                    id={moreMenuId}
+                    ref={moreDropdownRef}
+                    className={joinClasses(
+                      cx(wikiChromeStyles, 'topbar-account-menu'),
+                      cx(topBarStyles, 'topbar-disclosure-panel topbar-more-menu')
+                    )}
+                    role="region"
+                    aria-label="More archive sections"
+                  >
+                    <ul className={cx(topBarStyles, 'topbar-disclosure-list')}>
+                      <li>
+                        <Link
+                          to="/kinship"
+                          className={joinClasses(
+                            cx(wikiChromeStyles, 'topbar-account-item'),
+                            location.pathname === '/kinship' ? 'active' : ''
+                          )}
+                          aria-current={location.pathname === '/kinship' ? 'page' : undefined}
+                          onClick={() => {
+                            setMoreOpen(false);
+                          }}
+                        >
+                          {KINLOOM_VOCABULARY.nav.kinship}
+                        </Link>
+                      </li>
+                      {navPluginRoutes.map((route) => {
+                        const isActive = isPluginNavRouteActive(route, location.pathname);
+                        return (
+                          <li key={`more:${route.pluginId}:${route.path}`}>
+                            <Link
+                              to={route.path}
+                              className={joinClasses(
+                                cx(wikiChromeStyles, 'topbar-account-item'),
+                                isActive ? 'active' : ''
+                              )}
+                              aria-current={isActive ? 'page' : undefined}
+                              onClick={() => {
+                                setMoreOpen(false);
+                              }}
+                            >
+                              {route.navIcon && (
+                                <span className={cx(topBarStyles, 'nav-pill-icon')} aria-hidden="true">
+                                  {route.navIcon}
+                                </span>
+                              )}
+                              <span>{route.navLabel}</span>
+                            </Link>
+                          </li>
+                        );
+                      })}
+                    </ul>
+                  </div>
+                )}
+              </div>
+            ) : (
+              <Link
+                to="/kinship"
+                className={cx(
+                  topBarStyles,
+                  `nav-pill nav-pill-desktop-only ${location.pathname === '/kinship' ? 'active' : ''}`
+                )}
+                aria-current={location.pathname === '/kinship' ? 'page' : undefined}
+              >
+                {KINLOOM_VOCABULARY.nav.kinship}
+              </Link>
+            )}
             <PluginSlot name="topBarNav" className={cx(topBarStyles, 'topbar-nav-plugin-slot')} />
           </nav>
         </div>
@@ -430,7 +562,7 @@ export const ExplorerTopBar: React.FC = () => {
             )}
           </button>
 
-          {isInviteViewer && (
+          {showInviteSignIn && (
             <button
               type="button"
               className={cx(topBarStyles, 'topbar-utility-btn nav-pill-desktop-only')}
@@ -584,7 +716,7 @@ export const ExplorerTopBar: React.FC = () => {
                 )}
 
                 <ul className={cx(topBarStyles, 'topbar-disclosure-list')}>
-                  {isInviteViewer && (
+                  {showInviteSignIn && (
                     <li>
                       <button
                         type="button"
@@ -703,18 +835,29 @@ export const ExplorerTopBar: React.FC = () => {
                         </button>
                         <button
                           type="button"
-                          className={cx(wikiChromeStyles, 'topbar-account-item')}
+                          className={joinClasses(
+                            cx(wikiChromeStyles, 'topbar-account-item'),
+                            cx(topBarStyles, 'topbar-shortcuts-item')
+                          )}
                           onClick={handleOpenShortcuts}
                         >
                           Keyboard Shortcuts
                         </button>
-                        <button
-                          type="button"
-                          className={cx(wikiChromeStyles, 'topbar-account-item')}
-                          onClick={handleResetOnboarding}
-                        >
-                          Reset Tutorial &amp; Onboarding Progress
-                        </button>
+                        <details className={cx(topBarStyles, 'topbar-quiet-reset')}>
+                          <summary className={cx(topBarStyles, 'topbar-quiet-reset-summary')}>
+                            Reset progress
+                          </summary>
+                          <button
+                            type="button"
+                            className={joinClasses(
+                              cx(wikiChromeStyles, 'topbar-account-item'),
+                              cx(topBarStyles, 'topbar-quiet-secondary-item')
+                            )}
+                            onClick={handleResetOnboarding}
+                          >
+                            Reset Tutorial &amp; Onboarding Progress
+                          </button>
+                        </details>
                       </div>
                     </li>
                   )}
@@ -818,7 +961,7 @@ export const ExplorerTopBar: React.FC = () => {
             )}
           </div>
 
-          {onboarding && (
+          {onboarding && !inlineGuideBannerVisible && (
             <div
               className={joinClasses(
                 cx(wikiChromeStyles, 'topbar-account'),
@@ -935,7 +1078,10 @@ export const ExplorerTopBar: React.FC = () => {
                   <button
                     type="button"
                     role="menuitem"
-                    className={cx(wikiChromeStyles, 'topbar-account-item')}
+                    className={joinClasses(
+                      cx(wikiChromeStyles, 'topbar-account-item'),
+                      cx(topBarStyles, 'topbar-shortcuts-item')
+                    )}
                     onClick={handleOpenShortcuts}
                   >
                     Keyboard Shortcuts
@@ -944,7 +1090,10 @@ export const ExplorerTopBar: React.FC = () => {
                   <button
                     type="button"
                     role="menuitem"
-                    className={cx(wikiChromeStyles, 'topbar-account-item')}
+                    className={joinClasses(
+                      cx(wikiChromeStyles, 'topbar-account-item'),
+                      cx(topBarStyles, 'topbar-quiet-secondary-item')
+                    )}
                     onClick={handleResetOnboarding}
                   >
                     Reset Tutorial &amp; Onboarding Progress
@@ -969,6 +1118,16 @@ export const ExplorerTopBar: React.FC = () => {
           </div>
         )}
       </header>
+      {accountOpen && (
+        <div
+          className={cx(topBarStyles, 'topbar-mobile-scrim')}
+          aria-hidden="true"
+          data-testid="mobile-menu-scrim"
+          onClick={() => {
+            setAccountOpen(false);
+          }}
+        />
+      )}
       {isInviteViewer && (
         <SignInModal
           open={signInOpen}

@@ -31,7 +31,7 @@ import { R2IncrementalPatchBundleCache } from './adapters/r2BundleCache.js';
 import { R2MediaStore } from './adapters/r2MediaStore.js';
 import type { ExecutionContext, ExportedHandler, KinloomWorkerEnv } from './types.js';
 
-export const KINLOOM_WORKER_VERSION = '0.82.0';
+export const KINLOOM_WORKER_VERSION = '0.84.2';
 
 export {
   type AdminObservabilityStatsResponse,
@@ -357,7 +357,9 @@ export function createCloudflareWorker(
           ? {
               ...(env.GEMINI_API_KEY !== undefined ? { geminiApiKey: env.GEMINI_API_KEY } : {}),
               ...(env.GEMINI_TTS_MODEL !== undefined ? { geminiModel: env.GEMINI_TTS_MODEL } : {}),
-              ...(env.GOOGLE_CLOUD_TTS_API_KEY !== undefined ? { googleCloudTtsApiKey: env.GOOGLE_CLOUD_TTS_API_KEY } : {}),
+              ...(env.GOOGLE_CLOUD_TTS_API_KEY !== undefined
+                ? { googleCloudTtsApiKey: env.GOOGLE_CLOUD_TTS_API_KEY }
+                : {}),
               ...(env.GCP_PROJECT_ID !== undefined ? { gcpProjectId: env.GCP_PROJECT_ID } : {}),
               ...(env.CHIRP3_HD_VOICE !== undefined ? { chirpVoice: env.CHIRP3_HD_VOICE } : {}),
               ...(options.pronunciationFetch !== undefined ? { fetchImpl: options.pronunciationFetch } : {}),
@@ -374,7 +376,9 @@ export function createCloudflareWorker(
         siteConfig: options.siteConfig,
         mode,
         sessionSecret: env.SESSION_SECRET,
-        ...(env.BOOTSTRAP_ADMIN_EMAIL !== undefined ? { bootstrapAdminEmail: env.BOOTSTRAP_ADMIN_EMAIL } : {}),
+        ...(env.BOOTSTRAP_ADMIN_EMAIL !== undefined
+          ? { bootstrapAdminEmail: env.BOOTSTRAP_ADMIN_EMAIL }
+          : {}),
         ...(options.onPluginError !== undefined ? { onPluginError: options.onPluginError } : {}),
         compiledPluginRoutes,
         diagnostics: {

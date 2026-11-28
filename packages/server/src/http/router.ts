@@ -59,6 +59,8 @@ export interface KinloomServerConfig {
   ports: KinloomServerPorts;
   sessionSecret: string;
   mode?: 'private' | 'public';
+  hasReadings?: boolean;
+  hasMediaChecklist?: boolean;
   bootstrapAdminEmail?: string;
   sessionTtlSeconds?: number;
   oauthCookieTtlSeconds?: number;
@@ -250,6 +252,9 @@ export function createKinloomServer(config: KinloomServerConfig): KinloomServer 
     authProvider: config.ports.authProvider,
     clock: config.ports.clock,
     siteConfig: config.siteConfig,
+    mode,
+    hasReadings: config.hasReadings,
+    hasMediaChecklist: config.hasMediaChecklist,
     bootstrapAdminEmail: config.bootstrapAdminEmail,
     magicLinkTtlMinutes: config.magicLinkTtlMinutes,
     userOnboardingStore: config.ports.userOnboardingStore,

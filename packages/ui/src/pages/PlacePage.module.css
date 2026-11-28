@@ -234,7 +234,7 @@
   overflow: hidden;
   background: var(--surface-linen);
   border-bottom: 1px solid var(--border-decorative);
-  border-radius: 2px;
+  border-radius: var(--radius-sm);
 }
 
 .occupancy-decade-hairline {
@@ -254,7 +254,7 @@
   z-index: 1;
   min-width: 10px;
   background: var(--radar-copresence);
-  border-radius: 2px;
+  border-radius: var(--radius-sm);
   transition: background-color 0.14s ease;
 }
 
@@ -291,7 +291,79 @@
   }
 }
 
+.place-header-top {
+  display: flex;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.place-survey-stage {
+  margin-top: 14px;
+}
+
 @media (max-width: 768px) {
+  .place-utility-bar {
+    margin-bottom: 2px;
+    gap: 4px 10px;
+  }
+
+  .place-header-top {
+    gap: 6px;
+  }
+
+  .place-breadcrumb {
+    margin-bottom: 0;
+    gap: 4px;
+  }
+
+  .place-breadcrumb a {
+    display: inline-flex;
+    align-items: center;
+    min-height: var(--control-height-touch);
+    padding: 6px 4px;
+  }
+
+  .place-dossier-title {
+    font-size: 1.44rem;
+    line-height: 1.12;
+    margin: 0 0 2px;
+  }
+
+  .place-front-door-summary {
+    margin: 0 0 2px;
+    font-size: 0.74rem;
+  }
+
+  .place-scope-bar {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    scrollbar-width: none;
+    gap: 8px;
+    max-width: 100%;
+    width: 100%;
+    padding-bottom: 2px;
+  }
+
+  .place-scope-bar::-webkit-scrollbar {
+    display: none;
+  }
+
+  .place-scope-bar :global(.kl-cluster) {
+    flex-wrap: nowrap;
+    flex-shrink: 0;
+  }
+
+  .place-scope-bar :global(.pill-btn),
+  .place-scope-bar :global(.ink-link-btn) {
+    white-space: nowrap;
+    flex-shrink: 0;
+  }
+
+  .place-survey-stage {
+    margin-top: 8px;
+  }
+
   .place-history-grid {
     grid-template-columns: minmax(0, 1fr);
   }

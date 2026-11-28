@@ -892,7 +892,11 @@ export function tryFastParseMediaItem(raw: unknown, ownsInput = false): MediaIte
     personIds = validatedIds;
   }
 
-  if (ownsInput && raw['date_edtf'] === dateEdtf && (personIds === undefined || raw['person_ids'] === personIds)) {
+  if (
+    ownsInput &&
+    raw['date_edtf'] === dateEdtf &&
+    (personIds === undefined || raw['person_ids'] === personIds)
+  ) {
     let expectedKeys = 4;
     if (sourceId !== undefined) expectedKeys += 1;
     if (page !== undefined) expectedKeys += 1;

@@ -3,6 +3,14 @@ import type { GeoJSONSource, Map as MapLibreMap, Source, StyleSpecification } fr
 import { setMaxParallelImageRequests, setWorkerCount, setWorkerUrl } from 'maplibre-gl';
 import maplibreWorkerUrl from 'maplibre-gl/dist/maplibre-gl-worker.mjs?url';
 import { PAPER_LAND_LAYER_ID } from '../../browser/ohmStyle.js';
+import {
+  getOfflineBasemapPalette,
+  OFFLINE_BASEMAP_LAYER_IDS,
+  OFFLINE_BASEMAP_SOURCE_IDS,
+  OFFLINE_GRATICULE_GEOJSON,
+  OFFLINE_INLAND_WATER_GEOJSON,
+  OFFLINE_LAND_GEOJSON,
+} from '../../lib/mapOfflineBasemap.js';
 import { getResolvedThemeColorTokens } from '../../lib/tokens.js';
 import { SOURCE_ID, STOP_LAYER_ID } from './mapOverlayData.js';
 
@@ -22,17 +30,77 @@ export function ensureMapLibreConfigured(): void {
 }
 
 export function buildPaperStyle(isDark = false): StyleSpecification {
-  const palette = getResolvedThemeColorTokens(isDark);
+  const colors = getOfflineBasemapPalette(isDark);
   return {
     version: 8,
     name: 'paper',
     glyphs: 'https://www.openhistoricalmap.org/map-styles/fonts/{fontstack}/{range}.pbf',
-    sources: {},
+    sources: {
+      [OFFLINE_BASEMAP_SOURCE_IDS.graticule]: {
+        type: 'geojson',
+        data: OFFLINE_GRATICULE_GEOJSON,
+      },
+      [OFFLINE_BASEMAP_SOURCE_IDS.land]: {
+        type: 'geojson',
+        data: OFFLINE_LAND_GEOJSON,
+      },
+      [OFFLINE_BASEMAP_SOURCE_IDS.inlandWater]: {
+        type: 'geojson',
+        data: OFFLINE_INLAND_WATER_GEOJSON,
+      },
+    },
     layers: [
       {
-        id: 'paper',
+        id: OFFLINE_BASEMAP_LAYER_IDS.background,
         type: 'background',
-        paint: { 'background-color': palette.land },
+        paint: { 'background-color': colors.water },
+      },
+      {
+        id: OFFLINE_BASEMAP_LAYER_IDS.graticule,
+        type: 'line',
+        source: OFFLINE_BASEMAP_SOURCE_IDS.graticule,
+        paint: {
+          'line-color': colors.graticule,
+          'line-width': 0.75,
+          'line-opacity': colors.graticuleOpacity,
+          'line-dasharray': [2, 3],
+        },
+      },
+      {
+        id: OFFLINE_BASEMAP_LAYER_IDS.landFill,
+        type: 'fill',
+        source: OFFLINE_BASEMAP_SOURCE_IDS.land,
+        paint: {
+          'fill-color': colors.land,
+        },
+      },
+      {
+        id: OFFLINE_BASEMAP_LAYER_IDS.coastline,
+        type: 'line',
+        source: OFFLINE_BASEMAP_SOURCE_IDS.land,
+        paint: {
+          'line-color': colors.coastline,
+          'line-width': 1.15,
+          'line-opacity': colors.coastlineOpacity,
+        },
+      },
+      {
+        id: OFFLINE_BASEMAP_LAYER_IDS.inlandWaterFill,
+        type: 'fill',
+        source: OFFLINE_BASEMAP_SOURCE_IDS.inlandWater,
+        paint: {
+          'fill-color': colors.water,
+        },
+      },
+      {
+        id: OFFLINE_BASEMAP_LAYER_IDS.inlandWaterShore,
+        type: 'line',
+        source: OFFLINE_BASEMAP_SOURCE_IDS.inlandWater,
+        paint: {
+          'line-color': colors.coastline,
+          'line-width': 0.9,
+          'line-opacity': colors.coastlineOpacity,
+        },
       },
     ],
   };
@@ -89,12 +157,12 @@ export interface FitPadding {
 export function computeSafeFitPadding(input: FitPaddingMeasurements): FitPadding {
   const isMobile = input.viewportWidth <= 767;
   const toolbarOffset = isMobile ? 8 : 12;
-  const toolbarGap = isMobile ? 16 : 20;
+  const toolbarGap = isMobile ? 12 : 20;
   const measuredTop =
     input.toolbarHeight !== undefined && input.toolbarHeight > 0
       ? Math.ceil(input.toolbarHeight) + toolbarOffset + toolbarGap
       : isMobile
-        ? 124
+        ? 76
         : 82;
 
   const defaultBottom = isMobile ? (input.hasSelectedStop ? 210 : 124) : 112;
@@ -105,8 +173,8 @@ export function computeSafeFitPadding(input: FitPaddingMeasurements): FitPadding
 
   let top = measuredTop;
   let bottom = Math.max(defaultBottom, measuredBottom, input.drawerBottomPx ?? 0);
-  let left = isMobile ? 20 : 28;
-  let right = isMobile ? 76 : input.hasSelectedStop ? 344 : 110;
+  let left = isMobile ? 28 : 36;
+  let right = isMobile ? 32 : input.hasSelectedStop ? 344 : 118;
 
   if (input.viewportHeight !== undefined && input.viewportHeight > 0) {
     const maxVertical = Math.max(0, input.viewportHeight - 120);
@@ -332,8 +400,14 @@ function addFamilyLayers(map: MapLibreMap, isDark = false): void {
       'text-field': ['coalesce', ['get', 'label'], ''],
       'text-font': ['OpenHistorical'],
       'text-size': 12,
-      'text-offset': [0.75, 0],
-      'text-anchor': 'left',
+      'text-offset': [
+        'case',
+        ['==', ['get', 'labelAnchor'], 'right'],
+        ['literal', [-0.75, 0]],
+        ['literal', [0.75, 0]],
+      ],
+      'text-anchor': ['coalesce', ['get', 'labelAnchor'], 'left'],
+      'text-max-width': 14,
       'text-allow-overlap': false,
       'text-padding': 4,
       'text-optional': true,
@@ -354,8 +428,14 @@ function addFamilyLayers(map: MapLibreMap, isDark = false): void {
       'text-field': ['coalesce', ['get', 'label'], ''],
       'text-font': ['OpenHistorical Bold'],
       'text-size': 12.5,
-      'text-offset': [0.8, 0],
-      'text-anchor': 'left',
+      'text-offset': [
+        'case',
+        ['==', ['get', 'labelAnchor'], 'right'],
+        ['literal', [-0.8, 0]],
+        ['literal', [0.8, 0]],
+      ],
+      'text-anchor': ['coalesce', ['get', 'labelAnchor'], 'left'],
+      'text-max-width': 14,
       'text-allow-overlap': false,
       'text-ignore-placement': false,
       'text-padding': 4,
@@ -373,6 +453,7 @@ export function applyMapThemeToLayers(map: MapLibreMap, isDark: boolean): void {
     return;
   }
   const palette = getResolvedThemeColorTokens(isDark);
+  const offlinePalette = getOfflineBasemapPalette(isDark);
   const paintIfPresent = (
     layerId: string,
     prop: Parameters<MapLibreMap['setPaintProperty']>[1],
@@ -383,12 +464,32 @@ export function applyMapThemeToLayers(map: MapLibreMap, isDark: boolean): void {
     }
   };
 
-  paintIfPresent('paper', 'background-color', palette.land);
+  const hasOfflineBasemap = Boolean(map.getLayer(OFFLINE_BASEMAP_LAYER_IDS.landFill));
+  if (hasOfflineBasemap) {
+    paintIfPresent(OFFLINE_BASEMAP_LAYER_IDS.background, 'background-color', offlinePalette.water);
+    paintIfPresent(OFFLINE_BASEMAP_LAYER_IDS.graticule, 'line-color', offlinePalette.graticule);
+    paintIfPresent(OFFLINE_BASEMAP_LAYER_IDS.graticule, 'line-opacity', offlinePalette.graticuleOpacity);
+    paintIfPresent(OFFLINE_BASEMAP_LAYER_IDS.landFill, 'fill-color', offlinePalette.land);
+    paintIfPresent(OFFLINE_BASEMAP_LAYER_IDS.coastline, 'line-color', offlinePalette.coastline);
+    paintIfPresent(OFFLINE_BASEMAP_LAYER_IDS.coastline, 'line-opacity', offlinePalette.coastlineOpacity);
+    paintIfPresent(OFFLINE_BASEMAP_LAYER_IDS.inlandWaterFill, 'fill-color', offlinePalette.water);
+    paintIfPresent(OFFLINE_BASEMAP_LAYER_IDS.inlandWaterShore, 'line-color', offlinePalette.coastline);
+    paintIfPresent(
+      OFFLINE_BASEMAP_LAYER_IDS.inlandWaterShore,
+      'line-opacity',
+      offlinePalette.coastlineOpacity
+    );
+  } else {
+    paintIfPresent(OFFLINE_BASEMAP_LAYER_IDS.background, 'background-color', palette.land);
+  }
   paintIfPresent(PAPER_LAND_LAYER_ID, 'fill-color', palette.land);
 
   const styleLayers = typeof map.getStyle === 'function' ? (map.getStyle()?.layers ?? []) : [];
   for (const layer of styleLayers) {
     if (layer.type === 'background') {
+      if (hasOfflineBasemap && layer.id === OFFLINE_BASEMAP_LAYER_IDS.background) {
+        continue;
+      }
       paintIfPresent(layer.id, 'background-color', palette.land);
     } else if (layer.type === 'fill' && 'source-layer' in layer && layer['source-layer'] === 'water_areas') {
       paintIfPresent(layer.id, 'fill-color', palette.water);

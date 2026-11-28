@@ -763,6 +763,9 @@ export function formatPersonDirectoryLifespan(person: Person): string {
   if (person.is_living) {
     return formatLivingLifespan(person);
   }
+  if (person.birth_year === null && person.death_year === null) {
+    return 'Dates unknown';
+  }
   return `${person.birth_year ?? '?'} – ${person.death_year ?? '?'}`;
 }
 

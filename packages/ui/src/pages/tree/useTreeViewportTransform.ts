@@ -81,8 +81,9 @@ export function useTreeViewportTransform(params: {
   readonly stageRef: React.RefObject<HTMLDivElement | null>;
   readonly toolbarRef?: React.RefObject<HTMLDivElement | null>;
   readonly controlsRef?: React.RefObject<HTMLDivElement | null>;
+  readonly minimapRef?: React.RefObject<HTMLElement | null>;
 }): TreeViewportTransformEngine {
-  const { diagramLayout, containerRef, stageRef, toolbarRef, controlsRef } = params;
+  const { diagramLayout, containerRef, stageRef, toolbarRef, controlsRef, minimapRef } = params;
   const [semanticZoom, setSemanticZoom] = useState<SemanticZoomLevel>(
     resolveSemanticZoomLevel(INITIAL_TREE_TRANSFORM.zoom)
   );
@@ -300,20 +301,33 @@ export function useTreeViewportTransform(params: {
       }
     }
 
-    let right = isNarrow ? 64 : 84;
+    let right = isNarrow ? 68 : 96;
     const ctrlEl = controlsRef?.current ?? container?.querySelector<HTMLElement>('.tree-controls') ?? null;
     if (ctrlEl) {
       const ctrlRect = ctrlEl.getBoundingClientRect();
       const measuredCtrlW = ctrlRect.width > 0 ? ctrlRect.width : ctrlEl.offsetWidth;
       if (measuredCtrlW > 0) {
-        right = Math.ceil(measuredCtrlW + (isNarrow ? 20 : 28));
+        right = Math.max(right, Math.ceil(measuredCtrlW + (isNarrow ? 24 : 36)));
       }
     }
 
     const left = isNarrow ? 12 : 20;
-    const bottom = isNarrow ? 18 : 24;
+    let bottom = isNarrow ? 24 : 28;
+    const minimapEl = minimapRef?.current ?? container?.querySelector<HTMLElement>('.tree-minimap') ?? null;
+    if (minimapEl) {
+      const minimapRect = minimapEl.getBoundingClientRect();
+      const measuredMinimapH = minimapRect.height > 0 ? minimapRect.height : minimapEl.offsetHeight;
+      const isCollapsed = minimapEl.classList.contains('is-collapsed');
+      const fallbackMinimapH = isCollapsed ? 34 : isNarrow ? 116 : 148;
+      const effectiveMinimapH = measuredMinimapH > 0 ? measuredMinimapH : fallbackMinimapH;
+      const maxBottomReserve = Math.floor(vh * 0.34);
+      bottom = Math.max(
+        bottom,
+        Math.min(maxBottomReserve, Math.ceil(effectiveMinimapH + (isNarrow ? 26 : 34)))
+      );
+    }
     return { top, right, bottom, left, viewportWidth: vw, viewportHeight: vh };
-  }, [containerRef, controlsRef, getViewportSize, toolbarRef]);
+  }, [containerRef, controlsRef, getViewportSize, minimapRef, toolbarRef]);
 
   // Keep G1 clear of the toolbar when responsive toolbar wrapping changes its measured height.
   useEffect(() => {
@@ -346,6 +360,14 @@ export function useTreeViewportTransform(params: {
       notifySubscribers(current);
     });
     observer.observe(toolbarEl);
+    const minimapEl = minimapRef?.current ?? container?.querySelector<HTMLElement>('.tree-minimap') ?? null;
+    if (minimapEl) {
+      observer.observe(minimapEl);
+    }
+    const ctrlEl = controlsRef?.current ?? container?.querySelector<HTMLElement>('.tree-controls') ?? null;
+    if (ctrlEl) {
+      observer.observe(ctrlEl);
+    }
     if (container) {
       observer.observe(container);
     }
@@ -355,8 +377,10 @@ export function useTreeViewportTransform(params: {
   }, [
     applyTransformNow,
     containerRef,
+    controlsRef,
     diagramLayout.genBands,
     measureSafeInsets,
+    minimapRef,
     notifySubscribers,
     toolbarRef,
   ]);

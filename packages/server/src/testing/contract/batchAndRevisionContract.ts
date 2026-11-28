@@ -303,7 +303,9 @@ export function registerBatchAndRevisionContractTests(withHarness: WithContractH
         'Historical Person 94'
       );
       const lastEvent = fetched.get(entityLookupCompositeKey('event', 'evt_bulk_19'));
-      expect(lastEvent && !('edge' in lastEvent) ? lastEvent.data['summary'] : null).toBe('Historical Event 19');
+      expect(lastEvent && !('edge' in lastEvent) ? lastEvent.data['summary'] : null).toBe(
+        'Historical Event 19'
+      );
       const edgeLookup = lookupKeys[115];
       if (!edgeLookup) throw new Error('Expected lookupKeys[115]');
       const firstEdge = fetched.get(entityLookupCompositeKey('kinship_edge', edgeLookup.entityId));

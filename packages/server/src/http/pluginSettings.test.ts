@@ -219,7 +219,9 @@ describe('Declarative Plugin Settings API, RBAC/CSRF, write-only secrets, and re
       google_cloud_tts_api_key: { configured: false, updated_at: null },
       openai_api_key: { configured: true, updated_at: '2026-11-27T12:00:00.000Z' },
     });
-    expect(updatedAfterSecrets.plugin.readonly_values['configured_credentials']).toBe('gemini, openai-speech');
+    expect(updatedAfterSecrets.plugin.readonly_values['configured_credentials']).toBe(
+      'gemini, openai-speech'
+    );
     expect(updatedAfterSecrets.plugin.readonly_values['active_generator']).toBe('openai-speech');
     expect(pronunciationPlugin.getRuntimeConfig()).toMatchObject({
       primaryBackend: 'openai-speech',

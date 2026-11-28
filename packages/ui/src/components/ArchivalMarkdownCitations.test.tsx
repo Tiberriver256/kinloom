@@ -8,7 +8,7 @@ import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { ArchiveProvider } from '../context/ArchiveProvider.js';
 import { PersonPage } from '../pages/PersonPage.js';
-import { ArchivalMarkdown } from './ArchivalMarkdown.js';
+import { ArchivalMarkdown, formatNarrativeDateSpan } from './ArchivalMarkdown.js';
 import { computeCitationPopoverPosition } from './CitationPopover.js';
 import { SourceInspectorDrawer } from './SourceInspectorDrawer.js';
 
@@ -312,6 +312,61 @@ describe('ArchivalMarkdown inline footnote citations and CitationPopover', () =>
     expect(nearBottom.placement).toBe('above');
     expect(nearBottom.top).toBeLessThan(610);
     expect(nearBottom.top).toBeGreaterThanOrEqual(12);
+  });
+
+  it('clamps popover below sticky header, anchors in desktop marginalia lane, omits broken scans, and formats human-readable narrative date spans (#109)', () => {
+    // 1. Clamp below sticky header (headerBottom = 56 -> top >= 68)
+    const clampedBelowHeader = computeCitationPopoverPosition({
+      anchorRect: { top: 64, bottom: 80, left: 220, right: 244, width: 24 },
+      popoverSize: { width: 320, height: 220 },
+      viewport: { width: 900, height: 260 },
+      headerBottom: 56,
+    });
+    expect(clampedBelowHeader.top).toBeGreaterThanOrEqual(56 + 12);
+
+    // 2. Anchor in right marginalia lane on desktop (>= 1024px)
+    const desktopMarginalia = computeCitationPopoverPosition({
+      anchorRect: { top: 240, bottom: 256, left: 320, right: 344, width: 24 },
+      popoverSize: { width: 320, height: 220 },
+      viewport: { width: 1440, height: 900 },
+      headerBottom: 56,
+      marginaliaLane: { left: 960, right: 1240, width: 280 },
+      preferRightLane: true,
+    });
+    expect(desktopMarginalia.placement).toBe('marginalia');
+    expect(desktopMarginalia.left).toBe(960);
+    expect(desktopMarginalia.top).toBeGreaterThanOrEqual(56 + 12);
+
+    // 3. Broken scan image is cleanly omitted on error (no empty grey box)
+    const sourcesById = new Map(TEST_SOURCES.map((s) => [s.id, s]));
+    const { container, unmount } = renderIntoDom(
+      <ArchivalMarkdown
+        markdown="Enumerated in 1880.[^src_demo_census_1880]"
+        sourcesById={sourcesById}
+        mediaItems={TEST_MEDIA}
+        subjectPersonId="p_harriet"
+        resolveMediaUrl={(m) => `https://archive.example${m.file}`}
+      />
+    );
+    const btn = container.querySelector<HTMLButtonElement>('.archival-footnote-ref');
+    act(() => {
+      btn?.click();
+    });
+    const popover = document.body.querySelector<HTMLDivElement>('.citation-popover');
+    const img = popover?.querySelector<HTMLImageElement>('.citation-popover-media-img');
+    expect(img).not.toBeNull();
+    expect(popover?.querySelector('[data-image-status="loading"]')).not.toBeNull();
+    act(() => {
+      img?.dispatchEvent(new Event('error'));
+    });
+    expect(popover?.querySelector('.citation-popover-media-wrap')).toBeNull();
+    unmount();
+
+    // 4. Human-readable biography date spans (no colliding YYYY-MM-DD–YYYY-MM-DD)
+    expect(formatNarrativeDateSpan('1851-03-14/1926-11-02')).toBe('Mar 14, 1851 — Nov 2, 1926');
+    expect(formatNarrativeDateSpan('1851/1926')).toBe('1851–1926');
+    expect(formatNarrativeDateSpan('~1851/1926')).toBe('c. 1851 — 1926');
+    expect(formatNarrativeDateSpan('1851-03')).toBe('Mar 1851');
   });
 });
 

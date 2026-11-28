@@ -115,8 +115,9 @@
   width: 28px;
   height: 28px;
   border-radius: var(--radius-sm);
-  background: var(--surface-header);
-  color: var(--text-inverse);
+  background: var(--surface-action-primary);
+  color: var(--text-on-action-primary);
+  border: var(--border-width-thin) solid var(--border-action-primary);
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -174,6 +175,7 @@
 .topbar-account-item {
   display: flex;
   align-items: center;
+  gap: 8px;
   width: 100%;
   padding: 8px 10px;
   border: none;
@@ -271,18 +273,18 @@
 }
 
 .wiki-btn-primary {
-  background: var(--surface-header);
-  color: var(--text-inverse);
-  border: 1px solid var(--surface-header);
+  background: var(--surface-action-primary);
+  color: var(--text-on-action-primary);
+  border: var(--border-width-thin) solid var(--border-action-primary);
 }
 
 .wiki-btn-primary:hover:not(:disabled) {
-  background: color-mix(in srgb, var(--surface-header) 86%, var(--surface-card));
-  border-color: color-mix(in srgb, var(--surface-header) 86%, var(--surface-card));
+  background: var(--surface-action-primary-hover);
+  border-color: var(--border-action-primary);
 }
 
 .wiki-btn-primary:active:not(:disabled) {
-  background: color-mix(in srgb, var(--surface-header) 88%, var(--border-strong));
+  background: var(--surface-action-primary-hover);
 }
 
 .wiki-btn-primary:disabled {

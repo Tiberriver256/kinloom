@@ -85,7 +85,9 @@ export const EvidenceLegend: React.FC<EvidenceLegendProps> = ({
         <span className={cx(styles, 'evidence-legend-chevron')} aria-hidden="true">
           {open ? '▾' : '▸'}
         </span>
-        <span>{KINLOOM_VOCABULARY.epistemic.legendTitle}</span>
+        <span className={cx(styles, 'evidence-legend-toggle-label')}>
+          {KINLOOM_VOCABULARY.epistemic.legendTitle}
+        </span>
       </button>
 
       {open && (

@@ -9,6 +9,8 @@ import markdownStyles from './ArchivalMarkdown.module.css';
 import { ArchivalImage } from './Atoms.js';
 
 const SAFE_EXTERNAL_URL_RE = /^https?:\/\//i;
+const DESKTOP_MARGINALIA_BREAKPOINT = 1024;
+const MIN_MARGINALIA_LANE_WIDTH = 220;
 
 export interface PopoverAnchorRect {
   top: number;
@@ -18,11 +20,82 @@ export interface PopoverAnchorRect {
   width: number;
 }
 
+export interface PopoverLaneRect {
+  left: number;
+  right: number;
+  width: number;
+}
+
 export interface PopoverCoordinates {
   top: number;
   left: number;
-  placement: 'above' | 'below';
+  placement: 'above' | 'below' | 'marginalia';
   maxWidth: number;
+}
+
+export function measureStickyHeaderBottom(): number {
+  if (typeof window === 'undefined' || typeof document === 'undefined') {
+    return 0;
+  }
+  const headers = document.querySelectorAll<HTMLElement>('header');
+  for (const header of headers) {
+    const style = window.getComputedStyle(header);
+    const rect = header.getBoundingClientRect();
+    const isStickyOrFixed = style.position === 'sticky' || style.position === 'fixed';
+    const isTopbarClass = typeof header.className === 'string' && header.className.includes('topbar');
+    if ((isStickyOrFixed || isTopbarClass) && rect.bottom > 0 && rect.top <= 4) {
+      return Math.ceil(rect.bottom);
+    }
+  }
+  const cssVar = window.getComputedStyle(document.documentElement).getPropertyValue('--topbar-height').trim();
+  const parsed = Number.parseFloat(cssVar);
+  if (Number.isFinite(parsed) && parsed > 0) {
+    return Math.ceil(parsed);
+  }
+  return 0;
+}
+
+export function measureDesktopMarginaliaLane(anchorEl: HTMLElement): PopoverLaneRect | null {
+  if (typeof window === 'undefined' || window.innerWidth < DESKTOP_MARGINALIA_BREAKPOINT) {
+    return null;
+  }
+  const viewportWidth = window.innerWidth;
+  const margin = 12;
+
+  const row = anchorEl.closest<HTMLElement>('[class*="folio-marginalia-row"]');
+  if (row) {
+    const rail = row.querySelector<HTMLElement>(
+      '[class*="folio-marginalia-rail"], [class*="folio-marginalia-rail-empty"]'
+    );
+    if (rail) {
+      const rect = rail.getBoundingClientRect();
+      if (rect.width >= 180 && rect.left < viewportWidth - margin) {
+        return {
+          left: rect.left,
+          right: Math.min(rect.right, viewportWidth - margin),
+          width: Math.min(rect.width, viewportWidth - margin - rect.left),
+        };
+      }
+    }
+  }
+
+  const proseContainer = anchorEl.closest<HTMLElement>(
+    '[class*="folio-marginalia-main"], [class*="person-biography-entry"], [class*="archival-markdown"]'
+  );
+  if (proseContainer) {
+    const rect = proseContainer.getBoundingClientRect();
+    const laneLeft = rect.right + 16;
+    const laneWidth = viewportWidth - margin - laneLeft;
+    if (rect.width > 0 && laneWidth >= MIN_MARGINALIA_LANE_WIDTH) {
+      return {
+        left: laneLeft,
+        right: viewportWidth - margin,
+        width: laneWidth,
+      };
+    }
+  }
+
+  return null;
 }
 
 export function computeCitationPopoverPosition(params: {
@@ -31,22 +104,61 @@ export function computeCitationPopoverPosition(params: {
   viewport: { width: number; height: number };
   margin?: number;
   gap?: number;
+  headerBottom?: number;
+  marginaliaLane?: PopoverLaneRect | null;
+  preferRightLane?: boolean;
 }): PopoverCoordinates {
   const margin = params.margin ?? 12;
   const gap = params.gap ?? 8;
+  const headerBottom = Math.max(0, params.headerBottom ?? 0);
+  const minTop = Math.max(margin, Math.ceil(headerBottom) + margin);
+
   const maxWidth = Math.min(340, Math.max(220, params.viewport.width - margin * 2));
   const effectiveWidth = Math.min(
     params.popoverSize.width > 0 ? params.popoverSize.width : maxWidth,
     maxWidth
   );
   const effectiveHeight = params.popoverSize.height > 0 ? params.popoverSize.height : 200;
+  const maxLeft = Math.max(margin, params.viewport.width - effectiveWidth - margin);
+  const maxTop = Math.max(minTop, params.viewport.height - effectiveHeight - margin);
+
+  if (params.viewport.width >= DESKTOP_MARGINALIA_BREAKPOINT) {
+    const lane = params.marginaliaLane;
+    if (lane && params.viewport.width - lane.left - margin >= MIN_MARGINALIA_LANE_WIDTH) {
+      const laneMaxWidth = Math.min(maxWidth, Math.max(220, params.viewport.width - lane.left - margin));
+      const laneEffectiveWidth = Math.min(effectiveWidth, laneMaxWidth);
+      const laneMaxLeft = Math.max(margin, params.viewport.width - laneEffectiveWidth - margin);
+      const left = Math.round(Math.max(margin, Math.min(lane.left, laneMaxLeft)));
+      const rawTop = params.anchorRect.top - 8;
+      const top = Math.round(Math.max(minTop, Math.min(rawTop, maxTop)));
+      return {
+        top,
+        left,
+        placement: 'marginalia',
+        maxWidth: Math.round(laneMaxWidth),
+      };
+    }
+
+    if (params.preferRightLane) {
+      const rightLaneLeft = Math.max(margin, params.viewport.width - effectiveWidth - margin);
+      if (rightLaneLeft >= params.anchorRect.right + 16) {
+        const rawTop = params.anchorRect.top - 8;
+        const top = Math.round(Math.max(minTop, Math.min(rawTop, maxTop)));
+        return {
+          top,
+          left: Math.round(rightLaneLeft),
+          placement: 'marginalia',
+          maxWidth: Math.round(maxWidth),
+        };
+      }
+    }
+  }
 
   const idealLeft = params.anchorRect.left + params.anchorRect.width / 2 - effectiveWidth / 2;
-  const maxLeft = Math.max(margin, params.viewport.width - effectiveWidth - margin);
   const left = Math.round(Math.max(margin, Math.min(idealLeft, maxLeft)));
 
   const spaceBelow = params.viewport.height - params.anchorRect.bottom - gap - margin;
-  const spaceAbove = params.anchorRect.top - gap - margin;
+  const spaceAbove = params.anchorRect.top - gap - minTop;
 
   let placement: 'above' | 'below';
   let rawTop: number;
@@ -58,8 +170,7 @@ export function computeCitationPopoverPosition(params: {
     rawTop = params.anchorRect.top - gap - effectiveHeight;
   }
 
-  const maxTop = Math.max(margin, params.viewport.height - effectiveHeight - margin);
-  const top = Math.round(Math.max(margin, Math.min(rawTop, maxTop)));
+  const top = Math.round(Math.max(minTop, Math.min(rawTop, maxTop)));
 
   return {
     top,
@@ -110,6 +221,9 @@ export const CitationPopover: React.FC<CitationPopoverProps> = ({
         width: typeof window !== 'undefined' ? window.innerWidth : 1024,
         height: typeof window !== 'undefined' ? window.innerHeight : 768,
       },
+      headerBottom: measureStickyHeaderBottom(),
+      marginaliaLane: measureDesktopMarginaliaLane(anchorEl),
+      preferRightLane: true,
     })
   );
   const [imageFailed, setImageFailed] = useState(false);
@@ -136,6 +250,9 @@ export const CitationPopover: React.FC<CitationPopoverProps> = ({
           width: window.innerWidth || 1024,
           height: window.innerHeight || 768,
         },
+        headerBottom: measureStickyHeaderBottom(),
+        marginaliaLane: measureDesktopMarginaliaLane(anchorEl),
+        preferRightLane: true,
       })
     );
   }, [anchorEl, popoverRef]);
@@ -155,7 +272,8 @@ export const CitationPopover: React.FC<CitationPopoverProps> = ({
 
   const citation = buildLibrarianCitation(source);
   const safeExternalUrl = citation.url && SAFE_EXTERNAL_URL_RE.test(citation.url) ? citation.url : null;
-  const showMediaPreview = Boolean(media && mediaUrl && !imageFailed);
+  const trimmedMediaUrl = mediaUrl?.trim() || null;
+  const showMediaPreview = Boolean(media && trimmedMediaUrl && !imageFailed);
 
   const card = (
     <div
@@ -208,7 +326,7 @@ export const CitationPopover: React.FC<CitationPopoverProps> = ({
         </div>
       )}
 
-      {showMediaPreview && media && mediaUrl && (
+      {showMediaPreview && media && trimmedMediaUrl && (
         <div className={cx(markdownStyles, 'citation-popover-media-wrap')}>
           {onOpenMedia ? (
             <button
@@ -222,11 +340,12 @@ export const CitationPopover: React.FC<CitationPopoverProps> = ({
             >
               <span className={cx(markdownStyles, 'citation-popover-media-frame')}>
                 <ArchivalImage
-                  src={mediaUrl}
+                  src={trimmedMediaUrl}
                   alt={media.caption}
+                  frameClassName={cx(markdownStyles, 'citation-popover-media-image-frame')}
                   className={cx(markdownStyles, 'citation-popover-media-img')}
                   frameStyle={{ width: '100%' }}
-                  loading="lazy"
+                  loading="eager"
                   fallback={null}
                   onLoad={reposition}
                   onError={() => {
@@ -240,11 +359,12 @@ export const CitationPopover: React.FC<CitationPopoverProps> = ({
             <figure className={cx(markdownStyles, 'citation-popover-media-figure')}>
               <div className={cx(markdownStyles, 'citation-popover-media-frame')}>
                 <ArchivalImage
-                  src={mediaUrl}
+                  src={trimmedMediaUrl}
                   alt={media.caption}
+                  frameClassName={cx(markdownStyles, 'citation-popover-media-image-frame')}
                   className={cx(markdownStyles, 'citation-popover-media-img')}
                   frameStyle={{ width: '100%' }}
-                  loading="lazy"
+                  loading="eager"
                   fallback={null}
                   onLoad={reposition}
                   onError={() => {

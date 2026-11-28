@@ -20,6 +20,9 @@ export interface LocalSurveyMapProps {
   excludeIds?: Set<string>;
 }
 
+const MIN_SVG_HIT_RADIUS = 12; // 24x24px WCAG 2.2 AA minimum target size
+const MIN_INTERACTIVE_PIN_SEPARATION = MIN_SVG_HIT_RADIUS * 2 + 8; // >= 24px target + >= 8px spacing
+
 export const LocalSurveyMap: React.FC<LocalSurveyMapProps> = ({
   center,
   allPlaces,
@@ -98,7 +101,7 @@ export const LocalSurveyMap: React.FC<LocalSurveyMapProps> = ({
 
   const compassBox = useMemo<SurveyBox>(() => ({ x1: width - 34, x2: width - 2, y1: 2, y2: 34 }), [width]);
 
-  const edgeBadgeFontSize = compact ? 9.5 : isNarrow ? 10.5 : 10.5;
+  const edgeBadgeFontSize = compact ? 9.5 : isNarrow ? 9.5 : 10.5;
   const edgeBadgeLayouts = useMemo(
     () =>
       computeEdgeBadgeLayouts({
@@ -176,6 +179,23 @@ export const LocalSurveyMap: React.FC<LocalSurveyMapProps> = ({
       radiusPx,
     ]
   );
+
+  // Enforce >= 8px spacing between 24x24px interactive SVG marker hit areas; crowded secondary pins
+  // remain visible as decorative dots and fully navigable via the Nearby link strip below the map.
+  const interactiveMarkerIds = useMemo(() => {
+    const selected = new Set<string>();
+    const acceptedPoints: { readonly x: number; readonly y: number }[] = [];
+    for (const m of markers) {
+      const tooClose = acceptedPoints.some(
+        (pt) => Math.hypot(pt.x - m.x, pt.y - m.y) < MIN_INTERACTIVE_PIN_SEPARATION
+      );
+      if (!tooClose) {
+        selected.add(m.place.id);
+        acceptedPoints.push({ x: m.x, y: m.y });
+      }
+    }
+    return selected;
+  }, [markers]);
 
   const insideCount = markers.filter((m) => m.inRadius).length;
   const totalNeighborCount = markers.length + edgeIndicators.length;
@@ -277,8 +297,40 @@ export const LocalSurveyMap: React.FC<LocalSurveyMapProps> = ({
           />
         )}
 
+        {/* Decorative radial spokes rendered outside interactive marker groups */}
+        <g pointerEvents="none">
+          {markers.map((m) => (
+            <line
+              key={`spoke-${m.place.id}`}
+              x1={cx}
+              y1={cy}
+              x2={m.x}
+              y2={m.y}
+              stroke={m.inRadius ? 'var(--accent-primary)' : 'var(--border-control)'}
+              strokeWidth={m.inRadius ? 1.1 : 0.75}
+              strokeDasharray="2 3"
+              opacity={0.7}
+            />
+          ))}
+        </g>
+
         {markers.map((m) => {
           const lbl = labelPlacement.get(m.place.id);
+          const isInteractive = interactiveMarkerIds.has(m.place.id);
+          if (!isInteractive) {
+            return (
+              <g key={m.place.id} pointerEvents="none">
+                <circle
+                  cx={m.x}
+                  cy={m.y}
+                  r={compact ? 3.2 : 4.5}
+                  fill={m.inRadius ? 'var(--accent-secondary)' : 'var(--surface-card)'}
+                  stroke={m.inRadius ? 'var(--surface-card)' : 'var(--text-secondary)'}
+                  strokeWidth="1.2"
+                />
+              </g>
+            );
+          }
           return (
             <g
               key={m.place.id}
@@ -298,15 +350,12 @@ export const LocalSurveyMap: React.FC<LocalSurveyMapProps> = ({
               }}
             >
               <title>{`${m.place.full_name} (${m.distanceMiles} mi) — Open Place Profile`}</title>
-              <line
-                x1={cx}
-                y1={cy}
-                x2={m.x}
-                y2={m.y}
-                stroke={m.inRadius ? 'var(--accent-primary)' : 'var(--border-control)'}
-                strokeWidth={m.inRadius ? 1.1 : 0.75}
-                strokeDasharray="2 3"
-                opacity={0.7}
+              <circle
+                className={'survey-pin-hit-area'}
+                cx={m.x}
+                cy={m.y}
+                r={MIN_SVG_HIT_RADIUS}
+                fill="transparent"
               />
               {!compact && lbl?.leader && (
                 <line
@@ -334,7 +383,7 @@ export const LocalSurveyMap: React.FC<LocalSurveyMapProps> = ({
                   x={lbl.lx}
                   y={lbl.ly}
                   textAnchor={lbl.anchor}
-                  fontSize={isNarrow ? '12.5' : '11.5'}
+                  fontSize={isNarrow ? '10.5' : '11.5'}
                   fontFamily="var(--font-mono)"
                   fill={m.inRadius ? 'var(--surface-header)' : 'var(--text-secondary)'}
                   paintOrder="stroke"
@@ -403,7 +452,7 @@ export const LocalSurveyMap: React.FC<LocalSurveyMapProps> = ({
           x={centerPlacement.x}
           y={centerPlacement.titleY}
           textAnchor={centerPlacement.anchor}
-          fontSize={compact ? '12.5' : isNarrow ? '13.5' : '12'}
+          fontSize={compact ? '11.5' : isNarrow ? '11.5' : '12'}
           fontWeight="700"
           fontFamily="var(--font-mono)"
           fill="var(--surface-header)"

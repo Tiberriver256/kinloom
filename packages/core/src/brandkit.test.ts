@@ -13,6 +13,7 @@ import {
   renderLightFaviconSvg,
   renderOgCardSvg,
   renderThemeInitScript,
+  renderThemeInitScriptSource,
   resolveBrandSpec,
   resolveRouteOgMetadata,
 } from './brandkit.js';
@@ -247,6 +248,9 @@ describe('brandkit core primitives', () => {
     const tags = renderBrandkitHeadTags(makeSampleConfig());
     expect(tags).toContain('<meta name="color-scheme" content="light dark" />');
     expect(tags).toContain(renderThemeInitScript());
+    expect(renderThemeInitScript()).toBe('<script src="/theme-init.js"></script>');
+    expect(renderThemeInitScript('/kinloom/')).toBe('<script src="/kinloom/theme-init.js"></script>');
+    expect(renderThemeInitScriptSource()).toContain("localStorage.getItem('kinloom-theme')");
     expect(tags.match(/<script\b/g)).toHaveLength(1);
     expect(tags).toContain('name="theme-color" content="#171614" media="(prefers-color-scheme: dark)"');
     expect(tags).toContain('<meta name="mobile-web-app-capable" content="yes" />');
@@ -267,6 +271,7 @@ describe('brandkit core primitives', () => {
     expect(tags).toContain('rel="manifest" href="/site.webmanifest"');
 
     const subpathTags = renderBrandkitHeadTags(makeSampleConfig(), { baseUrl: '/kinloom/' });
+    expect(subpathTags).toContain('<script src="/kinloom/theme-init.js"></script>');
     expect(subpathTags).toContain(
       'rel="apple-touch-icon" sizes="180x180" href="/kinloom/apple-touch-icon.png"'
     );

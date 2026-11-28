@@ -40,9 +40,7 @@ export class R2MediaStore implements MediaStore {
     return {
       exists: true,
       sizeBytes: obj.size,
-      ...(obj.httpMetadata?.contentType !== undefined
-        ? { contentType: obj.httpMetadata.contentType }
-        : {}),
+      ...(obj.httpMetadata?.contentType !== undefined ? { contentType: obj.httpMetadata.contentType } : {}),
     };
   }
 

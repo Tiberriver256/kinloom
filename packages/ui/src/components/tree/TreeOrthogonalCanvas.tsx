@@ -8,6 +8,7 @@ import type {
 } from '../../lib/archivalTreeModel.js';
 import { formatCardLifespan } from '../../lib/archivalTreeModel.js';
 import { cx } from '../../lib/cx.js';
+import { resolvePersonPortraitUrl } from '../../lib/personPortrait.js';
 import { fitTreeCardNameToWidth } from '../../lib/treeNodeDisplay.js';
 import { KINLOOM_VOCABULARY } from '../../lib/vocabulary.js';
 import { initialsOf, resolveAssetUrl } from '../Atoms.js';
@@ -48,7 +49,7 @@ export const TreeOrthogonalCanvas: React.FC<TreeOrthogonalCanvasProps> = ({
     () =>
       layout.nodes.map((node) => {
         const p = node.person;
-        const rawThumb = personThumbMap.get(p.id) || p.portrait_url;
+        const rawThumb = resolvePersonPortraitUrl(p, personThumbMap);
         const detailMaxWidthPx = Math.max(80, node.width - 44 - 10);
         const compactMaxWidthPx = Math.max(96, node.width - 24);
         const overviewMaxWidthPx = Math.max(96, node.width - 20);

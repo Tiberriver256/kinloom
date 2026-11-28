@@ -31,7 +31,7 @@
   width: 34px;
   height: 34px;
   border: none;
-  border-radius: 9999px;
+  border-radius: var(--radius-pill);
   background: var(--accent-primary);
   color: var(--text-inverse);
   font-size: 0.78rem;
@@ -356,7 +356,7 @@
   width: 34px;
   height: 34px;
   border: none;
-  border-radius: 9999px;
+  border-radius: var(--radius-pill);
   background: var(--text-chrome-bar);
   color: var(--surface-chrome-bar);
   font-size: 0.78rem;
@@ -470,8 +470,10 @@
   }
 
   :global(.archival-footnote-ref) {
-    padding: 8px 6px;
-    margin: -8px 0;
+    min-width: var(--control-height-touch);
+    min-height: var(--control-height-touch);
+    padding: 10px 8px;
+    margin: -12px 0;
   }
 }
 

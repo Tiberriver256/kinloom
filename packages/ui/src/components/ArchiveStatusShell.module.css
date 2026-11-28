@@ -8,6 +8,8 @@
 
 .kinloom-app:has(:global(.map-shell)),
 .kinloom-app:has(:global(.tree-shell-diagram)) {
+  height: 100vh;
+  /* biome-ignore lint/suspicious/noDuplicateProperties: 100vh fallback before 100dvh */
   height: 100dvh;
   overflow: hidden;
 }
@@ -37,6 +39,16 @@
 @keyframes archive-spin {
   to {
     transform: rotate(360deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .archive-loading-spinner {
+    animation: none;
+  }
+
+  .archive-recovery-btn {
+    transition: none;
   }
 }
 
@@ -135,15 +147,15 @@
 }
 
 .archive-recovery-btn:global(.primary) {
-  background: var(--surface-header);
-  border-color: var(--surface-header);
-  color: var(--text-inverse);
+  background: var(--surface-action-primary);
+  border-color: var(--border-action-primary);
+  color: var(--text-on-action-primary);
 }
 
 .archive-recovery-btn:global(.primary):hover {
-  background: var(--radar-copresence);
-  border-color: var(--radar-copresence);
-  color: var(--text-inverse);
+  background: var(--surface-action-primary-hover);
+  border-color: var(--accent-primary);
+  color: var(--text-on-action-primary);
 }
 
 .archive-recovery-details {
@@ -166,7 +178,7 @@
   word-break: break-word;
   background: var(--surface-canvas);
   border: 1px solid var(--border-decorative);
-  border-radius: 2px;
+  border-radius: var(--radius-sm);
   color: var(--text-secondary);
 }
 

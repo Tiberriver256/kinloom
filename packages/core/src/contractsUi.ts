@@ -99,6 +99,9 @@ export interface ArchiveCapabilities {
   hasRevisionHistory: boolean;
   hasTalk: boolean;
   canManageSite: boolean;
+  canReadArchive?: boolean;
+  hasReadings?: boolean;
+  hasMediaChecklist?: boolean;
 }
 
 export interface EntityWriteInput {

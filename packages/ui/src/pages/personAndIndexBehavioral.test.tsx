@@ -1,6 +1,6 @@
 /** @vitest-environment jsdom */
 import type { ArchiveBundle, ArchiveDataSource, KinloomSiteConfig } from '@kinloom/core';
-import { compileArchive, parseKinloomConfig } from '@kinloom/core';
+import { buildPersonThumbMap, compileArchive, parseKinloomConfig } from '@kinloom/core';
 import type React from 'react';
 import { act } from 'react';
 import { createRoot } from 'react-dom/client';
@@ -8,6 +8,7 @@ import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { LocalSurveyMap } from '../components/LocalSurveyMap.js';
 import { ArchiveProvider } from '../context/ArchiveProvider.js';
+import { resolvePersonPortraitUrl } from '../lib/personPortrait.js';
 import { IndexPage } from './IndexPage.js';
 import { PersonPage } from './PersonPage.js';
 import { PlacePage } from './PlacePage.js';
@@ -750,5 +751,123 @@ describe('Issue #75: named living relatives on private archives vs redacted publ
     expect(indexEl.textContent).not.toContain('SecretParent');
     expect(indexEl.textContent).not.toContain('SecretSpouse');
     expect(indexEl.textContent).not.toContain('SecretChild');
+  });
+});
+
+describe('Issue #109 PersonProfileHeader badge consolidation, quiet living children text, and unified portrait resolution', () => {
+  it('renders one unambiguous citation status badge, quiet inline living text in family rows, and resolves media fallback portraits consistently with /tree', async () => {
+    const { bundle } = compileArchive({
+      siteConfig: SITE_CONFIG,
+      mode: 'private',
+      people: [
+        {
+          id: 'p_parent_109',
+          slug: 'clara-stout',
+          full_name: 'Clara Stout',
+          given_name: 'Clara',
+          surname: 'Stout',
+          alt_names: [],
+          sex: 'F',
+          is_living: false,
+          lineage_group: 'ancestor',
+          birth_edtf: '1920-04-02',
+          death_edtf: '2001-08-19',
+          portrait_url: null,
+          has_primary_source: true,
+        },
+        {
+          id: 'p_child_109',
+          slug: 'david-stout',
+          full_name: 'David Stout',
+          given_name: 'David',
+          surname: 'Stout',
+          alt_names: [],
+          sex: 'M',
+          is_living: true,
+          lineage_group: 'descendant',
+          birth_edtf: '1950-06-15',
+          death_edtf: '',
+          portrait_url: null,
+        },
+      ],
+      places: [],
+      events: [
+        {
+          id: 'ev_clara_birth',
+          scope: 'personal',
+          event_kind: 'point_event',
+          category: 'birth',
+          title: 'Birth of Clara Stout',
+          edtf_date: '1920-04-02',
+          place_id: null,
+          participants: [{ person_id: 'p_parent_109', role: 'subject' }],
+          summary: 'Birth recorded in Michigan.',
+          sources: [{ source_id: 'src_vital_109', confidence: 'high', citation_detail: 'p. 12' }],
+        },
+        {
+          id: 'ev_clara_uncited',
+          scope: 'personal',
+          event_kind: 'point_event',
+          category: 'residence',
+          title: 'Moved to Michigan',
+          edtf_date: '1945',
+          place_id: null,
+          participants: [{ person_id: 'p_parent_109', role: 'subject' }],
+          summary: 'Settled in West Michigan.',
+          sources: [],
+        },
+      ],
+      sources: [
+        {
+          id: 'src_vital_109',
+          citation: '1920 Michigan Birth Register',
+          source_type: 'vital_record',
+        },
+      ],
+      kinship: [{ from: 'p_parent_109', to: 'p_child_109', relation: 'parent' }],
+      media: [
+        {
+          id: 'med_clara_family_photo',
+          kind: 'family_photo',
+          file: '/media/clara-family.jpg',
+          thumb_file: '/media/clara-family-thumb.jpg',
+          caption: 'Clara Stout family photo',
+          person_ids: ['p_parent_109'],
+        },
+      ],
+      narratives: [],
+    });
+
+    const clara = bundle.people.find((p) => p.id === 'p_parent_109')!;
+    const thumbMap = buildPersonThumbMap(bundle);
+    const treeResolved = resolvePersonPortraitUrl(clara, thumbMap);
+    const personResolved = resolvePersonPortraitUrl(clara, thumbMap, { preferFullResolution: true });
+    expect(treeResolved).toBeTruthy();
+    expect(personResolved).toBeTruthy();
+
+    const personEl = mountEl(
+      <MemoryRouter initialEntries={['/person/clara-stout']}>
+        <ArchiveProvider siteConfig={SITE_CONFIG} initialBundle={bundle}>
+          <Routes>
+            <Route path="/person/:slug" element={<PersonPage />} />
+          </Routes>
+        </ArchiveProvider>
+      </MemoryRouter>
+    );
+    await flushUi();
+
+    // Consolidated citation status: Partially Cited without contradictory Cited badge alongside it
+    const header = personEl.querySelector('header.person-header')!;
+    expect(header.textContent).toContain('Partially Cited');
+    expect(header.querySelector('.wiki-badge-cited')).toBeNull();
+
+    // Quiet inline living text in children row (no boxed LIVING pills)
+    const childLink = header.querySelector<HTMLAnchorElement>('a[href="/person/david-stout"]');
+    expect(childLink?.textContent).toContain('(b. 1950, living)');
+    expect(header.querySelector('.person-living-pill')).toBeNull();
+
+    // PersonPage header renders the resolved archival portrait img (matching /tree) instead of monogram-only fallback
+    const portraitImg = header.querySelector<HTMLImageElement>('img[alt="Archival portrait of Clara Stout"]');
+    expect(portraitImg).not.toBeNull();
   });
 });

@@ -62,9 +62,9 @@ export const DiagramNodeCard: React.FC<{
       strokeWidth = 2;
     }
 
-    const fill = isSelected ? 'var(--surface-header)' : 'var(--surface-card)';
-    const primaryTextFill = isSelected ? 'var(--text-inverse)' : 'var(--surface-header)';
-    const secondaryTextFill = isSelected ? 'var(--surface-linen)' : 'var(--text-secondary)';
+    const fill = isSelected ? 'var(--surface-action-primary)' : 'var(--surface-card)';
+    const primaryTextFill = isSelected ? 'var(--text-on-action-primary)' : 'var(--surface-header)';
+    const secondaryTextFill = isSelected ? 'var(--text-on-action-primary-muted)' : 'var(--text-secondary)';
     const safeId = person.id.replace(/[^a-zA-Z0-9_-]/g, '_');
     const clipId = `tree-avatar-clip-${safeId}`;
     const cardClipId = `tree-card-clip-${safeId}`;
@@ -313,7 +313,7 @@ export const EarlyLossStripLayer: React.FC<{
               width={chip.width}
               height={chip.height}
               rx={3}
-              fill={isSelected ? 'var(--surface-header)' : 'var(--surface-card)'}
+              fill={isSelected ? 'var(--surface-action-primary)' : 'var(--surface-card)'}
               stroke={isSelected || isLit ? 'var(--accent-primary)' : 'var(--border-control)'}
               strokeWidth={isSelected ? 1.8 : 1}
             />
@@ -324,7 +324,7 @@ export const EarlyLossStripLayer: React.FC<{
                 fontSize="10.5"
                 fontWeight="600"
                 fontFamily="var(--font-serif)"
-                fill={isSelected ? 'var(--text-inverse)' : 'var(--text-primary)'}
+                fill={isSelected ? 'var(--text-on-action-primary)' : 'var(--text-primary)'}
               >
                 {fitTreeCardNameToWidth(
                   chip.person.given_name || chip.person.full_name,
@@ -337,7 +337,7 @@ export const EarlyLossStripLayer: React.FC<{
                 y={25}
                 fontSize="9.5"
                 fontFamily="var(--font-mono)"
-                fill={isSelected ? 'var(--surface-linen)' : 'var(--text-secondary)'}
+                fill={isSelected ? 'var(--text-on-action-primary-muted)' : 'var(--text-secondary)'}
               >
                 {formatEarlyLossAgeLabel(chip.person)}
               </text>

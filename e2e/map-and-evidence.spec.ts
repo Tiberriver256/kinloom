@@ -62,13 +62,15 @@ test('map toolbar prevents desktop era clipping, keeps mobile selects and route 
   );
 
   for (const vp of [
-    { width: 1440, height: 900 },
-    { width: 1280, height: 800 },
+    { width: 1440, height: 900, expectIllinoisPrairie: true, expectMoreMenu: false },
+    { width: 1280, height: 800, expectIllinoisPrairie: true, expectMoreMenu: false },
+    { width: 1024, height: 768, expectIllinoisPrairie: false, expectMoreMenu: true },
   ]) {
-    await page.setViewportSize(vp);
+    await page.setViewportSize({ width: vp.width, height: vp.height });
     await page.goto('/map');
     await expect(page.locator('.map-toolbar')).toBeVisible();
     await expect(page.locator('.maplibregl-canvas')).toBeVisible();
+    await page.evaluate(() => document.fonts.ready);
 
     const metrics = await page.evaluate(() => {
       const main = document.querySelector('main')?.getBoundingClientRect();
@@ -97,11 +99,17 @@ test('map toolbar prevents desktop era clipping, keeps mobile selects and route 
         };
       });
       const moreBtn = document.querySelector<HTMLButtonElement>('.map-toolbar button[aria-haspopup="menu"]');
+      const stageLegendCount = document.querySelectorAll('.map-stage-legend').length;
+      const swatchCount = document.querySelectorAll(
+        'fieldset[aria-label="Filter migration map by era"] .map-era-swatch'
+      ).length;
       return {
         docOverflow: document.documentElement.scrollWidth - window.innerWidth,
         toolbarHeight: toolbar ? Math.round(toolbar.height) : 999,
         toolbarRight: toolbar ? Math.round(toolbar.right) : 9999,
         eraButtons,
+        stageLegendCount,
+        swatchCount,
         moreBtnText: moreBtn?.textContent?.trim() ?? null,
         canvasRightGap: main && glCanvas ? Math.round(Math.abs(main.right - glCanvas.right)) : 999,
         canvasBottomGap: main && glCanvas ? Math.round(Math.abs(main.bottom - glCanvas.bottom)) : 999,
@@ -113,7 +121,21 @@ test('map toolbar prevents desktop era clipping, keeps mobile selects and route 
     expect(metrics.docOverflow, `Doc overflow at ${vp.width}px`).toBeLessThanOrEqual(0);
     expect(metrics.toolbarHeight, `Toolbar height at ${vp.width}px`).toBeLessThanOrEqual(64);
     expect(metrics.toolbarRight, `Toolbar right edge at ${vp.width}px`).toBeLessThanOrEqual(vp.width);
+    expect(metrics.stageLegendCount, `Duplicate stage legend removed at ${vp.width}px`).toBe(0);
+    expect(
+      metrics.swatchCount,
+      `Era color swatches embedded in toolbar at ${vp.width}px`
+    ).toBeGreaterThanOrEqual(1);
     expect(metrics.eraButtons.length, `Visible era buttons at ${vp.width}px`).toBeGreaterThanOrEqual(2);
+    if (vp.expectIllinoisPrairie) {
+      expect(
+        metrics.eraButtons.some((btn) => /Illinois Prairie/.test(btn.text)),
+        `Illinois Prairie stage directly visible without More popover at ${vp.width}px`
+      ).toBe(true);
+    }
+    if (vp.expectMoreMenu) {
+      expect(metrics.moreBtnText, `Overflow More menu rendered at ${vp.width}px`).not.toBeNull();
+    }
     for (const btn of metrics.eraButtons) {
       expect(btn.overflowsPresets, `Button "${btn.text}" clipped at ${vp.width}px`).toBeLessThanOrEqual(1);
       expect(
@@ -142,7 +164,24 @@ test('map toolbar prevents desktop era clipping, keeps mobile selects and route 
     }
   }
 
-  await page.setViewportSize({ width: 390, height: 844 });
+  // Verify 1280x720 retains direct stage visibility even under wider Linux font metrics
+  await page.setViewportSize({ width: 1280, height: 720 });
+  await page.goto('/map');
+  await expect(page.locator('.map-toolbar')).toBeVisible();
+  await page.addStyleTag({
+    content: '.map-toolbar button, .map-toolbar span { letter-spacing: 0.02em !important; }',
+  });
+  await page.evaluate(() => window.dispatchEvent(new Event('resize')));
+  await expect(page.getByRole('button', { name: /Illinois Prairie/ })).toBeVisible();
+  const wide1280Right = await page.evaluate(() => {
+    const toolbar = document.querySelector('.map-toolbar')?.getBoundingClientRect();
+    return toolbar ? Math.ceil(toolbar.right) : 9999;
+  });
+  expect(wide1280Right, 'Toolbar fits within 1280px even under widened font metrics').toBeLessThanOrEqual(
+    1280
+  );
+
+  await page.setViewportSize({ width: 360, height: 800 });
   await page.goto('/map');
   await expect(page.locator('.map-toolbar')).toBeVisible();
   await expect(page.locator('.maplibregl-canvas')).toBeVisible();
@@ -154,12 +193,14 @@ test('map toolbar prevents desktop era clipping, keeps mobile selects and route 
     const toolbarRect = toolbar?.getBoundingClientRect();
     const dockRect = document.querySelector('.map-bottom-dock')?.getBoundingClientRect();
     const zoomRect = document.querySelector('.map-zoom-controls')?.getBoundingClientRect();
-    const personSelect = document.querySelector<HTMLSelectElement>(
-      'select[aria-label="Filter migration map by person"]'
+    const zoomButtons = [...document.querySelectorAll<HTMLButtonElement>('.map-zoom-controls button')].map(
+      (btn) => {
+        const r = btn.getBoundingClientRect();
+        return { width: Math.round(r.width), height: Math.round(r.height) };
+      }
     );
-    const eraSelect = document.querySelector<HTMLSelectElement>(
-      'select[aria-label="Filter migration map by migration stage"]'
-    );
+    const filtersBtn = document.querySelector<HTMLButtonElement>('.map-filters-toggle-btn');
+    const filtersRect = filtersBtn?.getBoundingClientRect();
     const modeButtons = [
       ...document.querySelectorAll<HTMLButtonElement>(
         'fieldset[aria-label="Full lineage route mode"] button'
@@ -173,15 +214,19 @@ test('map toolbar prevents desktop era clipping, keeps mobile selects and route 
         height: Math.round(rect.height),
       };
     });
+    const unobstructedHeight = toolbarRect && dockRect ? Math.max(0, dockRect.top - toolbarRect.bottom) : 0;
     return {
       docOverflow: document.documentElement.scrollWidth - window.innerWidth,
       toolbarScrollDiff: toolbar ? Math.round(toolbar.scrollWidth - toolbar.clientWidth) : 999,
-      personSelectWidth: personSelect ? Math.round(personSelect.getBoundingClientRect().width) : 0,
-      personSelectHeight: personSelect ? Math.round(personSelect.getBoundingClientRect().height) : 0,
-      eraSelectWidth: eraSelect ? Math.round(eraSelect.getBoundingClientRect().width) : 0,
-      eraSelectHeight: eraSelect ? Math.round(eraSelect.getBoundingClientRect().height) : 0,
+      toolbarHeight: toolbarRect ? Math.round(toolbarRect.height) : 999,
+      filtersHeight: filtersRect ? Math.round(filtersRect.height) : 0,
       modeButtons,
-      zoomClearance: toolbarRect && zoomRect ? Math.round(zoomRect.top - toolbarRect.bottom) : -999,
+      zoomButtons,
+      zoomBottomGapToDock: zoomRect && dockRect ? Math.round(dockRect.top - zoomRect.bottom) : -999,
+      zoomMidYRatio: zoomRect ? (zoomRect.top + zoomRect.height / 2) / window.innerHeight : 0,
+      canvasYieldPct: (unobstructedHeight / window.innerHeight) * 100,
+      floatingStyleNoteCount: document.querySelectorAll('.map-style-note').length,
+      stageLegendCount: document.querySelectorAll('.map-stage-legend').length,
       canvasRightGap: main && glCanvas ? Math.round(Math.abs(main.right - glCanvas.right)) : 999,
       canvasBottomGap: main && glCanvas ? Math.round(Math.abs(main.bottom - glCanvas.bottom)) : 999,
       dockBottomGap: main && dockRect ? Math.round(Math.abs(main.bottom - dockRect.bottom)) : 999,
@@ -190,17 +235,30 @@ test('map toolbar prevents desktop era clipping, keeps mobile selects and route 
 
   expect(mobileMetrics.docOverflow).toBeLessThanOrEqual(0);
   expect(mobileMetrics.toolbarScrollDiff).toBeLessThanOrEqual(1);
-  expect(mobileMetrics.personSelectWidth).toBeGreaterThanOrEqual(165);
-  expect(mobileMetrics.personSelectHeight).toBeGreaterThanOrEqual(44);
-  expect(mobileMetrics.eraSelectWidth).toBeGreaterThanOrEqual(165);
-  expect(mobileMetrics.eraSelectHeight).toBeGreaterThanOrEqual(44);
+  expect(mobileMetrics.toolbarHeight).toBeLessThanOrEqual(64);
+  expect(mobileMetrics.filtersHeight).toBeGreaterThanOrEqual(44);
   expect(mobileMetrics.modeButtons).toHaveLength(2);
   expect(mobileMetrics.modeButtons.map((b) => b.text)).toEqual(['By person', 'Chronological']);
-  expect(mobileMetrics.modeButtons.every((b) => b.height >= 44 && b.width >= 140)).toBe(true);
-  expect(mobileMetrics.zoomClearance).toBeGreaterThanOrEqual(0);
+  expect(mobileMetrics.modeButtons.every((b) => b.height >= 44)).toBe(true);
+  expect(mobileMetrics.zoomButtons).toHaveLength(3);
+  expect(mobileMetrics.zoomButtons.every((b) => b.width >= 44 && b.height >= 44)).toBe(true);
+  expect(mobileMetrics.zoomBottomGapToDock).toBeGreaterThanOrEqual(4);
+  expect(mobileMetrics.zoomBottomGapToDock).toBeLessThanOrEqual(24);
+  expect(mobileMetrics.zoomMidYRatio).toBeGreaterThanOrEqual(0.55);
+  expect(mobileMetrics.canvasYieldPct).toBeGreaterThanOrEqual(62);
+  expect(mobileMetrics.floatingStyleNoteCount).toBe(0);
+  expect(mobileMetrics.stageLegendCount).toBe(0);
   expect(mobileMetrics.canvasRightGap).toBeLessThanOrEqual(1);
   expect(mobileMetrics.canvasBottomGap).toBeLessThanOrEqual(1);
   expect(mobileMetrics.dockBottomGap).toBeLessThanOrEqual(1);
+
+  // Open mobile Filters popover, verify person select + era swatch buttons, close cleanly
+  await page.locator('.map-filters-toggle-btn').click();
+  await expect(page.getByLabel('Filter migration map by person')).toBeVisible();
+  await expect(
+    page.locator('fieldset[aria-label="Filter migration map by era"] .map-era-swatch').first()
+  ).toBeVisible();
+  await page.getByRole('button', { name: 'Close map filters' }).click();
 
   await page.getByRole('button', { name: 'Chronological' }).click();
   await expect(page.getByRole('button', { name: 'Chronological' })).toHaveAttribute('aria-pressed', 'true');
@@ -210,23 +268,72 @@ test('map toolbar prevents desktop era clipping, keeps mobile selects and route 
   expect(consoleErrors).toEqual([]);
 });
 
-test('evidence and sources displays discrepancies, source registry, and photos and documents', async ({
+test('evidence and sources leads discrepancy cards with h2 in 2-col desktop grid, separates Needs Citation tab, hides empty /changes filters, and honors reduced-motion (#102)', async ({
   page,
 }) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
   await page.goto('/evidence');
   await expect(page.getByRole('heading', { name: 'Evidence & Sources' })).toBeVisible();
 
-  // Source Discrepancies tab
+  // Source Discrepancies tab: h2 leads every card, 2-column balanced grid on desktop
   await expect(page.getByText(/Preserved Discrepanc/).first()).toBeVisible();
   await expect(page.getByText(/Real estate valued at \$3,000/)).toBeVisible();
+  const evidenceLayout = await page.evaluate(() => {
+    const cards = [...document.querySelectorAll('article')];
+    const first = cards[0];
+    const second = cards[1];
+    const h2Rect = first?.querySelector('h2')?.getBoundingClientRect();
+    const dateRect = first?.querySelector('[class*="date-stamp"]')?.getBoundingClientRect();
+    const badgeRect = first?.querySelector('[class*="evidence-discrepancy-badge"]')?.getBoundingClientRect();
+    const firstRect = first?.getBoundingClientRect();
+    const secondRect = second?.getBoundingClientRect();
+    return {
+      cardCount: cards.length,
+      h2AboveDate: Boolean(h2Rect && dateRect && h2Rect.top < dateRect.top),
+      h2AboveBadge: Boolean(h2Rect && badgeRect && h2Rect.top < badgeRect.top),
+      twoColumnDesktop: Boolean(
+        firstRect &&
+          secondRect &&
+          Math.abs(firstRect.top - secondRect.top) < 8 &&
+          secondRect.left > firstRect.right
+      ),
+    };
+  });
+  expect(evidenceLayout.cardCount).toBeGreaterThanOrEqual(2);
+  expect(evidenceLayout.h2AboveDate).toBe(true);
+  expect(evidenceLayout.h2AboveBadge).toBe(true);
+  expect(evidenceLayout.twoColumnDesktop).toBe(true);
 
-  // Sources & Citations tab
+  // Sources & Citations tab shows Source Registry cleanly separated from Needs Citation
   await page.getByRole('tab', { name: /Sources & Citations/ }).click();
   await expect(page.getByRole('heading', { name: /Source Registry/ })).toBeVisible();
-  await expect(page.getByText(/Entries Needing Primary Citation/)).toBeVisible();
+  await expect(page.getByRole('heading', { name: /Entries Needing Primary Citation/ })).toHaveCount(0);
+
+  // Needs Citation tab is its own first-class audit bucket
+  await page.getByRole('tab', { name: /Needs Citation/ }).click();
+  await expect(page.getByRole('heading', { name: /Entries Needing Primary Citation/ })).toBeVisible();
 
   // Photos & Documents tab
   await page.getByRole('tab', { name: /Photos & Documents/ }).click();
   await expect(page.getByRole('heading', { name: /Photos & Documents/ })).toBeVisible();
   await expect(page.getByText(/Oak Ridge Cemetery monument/)).toBeVisible();
+
+  // /changes hides dead author filter tabs when revisions.length === 0 and shows next-step CTA links
+  await page.setViewportSize({ width: 360, height: 800 });
+  await page.goto('/changes');
+  await expect(page.getByRole('tab')).toHaveCount(0);
+  await expect(page.getByText('No archival changes have been recorded yet.')).toBeVisible();
+  await expect(page.getByRole('link', { name: /Explore People Directory/i })).toBeVisible();
+  await expect(page.getByRole('link', { name: /Inspect Evidence & Sources/i })).toBeVisible();
+  const changesOverflow = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
+  expect(changesOverflow).toBeLessThanOrEqual(0);
+
+  // Reduced-motion media query disables jump-strip scroll animation
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  await page.goto('/');
+  const jumpStripAnim = await page.evaluate(() => {
+    const strip = document.querySelector<HTMLElement>('[class*="jump-strip"]');
+    return strip ? getComputedStyle(strip).animationName : 'none';
+  });
+  expect(jumpStripAnim).toBe('none');
 });

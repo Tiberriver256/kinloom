@@ -7,16 +7,16 @@ aside.tree-focus-drawer {
   bottom: calc(18px + env(safe-area-inset-bottom, 0px));
   left: auto;
   z-index: 35;
-  max-height: calc(100dvh - var(--topbar-height) - 36px);
+  max-height: calc(100dvh - var(--shell-chrome-offset, var(--topbar-height)) - 36px);
   overflow-y: auto;
   overscroll-behavior: contain;
 }
 
 aside.tree-focus-drawer.tree-focus-drawer-diagram {
-  top: calc(var(--topbar-height) + 68px);
+  top: calc(var(--shell-chrome-offset, var(--topbar-height)) + 68px);
   right: calc(74px + env(safe-area-inset-right, 0px));
   bottom: auto;
-  max-height: calc(100dvh - var(--topbar-height) - 86px);
+  max-height: calc(100dvh - var(--shell-chrome-offset, var(--topbar-height)) - 86px);
 }
 
 .tree-focus-header {
@@ -57,7 +57,7 @@ aside.tree-focus-drawer.tree-focus-drawer-diagram {
   font-size: 0.75rem;
   font-weight: 600;
   padding: 4px 8px;
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   background: var(--badge-cited-bg);
   color: var(--badge-cited-fg);
 }
@@ -67,7 +67,7 @@ aside.tree-focus-drawer.tree-focus-drawer-diagram {
   font-size: 0.72rem;
   font-weight: 600;
   padding: 3px 8px;
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   border: 1px solid var(--accent-primary);
   background: var(--surface-linen);
   color: var(--accent-primary);
@@ -142,7 +142,7 @@ aside.tree-focus-drawer.tree-focus-drawer-diagram {
   width: 46px;
   height: 54px;
   object-fit: cover;
-  border-radius: 2px;
+  border-radius: var(--radius-sm);
   border: 1px solid var(--border-control);
   flex-shrink: 0;
   aspect-ratio: 46 / 54;
@@ -151,9 +151,9 @@ aside.tree-focus-drawer.tree-focus-drawer-diagram {
 .tree-focus-monogram {
   width: 44px;
   height: 44px;
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   background: var(--surface-linen);
-  border: 1.5px solid var(--accent-primary);
+  border: var(--border-width-emphasis) solid var(--accent-primary);
   color: var(--accent-primary);
   font-family: var(--font-mono);
   font-size: 0.85rem;
@@ -238,17 +238,17 @@ aside.tree-focus-drawer.tree-focus-drawer-diagram {
   min-height: 36px;
   padding: 0 14px;
   border-radius: var(--radius-sm);
-  border: 1px solid var(--surface-header);
-  background: var(--surface-header);
-  color: var(--text-inverse);
+  border: var(--border-width-thin) solid var(--border-action-primary);
+  background: var(--surface-action-primary);
+  color: var(--text-on-action-primary);
   font-weight: 600;
 }
 
 .tree-focus-timeline-link:hover,
 .tree-focus-timeline-link:global(.pill-btn):global(.active):hover {
-  background: var(--accent-primary);
+  background: var(--surface-action-primary-hover);
   border-color: var(--accent-primary);
-  color: var(--text-inverse);
+  color: var(--text-on-action-primary);
 }
 
 .tree-focus-clear-btn {
@@ -271,8 +271,9 @@ aside.tree-focus-drawer.tree-focus-drawer-diagram {
 }
 
 .tree-focus-anchor-btn:hover {
-  background: var(--accent-primary);
-  color: var(--text-inverse);
+  background: var(--surface-action-primary);
+  border-color: var(--border-action-primary);
+  color: var(--text-on-action-primary);
 }
 
 @media (max-width: 768px) {
@@ -284,7 +285,7 @@ aside.tree-focus-drawer.tree-focus-drawer-diagram {
     right: calc(10px + env(safe-area-inset-right, 0px));
     bottom: calc(10px + env(safe-area-inset-bottom, 0px));
     width: auto;
-    max-height: min(48dvh, calc(100dvh - var(--topbar-height) - 68px));
+    max-height: min(48dvh, calc(100dvh - var(--shell-chrome-offset, var(--topbar-height)) - 68px));
     overflow-y: auto;
     overscroll-behavior: contain;
     padding: 12px 14px 14px;

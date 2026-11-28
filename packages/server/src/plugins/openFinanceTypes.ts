@@ -542,7 +542,8 @@ export function validateOpenFinanceConfig(raw: unknown): ParseOpenFinanceConfigR
   if (primaryPlatform !== null) {
     const matchingEnabled = normalizedPlatforms.some((p) => p.platform === primaryPlatform && p.enabled);
     if (!matchingEnabled && !fieldErrors['primary_platform']) {
-      fieldErrors['primary_platform'] = `Primary platform '${primaryPlatform}' must be configured and enabled.`;
+      fieldErrors['primary_platform'] =
+        `Primary platform '${primaryPlatform}' must be configured and enabled.`;
     }
   } else {
     const firstEnabled = normalizedPlatforms.find((p) => p.enabled);
@@ -852,7 +853,9 @@ export function settingsValuesToOpenFinanceConfig(
     show_in_nav:
       typeof values['show_in_nav'] === 'boolean' ? values['show_in_nav'] : fallback.visibility.show_in_nav,
     show_in_footer:
-      typeof values['show_in_footer'] === 'boolean' ? values['show_in_footer'] : fallback.visibility.show_in_footer,
+      typeof values['show_in_footer'] === 'boolean'
+        ? values['show_in_footer']
+        : fallback.visibility.show_in_footer,
   };
 
   const parsedPlatformList = safeJsonParse(values['platform_order_json']);

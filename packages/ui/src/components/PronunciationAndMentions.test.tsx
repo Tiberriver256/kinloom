@@ -647,6 +647,24 @@ describe('PronunciationBadge playback and fallback', () => {
     expect(createdAudios).toHaveLength(1);
     expect(createdAudios[0]?.src).toBe('/audio/zeeland-mi.wav');
 
+    // Pronunciation details disclosure starts collapsed and toggles open for IPA, source, and variants (#109)
+    const detailsToggle = fullBadge.querySelector<HTMLButtonElement>('button.pronunciation-details-toggle');
+    expect(detailsToggle).not.toBeNull();
+    expect(detailsToggle?.textContent).toContain('Pronunciation details');
+    expect(detailsToggle?.getAttribute('aria-expanded')).toBe('false');
+    const detailsPanelId = detailsToggle?.getAttribute('aria-controls');
+    const detailsPanel = detailsPanelId
+      ? fullBadge.querySelector<HTMLElement>(`#${CSS.escape(detailsPanelId)}`)
+      : null;
+    expect(detailsPanel).not.toBeNull();
+    expect(detailsPanel?.getAttribute('data-open')).toBe('false');
+
+    act(() => {
+      detailsToggle?.click();
+    });
+    expect(detailsToggle?.getAttribute('aria-expanded')).toBe('true');
+    expect(detailsPanel?.getAttribute('data-open')).toBe('true');
+
     unmount();
   });
 });
@@ -1261,17 +1279,10 @@ describe('ArchivalMarkdown inline entity mentions and hover popovers', () => {
     const autoLeiden = allEntityLinks.find((a) => a.textContent === 'Leiden');
     expect(autoLeiden?.getAttribute('href')).toBe('/place/leiden');
 
-    // Inline speaker button beside Leiden plays audio in one click
-    const inlinePlayBtn = container.querySelector<HTMLButtonElement>(
-      '.inline-entity-pronunciation button[aria-label="Listen to pronunciation of Leiden"]'
-    );
-    expect(inlinePlayBtn).not.toBeNull();
-    act(() => {
-      inlinePlayBtn!.click();
-    });
-    expect(playMock).toHaveBeenCalledTimes(1);
+    // Body biography prose must NOT inject inline circular speaker buttons (#109)
+    expect(container.querySelector('.inline-entity-pronunciation')).toBeNull();
 
-    // Hovering / focusing an entity link opens the hover popover card
+    // Hovering / focusing an entity link opens the hover popover card with pronunciation playback
     act(() => {
       explicitLeiden!.dispatchEvent(new MouseEvent('mouseover', { bubbles: true }));
     });
@@ -1282,6 +1293,15 @@ describe('ArchivalMarkdown inline entity mentions and hover popovers', () => {
     expect(popover!.textContent).toContain('Town');
     expect(popover!.textContent).toContain('LAY-den');
     expect(popover!.querySelector('a[href="/place/leiden"]')?.textContent).toContain('View profile');
+
+    const popoverPlayBtn = popover!.querySelector<HTMLButtonElement>(
+      'button[aria-label="Listen to pronunciation of Leiden"]'
+    );
+    expect(popoverPlayBtn).not.toBeNull();
+    act(() => {
+      popoverPlayBtn!.click();
+    });
+    expect(playMock).toHaveBeenCalledTimes(1);
 
     // Escape closes the popover
     act(() => {

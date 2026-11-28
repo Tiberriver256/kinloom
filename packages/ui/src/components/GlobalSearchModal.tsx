@@ -559,7 +559,15 @@ export const GlobalSearchModal: React.FC = () => {
             <kbd className="kl-kbd">T</kbd>/<kbd className="kl-kbd">M</kbd>/<kbd className="kl-kbd">K</kbd>{' '}
             jump · <kbd className="kl-kbd">Esc</kbd> close
           </span>
-          <span>{readings ? `${totalSourcePages} source pages searchable` : 'Archive ready'}</span>
+          <span>
+            {searchable
+              ? results.length === 0
+                ? 'No matching results'
+                : `${results.length} ${results.length === 1 ? 'result' : 'results'}`
+              : readings && totalSourcePages > 0
+                ? `${totalSourcePages} source pages searchable`
+                : 'Type to search · Esc to close'}
+          </span>
         </div>
       </div>
     </dialog>

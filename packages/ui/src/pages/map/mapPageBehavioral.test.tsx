@@ -493,6 +493,8 @@ describe('MapPage behavioral migration journey flows', () => {
       host.remove();
     });
 
+    const stageColorMap = new Map(eras.map((era) => [era.id, era.color]));
+
     act(() => {
       root.render(
         <MapToolbar
@@ -503,6 +505,7 @@ describe('MapPage behavioral migration journey flows', () => {
           allStopsCount={69}
           migrationEras={eras}
           eraStopCounts={counts}
+          stageColorMap={stageColorMap}
           onSelectPersonId={onSelectPersonId}
           onSelectEraId={onSelectEraId}
           onSetRouteMode={onSetRouteMode}
@@ -510,6 +513,13 @@ describe('MapPage behavioral migration journey flows', () => {
       );
     });
     await flushUi();
+
+    // Era swatches are embedded directly inside toolbar era filter buttons (no duplicate stage legend)
+    const visibleSwatches = host.querySelectorAll(
+      'fieldset[aria-label="Filter migration map by era"] [class*="map-era-swatch"]'
+    );
+    expect(visibleSwatches.length).toBeGreaterThanOrEqual(2);
+    expect(host.querySelector('[class*="map-stage-legend"]')).toBeNull();
 
     const moreBtn = host.querySelector<HTMLButtonElement>('button[aria-haspopup="menu"]');
     expect(moreBtn).not.toBeNull();
@@ -531,6 +541,7 @@ describe('MapPage behavioral migration journey flows', () => {
       'Illinois Prairie & Midwest(22)',
       'Pacific & Western Crossing(11)',
     ]);
+    expect(menu?.querySelectorAll('[class*="map-era-swatch"]')).toHaveLength(3);
 
     act(() => {
       document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
@@ -572,5 +583,276 @@ describe('MapPage behavioral migration journey flows', () => {
       modeButtons[1]?.click();
     });
     expect(onSetRouteMode).toHaveBeenCalledWith('chronological');
+
+    // Mobile Filters popover opens, closes via Escape, outside pointerdown, and Done button
+    const filtersTrigger = host.querySelector<HTMLButtonElement>(
+      'button[aria-label^="Map filters and eras"]'
+    );
+    expect(filtersTrigger).not.toBeNull();
+    expect(filtersTrigger?.getAttribute('aria-expanded')).toBe('false');
+    act(() => {
+      filtersTrigger?.click();
+    });
+    await flushUi();
+    expect(filtersTrigger?.getAttribute('aria-expanded')).toBe('true');
+    expect(host.querySelector('[data-filters-open="true"]')).not.toBeNull();
+
+    act(() => {
+      document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+    });
+    await flushUi();
+    expect(filtersTrigger?.getAttribute('aria-expanded')).toBe('false');
+
+    act(() => {
+      filtersTrigger?.click();
+    });
+    await flushUi();
+    act(() => {
+      document.body.dispatchEvent(new Event('pointerdown', { bubbles: true }));
+    });
+    await flushUi();
+    expect(filtersTrigger?.getAttribute('aria-expanded')).toBe('false');
+
+    act(() => {
+      filtersTrigger?.click();
+    });
+    await flushUi();
+    const doneBtn = host.querySelector<HTMLButtonElement>('button[aria-label="Close map filters"]');
+    act(() => {
+      doneBtn?.click();
+    });
+    await flushUi();
+    expect(filtersTrigger?.getAttribute('aria-expanded')).toBe('false');
+
+    // Filtered state renders active badge, Clear filters, and mobile active-person clear control
+    act(() => {
+      root.render(
+        <MapToolbar
+          selectablePeople={SAMPLE_BUNDLE.people}
+          selectedPersonId="per_henry"
+          selectedEraId="era_2"
+          routeMode="per-person"
+          allStopsCount={69}
+          migrationEras={eras}
+          eraStopCounts={counts}
+          stageColorMap={stageColorMap}
+          onSelectPersonId={onSelectPersonId}
+          onSelectEraId={onSelectEraId}
+          onSetRouteMode={onSetRouteMode}
+        />
+      );
+    });
+    await flushUi();
+    expect(host.querySelector('[data-active-count="2"]')).not.toBeNull();
+    const clearPersonBtn = host.querySelector<HTMLButtonElement>('button[aria-label="Show all people"]');
+    act(() => {
+      clearPersonBtn?.click();
+    });
+    expect(onSelectPersonId).toHaveBeenCalledWith('all');
+
+    const clearFiltersBtn = [...host.querySelectorAll<HTMLButtonElement>('button')].find(
+      (b) => b.textContent?.trim() === 'Clear filters'
+    );
+    act(() => {
+      clearFiltersBtn?.click();
+    });
+    expect(onSelectEraId).toHaveBeenCalledWith('all');
+  });
+
+  it('keeps the first four migration stages visible at 1280px with wide font metrics and overflows genuine 6-stage archives', async () => {
+    const eras = [
+      { id: 'british_isles', label: 'British Isles Origins', description: '', color: '#3B4D61' },
+      { id: 'colonial_seaboard', label: 'Colonial Seaboard', description: '', color: '#1B2A41' },
+      {
+        id: 'appalachian_frontier',
+        label: 'Appalachian & Kentucky Frontier',
+        description: '',
+        color: '#2F5245',
+      },
+      { id: 'midwest_prairie', label: 'Illinois Prairie & Midwest', description: '', color: '#7A4612' },
+      { id: 'capital_and_new_england', label: 'Washington & New England', description: '', color: '#5B3A5E' },
+    ];
+    const counts = new Map([
+      ['british_isles', 2],
+      ['colonial_seaboard', 8],
+      ['appalachian_frontier', 29],
+      ['midwest_prairie', 19],
+      ['capital_and_new_england', 13],
+    ]);
+
+    const wideMetrics: Record<string, number> = {
+      all: 94,
+      british_isles: 152,
+      colonial_seaboard: 145,
+      appalachian_frontier: 238,
+      midwest_prairie: 194,
+      capital_and_new_england: 204,
+      pacific_west: 188,
+      more: 78,
+    };
+
+    const origGetBoundingClientRect = HTMLElement.prototype.getBoundingClientRect;
+    vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(function (this: HTMLElement) {
+      const key = this.dataset?.['measureEra'];
+      if (key && key in wideMetrics) {
+        return new DOMRect(0, 0, wideMetrics[key], 28);
+      }
+      if (this.dataset?.['mapTraceLabel'] === 'true') {
+        return new DOMRect(0, 0, 118, 28);
+      }
+      if (this.dataset?.['mapRouteMode'] === 'true') {
+        return new DOMRect(0, 0, 168, 28);
+      }
+      return origGetBoundingClientRect.call(this);
+    });
+
+    const host = document.createElement('div');
+    Object.defineProperty(host, 'clientWidth', { configurable: true, value: 1280 });
+    document.body.append(host);
+    const root = createRoot(host);
+    cleanups.push(() => {
+      act(() => {
+        root.unmount();
+      });
+      host.remove();
+    });
+
+    const fontListeners = new Map<string, Set<() => void>>();
+    const fakeFonts = {
+      ready: Promise.resolve(),
+      addEventListener: (event: string, listener: () => void) => {
+        const set = fontListeners.get(event) ?? new Set();
+        set.add(listener);
+        fontListeners.set(event, set);
+      },
+      removeEventListener: (event: string, listener: () => void) => {
+        fontListeners.get(event)?.delete(listener);
+      },
+    };
+    const origFonts = Object.getOwnPropertyDescriptor(document, 'fonts');
+    Object.defineProperty(document, 'fonts', { configurable: true, value: fakeFonts });
+    cleanups.push(() => {
+      if (origFonts) {
+        Object.defineProperty(document, 'fonts', origFonts);
+      } else {
+        Reflect.deleteProperty(document, 'fonts');
+      }
+    });
+
+    act(() => {
+      root.render(
+        <MapToolbar
+          selectablePeople={SAMPLE_BUNDLE.people}
+          selectedPersonId="all"
+          selectedEraId="all"
+          routeMode="per-person"
+          allStopsCount={71}
+          migrationEras={eras}
+          eraStopCounts={counts}
+          onSelectPersonId={vi.fn()}
+          onSelectEraId={vi.fn()}
+          onSetRouteMode={vi.fn()}
+        />
+      );
+    });
+    await flushUi();
+
+    const visibleLabels = [
+      ...host.querySelectorAll<HTMLButtonElement>(
+        'fieldset[aria-label="Filter migration map by era"] button'
+      ),
+    ].map((btn) => btn.textContent?.trim() ?? '');
+    expect(visibleLabels).toEqual([
+      'All Stages (71)',
+      'British Isles Origins (2)',
+      'Colonial Seaboard (8)',
+      'Appalachian & Kentucky Frontier (29)',
+      'Illinois Prairie & Midwest (19)',
+    ]);
+    expect(host.querySelector('button[aria-haspopup="menu"]')?.textContent?.trim()).toBe('More (+1) ▾');
+
+    const sixEras = [
+      ...eras,
+      { id: 'pacific_west', label: 'Pacific & Western Crossing', description: '', color: '#4B5563' },
+    ];
+    const sixCounts = new Map([...counts, ['pacific_west', 7]]);
+    const toolbarEl = host.querySelector<HTMLElement>('[class*="map-toolbar"]');
+    const measureRowEl = host.querySelector<HTMLElement>('[class*="map-era-measure-row"]');
+    if (toolbarEl) {
+      toolbarEl.style.left = '12px';
+      toolbarEl.style.paddingLeft = '5px';
+      toolbarEl.style.paddingRight = '5px';
+      toolbarEl.style.columnGap = '4px';
+    }
+    if (measureRowEl) {
+      measureRowEl.style.columnGap = '4px';
+    }
+
+    act(() => {
+      root.render(
+        <MapToolbar
+          selectablePeople={SAMPLE_BUNDLE.people}
+          selectedPersonId="all"
+          selectedEraId="all"
+          routeMode="per-person"
+          allStopsCount={78}
+          migrationEras={sixEras}
+          eraStopCounts={sixCounts}
+          onSelectPersonId={vi.fn()}
+          onSelectEraId={vi.fn()}
+          onSetRouteMode={vi.fn()}
+        />
+      );
+    });
+    await flushUi();
+
+    expect(host.querySelector('button[aria-haspopup="menu"]')?.textContent?.trim()).toBe('More (+2) ▾');
+
+    // Selecting an era that would overflow promotes it into the visible bar
+    act(() => {
+      root.render(
+        <MapToolbar
+          selectablePeople={SAMPLE_BUNDLE.people}
+          selectedPersonId="all"
+          selectedEraId="pacific_west"
+          routeMode="per-person"
+          allStopsCount={78}
+          migrationEras={sixEras}
+          eraStopCounts={sixCounts}
+          onSelectPersonId={vi.fn()}
+          onSelectEraId={vi.fn()}
+          onSetRouteMode={vi.fn()}
+        />
+      );
+    });
+    await flushUi();
+    expect(
+      host.querySelector('fieldset[aria-label="Filter migration map by era"] button[aria-pressed="true"]')
+        ?.textContent
+    ).toContain('Pacific & Western Crossing (7)');
+
+    // Clicking inside the open overflow menu or toolbar keeps menus open; resizing to mobile clears overflow
+    const moreBtn = host.querySelector<HTMLButtonElement>('button[aria-haspopup="menu"]');
+    act(() => {
+      moreBtn?.click();
+    });
+    await flushUi();
+    const menuEl = host.querySelector<HTMLElement>('[role="menu"]');
+    expect(menuEl).not.toBeNull();
+    act(() => {
+      menuEl?.dispatchEvent(new Event('pointerdown', { bubbles: true }));
+    });
+    await flushUi();
+    expect(host.querySelector('[role="menu"]')).not.toBeNull();
+
+    Object.defineProperty(host, 'clientWidth', { configurable: true, value: 360 });
+    act(() => {
+      for (const listener of fontListeners.get('loadingdone') ?? []) {
+        listener();
+      }
+      window.dispatchEvent(new Event('resize'));
+    });
+    await flushUi();
+    expect(host.querySelector('button[aria-haspopup="menu"]')).toBeNull();
   });
 });

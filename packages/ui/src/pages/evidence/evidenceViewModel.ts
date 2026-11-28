@@ -9,13 +9,13 @@ import type {
 import { UNVERIFIED_TREE_SOURCE_ID } from '@kinloom/core';
 import { formatArchivalEdtfDate } from '../../lib/edtfArchivalFormat.js';
 
-export type EvidenceTab = 'conflicts' | 'citations' | 'media';
+export type EvidenceTab = 'conflicts' | 'citations' | 'uncited' | 'media';
 export type EvidenceFilter = 'all' | 'uncited';
 export type MediaKindFilter = 'all' | ArchivalMediaKind;
 
 export const EVIDENCE_BATCH_SIZE = 24;
 
-export const EVIDENCE_TABS: readonly EvidenceTab[] = ['conflicts', 'citations', 'media'];
+export const EVIDENCE_TABS: readonly EvidenceTab[] = ['conflicts', 'citations', 'uncited', 'media'];
 
 export const MEDIA_KIND_FILTER_ORDER: readonly ArchivalMediaKind[] = [
   'record_scan',
@@ -53,11 +53,11 @@ export function parseInitialEvidenceTab(
   param: string | null,
   filterParam: string | null = null
 ): EvidenceTab {
+  if (param === 'uncited' || parseEvidenceFilterParam(filterParam) === 'uncited') {
+    return 'uncited';
+  }
   if (param === 'citations' || param === 'media' || param === 'conflicts') {
     return param;
-  }
-  if (parseEvidenceFilterParam(filterParam) === 'uncited') {
-    return 'citations';
   }
   return 'conflicts';
 }

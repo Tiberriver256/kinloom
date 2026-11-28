@@ -493,12 +493,16 @@ export function createWorkersObservabilityPlugin(
 
   function applyPersistedValues(values: Readonly<Record<string, PluginSettingScalarValue>>): void {
     emitServerTiming =
-      typeof values['emit_server_timing'] === 'boolean' ? values['emit_server_timing'] : initialEmitServerTiming;
+      typeof values['emit_server_timing'] === 'boolean'
+        ? values['emit_server_timing']
+        : initialEmitServerTiming;
     includeRequestIdHeader =
       typeof values['include_request_id_header'] === 'boolean'
         ? values['include_request_id_header']
         : initialIncludeRequestIdHeader;
-    minLogLevel = isLogLevel(values['log_level_threshold']) ? values['log_level_threshold'] : initialMinLogLevel;
+    minLogLevel = isLogLevel(values['log_level_threshold'])
+      ? values['log_level_threshold']
+      : initialMinLogLevel;
   }
 
   async function hydrateSettings(store: PluginSettingsStore | undefined, force = false): Promise<void> {
@@ -621,7 +625,9 @@ export function createWorkersObservabilityPlugin(
     },
     getReadonlySettings: (ctx) => {
       const effectiveServerTiming =
-        typeof ctx.values['emit_server_timing'] === 'boolean' ? ctx.values['emit_server_timing'] : emitServerTiming;
+        typeof ctx.values['emit_server_timing'] === 'boolean'
+          ? ctx.values['emit_server_timing']
+          : emitServerTiming;
       return buildWorkersReadonlySettings(ctx, {
         enabled: true,
         emitServerTiming: effectiveServerTiming,

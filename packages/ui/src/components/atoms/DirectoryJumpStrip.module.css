@@ -107,6 +107,19 @@
   }
 }
 
+@media (prefers-reduced-motion: reduce) {
+  .jump-strip,
+  .jump-strip:not([data-overflowing="false"]) {
+    animation: none;
+    mask: none;
+    transition: none;
+  }
+
+  .jump-link {
+    transition: none;
+  }
+}
+
 @container directory-jump-strip scroll-state(stuck: top) {
   .jump-strip {
     box-shadow: var(--shadow-card);

@@ -252,3 +252,90 @@ describe('Mobile discrepancy citation wrapping and sticky header seam', () => {
     expect(mobileSpineRule).toContain('box-shadow: 0 -4px 0 var(--surface-canvas);');
   });
 });
+
+describe('WCAG 2.2 AA mobile touch targets, WCAG 1.4.12 text-spacing, and horizontal edge fades (#110)', () => {
+  it('scrolls active ExplorerTopBar nav link into view with inline: center and wires non-stuck edge-fade CSS', () => {
+    const scrollIntoViewMock = vi.fn();
+    Element.prototype.scrollIntoView = scrollIntoViewMock;
+
+    mountEl(
+      <MemoryRouter initialEntries={['/time']}>
+        <ArchiveProvider siteConfig={SITE_CONFIG} initialBundle={SAMPLE_BUNDLE}>
+          <ExplorerTopBar />
+        </ArchiveProvider>
+      </MemoryRouter>
+    );
+
+    expect(scrollIntoViewMock).toHaveBeenCalledWith(
+      expect.objectContaining({ block: 'nearest', inline: 'center' })
+    );
+
+    const topBarCss = readFileSync(resolve(UI_SRC, 'components/ExplorerTopBar.module.css'), 'utf8');
+    expect(topBarCss).toContain('@property --nav-fade-start');
+    expect(topBarCss).toContain('@property --nav-fade-end');
+    expect(topBarCss).toContain('.nav-links:not([data-overflowing="false"])');
+    expect(topBarCss).toContain('animation-duration: auto, auto;');
+
+    const controlsCss = readFileSync(resolve(UI_SRC, 'styles/Controls.module.css'), 'utf8');
+    expect(controlsCss).toContain('@property --tabs-fade-start');
+    expect(controlsCss).toContain('@property --tabs-fade-end');
+    expect(controlsCss).toContain(':global(.evidence-tabs):not([data-overflowing="false"])');
+  });
+
+  it('allows .person-card-hook to grow under WCAG 1.4.12 text-spacing and enforces >=44px mobile touch targets', () => {
+    const indexCss = readFileSync(resolve(UI_SRC, 'pages/IndexPage.module.css'), 'utf8');
+    const hookRule = readCssBlock(indexCss, '.person-card-hook {');
+    expect(hookRule).not.toContain('-webkit-line-clamp');
+    expect(hookRule).not.toContain('line-clamp');
+    expect(hookRule).not.toContain('overflow: hidden');
+    const indexMobile640 = indexCss.slice(indexCss.indexOf('@media (max-width: 640px)'));
+    expect(readCssBlock(indexMobile640, '.index-about-toggle {')).toContain(
+      'min-height: var(--control-height-touch);'
+    );
+    const indexMobile768 = indexCss.slice(indexCss.lastIndexOf('@media (max-width: 768px)'));
+    expect(readCssBlock(indexMobile768, '.index-era-snapshot-link {')).toContain(
+      'min-height: var(--control-height-touch);'
+    );
+
+    const wikiPanelsCss = readFileSync(resolve(UI_SRC, 'components/wiki/WikiPanels.module.css'), 'utf8');
+    const wikiMobile = wikiPanelsCss.slice(wikiPanelsCss.lastIndexOf('@media (max-width: 768px)'));
+    expect(readCssBlock(wikiMobile, '.wiki-entity-link {')).toContain(
+      'min-height: var(--control-height-touch);'
+    );
+
+    const onboardingCss = readFileSync(
+      resolve(UI_SRC, 'components/OnboardingChecklistCard.module.css'),
+      'utf8'
+    );
+    expect(onboardingCss).toContain('min-block-size: var(--control-height-touch);');
+    expect(onboardingCss).not.toContain('min-block-size: 42px;');
+
+    const evidenceCss = readFileSync(resolve(UI_SRC, 'pages/EvidencePage.module.css'), 'utf8');
+    const evidenceMobile = evidenceCss.slice(evidenceCss.lastIndexOf('@media (max-width: 768px)'));
+    expect(readCssBlock(evidenceMobile, '.evidence-gap-cta {')).toContain(
+      'min-height: var(--control-height-touch);'
+    );
+
+    const placeCss = readFileSync(resolve(UI_SRC, 'pages/PlacePage.module.css'), 'utf8');
+    const placeMobile = placeCss.slice(placeCss.lastIndexOf('@media (max-width: 768px)'));
+    expect(readCssBlock(placeMobile, '.place-breadcrumb a {')).toContain(
+      'min-height: var(--control-height-touch);'
+    );
+    expect(readCssBlock(placeMobile, '.place-scope-bar {')).toContain('flex-wrap: nowrap;');
+
+    const timeCss = readFileSync(resolve(UI_SRC, 'pages/TimePage.module.css'), 'utf8');
+    const timeMobile = timeCss.slice(timeCss.lastIndexOf('@media (max-width: 768px)'));
+    expect(readCssBlock(timeMobile, '.time-lane-place a {')).toContain(
+      'min-height: var(--control-height-touch);'
+    );
+
+    const markdownCss = readFileSync(resolve(UI_SRC, 'components/ArchivalMarkdown.module.css'), 'utf8');
+    const mdMobile = markdownCss.slice(markdownCss.lastIndexOf('@media (pointer: coarse)'));
+    const footnoteRule = readCssBlock(mdMobile, '.archival-footnote-ref {');
+    expect(footnoteRule).toContain('min-width: var(--control-height-touch);');
+    expect(footnoteRule).toContain('min-height: var(--control-height-touch);');
+
+    const pronCss = readFileSync(resolve(UI_SRC, 'components/PronunciationBadge.module.css'), 'utf8');
+    expect(pronCss).toContain('.pronunciation-badge:global(.is-compact) .pronunciation-play-btn');
+  });
+});

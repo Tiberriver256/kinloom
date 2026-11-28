@@ -101,7 +101,7 @@ test('all 9 archival routes render cleanly with zero console or page errors', as
     {
       url: '/time',
       assertVisible: async () => {
-        await expect(page.getByRole('heading', { name: /Lincoln & Todd Family in \d{4}/ })).toBeVisible();
+        await expect(page.getByRole('heading', { name: /Historical Snapshot \d{4}/ })).toBeVisible();
       },
     },
     {

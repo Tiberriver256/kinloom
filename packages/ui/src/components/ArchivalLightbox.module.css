@@ -250,7 +250,7 @@
   inline-size: 56px;
   block-size: 42px;
   object-fit: cover;
-  border-radius: 2px;
+  border-radius: var(--radius-sm);
 }
 
 @media (max-width: 768px) {

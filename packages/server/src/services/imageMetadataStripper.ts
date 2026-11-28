@@ -58,7 +58,9 @@ function dataViewOf(bytes: Uint8Array): DataView {
   return new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
 }
 
-const CRC32_TABLE_VIEW = dataViewOf(new Uint8Array(CRC32_TABLE.buffer, CRC32_TABLE.byteOffset, CRC32_TABLE.byteLength));
+const CRC32_TABLE_VIEW = dataViewOf(
+  new Uint8Array(CRC32_TABLE.buffer, CRC32_TABLE.byteOffset, CRC32_TABLE.byteLength)
+);
 const IS_LITTLE_ENDIAN = new Uint8Array(new Uint16Array([1]).buffer)[0] === 1;
 
 export function computeCrc32(bytes: Uint8Array, start = 0, end = bytes.byteLength): number {

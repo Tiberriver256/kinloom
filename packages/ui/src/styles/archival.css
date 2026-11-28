@@ -4,7 +4,10 @@
 @import "./base.css";
 @import "./print.css";
 
-/* Reserve viewport height for main content while archive bundle loads to prevent footer CLS */
-main#main-content {
-  min-height: calc(100vh - var(--topbar-height, 56px));
+/* Reserve viewport height for main content while archive bundle loads to prevent footer CLS.
+ * Wrapped in :where(...) so full-viewport flex canvases (/map, /tree) can override min-height: 0. */
+:where(main#main-content) {
+  min-height: calc(100vh - var(--shell-chrome-offset, var(--topbar-height, 56px)));
+  /* biome-ignore lint/suspicious/noDuplicateProperties: 100vh fallback before 100dvh */
+  min-height: calc(100dvh - var(--shell-chrome-offset, var(--topbar-height, 56px)));
 }

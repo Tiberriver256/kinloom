@@ -19,8 +19,8 @@
 
 .private-archive-gate-card {
   background: var(--surface-card);
-  border: 1px solid var(--border-control);
-  border-radius: var(--radius-md);
+  border: var(--border-width-thin) solid var(--border-decorative);
+  border-radius: var(--radius-control);
   box-shadow: var(--shadow-active);
   padding: clamp(1.35rem, 4vw, 2rem);
 }
@@ -33,10 +33,10 @@
 }
 
 .private-archive-gate-kicker {
-  font-family: var(--font-mono);
+  font-family: var(--font-ui);
   font-size: 0.76rem;
   font-weight: 600;
-  letter-spacing: 0.07em;
+  letter-spacing: 0.06em;
   text-transform: uppercase;
   color: var(--accent-primary);
 }
@@ -109,7 +109,15 @@
   margin-top: 6px;
 }
 
+.wiki-auth-label {
+  font-family: var(--font-ui);
+  font-size: 0.84rem;
+  font-weight: 600;
+  color: var(--surface-header);
+}
+
 .wiki-field-hint {
+  font-family: var(--font-ui);
   font-size: 0.82rem;
   line-height: 1.45;
   color: var(--text-secondary);
@@ -117,6 +125,7 @@
 
 .wiki-field-error {
   margin: 4px 0 0;
+  font-family: var(--font-ui);
   font-size: 0.84rem;
   line-height: 1.4;
   font-weight: 600;
@@ -124,9 +133,7 @@
 }
 
 .wiki-invite-helper {
-  margin-top: 16px;
-  padding-top: 14px;
-  border-top: 1px solid var(--border-decorative);
+  margin-top: 14px;
 }
 
 .wiki-invite-toggle {
@@ -134,24 +141,28 @@
   align-items: center;
   justify-content: center;
   width: 100%;
-  min-height: 44px;
+  min-height: var(--control-height-touch);
   padding: 8px 12px;
-  border: 1px dashed var(--border-control);
-  border-radius: var(--radius-md);
-  background: transparent;
+  border: none;
+  border-radius: var(--radius-control);
+  background: var(--surface-subtle);
   color: var(--surface-header);
-  font-family: var(--font-mono);
-  font-size: 0.82rem;
+  font-family: var(--font-ui);
+  font-size: 0.86rem;
   font-weight: 600;
   cursor: pointer;
   transition:
     background-color 0.14s ease,
-    border-color 0.14s ease;
+    color 0.14s ease;
 }
 
 .wiki-invite-toggle:hover {
   background: var(--surface-linen);
-  border-color: var(--surface-header);
+}
+
+.wiki-invite-toggle:focus-visible {
+  outline: var(--border-width-emphasis) solid var(--action-focus);
+  outline-offset: 2px;
 }
 
 .wiki-invite-form {
@@ -162,6 +173,7 @@
 }
 
 .wiki-auth-notice-bar {
+  flex: 0 0 auto;
   display: flex;
   justify-content: space-between;
   align-items: center;
@@ -196,6 +208,7 @@
 
 /* Auth & Invite Strip (Whisper-thin, Single-line, Dismissible for Invite Guests) */
 .wiki-auth-banner {
+  flex: 0 0 auto;
   display: flex;
   justify-content: space-between;
   align-items: center;
@@ -203,8 +216,8 @@
   gap: 8px 12px;
   min-height: 32px;
   padding: 4px 26px;
-  font-family: var(--font-mono);
-  font-size: 0.75rem;
+  font-family: var(--font-ui);
+  font-size: 0.78rem;
   line-height: 1.3;
   border-bottom: 1px solid var(--border-decorative);
 }
@@ -231,7 +244,7 @@
 
 .wiki-auth-banner-sep {
   flex-shrink: 0;
-  color: var(--border-control);
+  color: var(--surface-header);
 }
 
 .wiki-auth-banner-link {
@@ -294,19 +307,11 @@
 .wiki-divider-label {
   display: flex;
   align-items: center;
-  gap: 12px;
-  font-family: var(--font-mono);
-  font-size: 0.76rem;
+  justify-content: center;
+  font-family: var(--font-ui);
+  font-size: 0.82rem;
   color: var(--text-secondary);
-  margin: 16px 0;
-}
-
-.wiki-divider-label::before,
-.wiki-divider-label::after {
-  content: "";
-  flex: 1 1 auto;
-  height: 1px;
-  background: var(--border-decorative);
+  margin: 12px 0;
 }
 
 .wiki-google-btn {
@@ -318,13 +323,27 @@
 
 @media (max-width: 768px) {
   .wiki-auth-banner {
-    min-height: 44px;
-    padding: 0 12px;
-    font-size: 0.75rem;
+    min-height: var(--control-height-touch);
+    padding: 4px 12px;
+    font-size: 0.78rem;
+  }
+
+  .wiki-auth-banner-copy {
+    flex-wrap: wrap;
+    white-space: normal;
+    overflow: visible;
+    gap: 2px 6px;
+  }
+
+  .wiki-auth-banner-label {
+    white-space: normal;
+    overflow: visible;
+    text-overflow: clip;
+    overflow-wrap: break-word;
   }
 
   .wiki-auth-banner-link {
-    min-height: 44px;
+    min-height: var(--control-height-touch);
     display: inline-flex;
     align-items: center;
     padding: 0 4px;

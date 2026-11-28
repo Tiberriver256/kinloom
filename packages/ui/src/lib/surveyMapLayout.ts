@@ -374,34 +374,43 @@ export function computeEdgeBadgeLayouts(params: {
   const { edgeIndicators, width, height, fontSize, compassBox } = params;
   const placed: SurveyBox[] = [compassBox];
   const layouts: SurveyEdgeBadgeLayout[] = [];
-  const badgeH = Math.ceil(fontSize + 8);
+  const badgeH = Math.max(24, Math.ceil(fontSize + 10));
   const padX = 6;
-  const framePad = 6;
+  const framePad = width <= 400 ? 10 : 6;
+  const boxGap = 4; // >= 8px spacing between adjacent 24px+ edge badges
 
   for (const ind of edgeIndicators) {
+    const maxNameLen = width <= 400 ? 12 : 16;
     const shortName =
-      ind.place.name.length > 16 ? `${ind.place.name.slice(0, 15).trimEnd()}…` : ind.place.name;
+      ind.place.name.length > maxNameLen
+        ? `${ind.place.name.slice(0, maxNameLen - 1).trimEnd()}…`
+        : ind.place.name;
     const text = `${ind.arrow} ${shortName} · ${Math.round(ind.distanceMiles)} mi`;
-    const rectW = Math.min(width - framePad * 2, estimateMonoTextWidth(text, fontSize));
+    const rectW = Math.max(24, Math.min(width - framePad * 2, estimateMonoTextWidth(text, fontSize)));
 
     const idealX = Math.max(framePad, Math.min(width - framePad - rectW, ind.edgeX - rectW / 2));
     const idealY = Math.max(framePad, Math.min(height - framePad - badgeH, ind.edgeY - badgeH / 2));
 
     const offsets: readonly [number, number][] = [
       [0, 0],
-      [0, badgeH + 4],
-      [0, -(badgeH + 4)],
-      [-(rectW + 6), 0],
-      [rectW + 6, 0],
-      [0, (badgeH + 4) * 2],
-      [0, -(badgeH + 4) * 2],
+      [0, badgeH + 8],
+      [0, -(badgeH + 8)],
+      [-(rectW + 8), 0],
+      [rectW + 8, 0],
+      [0, (badgeH + 8) * 2],
+      [0, -(badgeH + 8) * 2],
     ];
 
     let chosen: { readonly x: number; readonly y: number } | null = null;
     for (const [ox, oy] of offsets) {
       const rx = Math.max(framePad, Math.min(width - framePad - rectW, idealX + ox));
       const ry = Math.max(framePad, Math.min(height - framePad - badgeH, idealY + oy));
-      const box: SurveyBox = { x1: rx - 2, x2: rx + rectW + 2, y1: ry - 2, y2: ry + badgeH + 2 };
+      const box: SurveyBox = {
+        x1: rx - boxGap,
+        x2: rx + rectW + boxGap,
+        y1: ry - boxGap,
+        y2: ry + badgeH + boxGap,
+      };
       if (!placed.some((p) => boxesOverlap(box, p))) {
         placed.push(box);
         chosen = { x: rx, y: ry };
@@ -418,12 +427,12 @@ export function computeEdgeBadgeLayouts(params: {
         rectW,
         rectH: badgeH,
         textX: chosen.x + padX,
-        textY: chosen.y + badgeH - 5,
+        textY: chosen.y + Math.round(badgeH / 2 + fontSize * 0.34),
         box: {
-          x1: chosen.x - 2,
-          x2: chosen.x + rectW + 2,
-          y1: chosen.y - 2,
-          y2: chosen.y + badgeH + 2,
+          x1: chosen.x - boxGap,
+          x2: chosen.x + rectW + boxGap,
+          y1: chosen.y - boxGap,
+          y2: chosen.y + badgeH + boxGap,
         },
       });
     }
@@ -461,47 +470,60 @@ export function computeCenterLabelPlacement(params: {
     radiusPx,
   } = params;
 
-  const fontSize = compact ? 12.5 : isNarrow ? 13.5 : 12;
+  const fontSize = compact ? 11.5 : isNarrow ? 11.5 : 12;
   const textW = estimateMonoTextWidth(centerName, fontSize);
   const halfW = textW / 2;
+  const framePad = isNarrow ? 12 : 6;
+  const clampedMidX = Math.max(framePad + halfW, Math.min(width - framePad - halfW, cx));
   const pad = compact ? 8 : 11;
-  const topOffset = compact ? 14 : Math.max(18, Math.round(radiusPx) + 12);
-  const bottomOffset = compact ? 18 : Math.max(24, Math.round(radiusPx) + 18);
+  const topOffset = compact ? 14 : Math.max(18, Math.round(radiusPx) + 11);
+  const bottomOffset = compact ? 18 : Math.max(24, Math.round(radiusPx) + 17);
+  const ascent = Math.ceil(fontSize * 0.95);
+  const descent = Math.ceil(fontSize * 0.35);
+
+  const makeMiddle = (titleY: number): SurveyCenterPlacement => ({
+    x: clampedMidX,
+    titleY,
+    anchor: 'middle',
+    box: {
+      x1: clampedMidX - halfW,
+      x2: clampedMidX + halfW,
+      y1: titleY - ascent,
+      y2: titleY + descent,
+    },
+  });
 
   const candidates: readonly SurveyCenterPlacement[] = [
-    {
-      x: cx + pad,
-      titleY: cy + 4,
-      anchor: 'start',
-      box: { x1: cx + pad - 2, x2: cx + pad + textW, y1: cy - 12, y2: cy + 10 },
-    },
-    {
-      x: cx - pad,
-      titleY: cy + 4,
-      anchor: 'end',
-      box: { x1: cx - pad - textW, x2: cx - pad + 2, y1: cy - 12, y2: cy + 10 },
-    },
-    {
-      x: cx,
-      titleY: cy - topOffset,
-      anchor: 'middle',
-      box: { x1: cx - halfW, x2: cx + halfW, y1: cy - topOffset - 13, y2: cy - topOffset + 4 },
-    },
-    {
-      x: cx,
-      titleY: cy + bottomOffset,
-      anchor: 'middle',
-      box: { x1: cx - halfW, x2: cx + halfW, y1: cy + bottomOffset - 13, y2: cy + bottomOffset + 4 },
-    },
+    ...(isNarrow && scopeMode === 'radius15'
+      ? [makeMiddle(cy - topOffset), makeMiddle(cy + bottomOffset), makeMiddle(cy - 14), makeMiddle(cy + 20)]
+      : [
+          {
+            x: cx + pad,
+            titleY: cy + 4,
+            anchor: 'start' as const,
+            box: { x1: cx + pad - 2, x2: cx + pad + textW, y1: cy - 12, y2: cy + 10 },
+          },
+          {
+            x: cx - pad,
+            titleY: cy + 4,
+            anchor: 'end' as const,
+            box: { x1: cx - pad - textW, x2: cx - pad + 2, y1: cy - 12, y2: cy + 10 },
+          },
+          makeMiddle(cy - topOffset),
+          makeMiddle(cy + bottomOffset),
+          makeMiddle(cy - 14),
+          makeMiddle(cy + 20),
+        ]),
   ];
 
+  const isInBounds = (box: SurveyBox): boolean =>
+    box.x1 >= framePad && box.x2 <= width - framePad && box.y1 >= framePad && box.y2 <= height - framePad;
+
+  const isClearOfRing = (box: SurveyBox): boolean =>
+    compact || scopeMode !== 'radius15' || !boxIntersectsCircleStroke(box, cx, cy, radiusPx, 3.5);
+
   for (const c of candidates) {
-    const inViewport = c.box.x1 >= 6 && c.box.x2 <= width - 6 && c.box.y1 >= 6 && c.box.y2 <= height - 4;
-    if (!inViewport) {
-      continue;
-    }
-    const clearOfRing = compact || !isNarrow || scopeMode !== 'radius15' || c.anchor === 'middle';
-    if (!clearOfRing) {
+    if (!isInBounds(c.box) || !isClearOfRing(c.box)) {
       continue;
     }
     const blockedByMarker = markers.some(
@@ -513,13 +535,10 @@ export function computeCenterLabelPlacement(params: {
     }
   }
 
-  const c0 = candidates[0];
-  const c2 = candidates[2];
-  const fallback = c2 && c2.box.y1 >= 6 ? c2 : (c0 ?? c2);
-  if (!fallback) {
-    throw new Error('Expected label placement candidate');
-  }
-  return fallback;
+  const fallbackInBounds =
+    candidates.find((c) => isInBounds(c.box) && isClearOfRing(c.box)) ??
+    candidates.find((c) => isInBounds(c.box));
+  return fallbackInBounds ?? makeMiddle(Math.max(framePad + ascent, cy - 14));
 }
 
 function makeLabelBox(
@@ -616,7 +635,9 @@ export function computeSurveyLabelLayout(params: {
       return a.distanceMiles - b.distanceMiles;
     });
 
-  const fontSize = isNarrow ? 12.5 : 11.5;
+  const fontSize = isNarrow ? 10.5 : 11.5;
+  const framePadX = isNarrow ? 12 : 8;
+  const framePadY = isNarrow ? 10 : 8;
 
   const immediateDirs: readonly {
     readonly dx: number;
@@ -650,7 +671,9 @@ export function computeSurveyLabelLayout(params: {
 
   for (const m of prioritized) {
     const extras = clusterCounts.get(m.place.id) ?? 0;
-    const text = `${m.place.name} (${m.distanceMiles} mi${extras > 0 ? ` +${extras}` : ''})`;
+    const displayName =
+      isNarrow && m.place.name.length > 13 ? `${m.place.name.slice(0, 12).trimEnd()}…` : m.place.name;
+    const text = `${displayName} (${m.distanceMiles} mi${extras > 0 ? ` +${extras}` : ''})`;
     const textW = estimateMonoTextWidth(text, fontSize);
     const preferRight = m.x >= cx;
 
@@ -683,6 +706,25 @@ export function computeSurveyLabelLayout(params: {
           ]
     ).filter((d): d is (typeof leaderDirs)[number] => d !== undefined);
 
+    const radialOutwardCandidates: {
+      readonly lx: number;
+      readonly ly: number;
+      readonly anchor: 'start' | 'end';
+      readonly usesLeader: boolean;
+    }[] = [];
+    if (scopeMode === 'radius15' && radiusPx > 0) {
+      const angle = Math.atan2(m.y - cy, m.x - cx);
+      const outerR = radiusPx + 12;
+      const rx = cx + Math.cos(angle) * outerR;
+      const ry = cy + Math.sin(angle) * outerR;
+      const radialAnchor: 'start' | 'end' = Math.cos(angle) >= 0 ? 'start' : 'end';
+      radialOutwardCandidates.push(
+        { lx: rx, ly: ry + 4, anchor: radialAnchor, usesLeader: true },
+        { lx: rx, ly: ry - 10, anchor: radialAnchor, usesLeader: true },
+        { lx: rx, ly: ry + 16, anchor: radialAnchor, usesLeader: true }
+      );
+    }
+
     const allCandidates: {
       readonly lx: number;
       readonly ly: number;
@@ -701,6 +743,7 @@ export function computeSurveyLabelLayout(params: {
         anchor: d.anchor,
         usesLeader: true,
       })),
+      ...radialOutwardCandidates,
     ];
 
     let bestCandidate: {
@@ -710,17 +753,22 @@ export function computeSurveyLabelLayout(params: {
 
     for (const c of allCandidates) {
       const box = makeLabelBox(c.lx, c.ly, c.anchor, textW, fontSize);
-      if (box.x1 < 8 || box.x2 > width - 8 || box.y1 < 8 || box.y2 > height - 6) {
+      if (
+        box.x1 < framePadX ||
+        box.x2 > width - framePadX ||
+        box.y1 < framePadY ||
+        box.y2 > height - framePadY
+      ) {
         continue;
       }
       if (obstacles.some((obs) => boxesOverlap(box, obs))) {
         continue;
       }
+      if (scopeMode === 'radius15' && boxIntersectsCircleStroke(box, cx, cy, radiusPx, 3.5)) {
+        continue;
+      }
 
       let score = c.usesLeader ? 15 : 0;
-      if (scopeMode === 'radius15' && boxIntersectsCircleStroke(box, cx, cy, radiusPx, 3.5)) {
-        score += 100;
-      }
       for (const other of markers) {
         if (other.place.id === m.place.id) {
           continue;

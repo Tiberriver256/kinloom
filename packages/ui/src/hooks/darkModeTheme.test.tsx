@@ -363,12 +363,44 @@ describe('MapLibre and token dark-mode parity', () => {
     expect(darkTokens.route).toBe(KINLOOM_DARK_COLOR_TOKENS.warmBrass);
     expect(darkTokens.routeLatest).toBe(KINLOOM_DARK_COLOR_TOKENS.vermilionTint);
 
+    const lightPaper = buildPaperStyle(false);
     const darkPaper = buildPaperStyle(true);
+    expect(lightPaper.layers[0]).toMatchObject({
+      id: 'paper',
+      type: 'background',
+      paint: { 'background-color': '#D4E1E8' },
+    });
     expect(darkPaper.layers[0]).toMatchObject({
       id: 'paper',
       type: 'background',
-      paint: { 'background-color': '#2A2723' },
+      paint: { 'background-color': '#131F2B' },
     });
+    const darkLandLayer = darkPaper.layers.find((layer) => layer.id === 'kinloom-offline-land-fill');
+    const darkCoastLayer = darkPaper.layers.find((layer) => layer.id === 'kinloom-offline-coastline');
+    expect(darkLandLayer && 'paint' in darkLandLayer ? darkLandLayer.paint : null).toEqual({
+      'fill-color': '#312D27',
+    });
+    expect(darkCoastLayer && 'paint' in darkCoastLayer ? darkCoastLayer.paint : null).toMatchObject({
+      'line-color': '#655D50',
+    });
+
+    // Offline archival style dynamically repaints water, land, coastline, and graticule layers on theme toggle
+    const offlinePainted: Array<[string, string, unknown]> = [];
+    const offlineLayerIds = new Set(darkPaper.layers.map((layer) => layer.id));
+    const fakeOfflineMap = {
+      getLayer: (id: string) => (offlineLayerIds.has(id) ? { id } : undefined),
+      getStyle: () => ({ layers: darkPaper.layers }),
+      setPaintProperty: (id: string, prop: string, val: unknown) => {
+        offlinePainted.push([id, prop, val]);
+      },
+    } as unknown as MapLibreMap;
+    applyMapThemeToLayers(fakeOfflineMap, true);
+    expect(offlinePainted).toContainEqual(['paper', 'background-color', '#131F2B']);
+    expect(offlinePainted).toContainEqual(['kinloom-offline-land-fill', 'fill-color', '#312D27']);
+    expect(offlinePainted).toContainEqual(['kinloom-offline-coastline', 'line-color', '#655D50']);
+    applyMapThemeToLayers(fakeOfflineMap, false);
+    expect(offlinePainted).toContainEqual(['paper', 'background-color', '#D4E1E8']);
+    expect(offlinePainted).toContainEqual(['kinloom-offline-land-fill', 'fill-color', '#EAE1CE']);
 
     const rawOhm: StyleSpecification = {
       version: 8,
@@ -443,13 +475,13 @@ describe('MapLibre and token dark-mode parity', () => {
     expect(painted).toContainEqual(['paper', 'background-color', '#2A2723']);
     expect(painted).toContainEqual([PAPER_LAND_LAYER_ID, 'fill-color', '#2A2723']);
     expect(painted).toContainEqual(['water_areas_ne', 'fill-color', '#17222D']);
-    expect(painted).toContainEqual(['migration-route', 'line-color', '#D89C56']);
+    expect(painted).toContainEqual(['migration-route', 'line-color', '#F6D191']);
     expect(painted).toContainEqual(['migration-route-latest', 'line-color', '#F39287']);
-    expect(painted).toContainEqual(['migration-labels', 'text-color', '#EDE6D9']);
+    expect(painted).toContainEqual(['migration-labels', 'text-color', '#E4DDD0']);
     expect(painted).toContainEqual(['migration-labels', 'text-halo-color', '#171614']);
 
     applyMapThemeToLayers(fakeMap, false);
-    expect(painted).toContainEqual(['migration-route', 'line-color', '#7A4612']);
+    expect(painted).toContainEqual(['migration-route', 'line-color', '#562E07']);
     expect(painted).toContainEqual(['migration-labels', 'text-halo-width', 1.4]);
 
     // Defensive no-op when map stub lacks setPaintProperty or style layers
@@ -552,7 +584,7 @@ describe('MapLibre and token dark-mode parity', () => {
       viewportWidth: 0,
       hasSelectedStop: false,
     });
-    expect(noViewportHeight).toEqual({ top: 124, right: 76, bottom: 124, left: 20 });
+    expect(noViewportHeight).toEqual({ top: 76, right: 32, bottom: 124, left: 28 });
 
     // buildArchivalOhmStyle drops layers without a source string and supports non-default year loads
     const styleWithNoSource: StyleSpecification = {
@@ -608,9 +640,11 @@ describe('MapLibre and token dark-mode parity', () => {
     const stdout = execFileSync(process.execPath, [scriptPath], { encoding: 'utf8' });
     const lightPasses = stdout.match(/^PASS \[light\]/gm) ?? [];
     const darkPasses = stdout.match(/^PASS \[dark\]/gm) ?? [];
-    expect(lightPasses).toHaveLength(28);
-    expect(darkPasses).toHaveLength(28);
-    expect(stdout).toContain('All 56 Kinloom contrast checks (28 light + 28 dark)');
+    const apcaPasses = stdout.match(/^PASS \[apca-(?:light|dark)\]/gm) ?? [];
+    expect(lightPasses).toHaveLength(34);
+    expect(darkPasses).toHaveLength(34);
+    expect(apcaPasses).toHaveLength(19);
+    expect(stdout).toContain('All 68 Kinloom WCAG contrast checks (34 light + 34 dark), 19 APCA checks');
     expect(stdout).not.toContain('FAIL');
   });
 });

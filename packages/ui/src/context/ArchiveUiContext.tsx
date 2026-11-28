@@ -45,6 +45,10 @@ export interface ArchiveUiContextValue {
   searchOpen: boolean;
   openSearch: () => void;
   closeSearch: () => void;
+  inviteBannerVisible: boolean;
+  setInviteBannerVisible: (visible: boolean) => void;
+  inlineGuideBannerVisible: boolean;
+  setInlineGuideBannerVisible: (visible: boolean) => void;
 }
 
 const ArchiveUiContext = createContext<ArchiveUiContextValue | null>(null);
@@ -56,6 +60,8 @@ export const ArchiveUiProvider: React.FC<{ children: React.ReactNode }> = ({ chi
   const [sourceReader, setSourceReader] = useState<SourceReaderRequest | null>(null);
   const [sourceInspector, setSourceInspector] = useState<SourceInspectorRequest | null>(null);
   const [searchOpen, setSearchOpen] = useState(false);
+  const [inviteBannerVisible, setInviteBannerVisible] = useState(false);
+  const [inlineGuideBannerVisible, setInlineGuideBannerVisible] = useState(false);
 
   const openSourceReader = useCallback(
     (req: SourceReaderRequestInput) => {
@@ -139,6 +145,10 @@ export const ArchiveUiProvider: React.FC<{ children: React.ReactNode }> = ({ chi
       searchOpen,
       openSearch,
       closeSearch,
+      inviteBannerVisible,
+      setInviteBannerVisible,
+      inlineGuideBannerVisible,
+      setInlineGuideBannerVisible,
     }),
     [
       activeYear,
@@ -153,6 +163,8 @@ export const ArchiveUiProvider: React.FC<{ children: React.ReactNode }> = ({ chi
       searchOpen,
       openSearch,
       closeSearch,
+      inviteBannerVisible,
+      inlineGuideBannerVisible,
     ]
   );
 
@@ -165,4 +177,8 @@ export function useArchiveUi(): ArchiveUiContextValue {
     throw new Error('useArchiveUi must be used inside ArchiveUiProvider');
   }
   return ctx;
+}
+
+export function useOptionalArchiveUi(): ArchiveUiContextValue | null {
+  return useContext(ArchiveUiContext);
 }

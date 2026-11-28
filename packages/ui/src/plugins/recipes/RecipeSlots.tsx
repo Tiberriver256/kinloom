@@ -29,6 +29,7 @@ export const PersonRecipesSlot: React.FC<PersonRecipesSlotProps> = ({ person }) 
   const archiveData = useOptionalArchiveData();
   const hasSessionLoader = Boolean(archiveData?.dataSource.getSession);
   const session = archiveData?.session ?? null;
+  const canReadArchive = archiveData?.capabilities.canReadArchive;
   const sessionKey = session
     ? `${session.principal_kind}:${session.authenticated ? 'auth' : 'anon'}`
     : 'pending';
@@ -41,6 +42,10 @@ export const PersonRecipesSlot: React.FC<PersonRecipesSlotProps> = ({ person }) 
       return undefined;
     }
     if (hasSessionLoader && sessionKey === 'pending') {
+      return undefined;
+    }
+    if (hasSessionLoader && session?.principal_kind === 'anonymous' && canReadArchive === false) {
+      setRecipes([]);
       return undefined;
     }
     const controller = new AbortController();
@@ -61,7 +66,7 @@ export const PersonRecipesSlot: React.FC<PersonRecipesSlotProps> = ({ person }) 
       cancelled = true;
       controller.abort();
     };
-  }, [client, person.id, isLiving, hasSessionLoader, sessionKey]);
+  }, [client, person.id, isLiving, hasSessionLoader, sessionKey, session?.principal_kind, canReadArchive]);
 
   if (isLiving || recipes.length === 0) {
     return null;
@@ -127,6 +132,7 @@ export const IndexRecipesWidget: React.FC = () => {
   const { subscribePluginSettings } = useKinloomPlugins();
   const hasSessionLoader = Boolean(archiveData?.dataSource.getSession);
   const session = archiveData?.session ?? null;
+  const canReadArchive = archiveData?.capabilities.canReadArchive;
   const sessionKey = session
     ? `${session.principal_kind}:${session.authenticated ? 'auth' : 'anon'}`
     : 'pending';
@@ -186,12 +192,23 @@ export const IndexRecipesWidget: React.FC = () => {
     if (hasSessionLoader && sessionKey === 'pending') {
       return undefined;
     }
+    if (hasSessionLoader && session?.principal_kind === 'anonymous' && canReadArchive === false) {
+      setRecipes([]);
+      return undefined;
+    }
     const controller = new AbortController();
     void loadWidgetRecipes(controller.signal);
     return (): void => {
       controller.abort();
     };
-  }, [loadWidgetRecipes, showIndexWidget, hasSessionLoader, sessionKey]);
+  }, [
+    loadWidgetRecipes,
+    showIndexWidget,
+    hasSessionLoader,
+    sessionKey,
+    session?.principal_kind,
+    canReadArchive,
+  ]);
 
   if (!showIndexWidget || !allowedByServer || recipes.length === 0) {
     return null;

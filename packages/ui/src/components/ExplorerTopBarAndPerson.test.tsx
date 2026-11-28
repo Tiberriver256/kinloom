@@ -1,4 +1,7 @@
 /** @vitest-environment jsdom */
+import { readFileSync } from 'node:fs';
+import { dirname, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import type { ArchiveBundle, ArchiveDataSource, KinloomSiteConfig, Narrative } from '@kinloom/core';
 import { compileArchive, parseKinloomConfig } from '@kinloom/core';
 import { act } from 'react';
@@ -223,6 +226,12 @@ describe('ExplorerTopBar mobile & account menu behavior', () => {
       </MemoryRouter>
     );
 
+    // While invite strip is visible, Sign in to edit is deduplicated from topbar and Mobile Menu
+    const topbarSignInBeforeDismiss = [...container.querySelectorAll('header button')].filter(
+      (b) => b.textContent?.trim() === 'Sign in to edit'
+    );
+    expect(topbarSignInBeforeDismiss).toHaveLength(0);
+
     const dismissBtn = container.querySelector<HTMLButtonElement>(
       'button[aria-label="Dismiss family invite notice"]'
     );
@@ -351,6 +360,94 @@ describe('ExplorerTopBar mobile & account menu behavior', () => {
       'Open Kinship',
       'Open Evidence',
     ]);
+  });
+
+  it('enforces <=7 desktop primary nav items with More overflow menu, aligns plugin icon gaps, adds Mobile Menu scrim, and enforces #111 CSS contracts', () => {
+    const bundle = buildTestBundle([]);
+    const recipesPlugin = {
+      id: 'recipes-test',
+      name: 'Recipes',
+      routes: [
+        {
+          path: '/recipes',
+          navLabel: 'Recipes',
+          navMatchPrefix: '/recipes',
+          navIcon: <span data-testid="recipe-icon">R</span>,
+          component: () => <div>Recipes</div>,
+        },
+      ],
+    };
+
+    const { container, unmount } = renderIntoDom(
+      <MemoryRouter initialEntries={['/recipes']}>
+        <ArchiveProvider siteConfig={siteConfig} initialBundle={bundle} plugins={[recipesPlugin]}>
+          <ExplorerTopBar />
+        </ArchiveProvider>
+      </MemoryRouter>
+    );
+
+    // Desktop primary nav has <= 7 top-level items (6 core links + 1 More trigger)
+    const topLevelControls = container.querySelectorAll(
+      'nav[aria-label="Primary"] > a, nav[aria-label="Primary"] > .topbar-more-wrap > button'
+    );
+    expect(topLevelControls.length).toBeLessThanOrEqual(7);
+    expect(topLevelControls.length).toBe(7);
+
+    // More trigger reflects active state when visiting a plugin route and opens grouped overflow links
+    const moreBtn = container.querySelector<HTMLButtonElement>('button[aria-label="More archive sections"]');
+    expect(moreBtn).not.toBeNull();
+    expect(moreBtn?.className).toContain('active');
+    act(() => {
+      moreBtn?.click();
+    });
+    const moreMenu = container.querySelector('.topbar-more-menu');
+    expect(moreMenu?.textContent).toContain('Kinship');
+    expect(moreMenu?.textContent).toContain('Recipes');
+    expect(moreMenu?.querySelector('[data-testid="recipe-icon"]')).not.toBeNull();
+
+    // Escape closes More menu and returns focus to trigger
+    act(() => {
+      document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+    });
+    expect(container.querySelector('.topbar-more-menu')).toBeNull();
+
+    // Mobile Menu opens with backdrop scrim, tucks onboarding reset inside quiet <details>, and closes on scrim click
+    const menuBtn = container.querySelector<HTMLButtonElement>('button[aria-label="Archive menu"]');
+    act(() => {
+      menuBtn?.click();
+    });
+    const scrim = container.querySelector<HTMLDivElement>('[data-testid="mobile-menu-scrim"]');
+    expect(scrim).not.toBeNull();
+    expect(container.querySelector('.topbar-account-menu details.topbar-quiet-reset')).not.toBeNull();
+    expect(
+      container.querySelector('.topbar-account-menu button.topbar-shortcuts-item')?.textContent?.trim()
+    ).toBe('Keyboard Shortcuts');
+
+    act(() => {
+      scrim?.click();
+    });
+    expect(container.querySelector('.topbar-account-menu')).toBeNull();
+    expect(container.querySelector('[data-testid="mobile-menu-scrim"]')).toBeNull();
+
+    unmount();
+
+    // Verify CSS hygiene and Issue #111 stylesheet contracts
+    const here = dirname(fileURLToPath(import.meta.url));
+    const topBarCss = readFileSync(resolve(here, 'ExplorerTopBar.module.css'), 'utf8');
+    const wikiChromeCss = readFileSync(resolve(here, 'wiki/WikiChrome.module.css'), 'utf8');
+    const wikiAuthCss = readFileSync(resolve(here, 'wiki/WikiAuth.module.css'), 'utf8');
+    const searchCss = readFileSync(resolve(here, 'GlobalSearchModal.module.css'), 'utf8');
+
+    expect(topBarCss).toContain('.topbar-mobile-scrim');
+    expect(topBarCss).toContain('background: var(--backdrop-drawer);');
+    expect(topBarCss).toContain('@media (pointer: coarse)');
+    expect(topBarCss).toContain('.topbar-shortcuts-item');
+    expect(topBarCss).toMatch(/\.nav-pill\s*\{[^}]*gap:\s*[678]px;/);
+    expect(wikiChromeCss).toMatch(/\.topbar-account-item\s*\{[^}]*gap:\s*[678]px;/);
+    expect(wikiAuthCss).toMatch(/\.wiki-auth-banner\s*\{[^}]*font-family:\s*var\(--font-ui\);/);
+    expect(wikiAuthCss).toContain('flex-wrap: wrap;');
+    expect(searchCss).toContain('grid-template-columns: repeat(2, minmax(0, 1fr));');
+    expect(searchCss).toContain('border-color: transparent;');
   });
 });
 

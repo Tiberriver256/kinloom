@@ -228,9 +228,9 @@ export interface RawThemeSurfaceProbe {
 }
 
 const APPLY_LIGHT_THEME_EXPR =
-  "(() => { const root = document.documentElement; if (root && root.hasAttribute('data-theme')) { root.setAttribute('data-theme', 'light'); } })()";
+  "(() => { try { const stored = window.localStorage.getItem('kinloom:theme'); if (stored && stored !== 'light') { window.localStorage.removeItem('kinloom:theme'); } } catch {} const root = document.documentElement; if (root && root.hasAttribute('data-theme')) { root.setAttribute('data-theme', 'light'); } })()";
 const APPLY_DARK_THEME_EXPR =
-  "(() => { const root = document.documentElement; if (root && root.hasAttribute('data-theme')) { root.setAttribute('data-theme', 'dark'); } })()";
+  "(() => { try { const stored = window.localStorage.getItem('kinloom:theme'); if (stored && stored !== 'dark') { window.localStorage.removeItem('kinloom:theme'); } } catch {} const root = document.documentElement; if (root && root.hasAttribute('data-theme')) { root.setAttribute('data-theme', 'dark'); } })()";
 
 export async function navigateAndSettlePage(options: {
   readonly page: ScreenshotPageHandle;
@@ -292,6 +292,13 @@ export async function navigateAndSettlePage(options: {
     });
   } catch {
     // Loading shell either absent or still visible; proceed to capture what rendered.
+  }
+
+  // Re-verify theme alignment after SPA hydration so a previously stored theme cannot override it.
+  try {
+    await page.evaluate(theme === 'dark' ? APPLY_DARK_THEME_EXPR : APPLY_LIGHT_THEME_EXPR);
+  } catch {
+    // Non-fatal if document evaluation fails on error page.
   }
 
   if (isMap) {

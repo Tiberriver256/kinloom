@@ -531,3 +531,150 @@ describe('PlacePage Front Door header, Gantt decade hairlines, empty Local Histo
     expect(notFoundEl.querySelector('dialog[aria-label="Search archive"]')).not.toBeNull();
   });
 });
+
+describe('LocalSurveyMap 360px label collision avoidance and >=24x24px SVG markers (#110)', () => {
+  it('keeps center label, neighbor labels, and edge badges inside 360px padding and off the dashed 15-mile circle', () => {
+    const center = makePlace({
+      id: 'pl_center',
+      slug: 'center',
+      name: 'Springfield',
+      lat: 39.78,
+      lng: -89.65,
+    });
+    const cluster: Place[] = [
+      center,
+      makePlace({ id: 'pl_1', slug: 'p1', name: 'Chatham', lat: 39.68, lng: -89.7 }),
+      makePlace({ id: 'pl_2', slug: 'p2', name: 'Riverton', lat: 39.84, lng: -89.54 }),
+      makePlace({ id: 'pl_3', slug: 'p3', name: 'Pleasant Plains', lat: 39.87, lng: -89.92 }),
+      makePlace({ id: 'pl_4', slug: 'p4', name: 'Williamsville', lat: 39.96, lng: -89.54 }),
+      makePlace({ id: 'pl_far_n', slug: 'far-n', name: 'Bloomington', lat: 40.48, lng: -88.99 }),
+    ];
+
+    const width = 360;
+    const height = 190;
+    const cx = width / 2;
+    const cy = height / 2;
+    const radiusPx = Math.min((height - 20) * 0.44, (15 / 42) * ((height - 20) / 2));
+    const compassBox: SurveyBox = { x1: width - 34, x2: width - 2, y1: 2, y2: 34 };
+
+    const proj = projectAdaptiveSurveyPlaces({
+      center,
+      allPlaces: cluster,
+      width,
+      height,
+      maxRadiusMiles: 42,
+      highlightRadiusMiles: 15,
+    });
+    const edgeLayouts = computeEdgeBadgeLayouts({
+      edgeIndicators: proj.edgeIndicators,
+      width,
+      height,
+      fontSize: 9.5,
+      compassBox,
+    });
+    for (const badge of edgeLayouts) {
+      expect(badge.rectH).toBeGreaterThanOrEqual(24);
+      expect(badge.rectW).toBeGreaterThanOrEqual(24);
+      expect(badge.rectX).toBeGreaterThanOrEqual(10);
+      expect(badge.rectX + badge.rectW).toBeLessThanOrEqual(width - 10);
+    }
+
+    const edgeBoxes = edgeLayouts.map((b) => b.box);
+    const centerPlacement = computeCenterLabelPlacement({
+      centerName: center.name,
+      markers: proj.inBoundsMarkers,
+      edgeBadgeBoxes: edgeBoxes,
+      compassBox,
+      cx,
+      cy,
+      width,
+      height,
+      compact: false,
+      isNarrow: true,
+      scopeMode: 'radius15',
+      radiusPx,
+    });
+    expect(centerPlacement.box.x1).toBeGreaterThanOrEqual(12);
+    expect(centerPlacement.box.x2).toBeLessThanOrEqual(width - 12);
+    expect(centerPlacement.box.y1).toBeGreaterThanOrEqual(12);
+    expect(centerPlacement.box.y2).toBeLessThanOrEqual(height - 12);
+    expect(boxIntersectsCircleStroke(centerPlacement.box, cx, cy, radiusPx, 3.5)).toBe(false);
+
+    const labels = computeSurveyLabelLayout({
+      markers: proj.inBoundsMarkers,
+      centerPlacement,
+      edgeBadgeBoxes: edgeBoxes,
+      compassBox,
+      cx,
+      cy,
+      width,
+      height,
+      compact: false,
+      isNarrow: true,
+      scopeMode: 'radius15',
+      radiusPx,
+    });
+    for (const placed of labels.values()) {
+      expect(placed.box.x1).toBeGreaterThanOrEqual(12);
+      expect(placed.box.x2).toBeLessThanOrEqual(width - 12);
+      expect(placed.box.y1).toBeGreaterThanOrEqual(10);
+      expect(placed.box.y2).toBeLessThanOrEqual(height - 10);
+      expect(boxIntersectsCircleStroke(placed.box, cx, cy, radiusPx, 3.5)).toBe(false);
+    }
+  });
+
+  it('renders >=24x24px interactive SVG hit circles and >=24px edge badge rects with >=8px marker separation', () => {
+    const center = makePlace({ id: 'pl_center', slug: 'center', name: 'Center', lat: 39.78, lng: -89.65 });
+    const nearA = makePlace({ id: 'pl_a', slug: 'near-a', name: 'Riverton', lat: 39.84, lng: -89.54 });
+    const nearAClose = makePlace({
+      id: 'pl_a2',
+      slug: 'near-a2',
+      name: 'Spaulding',
+      lat: 39.85,
+      lng: -89.53,
+    });
+    const distant = makePlace({
+      id: 'pl_dist',
+      slug: 'distant-town',
+      name: 'Bloomington',
+      lat: 40.48,
+      lng: -88.99,
+    });
+
+    const container = mountEl(
+      <MemoryRouter initialEntries={['/place/center']}>
+        <LocalSurveyMap
+          center={center}
+          allPlaces={[center, nearA, nearAClose, distant]}
+          scopeMode="radius15"
+        />
+      </MemoryRouter>
+    );
+
+    const interactivePins = [...container.querySelectorAll<SVGGElement>('.survey-neighbor-pin')];
+    expect(interactivePins.length).toBeGreaterThanOrEqual(1);
+    const centers: { x: number; y: number }[] = [];
+    for (const pin of interactivePins) {
+      const hitCircle = pin.querySelector<SVGCircleElement>('.survey-pin-hit-area');
+      expect(hitCircle).not.toBeNull();
+      expect(Number(hitCircle?.getAttribute('r'))).toBeGreaterThanOrEqual(12);
+      centers.push({
+        x: Number(hitCircle?.getAttribute('cx')),
+        y: Number(hitCircle?.getAttribute('cy')),
+      });
+    }
+    for (let i = 0; i < centers.length; i += 1) {
+      const ci = centers[i];
+      if (!ci) continue;
+      for (let j = i + 1; j < centers.length; j += 1) {
+        const cj = centers[j];
+        if (!cj) continue;
+        expect(Math.hypot(ci.x - cj.x, ci.y - cj.y)).toBeGreaterThanOrEqual(32);
+      }
+    }
+
+    const edgeRect = container.querySelector<SVGRectElement>('.survey-edge-badge rect');
+    expect(edgeRect).not.toBeNull();
+    expect(Number(edgeRect?.getAttribute('height'))).toBeGreaterThanOrEqual(24);
+  });
+});

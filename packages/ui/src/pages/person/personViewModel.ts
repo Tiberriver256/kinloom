@@ -223,12 +223,14 @@ export function buildPersonEditInitialData(person: Person): EntityPayload {
 
 export function resolvePortraitLightboxState(
   person: Person,
-  personMedia: readonly MediaItem[]
+  personMedia: readonly MediaItem[],
+  resolvedPortraitUrl?: string | null
 ): PersonLightboxState | null {
-  if (!person.portrait_url) {
+  const effectiveUrl = resolvedPortraitUrl ?? person.portrait_url ?? person.thumb_url ?? null;
+  if (!effectiveUrl) {
     return null;
   }
-  const idx = personMedia.findIndex((m) => m.file === person.portrait_url);
+  const idx = personMedia.findIndex((m) => m.file === effectiveUrl || m.thumb_file === effectiveUrl);
   if (idx !== -1) {
     return { kind: 'gallery', index: idx };
   }
@@ -240,7 +242,7 @@ export function resolvePortraitLightboxState(
     media: {
       id: `portrait-${person.id}`,
       kind: 'portrait',
-      file: person.portrait_url,
+      file: effectiveUrl,
       caption: `Archival portrait of ${person.full_name}`,
       person_id: person.id,
       person_name: person.full_name,

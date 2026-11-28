@@ -753,7 +753,7 @@
   justify-content: center;
   inline-size: 28px;
   block-size: 28px;
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   background: var(--surface-linen);
   border: 1px solid var(--border-control);
   color: var(--surface-header);
@@ -1562,7 +1562,7 @@
     border: 2px solid var(--border-strong);
     box-shadow: none;
     padding: 16px 20px;
-    background: #ffffff;
+    background: var(--surface-card);
   }
 
   .recipe-detail-columns {

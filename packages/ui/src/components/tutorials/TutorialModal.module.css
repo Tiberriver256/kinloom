@@ -242,7 +242,7 @@
   align-items: center;
   gap: 3px;
   padding: 1px 6px;
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   background: var(--badge-cited-bg);
   color: var(--badge-cited-fg);
   font-family: var(--font-mono);
@@ -278,7 +278,7 @@
   display: inline-flex;
   align-items: center;
   padding: 2px 8px;
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   border: 1px solid var(--border-decorative);
   background: var(--surface-linen);
   color: var(--text-primary);
@@ -366,7 +366,7 @@
   display: inline-flex;
   align-items: center;
   padding: 2px 9px;
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   background: var(--accent-primary);
   color: var(--text-inverse);
   font-family: var(--font-mono);

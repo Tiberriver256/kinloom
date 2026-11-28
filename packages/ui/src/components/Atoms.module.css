@@ -57,7 +57,7 @@
 .axis-page-header .folio-lead {
   font-size: 0.94rem;
   line-height: 1.4;
-  max-width: none;
+  max-width: 66ch;
 }
 
 .axis-page-header-actions {
@@ -198,7 +198,7 @@
   align-items: center;
   justify-content: center;
   overflow: hidden;
-  border-radius: 1px;
+  border-radius: var(--radius-sm);
 }
 
 .photo-print img {
@@ -269,7 +269,7 @@
   gap: 7px;
   padding: 4px 10px 4px 5px;
   background: var(--surface-overlay-soft);
-  border-radius: 2px;
+  border-radius: var(--radius-sm);
   font-family: var(--font-serif);
   font-size: 0.88rem;
   cursor: pointer;
@@ -284,16 +284,26 @@
   transform: translateY(-1px);
 }
 
+@media (prefers-reduced-motion: reduce) {
+  .avatar-chip {
+    transition: background-color 0.14s ease;
+  }
+
+  .avatar-chip:hover {
+    transform: none;
+  }
+}
+
 .avatar-chip:global(.tier-confirmed) {
-  border: 1.5px solid var(--radar-copresence);
+  border: var(--border-width-emphasis) solid var(--radar-copresence);
 }
 
 .avatar-chip:global(.tier-inferred) {
-  border: 1.5px dashed var(--radar-copresence);
+  border: var(--border-width-emphasis) dashed var(--radar-copresence);
 }
 
 .avatar-chip:global(.tier-possible) {
-  border: 1.5px dotted var(--border-control);
+  border: var(--border-width-emphasis) dotted var(--border-control);
   opacity: 0.88;
 }
 
@@ -351,7 +361,7 @@
   line-height: 1.3;
   padding: 4px 8px;
   border-radius: var(--radius-sm);
-  border-bottom: 1.5px solid var(--status-conflict);
+  border-bottom: var(--border-width-emphasis) solid var(--status-conflict);
   background: var(--diff-del-bg);
   color: var(--diff-del-fg);
   margin-left: 6px;
@@ -396,7 +406,7 @@
   border: 1px solid var(--border-mat);
   box-shadow: var(--shadow-print);
   filter: sepia(0.12) contrast(1.03);
-  border-radius: 1px;
+  border-radius: var(--radius-sm);
   flex-shrink: 0;
 }
 
@@ -436,7 +446,7 @@
   border: 1px solid var(--border-mat);
   box-shadow: var(--shadow-print);
   filter: sepia(0.1) contrast(1.03);
-  border-radius: 1px;
+  border-radius: var(--radius-sm);
 }
 
 @media (max-width: 960px) {

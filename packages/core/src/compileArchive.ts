@@ -201,7 +201,9 @@ interface DualSharedPreparedContext {
   readonly preResolvedBirthYears: readonly (number | null)[];
   readonly preResolvedDeathYears: readonly (number | null)[];
   readonly sharedResidenceSpans?: readonly ResidenceSpan[] | undefined;
-  onComputedPrivateSpans?: ((spans: readonly ResidenceSpan[], canShareWithPublic: boolean) => void) | undefined;
+  onComputedPrivateSpans?:
+    | ((spans: readonly ResidenceSpan[], canShareWithPublic: boolean) => void)
+    | undefined;
 }
 
 function compileArchiveInternal(
@@ -533,8 +535,10 @@ function compileArchiveInternal(
       }
     }
 
-    p.birth_year = dualCtx && !p.is_living ? (dualCtx.preResolvedBirthYears[i] ?? null) : edtfYear(p.birth_edtf);
-    p.death_year = dualCtx && !p.is_living ? (dualCtx.preResolvedDeathYears[i] ?? null) : edtfYear(p.death_edtf);
+    p.birth_year =
+      dualCtx && !p.is_living ? (dualCtx.preResolvedBirthYears[i] ?? null) : edtfYear(p.birth_edtf);
+    p.death_year =
+      dualCtx && !p.is_living ? (dualCtx.preResolvedDeathYears[i] ?? null) : edtfYear(p.death_edtf);
     p.event_count = eventCount;
     p.media_count = 0;
     p.primary_place_id = primaryPlaceId;

@@ -74,7 +74,6 @@ export class WikiWriteService {
     });
   }
 
-
   private requireSingleRevision(revisions: readonly RevisionRecord[]): RevisionRecord {
     const [rev] = revisions;
     if (!rev) {
@@ -475,7 +474,11 @@ export class WikiWriteService {
     };
   }
 
-  async revertBatch(params: { batchId: BatchId; summary?: string | undefined; author: RevisionAuthor }): Promise<{
+  async revertBatch(params: {
+    batchId: BatchId;
+    summary?: string | undefined;
+    author: RevisionAuthor;
+  }): Promise<{
     reverted_batch_id: BatchId;
     revisions: readonly RevisionRecord[];
     head_revision_id: RevisionId;

@@ -20,12 +20,21 @@ interface ScreenshotsManifestSubset {
       readonly plugin: number;
     };
   };
+  readonly darkThemeVerification?: {
+    readonly status: string;
+    readonly lightCanvasInDarkModeCount: number;
+  };
   readonly captures: ReadonlyArray<{
     readonly category: string;
     readonly slug: string;
     readonly state: string;
+    readonly theme?: string;
     readonly status: string;
     readonly file: string | null;
+    readonly themeAudit?: {
+      readonly dataTheme: string | null;
+      readonly isDarkSurface: boolean | null;
+    };
   }>;
 }
 
@@ -40,10 +49,16 @@ function createSyntheticArchiveHtml(pathname: string): string {
 <head>
 <meta charset="utf-8" />
 <title>Lincoln Synthetic Archive — ${pathname}</title>
-<style>
+  <style>
   body { margin: 0; font-family: sans-serif; background: #f5efe2; color: #23272e; }
+  @media (prefers-color-scheme: dark) {
+    html:not([data-theme="light"]) body { background: #181c22; color: #f5efe2; }
+  }
   html[data-theme="dark"] body { background: #181c22; color: #f5efe2; }
+  html[data-theme="light"] body { background: #f5efe2; color: #23272e; }
   header { background: #1b2a41; color: #fcf9f2; padding: 12px 16px; display: flex; gap: 12px; align-items: center; }
+  html[data-theme="dark"] header { background: #11100e; color: #eae3d5; }
+  html[data-theme="dark"] main, html[data-theme="dark"] footer, html[data-theme="dark"] button, html[data-theme="dark"] dialog[open] { background: #1f1d1a; color: #eae3d5; border-color: #3d3832; }
   header a { color: #fcf9f2; text-decoration: none; }
   main { padding: 20px; min-height: 320px; }
   footer { padding: 14px 16px; border-top: 1px solid #d6cebe; }
@@ -147,9 +162,15 @@ function createSyntheticArchiveHtml(pathname: string): string {
       const out = document.getElementById('searchResults');
       if (out) out.textContent = 'Results for: ' + e.target.value;
     });
+    const storedTheme = window.localStorage.getItem('kinloom:theme');
+    if (storedTheme === 'light' || storedTheme === 'dark') {
+      document.documentElement.setAttribute('data-theme', storedTheme);
+    }
     document.getElementById('btnTheme')?.addEventListener('click', () => {
       const root = document.documentElement;
-      root.setAttribute('data-theme', root.getAttribute('data-theme') === 'dark' ? 'light' : 'dark');
+      const next = root.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
+      root.setAttribute('data-theme', next);
+      window.localStorage.setItem('kinloom:theme', next);
     });
     document.getElementById('btnSources')?.addEventListener('click', () => {
       document.getElementById('sourceDialog')?.setAttribute('open', '');
@@ -279,7 +300,7 @@ function runCliProcess(
 }
 
 test('kinloom screenshots CLI captures real Chromium PNGs, manifest.json, and index.html with secret redaction', async () => {
-  test.setTimeout(90_000);
+  test.setTimeout(150_000);
   const server = await startSyntheticArchiveServer();
   const outDir = await fs.mkdtemp(path.join(os.tmpdir(), 'kinloom-e2e-shots-'));
   const defaultOutCwd = await fs.mkdtemp(path.join(os.tmpdir(), 'kinloom-e2e-shots-cwd-'));
@@ -378,13 +399,13 @@ test('kinloom screenshots CLI captures real Chromium PNGs, manifest.json, and in
         '--viewports',
         'desktop:1280x800',
         '--themes',
-        'dark',
+        'light,dark',
         '--include',
-        'plugins',
+        'components,plugins',
         '--plugin-routes',
         '/stories/demo-reel',
         '--sample-people',
-        '0',
+        '1',
         '--sample-places',
         '0',
         '--no-full-page',
@@ -396,10 +417,19 @@ test('kinloom screenshots CLI captures real Chromium PNGs, manifest.json, and in
     expect(darkTextRun.stderr).toBe('');
     expect(darkTextRun.exitCode).toBe(0);
     expect(darkTextRun.stdout).toContain('Kinloom UI Screenshots Export');
-    const defaultManifestStat = await fs.stat(
-      path.join(defaultOutCwd, 'kinloom-screenshots', 'manifest.json')
-    );
+    const defaultManifestPath = path.join(defaultOutCwd, 'kinloom-screenshots', 'manifest.json');
+    const defaultManifestStat = await fs.stat(defaultManifestPath);
     expect(defaultManifestStat.isFile()).toBe(true);
+    const darkManifest = JSON.parse(
+      await fs.readFile(defaultManifestPath, 'utf8')
+    ) as ScreenshotsManifestSubset;
+    expect(darkManifest.darkThemeVerification?.status).toBe('verified');
+    expect(darkManifest.darkThemeVerification?.lightCanvasInDarkModeCount).toBe(0);
+    const darkFooter = darkManifest.captures.find(
+      (c) => c.slug === 'footer' && c.theme === 'dark' && c.status === 'captured'
+    );
+    expect(darkFooter?.themeAudit?.dataTheme).toBe('dark');
+    expect(darkFooter?.themeAudit?.isDarkSurface).toBe(true);
   } finally {
     await server.close();
     await fs.rm(outDir, { recursive: true, force: true });

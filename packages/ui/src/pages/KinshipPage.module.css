@@ -57,12 +57,84 @@
   color: inherit;
 }
 
+.kinship-overlap-timeline {
+  margin-top: 6px;
+  max-width: 260px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.kinship-overlap-legend {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-family: var(--font-ui);
+  font-size: 0.72rem;
+  color: var(--text-secondary);
+}
+
+.kinship-overlap-legend-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+.kinship-overlap-swatch {
+  width: 10px;
+  height: 6px;
+  border-radius: var(--radius-sm);
+  flex-shrink: 0;
+}
+
+.kinship-overlap-swatch:global(.is-a) {
+  background: var(--surface-header);
+  opacity: 0.75;
+}
+
+.kinship-overlap-swatch:global(.is-b) {
+  background: var(--accent-secondary);
+  opacity: 0.75;
+}
+
+.kinship-overlap-legend-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--text-primary);
+  font-weight: 500;
+}
+
+.kinship-overlap-legend-years {
+  margin-left: auto;
+  flex-shrink: 0;
+  font-family: var(--font-mono);
+  font-size: 0.7rem;
+  font-variant-numeric: tabular-nums;
+}
+
 .kinship-overlap-sparkline {
   display: block;
   width: 100%;
-  max-width: 240px;
   height: 34px;
-  margin-top: 6px;
+}
+
+.kinship-overlap-axis {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 6px;
+  font-family: var(--font-mono);
+  font-size: 0.68rem;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-secondary);
+}
+
+.kinship-overlap-axis-shared {
+  color: var(--accent-primary);
+  font-family: var(--font-ui);
+  font-weight: 600;
 }
 
 .kinship-path-header {
@@ -145,7 +217,7 @@
 
 .kinship-node-pill:global(.endpoint) {
   border-color: var(--radar-copresence);
-  border-width: 1.5px;
+  border-width: var(--border-width-emphasis);
   background: var(--surface-radar);
 }
 
@@ -215,8 +287,9 @@
 
 .kinship-examples-bar :global(.pill-btn) {
   text-align: left;
-  border: 1px solid var(--border-decorative);
-  border-radius: var(--radius-md);
+  min-height: var(--control-height-sm);
+  border: var(--border-width-thin) solid var(--border-decorative);
+  border-radius: var(--radius-control);
   padding: 5px 10px;
   background: var(--surface-subtle);
   font-family: var(--font-ui);
@@ -313,9 +386,9 @@
     flex-shrink: 0;
     white-space: nowrap;
     text-align: left;
-    min-height: 44px;
-    border: 1px solid var(--border-decorative);
-    border-radius: var(--radius-md);
+    min-height: var(--control-height-touch);
+    border: var(--border-width-thin) solid var(--border-decorative);
+    border-radius: var(--radius-control);
     padding: 6px 12px;
     background: var(--surface-subtle);
     font-family: var(--font-ui);

@@ -183,9 +183,9 @@
   align-self: center;
   width: 26px;
   height: 26px;
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   background: var(--surface-card);
-  border: 1.8px solid var(--accent-primary);
+  border: var(--border-width-emphasis) solid var(--accent-primary);
   color: var(--accent-primary);
   font-family: var(--font-mono);
   font-size: 0.72rem;
@@ -213,8 +213,8 @@
   gap: 10px;
   text-align: left;
   padding: 8px 10px;
-  border-radius: 4px;
-  border: 1.25px solid var(--border-control);
+  border-radius: var(--radius-control);
+  border: var(--border-width-thin) solid var(--border-control);
   background: var(--surface-canvas);
   color: var(--text-primary);
   cursor: pointer;
@@ -256,19 +256,19 @@
 }
 
 .tree-roll-card:global(.is-selected) {
-  background: var(--surface-header);
-  border-color: var(--accent-primary);
+  background: var(--surface-action-primary);
+  border-color: var(--border-action-primary);
   border-style: solid;
-  color: var(--text-inverse);
+  color: var(--text-on-action-primary);
   box-shadow: var(--shadow-active);
 }
 
 .tree-roll-avatar {
   width: 34px;
   height: 34px;
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   background: var(--surface-linen);
-  border: 1.5px solid var(--accent-primary);
+  border: var(--border-width-emphasis) solid var(--accent-primary);
   color: var(--accent-primary);
   display: inline-flex;
   align-items: center;
@@ -331,7 +331,7 @@
 
 .tree-roll-card:global(.is-selected) .tree-roll-card-dates,
 .tree-roll-card:global(.is-selected) .tree-roll-card-spouse {
-  color: var(--surface-linen);
+  color: var(--text-on-action-primary-muted);
 }
 
 .tree-roll-attachments {
@@ -386,7 +386,7 @@
   gap: 6px;
   min-height: 36px;
   padding: 4px 10px;
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   border: 1px solid var(--border-control);
   background: var(--surface-card);
   color: var(--text-primary);
@@ -412,9 +412,9 @@
 }
 
 .tree-early-chip:global(.is-selected) {
-  background: var(--surface-header);
-  color: var(--text-inverse);
-  border-color: var(--accent-primary);
+  background: var(--surface-action-primary);
+  color: var(--text-on-action-primary);
+  border-color: var(--border-action-primary);
 }
 
 .tree-early-chip-name {
@@ -430,7 +430,7 @@
 }
 
 .tree-early-chip:global(.is-selected) .tree-early-chip-years {
-  color: var(--surface-linen);
+  color: var(--text-on-action-primary-muted);
 }
 
 .tree-roll-siblings-block {
@@ -448,7 +448,7 @@
   min-height: 38px;
   max-width: 100%;
   padding: 6px 14px;
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   border: 1px solid var(--border-decorative);
   background: var(--surface-subtle);
   color: var(--jump-active-fg);
@@ -545,6 +545,44 @@
 
   .tree-hanging-grid {
     gap: 8px 12px;
+  }
+}
+
+@media (max-width: 420px) {
+  .tree-roll-couple-row {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 6px;
+  }
+
+  .tree-roll-partner-pair {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 6px;
+    flex: 1 1 auto;
+    width: 100%;
+    max-width: none;
+  }
+
+  .tree-roll-card,
+  .tree-roll-partner-pair .tree-roll-card {
+    flex: 0 0 auto;
+    width: 100%;
+    max-width: none;
+  }
+
+  .tree-roll-union-hub {
+    align-self: center;
+  }
+
+  .tree-hanging-grid {
+    grid-template-columns: 1fr;
+    gap: 8px;
+  }
+
+  .tree-hanging-grid::before {
+    display: none;
   }
 }
 

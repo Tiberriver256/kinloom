@@ -78,6 +78,15 @@ export function wantsLabel(
   return index === 0 || index === count - 1;
 }
 
+export function resolveStopLabelAnchor(lng: number, minLng: number, maxLng: number): 'left' | 'right' {
+  const span = maxLng - minLng;
+  if (span < 4) {
+    return 'left';
+  }
+  const normalized = (lng - minLng) / span;
+  return normalized >= 0.72 ? 'right' : 'left';
+}
+
 export function buildFamilyOverlay(input: {
   readonly stops: readonly MigrationStop[];
   readonly visibleStops: readonly MigrationStop[];
@@ -90,6 +99,18 @@ export function buildFamilyOverlay(input: {
 }): FeatureCollection {
   const features: Feature[] = [];
   const stepping = input.stepIndex >= 0;
+
+  let minStopLng = Infinity;
+  let maxStopLng = -Infinity;
+  for (const stop of input.visibleStops) {
+    const lng = normalizeLongitude(stop.place.lng);
+    if (lng < minStopLng) {
+      minStopLng = lng;
+    }
+    if (lng > maxStopLng) {
+      maxStopLng = lng;
+    }
+  }
 
   if (stepping) {
     for (const segment of input.allSegments) {
@@ -127,6 +148,10 @@ export function buildFamilyOverlay(input: {
   }
 
   for (const [index, stop] of input.visibleStops.entries()) {
+    const labelAnchor =
+      Number.isFinite(minStopLng) && Number.isFinite(maxStopLng)
+        ? resolveStopLabelAnchor(normalizeLongitude(stop.place.lng), minStopLng, maxStopLng)
+        : 'left';
     features.push({
       type: 'Feature',
       properties: {
@@ -134,6 +159,7 @@ export function buildFamilyOverlay(input: {
         id: stop.id,
         color: input.stageColors.get(stop.lineageStage) ?? KINLOOM_COLOR_TOKENS.archivalIndigo,
         label: `${stop.year} · ${stop.place.name}`,
+        labelAnchor,
         selected: stop.id === input.selectedStopId,
         showLabel: wantsLabel(
           index,

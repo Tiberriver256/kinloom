@@ -90,12 +90,12 @@
   justify-content: center;
   gap: 5px;
   flex-shrink: 0;
-  min-height: 36px;
+  min-height: var(--control-height-md);
   padding: 6px 14px;
-  border: 1px solid var(--accent-primary);
-  border-radius: var(--radius-md);
-  background: var(--accent-primary);
-  color: var(--text-inverse);
+  border: var(--border-width-thin) solid var(--border-action-primary);
+  border-radius: var(--radius-control);
+  background: var(--surface-action-primary);
+  color: var(--text-on-action-primary);
   font-family: var(--font-ui);
   font-size: 0.82rem;
   font-weight: 600;
@@ -109,9 +109,9 @@
 }
 
 .index-add-person-btn:hover {
-  background: var(--surface-header);
-  border-color: var(--surface-header);
-  color: var(--text-inverse);
+  background: var(--surface-action-primary-hover);
+  border-color: var(--accent-primary);
+  color: var(--text-on-action-primary);
 }
 
 .index-frontispiece-links {
@@ -135,7 +135,7 @@
   background: var(--surface-card);
   border: 1px solid var(--border-mat);
   box-shadow: var(--shadow-print);
-  border-radius: 1px;
+  border-radius: var(--radius-sm);
 }
 
 .index-frontispiece-img {
@@ -192,9 +192,10 @@
   flex: 1 1 220px;
   min-width: 180px;
   max-width: 320px;
-  padding: 7px 12px;
-  border: 1px solid transparent;
-  border-radius: var(--radius-md);
+  min-height: var(--control-height-md);
+  padding: 6px 12px;
+  border: var(--border-width-thin) solid var(--border-decorative);
+  border-radius: var(--radius-control);
   background: var(--surface-linen);
   font-family: var(--font-ui);
   font-size: 0.86rem;
@@ -215,8 +216,9 @@
   align-items: center;
   gap: 2px;
   padding: 2px;
-  border: 1px solid var(--border-decorative);
-  border-radius: var(--radius-md);
+  min-height: var(--control-height-md);
+  border: var(--border-width-thin) solid var(--border-decorative);
+  border-radius: var(--radius-control);
   background: var(--surface-subtle);
   flex-shrink: 0;
 }
@@ -251,9 +253,10 @@
 
 .index-filter-bar select.index-branch-select {
   order: 3;
+  min-height: var(--control-height-md);
   background: var(--surface-linen);
-  border: 1px solid transparent;
-  border-radius: var(--radius-md);
+  border: var(--border-width-thin) solid var(--border-decorative);
+  border-radius: var(--radius-control);
   padding: 6px 12px;
   font-family: var(--font-ui);
   font-size: 0.84rem;
@@ -270,9 +273,10 @@
 
 .index-filter-bar .index-media-filter-btn {
   order: 4;
+  min-height: var(--control-height-md);
   background: var(--surface-linen);
-  border: 1px solid transparent;
-  border-radius: var(--radius-md);
+  border: var(--border-width-thin) solid var(--border-decorative);
+  border-radius: var(--radius-control);
   padding: 6px 12px;
   font-family: var(--font-ui);
   font-size: 0.84rem;
@@ -287,18 +291,19 @@
 }
 
 .index-filter-bar .index-media-filter-btn:global(.active) {
-  background: var(--surface-header);
-  border-color: var(--surface-header);
-  border-bottom: 1px solid var(--surface-header);
-  color: var(--text-inverse);
+  background: var(--surface-action-primary);
+  border-color: var(--border-action-primary);
+  border-bottom: var(--border-width-thin) solid var(--border-action-primary);
+  color: var(--text-on-action-primary);
   font-weight: 600;
 }
 
 .index-filter-bar .index-clear-btn {
   order: 5;
+  min-height: var(--control-height-md);
   background: transparent;
-  border: 1px solid transparent;
-  border-radius: var(--radius-md);
+  border: var(--border-width-thin) solid transparent;
+  border-radius: var(--radius-control);
   padding: 6px 10px;
   font-family: var(--font-ui);
   font-size: 0.84rem;
@@ -449,7 +454,7 @@
   font-family: var(--font-serif);
   font-size: 1.05rem;
   font-weight: 600;
-  border-radius: 1px;
+  border-radius: var(--radius-sm);
 }
 
 .person-card-body {
@@ -494,19 +499,14 @@
   color: var(--text-secondary);
 }
 
-/* 1-line deterministic story hook: full text stays in DOM, visual-only ellipsis truncation */
+/* Deterministic story hook: grows cleanly under WCAG 1.4.12 text-spacing overrides */
 .person-card-hook {
   margin: 5px 0 0;
   font-family: var(--font-serif);
   font-style: italic;
   font-size: 0.9rem;
-  line-height: 1.4;
+  line-height: 1.45;
   color: var(--text-primary);
-  display: -webkit-box;
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 1;
-  line-clamp: 1;
-  overflow: hidden;
   overflow-wrap: break-word;
 }
 
@@ -826,6 +826,9 @@
 
   .index-about-toggle {
     display: inline-flex;
+    align-items: center;
+    min-height: var(--control-height-touch);
+    padding: 6px 4px;
     font-size: 0.76rem;
   }
 
@@ -873,12 +876,12 @@
   .index-view-segmented {
     order: 0;
     padding: 2px;
-    min-height: 44px;
+    min-height: var(--control-height-touch);
     box-sizing: border-box;
   }
 
   .index-view-btn {
-    min-height: 44px;
+    min-height: var(--control-height-touch);
     padding: 0 12px;
     font-size: 0.8rem;
     justify-content: center;
@@ -889,9 +892,9 @@
     align-items: center;
     justify-content: center;
     gap: 6px;
-    min-height: 44px;
+    min-height: var(--control-height-touch);
     padding: 0 12px;
-    border-radius: var(--radius-md);
+    border-radius: var(--radius-control);
     border: 1px solid transparent;
     background: var(--surface-linen);
     color: var(--text-primary);
@@ -923,7 +926,7 @@
     min-width: 18px;
     height: 18px;
     padding: 0 5px;
-    border-radius: 999px;
+    border-radius: var(--radius-pill);
     background: var(--accent-primary);
     color: var(--text-inverse);
     font-family: var(--font-ui);
@@ -954,8 +957,8 @@
     z-index: 42;
     padding: 12px;
     background: var(--surface-card);
-    border: 1px solid var(--border-decorative);
-    border-radius: var(--radius-md);
+    border: var(--border-width-thin) solid var(--border-decorative);
+    border-radius: var(--radius-control);
     box-shadow: var(--shadow-active);
     max-height: calc(100dvh - 180px);
     overflow-y: auto;
@@ -981,9 +984,9 @@
   }
 
   .index-filters-sheet-close {
-    min-height: 44px;
+    min-height: var(--control-height-touch);
     padding: 0 12px;
-    border-radius: var(--radius-md);
+    border-radius: var(--radius-control);
     border: none;
     background: var(--surface-linen);
     color: var(--surface-header);
@@ -999,7 +1002,7 @@
     width: 100%;
     min-width: 0;
     max-width: none;
-    min-height: 44px;
+    min-height: var(--control-height-touch);
     font-size: 16px;
   }
 
@@ -1017,7 +1020,7 @@
     width: 100%;
     max-width: none;
     min-width: 0;
-    min-height: 44px;
+    min-height: var(--control-height-touch);
     font-size: 16px;
   }
 
@@ -1032,7 +1035,7 @@
     order: 0;
     flex: 1 1 auto;
     width: 100%;
-    min-height: 44px;
+    min-height: var(--control-height-touch);
     justify-content: center;
     white-space: normal;
     text-align: center;
@@ -1042,7 +1045,7 @@
   .index-filter-bar .index-clear-btn {
     order: 0;
     flex: 0 0 auto;
-    min-height: 44px;
+    min-height: var(--control-height-touch);
     justify-content: center;
   }
 
@@ -1057,5 +1060,14 @@
   .person-card {
     padding: 16px 2px;
     gap: 14px;
+  }
+}
+
+@media (max-width: 768px) {
+  .index-era-snapshot-link {
+    display: inline-flex;
+    align-items: center;
+    min-height: var(--control-height-touch);
+    padding: 6px 4px;
   }
 }

@@ -211,7 +211,7 @@ export const PlacePage: React.FC = () => {
         )}
 
         <section className={cx(layoutStyles, 'place-map-box')}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', flexWrap: 'wrap', gap: 12 }}>
+          <div className={cx(placeStyles, 'place-header-top')}>
             <div>
               <nav className={cx(placeStyles, 'place-breadcrumb print-hide')} aria-label="Breadcrumb">
                 <Link to="/places">Places</Link>
@@ -266,7 +266,13 @@ export const PlacePage: React.FC = () => {
               )}
             </div>
 
-            <div className={cx(controlStyles, 'filter-bar place-scope-bar print-hide')} style={{ margin: 0 }}>
+            <div
+              className={joinClasses(
+                cx(controlStyles, 'filter-bar print-hide'),
+                cx(placeStyles, 'place-scope-bar')
+              )}
+              style={{ margin: 0 }}
+            >
               <div className="kl-cluster" role="group" aria-label="Map area filter">
                 {(
                   [
@@ -325,7 +331,7 @@ export const PlacePage: React.FC = () => {
           )}
 
           {isReadingProfile && (
-            <div style={{ marginTop: 14 }}>
+            <div className={cx(placeStyles, 'place-survey-stage')}>
               <LocalSurveyMap
                 center={place}
                 allPlaces={bundle.places}

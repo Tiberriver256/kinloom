@@ -78,8 +78,8 @@ dialog:global(.global-search-backdrop) {
 .lightbox-card {
   position: relative;
   background: var(--surface-card);
-  border: 1px solid var(--border-control);
-  border-radius: var(--radius-sm);
+  border: var(--border-width-thin) solid var(--border-control);
+  border-radius: var(--radius-control);
   max-width: 660px;
   width: 100%;
   max-height: calc(100vh - 40px);
@@ -96,8 +96,8 @@ dialog:global(.global-search-backdrop) {
   display: flex;
   flex-direction: column;
   background: var(--surface-card);
-  border: 1px solid var(--border-control);
-  border-radius: var(--radius-sm);
+  border: var(--border-width-thin) solid var(--border-control);
+  border-radius: var(--radius-control);
   overflow: hidden;
   box-shadow: var(--shadow-modal);
 }

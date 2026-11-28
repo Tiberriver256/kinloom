@@ -286,7 +286,7 @@ describe('Issue #69 stewardship flows: EvidenceLegend, uncited CTA, completeness
     expect(container.textContent).toContain('Inspect full Source Registry →');
   });
 
-  it('activates clickable uncited filter CTA on EvidencePage, syncs URL params, filters entries, and clears back to registry', async () => {
+  it('activates clickable uncited CTA on EvidencePage into dedicated Needs Citation tab, syncs URL params, filters entries, and pivots to Source Registry', async () => {
     const ds = makeDataSource({
       canEdit: false,
       canUploadMedia: false,
@@ -326,11 +326,13 @@ describe('Issue #69 stewardship flows: EvidenceLegend, uncited CTA, completeness
     });
     await flushUi();
 
-    expect(container.querySelector('[data-testid="loc"]')?.textContent).toBe(
-      '/evidence?tab=citations&filter=uncited'
-    );
+    expect(container.querySelector('[data-testid="loc"]')?.textContent).toBe('/evidence?tab=uncited');
     expect(gapBtn?.getAttribute('aria-pressed')).toBe('true');
-    expect(container.textContent).toContain('Filtered to 1 entry needing primary citation');
+    const needsCitationTab = Array.from(container.querySelectorAll('[role="tab"]')).find((t) =>
+      /needs citation/i.test(t.textContent || '')
+    );
+    expect(needsCitationTab?.getAttribute('aria-selected')).toBe('true');
+    expect(container.textContent).toContain('Entries Needing Primary Citation (1)');
     expect(container.textContent).toContain('Uncited Oxford Farm Note');
     expect(container.textContent).not.toContain('Source Registry (');
 
@@ -342,6 +344,13 @@ describe('Issue #69 stewardship flows: EvidenceLegend, uncited CTA, completeness
       setInputValue(searchInput, 'NoSuchAncestor');
       await flushUi();
       expect(container.textContent).toContain('No uncited entries match that filter.');
+      const clearBtn = Array.from(container.querySelectorAll('button')).find(
+        (b) => (b.textContent || '').trim() === 'Clear filter'
+      );
+      act(() => {
+        clearBtn?.click();
+      });
+      await flushUi();
       setInputValue(searchInput, 'Stephen Barton');
       await flushUi();
       expect(container.textContent).toContain('Uncited Oxford Farm Note');
@@ -356,8 +365,9 @@ describe('Issue #69 stewardship flows: EvidenceLegend, uncited CTA, completeness
     await flushUi();
     expect(container.querySelector('[data-testid="loc"]')?.textContent).toBe('/evidence?tab=citations');
     expect(container.textContent).toContain('Source Registry (');
+    expect(container.textContent).not.toContain('Entries Needing Primary Citation (');
 
-    // Initial load with ?filter=uncited defaults tab to citations, and switching to Discrepancies clears filter
+    // Legacy deep link ?filter=uncited resolves cleanly to the dedicated Needs Citation tab
     const deepLinkEl = mountEl(
       <MemoryRouter initialEntries={['/evidence?filter=uncited']}>
         <ArchiveProvider siteConfig={SITE_CONFIG} initialBundle={STEWARD_BUNDLE} dataSource={ds}>
@@ -377,7 +387,7 @@ describe('Issue #69 stewardship flows: EvidenceLegend, uncited CTA, completeness
     );
     await flushUi();
     await flushUi();
-    expect(deepLinkEl.textContent).toContain('Filtered to 1 entry needing primary citation');
+    expect(deepLinkEl.textContent).toContain('Entries Needing Primary Citation (1)');
     const conflictsTab = Array.from(deepLinkEl.querySelectorAll('[role="tab"]')).find((t) =>
       /discrepancies/i.test(t.textContent || '')
     ) as HTMLElement | undefined;
@@ -531,6 +541,11 @@ describe('Issue #69 stewardship flows: EvidenceLegend, uncited CTA, completeness
     await flushUi();
     expect(emptyEl.textContent).toContain('No archival changes have been recorded yet.');
     expect(emptyEl.textContent).not.toContain('No revisions match the active author filter.');
+    // Author filter tabs and Needs review toggle are hidden when revisions.length === 0
+    expect(emptyEl.querySelectorAll('[role="tab"]')).toHaveLength(0);
+    expect(emptyEl.textContent).not.toContain('Needs review');
+    expect(emptyEl.textContent).toContain('Browse People to Edit →');
+    expect(emptyEl.textContent).toContain('Inspect Evidence & Sources');
 
     const batchRevs: RevisionRecord[] = [
       {
@@ -692,8 +707,30 @@ describe('Issue #69 stewardship flows: EvidenceLegend, uncited CTA, completeness
     await flushUi();
     expect(feedEl.textContent).toContain('Every recorded change has been marked reviewed by a steward.');
 
+    const showAllChangesBtn = Array.from(feedEl.querySelectorAll('button')).find(
+      (b) => (b.textContent || '').trim() === 'Show all changes'
+    );
+    expect(showAllChangesBtn).toBeDefined();
     act(() => {
-      needsReviewBtn?.click();
+      showAllChangesBtn?.click();
+    });
+    await flushUi();
+
+    // Switching to an author tab with 0 matching items keeps the toolbar visible and offers Show all authors
+    const seedTab = Array.from(feedEl.querySelectorAll('[role="tab"]')).find((b) =>
+      /initial seed/i.test(b.textContent || '')
+    ) as HTMLElement | undefined;
+    act(() => {
+      seedTab?.click();
+    });
+    await flushUi();
+    expect(feedEl.querySelectorAll('[role="tab"]')).toHaveLength(4);
+    const showAllAuthorsBtn = Array.from(feedEl.querySelectorAll('button')).find(
+      (b) => (b.textContent || '').trim() === 'Show all authors'
+    );
+    expect(showAllAuthorsBtn).toBeDefined();
+    act(() => {
+      showAllAuthorsBtn?.click();
     });
     await flushUi();
 

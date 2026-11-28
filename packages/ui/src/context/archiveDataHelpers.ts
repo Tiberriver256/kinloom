@@ -33,6 +33,9 @@ export interface ArchiveCapabilities {
   hasRevisionHistory: boolean;
   hasTalk: boolean;
   canManageSite: boolean;
+  canReadArchive?: boolean;
+  hasReadings?: boolean;
+  hasMediaChecklist?: boolean;
 }
 
 export const DEFAULT_ARCHIVE_CAPABILITIES: CoreArchiveCapabilities = {
@@ -79,6 +82,9 @@ export function normalizeCapabilities(
     hasRevisionHistory: caps.hasRevisionHistory ?? false,
     hasTalk: caps.hasTalk ?? false,
     canManageSite: caps.canManageSite ?? false,
+    ...(caps.canReadArchive !== undefined ? { canReadArchive: caps.canReadArchive } : {}),
+    ...(caps.hasReadings !== undefined ? { hasReadings: caps.hasReadings } : {}),
+    ...(caps.hasMediaChecklist !== undefined ? { hasMediaChecklist: caps.hasMediaChecklist } : {}),
   };
 }
 

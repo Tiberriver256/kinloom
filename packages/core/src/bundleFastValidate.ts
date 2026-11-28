@@ -159,7 +159,9 @@ function isValidCompiledEvent(v: unknown): boolean {
     (v['place_id'] !== null && typeof v['place_id'] !== 'string') ||
     !isOptNullStr(v['place_precision']) ||
     typeof v['summary'] !== 'string' ||
-    (v['severity_rank'] !== undefined && v['severity_rank'] !== null && typeof v['severity_rank'] !== 'number') ||
+    (v['severity_rank'] !== undefined &&
+      v['severity_rank'] !== null &&
+      typeof v['severity_rank'] !== 'number') ||
     !isOptNullStr(v['source_url']) ||
     !isOptNullStr(v['photo_url']) ||
     !isOptNullStr(v['photo_placeholder_caption']) ||
@@ -396,7 +398,9 @@ export function tryValidateArchiveBundle(raw: unknown): ArchiveBundle | null {
           m['duration_seconds'] !== null &&
           (typeof m['duration_seconds'] !== 'number' || m['duration_seconds'] < 0)) ||
         (m['poster_url'] !== undefined && m['poster_url'] !== null && !isNonEmptyStr(m['poster_url'])) ||
-        (m['transcript_url'] !== undefined && m['transcript_url'] !== null && !isNonEmptyStr(m['transcript_url'])) ||
+        (m['transcript_url'] !== undefined &&
+          m['transcript_url'] !== null &&
+          !isNonEmptyStr(m['transcript_url'])) ||
         (m['has_primary_source'] !== undefined && typeof m['has_primary_source'] !== 'boolean') ||
         m['extensions'] !== undefined
       ) {

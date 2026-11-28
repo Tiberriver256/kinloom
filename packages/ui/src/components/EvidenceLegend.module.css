@@ -11,7 +11,7 @@
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  min-height: 32px;
+  min-height: var(--control-height-sm);
   padding: 4px 2px;
   border: none;
   border-radius: 0;
@@ -21,18 +21,25 @@
   font-size: 0.82rem;
   font-weight: 500;
   line-height: 1.3;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.evidence-legend-toggle-label {
   text-decoration: underline dotted;
   text-underline-offset: 3px;
-  cursor: pointer;
 }
 
 .evidence-legend-toggle:hover {
   color: var(--accent-primary);
+}
+
+.evidence-legend-toggle:hover .evidence-legend-toggle-label {
   text-decoration-style: solid;
 }
 
 .evidence-legend-toggle:focus-visible {
-  outline: 2px solid var(--action-focus);
+  outline: var(--border-width-emphasis) solid var(--action-focus);
   outline-offset: 2px;
 }
 
@@ -41,13 +48,14 @@
   width: 0.85em;
   text-align: center;
   color: var(--text-secondary);
+  text-decoration: none;
 }
 
 .evidence-legend-panel {
   width: 100%;
   background: var(--surface-card);
-  border: 1px solid var(--border-decorative);
-  border-radius: var(--radius-sm);
+  border: var(--border-width-thin) solid var(--border-decorative);
+  border-radius: var(--radius-control);
   padding: 12px 14px;
   box-sizing: border-box;
 }
@@ -63,7 +71,7 @@
 
 .evidence-legend-item {
   padding-left: 10px;
-  border-left: 2.5px solid var(--badge-cited-fg);
+  border-left: var(--border-width-emphasis) solid var(--badge-cited-fg);
 }
 
 .evidence-legend-item:global(.tier-cited) {
@@ -123,14 +131,14 @@
 .evidence-legend-footer {
   margin-top: 10px;
   padding-top: 8px;
-  border-top: 1px solid var(--border-decorative);
+  border-top: var(--border-width-thin) solid var(--border-decorative);
   display: flex;
   justify-content: flex-end;
 }
 
 .evidence-legend-link {
-  font-family: var(--font-mono);
-  font-size: 0.76rem;
+  font-family: var(--font-ui);
+  font-size: 0.78rem;
   font-weight: 600;
   color: var(--action-focus);
   text-decoration: none;
@@ -144,8 +152,8 @@
 
 @media (max-width: 768px) {
   .evidence-legend-toggle {
-    min-height: 44px;
-    padding: 6px 12px;
+    min-height: var(--control-height-touch);
+    padding: 6px 2px;
   }
 
   .evidence-legend-grid {

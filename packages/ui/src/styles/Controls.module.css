@@ -31,17 +31,17 @@
   left: 8px;
   z-index: 300;
   padding: 10px 16px;
-  min-height: 44px;
+  min-height: var(--control-height-touch);
   display: inline-flex;
   align-items: center;
-  background: var(--surface-header);
-  color: var(--text-inverse);
+  background: var(--surface-action-primary);
+  color: var(--text-on-action-primary);
   font-family: var(--font-ui);
   font-size: 0.84rem;
   font-weight: 600;
   text-decoration: none;
-  border-radius: var(--radius-md);
-  border: 2px solid var(--text-inverse);
+  border-radius: var(--radius-control);
+  border: var(--border-width-emphasis) solid var(--border-action-primary);
   box-shadow: var(--shadow-active);
   transform: translateY(-200%);
 }
@@ -63,8 +63,8 @@ dialog[open] {
 
 .empty-state-notice {
   padding: 22px 20px;
-  border: 1px solid var(--border-decorative);
-  border-radius: var(--radius-md);
+  border: var(--border-width-thin) solid var(--border-decorative);
+  border-radius: var(--radius-control);
   background: var(--surface-card);
   margin: 12px 0 24px;
 }
@@ -106,7 +106,7 @@ dialog[open] {
 .pill-btn {
   padding: 5px 4px;
   border: none;
-  border-bottom: 1.5px solid transparent;
+  border-bottom: var(--border-width-emphasis) solid transparent;
   background: transparent;
   color: var(--text-secondary);
   border-radius: 0;
@@ -140,9 +140,12 @@ dialog[open] {
 }
 
 select.pill-btn {
-  border-bottom: 1px solid var(--border-control);
+  border: var(--border-width-thin) solid var(--border-control);
+  border-radius: var(--radius-control);
+  background: var(--surface-subtle);
   color: var(--text-primary);
-  padding: 5px 6px;
+  min-height: var(--control-height-md);
+  padding: 0 10px;
   min-width: 0;
   max-width: 100%;
   text-overflow: ellipsis;
@@ -157,8 +160,9 @@ select.pill-btn option {
 :global(.index-filter-actions) .pill-btn,
 :global(.ink-filter-bar) .pill-btn,
 .empty-state-notice-action .pill-btn {
-  border: 1px solid var(--border-decorative);
-  border-radius: var(--radius-md);
+  border: var(--border-width-thin) solid var(--border-decorative);
+  border-radius: var(--radius-control);
+  min-height: var(--control-height-md);
   padding: 5px 11px;
   background: var(--surface-subtle);
   color: var(--text-primary);
@@ -189,25 +193,28 @@ select.pill-btn option {
 }
 
 .search-input {
-  padding: 6px 4px;
-  border: none;
-  border-bottom: 1.5px solid var(--border-control);
-  background: transparent;
-  border-radius: 0;
+  padding: 0 12px;
+  min-height: var(--control-height-md);
+  border: var(--border-width-thin) solid var(--border-control);
+  background: var(--surface-card);
+  border-radius: var(--radius-control);
   min-width: 260px;
-  font-family: var(--font-serif);
-  font-size: 0.98rem;
+  font-family: var(--font-ui);
+  font-size: 0.88rem;
   color: var(--text-primary);
+  transition:
+    background-color 0.14s ease,
+    border-color 0.14s ease;
 }
 
 .search-input:focus {
-  border-bottom-color: var(--radar-copresence);
+  border-color: var(--accent-primary);
 }
 
 .source-read-btn {
   background: transparent;
   border: none;
-  border-bottom: 1.5px solid var(--radar-copresence);
+  border-bottom: var(--border-width-emphasis) solid var(--radar-copresence);
   color: var(--radar-copresence);
   border-radius: 0;
   padding: 2px 1px;
@@ -254,15 +261,16 @@ select.pill-btn option {
 
 @media (max-width: 768px) {
   .search-input {
-    padding: 8px 10px;
+    padding: 8px 12px;
     font-size: 16px;
-    min-height: 44px;
+    min-height: var(--control-height-touch);
     width: 100%;
     min-width: 0;
   }
 
   select.pill-btn {
     font-size: 16px;
+    min-height: var(--control-height-touch);
   }
 
   .pill-btn,
@@ -273,14 +281,14 @@ select.pill-btn option {
   :global(.person-family-chip),
   :global(.person-section-jump-link),
   :global(.pronunciation-variant-btn) {
-    min-height: 44px;
+    min-height: var(--control-height-touch);
     display: inline-flex;
     align-items: center;
   }
 
   :global(.map-zoom-controls) .pill-btn {
-    min-width: 44px;
-    min-height: 44px;
+    min-width: var(--control-height-touch);
+    min-height: var(--control-height-touch);
     padding: 0;
     display: inline-flex;
     align-items: center;
@@ -304,6 +312,7 @@ select.pill-btn option {
   font-family: var(--font-ui);
   white-space: nowrap;
   flex-shrink: 0;
+  scroll-snap-align: start;
 }
 
 :global(.evidence-tabs) .pill-btn:global(.active) {
@@ -313,16 +322,96 @@ select.pill-btn option {
   font-weight: 600;
 }
 
+@property --tabs-fade-start {
+  syntax: "<length>";
+  inherits: false;
+  initial-value: 0px;
+}
+
+@property --tabs-fade-end {
+  syntax: "<length>";
+  inherits: false;
+  initial-value: 0px;
+}
+
+@keyframes tabs-fade-start {
+  to {
+    --tabs-fade-start: var(--tabs-fade-size);
+  }
+}
+
+@keyframes tabs-fade-end {
+  from {
+    --tabs-fade-end: var(--tabs-fade-size);
+  }
+}
+
 @media (max-width: 768px) {
   :global(.evidence-tabs) {
+    --tabs-fade-size: 2rem;
     flex-wrap: nowrap;
     overflow-x: auto;
     scrollbar-width: none;
+    scroll-snap-type: inline proximity;
+    scroll-padding-inline: var(--tabs-fade-size);
     gap: 14px;
   }
 
   :global(.evidence-tabs)::-webkit-scrollbar {
     display: none;
+  }
+
+  @supports (animation-timeline: scroll()) {
+    :global(.evidence-tabs) {
+      mask:
+        linear-gradient(black, black) no-clip subtract,
+        linear-gradient(to right, black, transparent) 0 0 / var(--tabs-fade-start) 100% no-repeat no-clip,
+        linear-gradient(to right, transparent, black) 100% 0 / var(--tabs-fade-end) 100% no-repeat no-clip;
+    }
+
+    :global(.evidence-tabs):not([data-overflowing="false"]) {
+      animation-name: tabs-fade-start, tabs-fade-end;
+      animation-duration: auto, auto;
+      animation-timing-function: linear, linear;
+      animation-fill-mode: both, both;
+      animation-timeline: scroll(self inline);
+      animation-range:
+        0 var(--tabs-fade-size),
+        calc(100% - var(--tabs-fade-size)) 100%;
+    }
+  }
+
+  @supports not (animation-timeline: scroll()) {
+    :global(.evidence-tabs):global(.is-scrollable-end) {
+      mask-image: linear-gradient(to right, black calc(100% - var(--tabs-fade-size)), transparent 100%);
+      -webkit-mask-image: linear-gradient(
+        to right,
+        black calc(100% - var(--tabs-fade-size)),
+        transparent 100%
+      );
+    }
+
+    :global(.evidence-tabs):global(.is-scrollable-start) {
+      mask-image: linear-gradient(to right, transparent 0, black var(--tabs-fade-size));
+      -webkit-mask-image: linear-gradient(to right, transparent 0, black var(--tabs-fade-size));
+    }
+
+    :global(.evidence-tabs):global(.is-scrollable-start):global(.is-scrollable-end) {
+      mask-image: linear-gradient(
+        to right,
+        transparent 0,
+        black var(--tabs-fade-size),
+        black calc(100% - var(--tabs-fade-size)),
+        transparent 100%
+      );
+      -webkit-mask-image: linear-gradient(
+        to right,
+        transparent 0,
+        black var(--tabs-fade-size),
+        black calc(100% - var(--tabs-fade-size)),
+        transparent 100%
+      );
+    }
   }
 }
 
@@ -331,23 +420,25 @@ select.pill-btn option {
   align-items: center;
   justify-content: center;
   gap: 6px;
+  min-height: var(--control-height-md);
   padding: 7px 14px;
-  border: 1px solid var(--accent-primary);
-  border-radius: var(--radius-md);
-  background: var(--accent-primary);
-  color: var(--text-inverse);
+  border: var(--border-width-thin) solid var(--border-action-primary);
+  border-radius: var(--radius-control);
+  background: var(--surface-action-primary);
+  color: var(--text-on-action-primary);
   font-family: var(--font-ui);
   font-size: 0.86rem;
   font-weight: 600;
   text-decoration: none;
   cursor: pointer;
   transition:
-    opacity 0.14s ease,
-    background-color 0.14s ease;
+    background-color 0.14s ease,
+    border-color 0.14s ease;
 }
 
 .cta-btn-primary:hover {
-  opacity: 0.92;
+  background: var(--surface-action-primary-hover);
+  border-color: var(--accent-primary);
 }
 
 .cta-btn-secondary {
@@ -355,9 +446,10 @@ select.pill-btn option {
   align-items: center;
   justify-content: center;
   gap: 6px;
+  min-height: var(--control-height-md);
   padding: 6px 12px;
-  border: 1px solid var(--border-control);
-  border-radius: var(--radius-md);
+  border: var(--border-width-thin) solid var(--border-control);
+  border-radius: var(--radius-control);
   background: var(--surface-subtle);
   color: var(--text-primary);
   font-family: var(--font-ui);
@@ -378,6 +470,6 @@ select.pill-btn option {
 @media (max-width: 768px) {
   .cta-btn-primary,
   .cta-btn-secondary {
-    min-height: 44px;
+    min-height: var(--control-height-touch);
   }
 }

@@ -1,4 +1,4 @@
-import type { MapJourneyState, MigrationEraConfig, MigrationStop } from '@kinloom/core';
+import type { MapJourneyState, MigrationStop } from '@kinloom/core';
 import { journeyNext, journeyPlayToggle, journeyPrev, journeyReset, journeyScrub } from '@kinloom/core';
 import type React from 'react';
 import { Link } from 'react-router-dom';
@@ -9,26 +9,6 @@ import { KINLOOM_VOCABULARY } from '../../lib/vocabulary.js';
 import controlStyles from '../../styles/Controls.module.css';
 import mapStyles from '../MapPage.module.css';
 
-export interface MapStageLegendProps {
-  readonly migrationEras: readonly MigrationEraConfig[];
-  readonly stageColorMap: ReadonlyMap<string, string>;
-}
-
-export const MapStageLegend: React.FC<MapStageLegendProps> = ({ migrationEras, stageColorMap }) => (
-  <aside className={cx(mapStyles, 'map-overlay map-stage-legend')} aria-label="Migration stage color legend">
-    {migrationEras.map((era) => (
-      <span key={era.id} className={cx(mapStyles, 'map-legend-item')}>
-        <span
-          className={cx(mapStyles, 'map-legend-swatch')}
-          style={{ backgroundColor: stageColorMap.get(era.id) ?? KINLOOM_COLOR_TOKENS.archivalIndigo }}
-          aria-hidden="true"
-        />
-        {era.label}
-      </span>
-    ))}
-  </aside>
-);
-
 export interface MapZoomControlsProps {
   readonly onZoomIn: () => void;
   readonly onZoomOut: () => void;
@@ -36,7 +16,11 @@ export interface MapZoomControlsProps {
 }
 
 export const MapZoomControls: React.FC<MapZoomControlsProps> = ({ onZoomIn, onZoomOut, onFit }) => (
-  <div className={cx(canvasSurfaceStyles, 'map-overlay tree-controls map-zoom-controls')}>
+  <div
+    role="group"
+    aria-label="Map zoom controls"
+    className={cx(canvasSurfaceStyles, 'map-overlay tree-controls map-zoom-controls')}
+  >
     <button
       type="button"
       className={cx(controlStyles, 'pill-btn')}

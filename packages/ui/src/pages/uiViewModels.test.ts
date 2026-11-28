@@ -27,6 +27,7 @@ import {
   computeAntimeridianSafeBounds,
   computeDefaultMapBounds,
   normalizeLongitude,
+  resolveStopLabelAnchor,
   routeArc,
   unwrapSegmentLongitudes,
   wantsLabel,
@@ -45,6 +46,7 @@ import {
   filterLocalRecordsByDecade,
   resolveMatchingPlaceIds,
 } from './place/placeViewModel.js';
+import { partitionDesktopAnchors } from './time/timeAnchorLayout.js';
 
 function must<T>(val: T | undefined, label = 'value'): T {
   if (val === undefined) throw new Error(`Expected ${label}`);
@@ -239,6 +241,9 @@ describe('evidenceViewModel', () => {
     const bundle = makeBundle();
 
     expect(parseInitialEvidenceTab('media')).toBe('media');
+    expect(parseInitialEvidenceTab('uncited')).toBe('uncited');
+    expect(parseInitialEvidenceTab('citations', 'uncited')).toBe('uncited');
+    expect(parseInitialEvidenceTab(null, 'uncited')).toBe('uncited');
     expect(parseInitialEvidenceTab('invalid')).toBe('conflicts');
 
     const conflicts = collectConflictEvents(bundle);
@@ -434,7 +439,11 @@ describe('mapOverlayData', () => {
     expect(multiBounds?.[1][0]).toBeCloseTo(-0.12, 2);
   });
 
-  it('computes safe fitBounds padding from measured toolbar and bottom dock heights and clamps on tight viewports', () => {
+  it('anchors eastern edge stop labels inward and computes safe fitBounds padding', () => {
+    expect(resolveStopLabelAnchor(0.98, -91.5, 0.98)).toBe('right');
+    expect(resolveStopLabelAnchor(-89.65, -91.5, 0.98)).toBe('left');
+    expect(resolveStopLabelAnchor(-89.0, -90.0, -88.5)).toBe('left');
+
     const desktop = computeSafeFitPadding({
       viewportWidth: 1440,
       viewportHeight: 900,
@@ -442,16 +451,16 @@ describe('mapOverlayData', () => {
       bottomDockHeight: 68,
       hasSelectedStop: false,
     });
-    expect(desktop).toEqual({ top: 80, right: 110, bottom: 112, left: 28 });
+    expect(desktop).toEqual({ top: 80, right: 118, bottom: 112, left: 36 });
 
     const mobile = computeSafeFitPadding({
       viewportWidth: 390,
       viewportHeight: 844,
-      toolbarHeight: 106,
-      bottomDockHeight: 132,
+      toolbarHeight: 54,
+      bottomDockHeight: 110,
       hasSelectedStop: false,
     });
-    expect(mobile).toEqual({ top: 130, right: 76, bottom: 150, left: 20 });
+    expect(mobile).toEqual({ top: 74, right: 32, bottom: 128, left: 28 });
 
     const tight = computeSafeFitPadding({
       viewportWidth: 320,
@@ -469,8 +478,35 @@ describe('mapOverlayData', () => {
       toolbarHeight: 50,
       bottomDockHeight: 80,
     });
-    expect(opts.padding).toEqual({ top: 82, right: 344, bottom: 240, left: 28 });
+    expect(opts.padding).toEqual({ top: 82, right: 344, bottom: 240, left: 36 });
     expect(opts.absolutePadding).toBe(true);
+  });
+
+  it('partitions desktop /time milestone anchors to <= 7 primary chips while keeping activeYear visible in chronological order', () => {
+    const anchors = [
+      { year: 1637, label: '1637', locatedCount: 2, aliveCount: 2 },
+      { year: 1686, label: '1686', locatedCount: 3, aliveCount: 3 },
+      { year: 1733, label: '1733', locatedCount: 4, aliveCount: 4 },
+      { year: 1782, label: '1782', locatedCount: 6, aliveCount: 6 },
+      { year: 1809, label: '1809', locatedCount: 10, aliveCount: 11 },
+      { year: 1820, label: '1820', locatedCount: 12, aliveCount: 14 },
+      { year: 1835, label: '1835', locatedCount: 14, aliveCount: 16 },
+      { year: 1850, label: '1850', locatedCount: 20, aliveCount: 22 },
+      { year: 1860, label: '1860', locatedCount: 24, aliveCount: 25 },
+      { year: 1880, label: '1880', locatedCount: 18, aliveCount: 20 },
+    ];
+
+    const small = partitionDesktopAnchors(anchors.slice(0, 4), 1733);
+    expect(small.primaryAnchors.map((a) => a.year)).toEqual([1637, 1686, 1733, 1782]);
+    expect(small.overflowAnchors).toEqual([]);
+
+    const defaultPart = partitionDesktopAnchors(anchors, 1860);
+    expect(defaultPart.primaryAnchors.map((a) => a.year)).toEqual([1782, 1809, 1820, 1835, 1850, 1860, 1880]);
+    expect(defaultPart.overflowAnchors.map((a) => a.year)).toEqual([1637, 1686, 1733]);
+
+    const promoted = partitionDesktopAnchors(anchors, 1637);
+    expect(promoted.primaryAnchors.map((a) => a.year)).toEqual([1637, 1809, 1820, 1835, 1850, 1860, 1880]);
+    expect(promoted.overflowAnchors.map((a) => a.year)).toEqual([1686, 1733, 1782]);
   });
 
   it('collapses overflowing desktop era pills cleanly and promotes a selected overflow era in natural order', () => {

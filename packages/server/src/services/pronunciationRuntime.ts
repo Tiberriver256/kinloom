@@ -76,7 +76,9 @@ export function parsePronunciationRuntimeConfig(
         ? (rawFallback as PronunciationFallbackBackend)
         : fallback.fallbackBackend,
     openAiBaseUrl:
-      typeof values['openai_base_url'] === 'string' ? values['openai_base_url'].trim() : fallback.openAiBaseUrl,
+      typeof values['openai_base_url'] === 'string'
+        ? values['openai_base_url'].trim()
+        : fallback.openAiBaseUrl,
     defaultModel:
       typeof values['default_model'] === 'string' && values['default_model'].trim().length > 0
         ? values['default_model'].trim()
