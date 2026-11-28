@@ -669,4 +669,144 @@ describe('GlobalSearchModal Archival Command Bar (#71)', () => {
     });
     expect(container.querySelector('[data-testid="active-reader"]')?.textContent).toBe('src_deed_book:4');
   });
+
+  it('covers empty-state results, suggestion chips, hover preview switching, Enter navigation, and place recently-viewed chips', () => {
+    recordRecentlyViewed({ kind: 'place', slug: 'mercer-town', label: 'Mercer Town' });
+    const bundle = makeBundle();
+    act(() => {
+      root.render(
+        <MemoryRouter initialEntries={['/']}>
+          <ArchiveDataProvider siteConfig={TEST_SITE_CONFIG} initialBundle={bundle} initialReadings={null}>
+            <ArchiveUiProvider>
+              <LocationReadout />
+              <GlobalSearchModal />
+            </ArchiveUiProvider>
+          </ArchiveDataProvider>
+        </MemoryRouter>
+      );
+    });
+
+    // Open with /
+    act(() => {
+      window.dispatchEvent(new KeyboardEvent('keydown', { key: '/', bubbles: true }));
+    });
+    expect(container.querySelector('dialog')?.textContent).toContain('Archive ready');
+
+    // Click a suggestion chip to populate query
+    const suggestionBtn = [...container.querySelectorAll<HTMLButtonElement>('dialog button')].find(
+      (b) => b.textContent === 'Thomas Alder'
+    );
+    expect(suggestionBtn).toBeDefined();
+    act(() => {
+      suggestionBtn?.click();
+    });
+    const input = container.querySelector<HTMLInputElement>('input[role="combobox"]');
+    expect(input?.value).toBe('Thomas Alder');
+
+    // Press Enter while input is focused -> navigates to Thomas Alder profile
+    act(() => {
+      input?.focus();
+      window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+    });
+    expect(container.querySelector('[data-testid="current-location"]')?.textContent).toBe(
+      '/person/thomas-alder'
+    );
+
+    // Re-open, click Recently viewed place chip
+    act(() => {
+      window.dispatchEvent(new KeyboardEvent('keydown', { key: '/', bubbles: true }));
+    });
+    const placeRecentBtn = [...container.querySelectorAll<HTMLButtonElement>('dialog button')].find(
+      (b) => b.textContent === 'Mercer Town'
+    );
+    expect(placeRecentBtn).toBeDefined();
+    act(() => {
+      placeRecentBtn?.click();
+    });
+    expect(container.querySelector('[data-testid="current-location"]')?.textContent).toBe(
+      '/place/mercer-town'
+    );
+
+    // Re-open, type unmatched query -> shows zero-results message, then match Mercer and hover + click preview Profile button
+    act(() => {
+      window.dispatchEvent(new KeyboardEvent('keydown', { key: '/', bubbles: true }));
+    });
+    const input2 = container.querySelector<HTMLInputElement>('input[role="combobox"]');
+    setInputValue(input2!, 'zzzz-no-match');
+    expect(container.querySelector('dialog')?.textContent).toContain('zzzz-no-match');
+
+    setInputValue(input2!, 'Mercer');
+    const options = container.querySelectorAll<HTMLButtonElement>('[role="option"]');
+    expect(options.length).toBeGreaterThan(1);
+    act(() => {
+      options[1]?.dispatchEvent(new MouseEvent('mouseover', { bubbles: true }));
+    });
+
+    const profileAction = [...container.querySelectorAll<HTMLButtonElement>('aside button')].find((b) =>
+      b.textContent?.includes('Profile')
+    );
+    expect(profileAction).toBeDefined();
+    act(() => {
+      profileAction?.click();
+    });
+    expect(container.querySelector('[data-testid="current-location"]')?.textContent).toContain('/person/');
+  });
+
+  it('handles duplicate/blank suggestion labels, option click activation, and ignored modifier keys cleanly', () => {
+    const base = makeBundle();
+    const bundle = {
+      ...base,
+      places: [
+        ...base.places,
+        { ...base.places[0]!, id: 'plc_blank', slug: 'blank-place', name: '   ', full_name: 'Blank Place' },
+        {
+          ...base.places[0]!,
+          id: 'plc_dup',
+          slug: 'dup-place',
+          name: 'Thomas Alder',
+          full_name: 'Thomas Alder Township',
+        },
+      ],
+    };
+    const dupConfig = {
+      ...TEST_SITE_CONFIG,
+      anchorYears: [{ year: 1860, label: 'Thomas Alder' }],
+    };
+    act(() => {
+      root.render(
+        <MemoryRouter initialEntries={['/']}>
+          <ArchiveDataProvider siteConfig={dupConfig} initialBundle={bundle} initialReadings={makeReadings()}>
+            <ArchiveUiProvider>
+              <LocationReadout />
+              <GlobalSearchModal />
+            </ArchiveUiProvider>
+          </ArchiveDataProvider>
+        </MemoryRouter>
+      );
+    });
+
+    act(() => {
+      window.dispatchEvent(new KeyboardEvent('keydown', { key: '/', bubbles: true }));
+    });
+    const input = container.querySelector<HTMLInputElement>('input[role="combobox"]');
+    setInputValue(input!, 'Thomas Alder');
+
+    // Ctrl+T and Alt+Z should not trigger navigation
+    act(() => {
+      window.dispatchEvent(new KeyboardEvent('keydown', { key: 't', ctrlKey: true, bubbles: true }));
+      window.dispatchEvent(new KeyboardEvent('keydown', { key: 'z', altKey: true, bubbles: true }));
+    });
+    expect(container.querySelector('dialog')).not.toBeNull();
+
+    // Direct option click activates result
+    const firstOpt = container.querySelector<HTMLButtonElement>('[role="option"]');
+    expect(firstOpt).not.toBeNull();
+    act(() => {
+      firstOpt?.click();
+    });
+    expect(container.querySelector('dialog')).toBeNull();
+    expect(container.querySelector('[data-testid="current-location"]')?.textContent).toBe(
+      '/person/thomas-alder'
+    );
+  });
 });
