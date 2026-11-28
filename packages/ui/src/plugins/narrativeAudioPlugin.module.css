@@ -470,8 +470,10 @@
   }
 
   :global(.archival-footnote-ref) {
-    padding: 8px 6px;
-    margin: -8px 0;
+    min-width: var(--control-height-touch);
+    min-height: var(--control-height-touch);
+    padding: 10px 8px;
+    margin: -12px 0;
   }
 }
 

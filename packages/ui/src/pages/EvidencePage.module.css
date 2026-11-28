@@ -159,7 +159,12 @@
     flex-direction: column;
   }
 
+  .evidence-gap-cta {
+    min-height: var(--control-height-touch);
+    padding: 8px 12px;
+  }
+
   .evidence-pagination-bar :global(.pill-btn) {
-    min-height: 44px;
+    min-height: var(--control-height-touch);
   }
 }

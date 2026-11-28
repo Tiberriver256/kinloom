@@ -9,6 +9,7 @@ import { KinloomFooter } from '../components/KinloomFooter.js';
 import { useArchiveData } from '../context/ArchiveDataContext.js';
 import { useArchiveUi } from '../context/ArchiveUiContext.js';
 import { handleTablistKeyDown, scrollBehaviorForMotion } from '../hooks/keyboardNav.js';
+import { useHorizontalScrollFade } from '../hooks/useHorizontalScrollFade.js';
 import { cx } from '../lib/cx.js';
 import { KINLOOM_VOCABULARY } from '../lib/vocabulary.js';
 import { PluginSlot } from '../plugins/PluginContext.js';
@@ -64,6 +65,7 @@ export const EvidencePage: React.FC = () => {
   const [lightboxItem, setLightboxItem] = useState<MediaItem | null>(null);
   const [mediaChecklist, setMediaChecklist] = useState<MediaChecklistItem[]>([]);
   const uncitedHeadingRef = useRef<HTMLHeadingElement | null>(null);
+  const evidenceTabsRef = useRef<HTMLDivElement | null>(null);
   const pendingFocusUncitedRef = useRef(false);
 
   const syncEvidenceUrl = (nextTab: EvidenceTab, nextUncitedOnly: boolean): void => {
@@ -99,6 +101,20 @@ export const EvidencePage: React.FC = () => {
     setUncitedQuery('');
     syncEvidenceUrl(tab, false);
   };
+
+  useHorizontalScrollFade(evidenceTabsRef, bundle ? 'evidence-tabs' : '');
+
+  // biome-ignore lint/correctness/useExhaustiveDependencies: center active mobile tab whenever selected tab changes
+  useEffect(() => {
+    const activeTab = evidenceTabsRef.current?.querySelector<HTMLElement>('[aria-selected="true"]');
+    if (activeTab && typeof activeTab.scrollIntoView === 'function') {
+      activeTab.scrollIntoView({
+        behavior: scrollBehaviorForMotion(),
+        block: 'nearest',
+        inline: 'center',
+      });
+    }
+  }, [tab]);
 
   useEffect(() => {
     if (!pendingFocusUncitedRef.current || tab !== 'citations' || !uncitedOnly) {
@@ -216,6 +232,7 @@ export const EvidencePage: React.FC = () => {
         <PluginSlot name="evidenceExtra" />
 
         <div
+          ref={evidenceTabsRef}
           className={cx(controlStyles, 'filter-bar evidence-tabs')}
           role="tablist"
           aria-label={KINLOOM_VOCABULARY.evidence.tablistAria}

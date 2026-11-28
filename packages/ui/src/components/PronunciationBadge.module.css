@@ -468,10 +468,11 @@
 /* Responsive overrides */
 
 @media (max-width: 768px) {
-  .pronunciation-play-btn {
-    width: 44px;
-    height: 44px;
-    min-width: 44px;
-    min-height: 44px;
+  .pronunciation-play-btn,
+  .pronunciation-badge:global(.is-compact) .pronunciation-play-btn {
+    width: var(--control-height-touch);
+    height: var(--control-height-touch);
+    min-width: var(--control-height-touch);
+    min-height: var(--control-height-touch);
   }
 }
