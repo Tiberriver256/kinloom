@@ -4,7 +4,7 @@
 
   --surface-canvas: #f5efe2;
   --surface-card: #fcf9f2;
-  --surface-subtle: #f5efe2;
+  --surface-subtle: #efe8d8;
   --surface-linen: #eae1ce;
   --surface-radar: var(--surface-linen);
   --surface-muted: #eae1ce;
@@ -114,15 +114,15 @@
     --surface-muted: #2a2723;
     --surface-header: #e4ddd0;
     --surface-chrome-bar: #171614;
-    --surface-action-primary: #2a2723;
-    --surface-action-primary-hover: #2a2723;
+    --surface-action-primary: #f6d191;
+    --surface-action-primary-hover: #e4ddd0;
 
     --text-primary: #e4ddd0;
-    --text-secondary: #bdb3a3;
+    --text-secondary: #d2c9ba;
     --text-inverse: #171614;
     --text-chrome-bar: #e4ddd0;
-    --text-on-action-primary: #e4ddd0;
-    --text-on-action-primary-muted: #e4ddd0;
+    --text-on-action-primary: #171614;
+    --text-on-action-primary-muted: #2a2723;
 
     --accent-primary: var(--site-accent-dark, #f6d191);
     --accent-secondary: #7cc2a6;
@@ -184,15 +184,15 @@
   --surface-muted: #2a2723;
   --surface-header: #e4ddd0;
   --surface-chrome-bar: #171614;
-  --surface-action-primary: #2a2723;
-  --surface-action-primary-hover: #2a2723;
+  --surface-action-primary: #f6d191;
+  --surface-action-primary-hover: #e4ddd0;
 
   --text-primary: #e4ddd0;
-  --text-secondary: #bdb3a3;
+  --text-secondary: #d2c9ba;
   --text-inverse: #171614;
   --text-chrome-bar: #e4ddd0;
-  --text-on-action-primary: #e4ddd0;
-  --text-on-action-primary-muted: #e4ddd0;
+  --text-on-action-primary: #171614;
+  --text-on-action-primary-muted: #2a2723;
 
   --accent-primary: var(--site-accent-dark, #f6d191);
   --accent-secondary: #7cc2a6;

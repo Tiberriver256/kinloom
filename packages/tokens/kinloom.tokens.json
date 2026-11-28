@@ -4,6 +4,7 @@
     "$type": "color",
     "primitive": {
       "cotton-rag": { "$value": "#F5EFE2", "$description": "Primary archival cotton-rag paper surface." },
+      "subtle-rag": { "$value": "#EFE8D8", "$description": "Subtle tinted cotton-rag strip surface." },
       "rag-card": { "$value": "#FCF9F2", "$description": "Elevated paper card and inverse ink on dark chrome." },
       "warm-linen": { "$value": "#EAE1CE", "$description": "Tinted linen surface, muted chrome ink, and decorative hairline." },
       "archival-indigo": { "$value": "#1B2A41", "$description": "Primary display heading, top chrome bar, and primary action surface." },
@@ -20,7 +21,7 @@
       "slate-card": { "$value": "#1F1D1A", "$description": "Nocturnal elevated card and subtle tinted surface." },
       "smoked-linen": { "$value": "#2A2723", "$description": "Nocturnal linen surface, action surface, and decorative hairline." },
       "parchment-heading": { "$value": "#E4DDD0", "$description": "Halation-capped parchment ink (APCA Lc 82..88 on nocturnal folio)." },
-      "warm-stone": { "$value": "#BDB3A3", "$description": "Nocturnal secondary metadata ink." },
+      "warm-stone": { "$value": "#D2C9BA", "$description": "Nocturnal secondary metadata ink (APCA >= Lc 72 on nocturnal surfaces)." },
       "warm-brass": { "$value": "#F6D191", "$description": "Nocturnal brass accent and active highlight ink." },
       "verdigris-sage": { "$value": "#7CC2A6", "$description": "Nocturnal secondary sage accent and cited/addition ink." },
       "archival-sky": { "$value": "#7DB6F2", "$description": "Nocturnal keyboard focus indicator ink." },
@@ -31,7 +32,7 @@
     "semantic": {
       "surface-canvas": { "$value": "{color.primitive.cotton-rag}" },
       "surface-card": { "$value": "{color.primitive.rag-card}" },
-      "surface-subtle": { "$value": "{color.primitive.cotton-rag}" },
+      "surface-subtle": { "$value": "{color.primitive.subtle-rag}" },
       "surface-linen": { "$value": "{color.primitive.warm-linen}" },
       "surface-muted": { "$value": "{color.primitive.warm-linen}" },
       "surface-header": { "$value": "{color.primitive.archival-indigo}" },

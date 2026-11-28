@@ -2,7 +2,8 @@
    Shared Paper & Ink Atoms (Unboxed Hairlines + Handwritten Accents)
    ========================================================================== */
 .folio-kicker {
-  font-family: var(--font-mono);
+  font-family: var(--font-ui);
+  font-variant-numeric: tabular-nums;
   font-size: var(--text-2xs);
   text-transform: uppercase;
   letter-spacing: 0.09em;
@@ -49,7 +50,7 @@
 }
 
 .axis-page-header .folio-title {
-  font-size: var(--text-2xl);
+  font-size: var(--text-3xl);
   margin: 0 0 4px;
   line-height: 1.15;
 }
@@ -85,7 +86,8 @@
 }
 
 .folio-metrics {
-  font-family: var(--font-mono);
+  font-family: var(--font-ui);
+  font-variant-numeric: tabular-nums;
   font-size: var(--text-xs);
   text-align: right;
   color: var(--text-secondary);
@@ -105,7 +107,8 @@
 }
 
 .folio-count-note {
-  font-family: var(--font-mono);
+  font-family: var(--font-ui);
+  font-variant-numeric: tabular-nums;
   font-size: var(--text-xs);
   color: var(--text-secondary);
 }

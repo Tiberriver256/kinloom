@@ -43,9 +43,16 @@ export function useArchivalImageStatus(resolvedSrc: string): {
       return;
     }
     const el = imgRef.current;
-    if (el?.complete && el.naturalWidth > 0) {
+    if (!el?.complete) {
+      return;
+    }
+    if (el.naturalWidth > 0) {
       setOutcome((cur) =>
         cur?.kind === 'loaded' && cur.src === resolvedSrc ? cur : { kind: 'loaded', src: resolvedSrc }
+      );
+    } else {
+      setOutcome((cur) =>
+        cur?.kind === 'error' && cur.src === resolvedSrc ? cur : { kind: 'error', src: resolvedSrc }
       );
     }
   }, [resolvedSrc]);

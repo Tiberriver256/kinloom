@@ -48,6 +48,8 @@
 
 .skip-to-content:focus,
 .skip-to-content:focus-visible {
+  top: calc(var(--topbar-height, 58px) + 8px);
+  z-index: 9999;
   transform: translateY(0);
   outline: 2px solid var(--action-focus);
   outline-offset: 2px;
@@ -70,7 +72,7 @@ dialog[open] {
 }
 
 .empty-state-notice-eyebrow {
-  font-family: var(--font-mono);
+  font-family: var(--font-ui);
   font-size: var(--text-2xs);
   font-weight: 600;
   letter-spacing: 0.06em;

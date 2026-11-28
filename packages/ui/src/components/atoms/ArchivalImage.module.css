@@ -2,6 +2,15 @@
    ArchivalImage — Warm Linen Underlay, Smooth Fade-In, & Editorial Fallback
    ========================================================================== */
 
+@keyframes archival-image-shimmer {
+  0% {
+    transform: translateX(-100%);
+  }
+  100% {
+    transform: translateX(100%);
+  }
+}
+
 .archival-image-frame {
   position: relative;
   display: inline-flex;
@@ -11,6 +20,22 @@
   background: var(--surface-linen);
   overflow: hidden;
   box-sizing: border-box;
+}
+
+.archival-image-frame[data-image-status="loading"]::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(90deg, transparent 0%, var(--surface-overlay-soft) 50%, transparent 100%);
+  animation: archival-image-shimmer 1.8s ease-in-out infinite;
+  pointer-events: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .archival-image-frame[data-image-status="loading"]::after {
+    animation: none;
+    opacity: 0;
+  }
 }
 
 .archival-image-frame.is-overflow-visible {

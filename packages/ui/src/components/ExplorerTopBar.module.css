@@ -70,7 +70,7 @@
   border-bottom: 2px solid transparent;
   border-radius: 0;
   text-decoration: none;
-  font-family: var(--font-serif);
+  font-family: var(--font-ui);
   font-size: var(--text-sm);
   font-weight: 500;
   background: transparent;
@@ -212,7 +212,7 @@
 .topbar-guide-badge {
   margin-left: auto;
   padding: 1px 6px;
-  border-radius: var(--radius-pill);
+  border-radius: var(--radius-control);
   background: var(--badge-cited-bg);
   color: var(--badge-cited-fg);
   font-size: var(--text-2xs);
@@ -236,6 +236,16 @@
 .topbar-disclosure-panel {
   box-shadow: var(--shadow-active);
   border: 1px solid var(--border-control);
+  max-height: calc(100vh - 80px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+}
+
+@supports (max-height: 100dvh) {
+  .topbar-disclosure-panel {
+    max-height: calc(100dvh - var(--topbar-height, 64px) - 16px - env(safe-area-inset-bottom, 0px));
+  }
 }
 
 .topbar-disclosure-list {

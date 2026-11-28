@@ -27,6 +27,10 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 
+:where(main#main-content, [id]) {
+  scroll-margin-top: calc(var(--topbar-height, 58px) + 12px);
+}
+
 h1,
 h2,
 h3 {
