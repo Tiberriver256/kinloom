@@ -401,12 +401,9 @@ describe('PlacesIndexPage Grid alignment and mobile era filter (#61)', () => {
     expect(container.textContent).toContain('1855–1880');
     expect(container.textContent).not.toContain('1855 – 1880');
 
-    // Mobile native select rendered when > 6 era filters exist
-    const eraSelect = container.querySelector<HTMLSelectElement>(
-      'select[aria-label="Filter places by migration region"]'
-    );
-    expect(eraSelect).not.toBeNull();
-    expect(eraSelect?.options.length).toBe(8);
+    // Competing migration-stage select is removed and Jump Strip is gated for <= 25 places (#95)
+    expect(container.querySelector('select[aria-label="Filter places by migration region"]')).toBeNull();
+    expect(container.querySelector('nav[aria-label="Jump to places section"]')).toBeNull();
   });
 });
 

@@ -333,7 +333,7 @@ describe('MapPage behavioral migration journey flows', () => {
     await flushUi();
     await flushUi();
 
-    expect(container.textContent).toContain('All Eras');
+    expect(container.textContent).toContain('All Stages');
 
     // Toggle route mode: Chronological -> By person -> mobile toggle
     const chronoBtn = Array.from(container.querySelectorAll('button')).find(

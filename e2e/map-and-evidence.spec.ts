@@ -21,7 +21,7 @@ test('map route filters by migration era, steps through journey stops, and handl
   await expect(prairieBtn).toHaveAttribute('aria-pressed', 'true');
 
   // Reset to all eras and step through journey playback
-  await page.getByRole('button', { name: /All Eras/ }).click();
+  await page.getByRole('button', { name: /All Stages/ }).click();
   await page.getByRole('button', { name: 'Next →' }).click();
   const stopCard = page.getByRole('region', { name: 'Selected stop details' });
   await expect(stopCard).toBeVisible();
@@ -158,7 +158,7 @@ test('map toolbar prevents desktop era clipping, keeps mobile selects and route 
       'select[aria-label="Filter migration map by person"]'
     );
     const eraSelect = document.querySelector<HTMLSelectElement>(
-      'select[aria-label="Filter migration map by era"]'
+      'select[aria-label="Filter migration map by migration stage"]'
     );
     const modeButtons = [
       ...document.querySelectorAll<HTMLButtonElement>(

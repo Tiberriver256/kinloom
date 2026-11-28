@@ -10,6 +10,7 @@ import { ExplorerTopBar } from '../components/ExplorerTopBar.js';
 import { KinloomFooter } from '../components/KinloomFooter.js';
 import { useArchiveData } from '../context/ArchiveDataContext.js';
 import { cx, joinClasses } from '../lib/cx.js';
+import { DIRECTORY_JUMP_STRIP_THRESHOLD } from '../lib/peopleDirectoryModel.js';
 import {
   buildPlacesDirectorySearchParams,
   buildPlacesDirectorySections,
@@ -25,8 +26,7 @@ import placesIndexStyles from './PlacesIndexPage.module.css';
 
 const PlaceLedgerEntry: React.FC<{
   entry: PlaceDirectoryEntry;
-  stageLabel: string;
-}> = ({ entry, stageLabel }) => {
+}> = ({ entry }) => {
   let yearSpan = 'Undated';
   if (entry.minYear && entry.maxYear) {
     yearSpan = entry.minYear === entry.maxYear ? String(entry.minYear) : `${entry.minYear}–${entry.maxYear}`;
@@ -41,9 +41,7 @@ const PlaceLedgerEntry: React.FC<{
             <h3 className={cx(placesIndexStyles, 'place-ledger-name')}>
               <Link to={`/place/${entry.place.slug}`}>{entry.place.name}</Link>
             </h3>
-            <div className={cx(placesIndexStyles, 'place-ledger-full')}>
-              {entry.place.full_name} · {stageLabel}
-            </div>
+            <div className={cx(placesIndexStyles, 'place-ledger-full')}>{entry.place.full_name}</div>
           </div>
           <div className={cx(placesIndexStyles, 'place-ledger-stats')}>
             <span className={cx(placesIndexStyles, 'place-ledger-span')}>{yearSpan}</span>
@@ -103,14 +101,6 @@ export const PlacesIndexPage: React.FC = () => {
     [siteConfig.migrationEras]
   );
 
-  const stageLabelById = useMemo(() => {
-    const map = new Map<string, string>();
-    for (const era of migrationEras) {
-      map.set(era.id, era.label);
-    }
-    return map;
-  }, [migrationEras]);
-
   const directory = useMemo(() => {
     if (!bundle) {
       return [];
@@ -157,14 +147,6 @@ export const PlacesIndexPage: React.FC = () => {
     [updateQueryState]
   );
 
-  const handleStageChange = useCallback(
-    (nextStage: string) => {
-      setExpandedSections(new Set());
-      updateQueryState({ stage: nextStage });
-    },
-    [updateQueryState]
-  );
-
   const handleQueryChange = useCallback(
     (nextQuery: string) => {
       updateQueryState({ query: nextQuery });
@@ -184,31 +166,29 @@ export const PlacesIndexPage: React.FC = () => {
 
   const sections = useMemo(() => buildPlacesDirectorySections({ entries: filtered, view }), [filtered, view]);
 
-  const showStageSelector = stageFilters.length > 2;
-  const showJumpStrip = sections.length > 1;
+  const showJumpStrip = filtered.length > DIRECTORY_JUMP_STRIP_THRESHOLD && sections.length > 1;
   const hasActiveFilters = stage !== 'all' || query.trim().length > 0;
 
   return (
     <div>
       <ExplorerTopBar />
       <main id="main-content" className={cx(placesIndexStyles, 'places-index-page')}>
-        <header className={cx(atomStyles, 'folio-header axis-page-header')}>
-          <div className={cx(atomStyles, 'folio-header-row')}>
-            <div>
-              <h1 className={cx(atomStyles, 'folio-title')}>
-                Places in the {siteConfig.site.familyName} Archive
-              </h1>
-              <p className={cx(atomStyles, 'folio-lead')}>
-                Towns, counties, and homesteads along the line: who passed through, when they overlapped, and
-                what local weather or newspaper notices recorded.
-              </p>
-              <div className={cx(atomStyles, 'axis-page-header-actions')}>
-                <Link to="/map" className={cx(atomStyles, 'ink-link-btn')}>
-                  Open Migration Map →
-                </Link>
-              </div>
-            </div>
+        <header
+          className={joinClasses(
+            cx(atomStyles, 'folio-header axis-page-header'),
+            cx(placesIndexStyles, 'places-header')
+          )}
+        >
+          <div className={cx(placesIndexStyles, 'places-header-top')}>
+            <h1 className={cx(atomStyles, 'folio-title')}>Places</h1>
+            <Link to="/map" className={cx(atomStyles, 'ink-link-btn')}>
+              Open Migration Map →
+            </Link>
           </div>
+          <p className={joinClasses(cx(atomStyles, 'folio-lead'), cx(placesIndexStyles, 'places-lead'))}>
+            Towns, counties, and homesteads along the line: who passed through, when they overlapped, and what
+            local weather or newspaper notices recorded.
+          </p>
         </header>
 
         {loading && <p className={cx(controlStyles, 'empty-ring-note')}>Loading places directory…</p>}
@@ -291,26 +271,6 @@ export const PlacesIndexPage: React.FC = () => {
                     A–Z
                   </button>
                 </div>
-
-                {showStageSelector && (
-                  <select
-                    aria-label="Filter places by migration region"
-                    className={joinClasses(
-                      cx(controlStyles, 'pill-btn'),
-                      cx(placesIndexStyles, 'places-stage-select')
-                    )}
-                    value={stage}
-                    onChange={(e) => {
-                      handleStageChange(e.target.value);
-                    }}
-                  >
-                    {stageFilters.map((f) => (
-                      <option key={f.id} value={f.id}>
-                        {f.label} ({stageCounts[f.id] ?? 0})
-                      </option>
-                    ))}
-                  </select>
-                )}
 
                 {hasActiveFilters && (
                   <button
@@ -402,11 +362,7 @@ export const PlacesIndexPage: React.FC = () => {
 
                       <div className={cx(placesIndexStyles, 'places-ledger')}>
                         {slice.visible.map((entry) => (
-                          <PlaceLedgerEntry
-                            key={entry.place.id}
-                            entry={entry}
-                            stageLabel={stageLabelById.get(entry.stage) ?? entry.stage}
-                          />
+                          <PlaceLedgerEntry key={entry.place.id} entry={entry} />
                         ))}
                       </div>
 

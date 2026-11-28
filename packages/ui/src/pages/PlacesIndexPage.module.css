@@ -367,3 +367,27 @@
     margin-top: 8px;
   }
 }
+
+.places-header-top {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+}
+
+@media (max-width: 768px) {
+  .places-header {
+    margin-bottom: 12px;
+    padding-bottom: 10px;
+  }
+
+  .places-lead {
+    display: none;
+  }
+
+  .places-toolbar {
+    gap: 6px;
+    margin-bottom: 10px;
+  }
+}

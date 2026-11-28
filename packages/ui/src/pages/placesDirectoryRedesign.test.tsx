@@ -426,23 +426,18 @@ describe('PlacesIndexPage redesigned directory UI (#78)', () => {
     });
     expect(container.querySelector('[data-testid="places-url"]')?.textContent).toBe('/places?view=az');
 
-    // Filter by stage + search query -> updates URL and supports Clear
-    const stageSelect = container.querySelector<HTMLSelectElement>(
-      'select[aria-label="Filter places by migration region"]'
-    );
-    expect(stageSelect).not.toBeNull();
+    // Competing migration-stage dropdown is removed (#95); search filters and Clear resets cleanly
+    expect(container.querySelector('select[aria-label="Filter places by migration region"]')).toBeNull();
+    const searchInput = container.querySelector<HTMLInputElement>('input[type="search"]');
+    expect(searchInput).not.toBeNull();
     act(() => {
-      if (stageSelect) {
-        stageSelect.value = 'europe';
-        stageSelect.dispatchEvent(new Event('change', { bubbles: true }));
+      if (searchInput) {
+        const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set;
+        setter?.call(searchInput, 'Hingham');
+        searchInput.dispatchEvent(new Event('input', { bubbles: true }));
+        searchInput.dispatchEvent(new Event('change', { bubbles: true }));
       }
     });
-    expect(container.querySelector('[data-testid="places-url"]')?.textContent).toBe(
-      '/places?view=az&stage=europe'
-    );
-    expect(container.querySelectorAll('article').length).toBe(2);
-
-    // Clear resets stage and query
     const clearBtn = [...container.querySelectorAll<HTMLButtonElement>('button')].find(
       (b) => b.textContent === 'Clear'
     );

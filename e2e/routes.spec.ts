@@ -85,9 +85,7 @@ test('all 9 archival routes render cleanly with zero console or page errors', as
     {
       url: '/places',
       assertVisible: async () => {
-        await expect(
-          page.getByRole('heading', { name: 'Places in the Lincoln & Todd Family Archive' })
-        ).toBeVisible();
+        await expect(page.getByRole('heading', { name: 'Places' })).toBeVisible();
         await expect(page.getByRole('link', { name: 'Springfield', exact: true }).first()).toBeVisible();
       },
     },
