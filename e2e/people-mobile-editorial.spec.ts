@@ -93,4 +93,93 @@ test.describe('People landing mobile editorial layout (#89, #90)', () => {
       }
     }
   });
+
+  test('clears DirectoryJumpStrip edge fades when transitioning from scrollable By Era to non-scrollable A–Z or desktop width (#103)', async ({
+    browser,
+  }) => {
+    const context = await browser.newContext({ viewport: { width: 390, height: 844 } });
+    try {
+      const page = await context.newPage();
+      await page.goto('/');
+      const eraNav = page.locator('nav[aria-label="Jump to era"]');
+      await expect(eraNav).toBeVisible();
+
+      const readFadeState = async (selector: string) =>
+        page.evaluate(async (sel) => {
+          await new Promise<void>((resolve) => {
+            requestAnimationFrame(() => {
+              requestAnimationFrame(() => resolve());
+            });
+          });
+          const nav = document.querySelector<HTMLElement>(sel);
+          if (!nav) {
+            return null;
+          }
+          const cs = window.getComputedStyle(nav);
+          return {
+            scrollWidth: nav.scrollWidth,
+            clientWidth: nav.clientWidth,
+            scrollLeft: Math.round(nav.scrollLeft),
+            fadeStart: cs.getPropertyValue('--jump-fade-start').trim(),
+            fadeEnd: cs.getPropertyValue('--jump-fade-end').trim(),
+            animationDuration: cs.animationDuration,
+          };
+        }, selector);
+
+      const eraStart = await readFadeState('nav[aria-label="Jump to era"]');
+      expect(eraStart).not.toBeNull();
+      expect(eraStart?.scrollWidth).toBeGreaterThan(eraStart?.clientWidth ?? 0);
+      expect(eraStart?.fadeStart).toBe('0px');
+      expect(eraStart?.fadeEnd).not.toBe('0px');
+      expect(eraStart?.animationDuration).toBe('auto, auto');
+
+      await eraNav.evaluate((el) => {
+        el.scrollLeft = 40;
+      });
+      const eraMid = await readFadeState('nav[aria-label="Jump to era"]');
+      expect(eraMid?.fadeStart).not.toBe('0px');
+      expect(eraMid?.fadeEnd).not.toBe('0px');
+
+      await eraNav.evaluate((el) => {
+        el.scrollLeft = el.scrollWidth - el.clientWidth;
+      });
+      const eraEnd = await readFadeState('nav[aria-label="Jump to era"]');
+      expect(eraEnd?.fadeStart).not.toBe('0px');
+      expect(eraEnd?.fadeEnd).toBe('0px');
+
+      await page.getByRole('button', { name: 'A–Z' }).click();
+      const azNav = page.locator('nav[aria-label="Jump to surname letter"]');
+      await expect(azNav).toBeVisible();
+      const azState = await readFadeState('nav[aria-label="Jump to surname letter"]');
+      expect(azState).not.toBeNull();
+      expect(azState?.scrollWidth).toBeLessThanOrEqual(azState?.clientWidth ?? 0);
+      expect(azState?.fadeStart).toBe('0px');
+      expect(azState?.fadeEnd).toBe('0px');
+
+      await page.getByRole('button', { name: 'By Era' }).click();
+      await expect(eraNav).toBeVisible();
+      await eraNav.evaluate((el) => {
+        el.scrollLeft = 40;
+      });
+      const eraScrolledAgain = await readFadeState('nav[aria-label="Jump to era"]');
+      expect(eraScrolledAgain?.fadeStart).not.toBe('0px');
+
+      await page.setViewportSize({ width: 1280, height: 800 });
+      await expect
+        .poll(async () => readFadeState('nav[aria-label="Jump to era"]'))
+        .toMatchObject({ fadeStart: '0px', fadeEnd: '0px' });
+      const desktopState = await readFadeState('nav[aria-label="Jump to era"]');
+      expect(desktopState?.scrollWidth).toBeLessThanOrEqual(desktopState?.clientWidth ?? 0);
+
+      await page.setViewportSize({ width: 390, height: 844 });
+      await expect
+        .poll(async () => {
+          const state = await readFadeState('nav[aria-label="Jump to era"]');
+          return state ? { fadeStart: state.fadeStart, hasEndFade: state.fadeEnd !== '0px' } : null;
+        })
+        .toEqual({ fadeStart: '0px', hasEndFade: true });
+    } finally {
+      await context.close();
+    }
+  });
 });

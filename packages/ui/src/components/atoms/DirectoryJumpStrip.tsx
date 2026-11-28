@@ -40,6 +40,7 @@ export const DirectoryJumpStrip: React.FC<DirectoryJumpStripProps> = ({
   const clickLockUntilRef = useRef<number>(0);
 
   const itemIdsKey = useMemo(() => items.map((item) => item.id).join('|'), [items]);
+  const navKey = `${compact ? 'az' : 'default'}:${itemIdsKey}`;
   const firstItemId = items[0]?.id ?? null;
   const lastItemId = items.at(-1)?.id ?? null;
 
@@ -54,10 +55,12 @@ export const DirectoryJumpStrip: React.FC<DirectoryJumpStripProps> = ({
     });
   }, [items, firstItemId]);
 
-  // Fallback overflow edge-fade masks for browsers without CSS scroll-driven animations.
+  // Keep CSS scroll-driven fades inactive whenever content stops overflowing so Blink cannot
+  // retain a finished ScrollTimeline hold time across view switches or viewport resizes, and
+  // fall back to IntersectionObserver edge classes where scroll-driven animations lack support.
   useEffect(() => {
     const scroller = navRef.current;
-    if (!scroller || !firstItemId || !lastItemId || typeof IntersectionObserver !== 'function') {
+    if (!scroller || !navKey || !firstItemId || !lastItemId) {
       return;
     }
     const supportsScrollTimeline =
@@ -65,6 +68,21 @@ export const DirectoryJumpStrip: React.FC<DirectoryJumpStripProps> = ({
       typeof CSS.supports === 'function' &&
       CSS.supports('animation-timeline', 'scroll()');
     if (supportsScrollTimeline) {
+      const syncOverflow = (): void => {
+        scroller.dataset.overflowing = scroller.scrollWidth > scroller.clientWidth + 1 ? 'true' : 'false';
+      };
+      syncOverflow();
+      if (typeof ResizeObserver !== 'function') {
+        return;
+      }
+      const resizeObserver = new ResizeObserver(syncOverflow);
+      resizeObserver.observe(scroller);
+      return () => {
+        resizeObserver.disconnect();
+      };
+    }
+
+    if (typeof IntersectionObserver !== 'function') {
       return;
     }
 
@@ -98,7 +116,7 @@ export const DirectoryJumpStrip: React.FC<DirectoryJumpStripProps> = ({
       observer.disconnect();
       scroller.classList.remove('is-scrollable-start', 'is-scrollable-end');
     };
-  }, [firstItemId, lastItemId]);
+  }, [navKey, firstItemId, lastItemId]);
 
   // Scroll-spy sync: observe rendered section containers and highlight the topmost visible section.
   useEffect(() => {
@@ -200,6 +218,7 @@ export const DirectoryJumpStrip: React.FC<DirectoryJumpStripProps> = ({
   return (
     <div className={cx(styles, 'jump-strip-wrap')}>
       <nav
+        key={navKey}
         ref={navRef}
         aria-label={ariaLabel}
         className={cx(styles, compact ? 'jump-strip is-az' : 'jump-strip')}

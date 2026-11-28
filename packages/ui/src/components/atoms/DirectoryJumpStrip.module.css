@@ -52,9 +52,13 @@
       linear-gradient(black, black) no-clip subtract,
       linear-gradient(to right, black, transparent) 0 0 / var(--jump-fade-start) 100% no-repeat no-clip,
       linear-gradient(to right, transparent, black) 100% 0 / var(--jump-fade-end) 100% no-repeat no-clip;
-    animation:
-      jump-fade-start linear both,
-      jump-fade-end linear both;
+  }
+
+  .jump-strip:not([data-overflowing="false"]) {
+    animation-name: jump-fade-start, jump-fade-end;
+    animation-duration: auto, auto;
+    animation-timing-function: linear, linear;
+    animation-fill-mode: both, both;
     animation-timeline: scroll(self inline);
     animation-range:
       0 var(--jump-fade-size),

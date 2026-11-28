@@ -196,6 +196,112 @@ describe('DirectoryJumpStrip shared primitive (#85)', () => {
     expect(css).toContain('scrollbar-width: none;');
     expect(css).toContain('.jump-strip::-webkit-scrollbar');
     expect(css).toContain('@property --jump-fade-end');
+    expect(css).toContain('animation-duration: auto, auto;');
     expect(css).toContain('animation-timeline: scroll(self inline);');
+    expect(css).toContain('.jump-strip:not([data-overflowing="false"])');
+  });
+
+  it('remounts nav on view switch while preserving keyboard focus within the same view, and toggles data-overflowing across resizes (#103)', () => {
+    const resizeCallbacks: ResizeObserverCallback[] = [];
+    const disconnectSpy = vi.fn();
+    class MockResizeObserver implements ResizeObserver {
+      constructor(cb: ResizeObserverCallback) {
+        resizeCallbacks.push(cb);
+      }
+      observe(): void {}
+      unobserve(): void {}
+      disconnect(): void {
+        disconnectSpy();
+      }
+    }
+
+    const originalRO = globalThis.ResizeObserver;
+    const originalCss = globalThis.CSS;
+    globalThis.ResizeObserver = MockResizeObserver;
+    Object.defineProperty(globalThis, 'CSS', {
+      configurable: true,
+      value: { supports: () => true },
+    });
+
+    const eraItems: DirectoryJumpStripItem[] = [
+      { id: 'sec-1700s', label: '1700s', count: 12 },
+      { id: 'sec-1800s', label: '1800–49', count: 18 },
+    ];
+    const azItems: DirectoryJumpStripItem[] = [
+      { id: 'sec-b', label: 'B' },
+      { id: 'sec-c', label: 'C' },
+    ];
+
+    const container = document.createElement('div');
+    document.body.append(container);
+    const root = createRoot(container);
+    cleanups.push(() => {
+      act(() => {
+        root.unmount();
+      });
+      container.remove();
+    });
+
+    try {
+      act(() => {
+        root.render(<DirectoryJumpStrip items={eraItems} ariaLabel="Jump to era" compact={false} />);
+      });
+      const eraNav = container.querySelector('nav') as HTMLElement;
+      expect(eraNav).not.toBeNull();
+      expect(eraNav.dataset.overflowing).toBe('false');
+
+      let mockScrollWidth = 477;
+      let mockClientWidth = 358;
+      Object.defineProperty(eraNav, 'scrollWidth', { configurable: true, get: () => mockScrollWidth });
+      Object.defineProperty(eraNav, 'clientWidth', { configurable: true, get: () => mockClientWidth });
+
+      act(() => {
+        resizeCallbacks.at(-1)?.([], {} as ResizeObserver);
+      });
+      expect(eraNav.dataset.overflowing).toBe('true');
+
+      // Re-rendering with the same view/items preserves the nav element and active keyboard focus.
+      const firstLink = eraNav.querySelector('a') as HTMLAnchorElement;
+      firstLink.focus();
+      act(() => {
+        root.render(<DirectoryJumpStrip items={eraItems} ariaLabel="Jump to era" compact={false} />);
+      });
+      expect(container.querySelector('nav')).toBe(eraNav);
+      expect(document.activeElement).toBe(firstLink);
+
+      // Resizing to desktop clears data-overflowing back to false.
+      mockScrollWidth = 1128;
+      mockClientWidth = 1128;
+      act(() => {
+        resizeCallbacks.at(-1)?.([], {} as ResizeObserver);
+      });
+      expect(eraNav.dataset.overflowing).toBe('false');
+
+      // Switching to A–Z mounts a fresh nav node and disconnects the prior ResizeObserver.
+      act(() => {
+        root.render(
+          <DirectoryJumpStrip
+            items={azItems}
+            ariaLabel="Jump to surname letter"
+            compact={true}
+            showCounts={false}
+          />
+        );
+      });
+      const azNav = container.querySelector('nav') as HTMLElement;
+      expect(azNav).not.toBe(eraNav);
+      expect(azNav.dataset.overflowing).toBe('false');
+      expect(disconnectSpy).toHaveBeenCalledTimes(1);
+
+      // Also verify graceful no-op when ResizeObserver is unavailable.
+      Object.defineProperty(globalThis, 'ResizeObserver', { configurable: true, value: undefined });
+      act(() => {
+        root.render(<DirectoryJumpStrip items={eraItems} ariaLabel="Jump to era" compact={false} />);
+      });
+      expect(container.querySelector('nav')?.getAttribute('data-overflowing')).toBe('false');
+    } finally {
+      Object.defineProperty(globalThis, 'ResizeObserver', { configurable: true, value: originalRO });
+      Object.defineProperty(globalThis, 'CSS', { configurable: true, value: originalCss });
+    }
   });
 });
