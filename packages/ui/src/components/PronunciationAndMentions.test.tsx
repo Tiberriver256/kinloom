@@ -1432,14 +1432,18 @@ describe('Live-lexicon partial-update merge regression (PersonPage + EntityEditD
     // Open Edit drawer via the Edit button on the pronunciation row
     const editBtn = headingRow.querySelector<HTMLButtonElement>('button.pronunciation-edit-link');
     expect(editBtn).not.toBeNull();
-    act(() => {
+    await act(async () => {
       editBtn!.click();
     });
 
-    const editSharedBtn = container.querySelector<HTMLButtonElement>(
-      'button[data-pronunciation-token="Mercer"]'
-    );
-    expect(editSharedBtn).not.toBeNull();
+    let editSharedBtn: HTMLButtonElement | null = null;
+    await vi.waitFor(async () => {
+      await act(async () => {
+        await Promise.resolve();
+      });
+      editSharedBtn = container.querySelector<HTMLButtonElement>('button[data-pronunciation-token="Mercer"]');
+      expect(editSharedBtn).not.toBeNull();
+    });
     act(() => {
       editSharedBtn!.click();
     });
