@@ -86,6 +86,9 @@ function normalizeCapabilitiesOverride(override: Partial<ArchiveCapabilities>): 
     hasRevisionHistory: override.hasRevisionHistory ?? false,
     hasTalk: override.hasTalk ?? false,
     canManageSite: override.canManageSite ?? false,
+    ...(override.canReadArchive !== undefined ? { canReadArchive: override.canReadArchive } : {}),
+    ...(override.hasReadings !== undefined ? { hasReadings: override.hasReadings } : {}),
+    ...(override.hasMediaChecklist !== undefined ? { hasMediaChecklist: override.hasMediaChecklist } : {}),
   };
 }
 

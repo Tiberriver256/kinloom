@@ -8,9 +8,12 @@ const STRICT_HTTPS_ORIGIN_PATTERN = /^https:\/\/[a-z0-9-]+(?:\.[a-z0-9-]+)+(?::\
 const BASE_CSP_DIRECTIVES = [
   ['default-src', "'self'"],
   ['script-src', "'self'"],
-  ['style-src', "'self' 'unsafe-inline'"],
+  ['style-src', "'self' 'unsafe-inline' https://fonts.googleapis.com"],
   ['img-src', "'self' data: blob: https:"],
-  ['font-src', "'self' data: https://www.openhistoricalmap.org https://*.openhistoricalmap.org"],
+  [
+    'font-src',
+    "'self' data: https://fonts.gstatic.com https://www.openhistoricalmap.org https://*.openhistoricalmap.org",
+  ],
   ['connect-src', "'self' https://www.openhistoricalmap.org https://*.openhistoricalmap.org"],
   ['media-src', "'self' blob:"],
   ['worker-src', "'self' blob:"],

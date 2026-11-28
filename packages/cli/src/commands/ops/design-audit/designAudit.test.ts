@@ -793,6 +793,7 @@ describe('kinloom design-audit CLI subcommand dispatch', () => {
     expect(runCap.stdout.join('\n')).toContain('static-degraded');
 
     // Minimal page without optional route/keyboard/emulateMedia/addStyleTag hooks
+    const evaluatedExprs: string[] = [];
     const minimalBrowser: DesignAuditBrowser = {
       newContext: async () => ({
         newPage: async (): Promise<DesignAuditBrowserPage> => ({
@@ -802,6 +803,7 @@ describe('kinloom design-audit CLI subcommand dispatch', () => {
           },
           evaluate: async <T = unknown>(expr: string | ((...args: never[]) => T)): Promise<T> => {
             const code = String(expr);
+            evaluatedExprs.push(code);
             if (code.includes('aboveFoldMainRatio')) {
               return {
                 viewport: '1440x900',
@@ -839,6 +841,8 @@ describe('kinloom design-audit CLI subcommand dispatch', () => {
       browserFactory: async () => minimalBrowser,
     });
     expect(minManifest.captureCount).toBe(6);
+    expect(evaluatedExprs.some((expr) => expr.includes("removeItem('kinloom-theme')"))).toBe(true);
+    expect(evaluatedExprs.some((expr) => expr.includes("removeItem('kinloom:theme')"))).toBe(false);
 
     // Cover auto-degrade when no --url is given, plus skipDirs & nonexistent dir in discoverRepoStyleFiles
     fs.mkdirSync(path.join(tmp, 'node_modules'), { recursive: true });

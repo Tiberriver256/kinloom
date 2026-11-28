@@ -45,7 +45,7 @@ describe('kinloom brandkit command', () => {
     expect(ico.readUInt8(22)).toBe(32); // second frame width
   });
 
-  it('generates all 11 all-device brandkit and PWA assets with light/dark favicons, sw.js, and < 300 KB OG budget', async () => {
+  it('generates all 12 all-device brandkit and PWA assets with light/dark favicons, sw.js, theme-init.js, and < 300 KB OG budget', async () => {
     const dir = await makeTempDir('kinloom-brandkit-default-');
     const outDir = path.join(dir, 'public');
 
@@ -61,6 +61,7 @@ describe('kinloom brandkit command', () => {
       'icon-maskable-512.png',
       'site.webmanifest',
       'sw.js',
+      'theme-init.js',
       'og-default.png',
     ]);
     expect(result.ogBytes).toBeLessThan(KINLOOM_OG_DIMENSIONS.recommendedMaxBytes);
@@ -109,6 +110,10 @@ describe('kinloom brandkit command', () => {
     expect(manifest.display).toBe('standalone');
     expect(manifest.orientation).toBe('any');
     expect(manifest.icons.some((i) => i.purpose === 'maskable' && i.sizes === '512x512')).toBe(true);
+
+    const themeInitScript = await readFile(path.join(outDir, 'theme-init.js'), 'utf8');
+    expect(themeInitScript).toContain("localStorage.getItem('kinloom-theme')");
+    expect(result.headTags).toContain('<script src="/theme-init.js"></script>');
 
     const swScript = await readFile(path.join(outDir, 'sw.js'), 'utf8');
     expect(swScript).toContain('"/api"');
