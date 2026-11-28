@@ -364,7 +364,7 @@ describe('Issue #66: recentlyViewed edge cases and GlobalSearchModal navigation'
     });
     await flushUi();
 
-    const recentChip = Array.from(searchEl.querySelectorAll('dialog button')).find((b) =>
+    const recentChip = Array.from(searchEl.querySelectorAll<HTMLButtonElement>('dialog button')).find((b) =>
       b.textContent?.includes('Zeeland')
     );
     expect(recentChip).toBeDefined();
