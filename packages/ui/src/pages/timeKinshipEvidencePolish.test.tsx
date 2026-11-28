@@ -17,6 +17,7 @@ import {
   cleanTimeActivityNote,
   computeArchiveYearDensity,
   ensureTerminalPunctuation,
+  extractFirstSentence,
   truncateAtWordBoundary,
 } from '../lib/timeFormatting.js';
 import { EvidencePage } from './EvidencePage.js';
@@ -94,6 +95,26 @@ describe('TimePage mobile scrubber non-occlusion, density ridgeline, blurbs, and
     const fixedFromEvent = cleanTimeActivityNote(rawCoreMidWord, fakeEvent, 130);
     expect(fixedFromEvent.endsWith('…')).toBe(true);
     expect(fixedFromEvent).not.toContain('landing in S…');
+
+    expect(
+      extractFirstSentence('Retired from the U.S. Postal Service in 1945. Moved to St. Louis later.')
+    ).toBe('Retired from the U.S. Postal Service in 1945.');
+    expect(
+      extractFirstSentence(
+        'Served under Capt. James Alder Jr. in Washington, D.C. during c. 1864. Returned home.'
+      )
+    ).toBe('Served under Capt. James Alder Jr. in Washington, D.C. during c. 1864.');
+
+    const abbrevEvent = {
+      id: 'evt_us',
+      summary: 'Retired from the U.S. Postal Service after thirty years. Settled near Grand Rapids.',
+    } as ArchiveEvent;
+    expect(cleanTimeActivityNote('Retired from the U.S.', abbrevEvent)).toBe(
+      'Retired from the U.S. Postal Service after thirty years.'
+    );
+    expect(cleanTimeActivityNote('Last recorded in 1945: Retired from the U.S.', abbrevEvent)).toBe(
+      'Last recorded in 1945: Retired from the U.S. Postal Service after thirty years.'
+    );
   });
 
   it('renders sticky mobile scrubber CSS without bottom fixed occlusion, ridgeline SVG, and separated 1880 · N anchors', () => {

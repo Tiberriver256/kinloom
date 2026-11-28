@@ -17,7 +17,7 @@
 }
 
 .time-header-summary {
-  font-family: var(--font-mono);
+  font-family: var(--font-ui);
   font-size: var(--text-2xs);
   color: var(--text-secondary);
   font-variant-numeric: tabular-nums;
@@ -53,7 +53,8 @@
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  font-family: var(--font-mono);
+  font-family: var(--font-ui);
+  font-variant-numeric: tabular-nums;
   font-size: var(--text-2xs);
   text-transform: uppercase;
   letter-spacing: 0.08em;
@@ -88,7 +89,8 @@
   display: flex;
   flex-wrap: wrap;
   gap: 8px 20px;
-  font-family: var(--font-mono);
+  font-family: var(--font-ui);
+  font-variant-numeric: tabular-nums;
   font-size: var(--text-2xs);
   color: var(--text-secondary);
   margin-bottom: 18px;
@@ -259,7 +261,8 @@
 }
 
 .time-local-heading {
-  font-family: var(--font-mono);
+  font-family: var(--font-ui);
+  font-variant-numeric: tabular-nums;
   font-size: var(--text-2xs);
   color: var(--radar-local);
   font-weight: 600;

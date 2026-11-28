@@ -23,6 +23,10 @@ export interface LocalSurveyMapProps {
 const MIN_SVG_HIT_RADIUS = 12; // 24x24px WCAG 2.2 AA minimum target size
 const MIN_INTERACTIVE_PIN_SEPARATION = MIN_SVG_HIT_RADIUS * 2 + 8; // >= 24px target + >= 8px spacing
 
+function abbreviateSurveyLabel(text: string): string {
+  return text.replace(/\bCounty\b/g, 'Co.');
+}
+
 export const LocalSurveyMap: React.FC<LocalSurveyMapProps> = ({
   center,
   allPlaces,
@@ -208,23 +212,34 @@ export const LocalSurveyMap: React.FC<LocalSurveyMapProps> = ({
     scopeLabel = `County corridor · ${totalNeighborCount} neighbors${scaleSuffix}`;
   }
 
+  const placedEdgeIds = useMemo(
+    () => new Set(edgeBadgeLayouts.map((b) => b.indicator.place.id)),
+    [edgeBadgeLayouts]
+  );
+
   const nearbyLinks = useMemo(() => {
     const items: { readonly place: Place; readonly distanceMiles: number }[] = [];
     const seen = new Set<string>();
     for (const m of markers) {
+      if (interactiveMarkerIds.has(m.place.id)) {
+        continue;
+      }
       if (!seen.has(m.place.id)) {
         seen.add(m.place.id);
         items.push({ place: m.place, distanceMiles: m.distanceMiles });
       }
     }
     for (const ind of edgeIndicators) {
+      if (placedEdgeIds.has(ind.place.id)) {
+        continue;
+      }
       if (!seen.has(ind.place.id)) {
         seen.add(ind.place.id);
         items.push({ place: ind.place, distanceMiles: ind.distanceMiles });
       }
     }
     return items.slice(0, 6);
-  }, [markers, edgeIndicators]);
+  }, [markers, edgeIndicators, interactiveMarkerIds, placedEdgeIds]);
 
   return (
     <div ref={wrapRef} className={cls(surveyMapStyles, 'local-survey-wrap')}>
@@ -384,14 +399,14 @@ export const LocalSurveyMap: React.FC<LocalSurveyMapProps> = ({
                   y={lbl.ly}
                   textAnchor={lbl.anchor}
                   fontSize={isNarrow ? '10.5' : '11.5'}
-                  fontFamily="var(--font-mono)"
+                  fontFamily="var(--font-ui)"
                   fill={m.inRadius ? 'var(--surface-header)' : 'var(--text-secondary)'}
                   paintOrder="stroke"
                   stroke="var(--surface-canvas)"
                   strokeWidth="4"
                   strokeLinejoin="round"
                 >
-                  {lbl.text}
+                  {abbreviateSurveyLabel(lbl.text)}
                 </text>
               )}
             </g>
@@ -422,7 +437,7 @@ export const LocalSurveyMap: React.FC<LocalSurveyMapProps> = ({
               y={badge.rectY}
               width={badge.rectW}
               height={badge.rectH}
-              rx={3}
+              rx={4}
               fill="var(--surface-card)"
               stroke="var(--border-control)"
               strokeWidth="1"
@@ -431,10 +446,10 @@ export const LocalSurveyMap: React.FC<LocalSurveyMapProps> = ({
               x={badge.textX}
               y={badge.textY}
               fontSize={edgeBadgeFontSize}
-              fontFamily="var(--font-mono)"
+              fontFamily="var(--font-ui)"
               fill="var(--surface-header)"
             >
-              {badge.text}
+              {abbreviateSurveyLabel(badge.text)}
             </text>
           </g>
         ))}
@@ -454,14 +469,14 @@ export const LocalSurveyMap: React.FC<LocalSurveyMapProps> = ({
           textAnchor={centerPlacement.anchor}
           fontSize={compact ? '11.5' : isNarrow ? '11.5' : '12'}
           fontWeight="700"
-          fontFamily="var(--font-mono)"
+          fontFamily="var(--font-ui)"
           fill="var(--surface-header)"
           paintOrder="stroke"
           stroke="var(--surface-canvas)"
           strokeWidth="4"
           strokeLinejoin="round"
         >
-          {center.name}
+          {abbreviateSurveyLabel(center.name)}
         </text>
 
         {/* biome-ignore lint/a11y/noAriaHiddenOnFocusable: decorative SVG compass rose */}

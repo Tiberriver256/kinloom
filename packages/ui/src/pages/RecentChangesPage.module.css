@@ -176,6 +176,15 @@
 }
 
 @media (max-width: 768px) {
+  :global(.page-shell) > :global(.place-page) > :global(.wire-banner) {
+    padding-bottom: 12px;
+    margin-bottom: 12px !important;
+  }
+
+  :global(.page-shell) > :global(.place-page) > :global(.wire-banner) p {
+    display: none;
+  }
+
   .changes-toolbar {
     flex-direction: column;
     align-items: flex-start;

@@ -32,7 +32,7 @@
 }
 
 .index-banner h1 {
-  font-size: var(--text-2xl);
+  font-size: var(--text-3xl);
   margin: 0 0 4px;
   line-height: 1.15;
 }
@@ -696,18 +696,51 @@
 
 @media (max-width: 768px) {
   .index-banner {
-    padding: 0 0 8px;
+    padding: 0 0 4px;
     margin-bottom: 4px;
   }
 
   .index-frontispiece {
-    padding: 0 0 12px;
-    margin-bottom: 10px;
+    padding: 0 0 4px;
+    margin-bottom: 4px;
   }
 
   .index-banner h1 {
     font-size: var(--text-xl);
     margin-bottom: 2px;
+  }
+
+  .index-banner-meta-row {
+    flex-wrap: nowrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 4px 10px;
+    margin-top: 2px;
+  }
+
+  .index-banner-meta {
+    min-width: 0;
+  }
+
+  .index-about-toggle {
+    display: inline-flex;
+    align-items: center;
+    flex-shrink: 0;
+    white-space: nowrap;
+    min-height: var(--control-height-touch);
+    padding: 4px 2px;
+    font-size: var(--text-xs);
+  }
+
+  .index-banner-about {
+    display: none;
+  }
+
+  .index-banner-about:global(.is-open) {
+    display: block;
+    margin-top: 8px;
+    padding-top: 8px;
+    border-top: var(--border-width-thin) solid color-mix(in srgb, var(--border-decorative) 60%, transparent);
   }
 
   .index-banner p {
@@ -788,15 +821,15 @@
 
 @media (max-width: 640px) {
   .index-banner {
-    padding: 0 0 6px;
-    margin-bottom: 6px;
-    gap: 6px;
+    padding: 0 0 4px;
+    margin-bottom: 4px;
+    gap: 4px;
   }
 
   .index-frontispiece {
     border-bottom: none;
-    padding: 0 0 6px;
-    margin-bottom: 6px;
+    padding: 0 0 4px;
+    margin-bottom: 4px;
   }
 
   .index-banner-head {
@@ -855,7 +888,7 @@
 
   /* Single-row compact mobile browse bar */
   .index-filter-bar {
-    margin-bottom: 6px;
+    margin-bottom: 8px;
   }
 
   .index-filter-actions {

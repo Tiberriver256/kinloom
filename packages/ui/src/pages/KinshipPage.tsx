@@ -206,7 +206,16 @@ export const KinshipPage: React.FC = () => {
       <div>
         <ExplorerTopBar />
         <main id="main-content" className={cx(layoutStyles, 'index-page')}>
-          Loading kinship archive…
+          <div
+            className={cx(kinshipStyles, 'kinship-loading-skeleton')}
+            role="status"
+            aria-label="Loading kinship archive"
+          >
+            <span className={cx(kinshipStyles, 'visually-hidden')}>Loading kinship archive…</span>
+            <div className={cx(kinshipStyles, 'kinship-skeleton-line kinship-skeleton-line-lg')} />
+            <div className={cx(kinshipStyles, 'kinship-skeleton-card')} />
+            <div className={cx(kinshipStyles, 'kinship-skeleton-card kinship-skeleton-card-tall')} />
+          </div>
         </main>
       </div>
     );
@@ -244,12 +253,14 @@ export const KinshipPage: React.FC = () => {
     <div>
       <ExplorerTopBar />
       <main id="main-content" className={cx(layoutStyles, 'place-page')}>
-        <section className={cx(layoutStyles, 'wire-banner')} style={{ marginBottom: 18 }}>
+        <section
+          className={joinClasses(cx(layoutStyles, 'wire-banner'), cx(kinshipStyles, 'kinship-banner'))}
+        >
           <div>
             <h1>{KINLOOM_VOCABULARY.kinship.heading}</h1>
             <p>{KINLOOM_VOCABULARY.kinship.lead}</p>
           </div>
-          <div className={'print-hide'} style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+          <div className={cx(kinshipStyles, 'kinship-banner-links print-hide')}>
             <Link to="/tree" className={cx(controlStyles, 'pill-btn')} style={{ textDecoration: 'none' }}>
               {KINLOOM_VOCABULARY.kinship.familyTreeCta}
             </Link>
@@ -273,7 +284,7 @@ export const KinshipPage: React.FC = () => {
           <>
             <section className={cx(kinshipStyles, 'kinship-selector-card print-hide')}>
               <div className={cx(kinshipStyles, 'kinship-selector-grid')}>
-                <label className={cx(kinshipStyles, 'kinship-field')}>
+                <label className={cx(kinshipStyles, 'kinship-field kinship-field-a')}>
                   <span>Person A</span>
                   <select
                     className={cx(controlStyles, 'pill-btn')}
@@ -293,7 +304,10 @@ export const KinshipPage: React.FC = () => {
 
                 <button
                   type="button"
-                  className={cx(controlStyles, 'cta-btn-secondary')}
+                  className={joinClasses(
+                    cx(controlStyles, 'cta-btn-secondary'),
+                    cx(kinshipStyles, 'kinship-swap-btn')
+                  )}
                   onClick={() => {
                     setFromId(effectiveToId);
                     setToId(effectiveFromId);
@@ -301,10 +315,11 @@ export const KinshipPage: React.FC = () => {
                   aria-label="Swap relatives"
                   title="Swap Person A and Person B"
                 >
-                  ⇄ Swap
+                  <span aria-hidden="true">⇄</span>
+                  <span className={cx(kinshipStyles, 'kinship-swap-text')}> Swap</span>
                 </button>
 
-                <label className={cx(kinshipStyles, 'kinship-field')}>
+                <label className={cx(kinshipStyles, 'kinship-field kinship-field-b')}>
                   <span>Person B</span>
                   <select
                     className={cx(controlStyles, 'pill-btn')}
@@ -375,9 +390,7 @@ export const KinshipPage: React.FC = () => {
 
                   <div className={cx(kinshipStyles, 'kinship-stats-row')}>
                     <div className={cx(kinshipStyles, 'kinship-stat-box')}>
-                      <div className={cx(kinshipStyles, 'kinship-stat-label')}>
-                        GENERATIONAL / KINSHIP HOPS
-                      </div>
+                      <div className={cx(kinshipStyles, 'kinship-stat-label')}>Kinship distance</div>
                       <div className={cx(kinshipStyles, 'kinship-stat-value')}>{presentation.hopsValue}</div>
                     </div>
                     <div className={cx(kinshipStyles, 'kinship-stat-box')}>

@@ -180,7 +180,8 @@
 }
 
 .time-anchor-caption {
-  font-family: var(--font-mono);
+  font-family: var(--font-ui);
+  font-variant-numeric: tabular-nums;
   font-size: var(--text-2xs);
   color: var(--text-secondary);
   margin-bottom: 4px;
@@ -197,13 +198,14 @@
   display: inline-flex;
   align-items: center;
   gap: 5px;
-  min-height: 32px;
+  min-height: var(--control-height-sm);
   padding: 4px 10px;
-  border: 1px solid var(--border-control);
-  border-radius: var(--radius-md);
+  border: var(--border-width-thin) solid var(--border-control);
+  border-radius: var(--radius-control);
   background: var(--surface-card);
   color: var(--surface-header);
-  font-family: var(--font-mono);
+  font-family: var(--font-ui);
+  font-variant-numeric: tabular-nums;
   font-size: var(--text-2xs);
   font-weight: 500;
   white-space: nowrap;

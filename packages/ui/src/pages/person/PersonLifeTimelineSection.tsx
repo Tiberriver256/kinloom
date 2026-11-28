@@ -81,8 +81,13 @@ export const PersonLifeTimelineSection: React.FC<PersonLifeTimelineSectionProps>
         </h2>
         <EvidenceLegend showRegistryLink className={cx(personStyles, 'person-timeline-legend')} />
       </div>
-      <div className={cx(personStyles, `timeline-layout${scrubberItems.length === 0 ? ' no-spine' : ''}`)}>
-        {scrubberItems.length > 0 && (
+      <div
+        className={cx(
+          personStyles,
+          `timeline-layout${personEvents.length > 25 && scrubberItems.length > 1 ? '' : ' no-spine'}`
+        )}
+      >
+        {personEvents.length > 25 && scrubberItems.length > 1 && (
           <nav className={cx(personStyles, 'timeline-spine')} aria-label="Jump to decade">
             <div className={cx(personStyles, 'scrubber-list')}>
               {scrubberItems.map((t) => {

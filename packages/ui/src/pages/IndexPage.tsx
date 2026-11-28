@@ -8,7 +8,6 @@ import atomStyles from '../components/Atoms.module.css';
 import { DirectoryJumpStrip } from '../components/atoms/DirectoryJumpStrip.js';
 import { ExplorerTopBar } from '../components/ExplorerTopBar.js';
 import { KinloomFooter } from '../components/KinloomFooter.js';
-import { OnboardingChecklistCard } from '../components/OnboardingChecklistCard.js';
 import wikiChromeStyles from '../components/wiki/WikiChrome.module.css';
 import { useArchiveData } from '../context/ArchiveDataContext.js';
 import { useOptionalOnboarding } from '../context/OnboardingContext.js';
@@ -445,7 +444,6 @@ export const IndexPage: React.FC = () => {
 
         <PluginSlot name="indexHero" />
         <PluginSlot name="indexWidgets" />
-        <OnboardingChecklistCard surface="index" />
 
         {loading && <p>Loading family archive…</p>}
         {error && (
