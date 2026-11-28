@@ -94,7 +94,7 @@ test.describe('People landing mobile editorial layout (#89, #90)', () => {
     }
   });
 
-  test('clears DirectoryJumpStrip edge fades when transitioning from scrollable By Era to non-scrollable A–Z or desktop width (#103)', async ({
+  test('clears DirectoryJumpStrip edge fades when switching jump modes or widening past overflow (#103)', async ({
     browser,
   }) => {
     const context = await browser.newContext({ viewport: { width: 390, height: 844 } });
@@ -153,7 +153,23 @@ test.describe('People landing mobile editorial layout (#89, #90)', () => {
       const azState = await readFadeState('nav[aria-label="Jump to surname letter"]');
       expect(azState).not.toBeNull();
       expect(azState?.fadeStart).toBe('0px');
-      if ((azState?.scrollWidth ?? 0) <= (azState?.clientWidth ?? 0)) {
+      const azOverflows = (azState?.scrollWidth ?? 0) > (azState?.clientWidth ?? 0);
+      if (azOverflows) {
+        expect(azState?.fadeEnd).not.toBe('0px');
+        await azNav.evaluate((el) => {
+          el.scrollLeft = 40;
+        });
+        const azScrolled = await readFadeState('nav[aria-label="Jump to surname letter"]');
+        expect(azScrolled?.fadeStart).not.toBe('0px');
+
+        await page.setViewportSize({ width: 640, height: 844 });
+        await expect
+          .poll(async () => readFadeState('nav[aria-label="Jump to surname letter"]'))
+          .toMatchObject({ fadeStart: '0px', fadeEnd: '0px' });
+        const azWideState = await readFadeState('nav[aria-label="Jump to surname letter"]');
+        expect(azWideState?.scrollWidth).toBeLessThanOrEqual(azWideState?.clientWidth ?? 0);
+        await page.setViewportSize({ width: 390, height: 844 });
+      } else {
         expect(azState?.fadeEnd).toBe('0px');
       }
 
