@@ -7,19 +7,36 @@ import {
   partitionPersonNarratives,
 } from '@kinloom/core';
 import type React from 'react';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { lazy, Suspense, useCallback, useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { triggerPersonGedcomDownload } from '../browser/download.js';
 import { recordRecentlyViewed } from '../browser/recentlyViewed.js';
 import { resolveAssetUrl } from '../components/Atoms.js';
 import { ExplorerTopBar } from '../components/ExplorerTopBar.js';
 import { KinloomFooter } from '../components/KinloomFooter.js';
-import { CreateEntityModal, type RelativeCreateContext } from '../components/wiki/CreateEntityModal.js';
-import { EntityEditDrawer, type EntityEditDrawerSection } from '../components/wiki/EntityEditDrawer.js';
-import { MediaUploaderModal } from '../components/wiki/MediaUploaderModal.js';
-import { RevisionHistoryPanel } from '../components/wiki/RevisionHistoryPanel.js';
-import { TalkPanel } from '../components/wiki/TalkPanel.js';
-import { WikiActionBar, type WikiEntityTab } from '../components/wiki/WikiActionBar.js';
+import type { RelativeCreateContext } from '../components/wiki/CreateEntityModal.js';
+import type { EntityEditDrawerSection } from '../components/wiki/EntityEditDrawer.js';
+import type { WikiEntityTab } from '../components/wiki/WikiActionBar.js';
+
+const LazyCreateEntityModal = lazy(async () => ({
+  default: (await import('../components/wiki/CreateEntityModal.js')).CreateEntityModal,
+}));
+const LazyEntityEditDrawer = lazy(async () => ({
+  default: (await import('../components/wiki/EntityEditDrawer.js')).EntityEditDrawer,
+}));
+const LazyMediaUploaderModal = lazy(async () => ({
+  default: (await import('../components/wiki/MediaUploaderModal.js')).MediaUploaderModal,
+}));
+const LazyRevisionHistoryPanel = lazy(async () => ({
+  default: (await import('../components/wiki/RevisionHistoryPanel.js')).RevisionHistoryPanel,
+}));
+const LazyTalkPanel = lazy(async () => ({
+  default: (await import('../components/wiki/TalkPanel.js')).TalkPanel,
+}));
+const LazyWikiActionBar = lazy(async () => ({
+  default: (await import('../components/wiki/WikiActionBar.js')).WikiActionBar,
+}));
+
 import { useArchiveData } from '../context/ArchiveDataContext.js';
 import { useArchiveUi } from '../context/ArchiveUiContext.js';
 import { cx } from '../lib/cx.js';
@@ -326,19 +343,26 @@ export const PersonPage: React.FC = () => {
             onOpenRelativeModal={setRelativeModal}
           />
 
-          <WikiActionBar
-            activeTab={wikiTab}
-            onSelectTab={(nextTab) => {
-              if (nextTab === 'edit') {
-                setEditInitialSection(undefined);
-              }
-              setWikiTab(nextTab);
-            }}
-            onUploadMedia={() => {
-              setUploadModalOpen(true);
-            }}
-            entityLabel={person.full_name}
-          />
+          {(capabilities.canEdit ||
+            capabilities.hasRevisionHistory ||
+            capabilities.hasTalk ||
+            capabilities.canUploadMedia) && (
+            <Suspense fallback={null}>
+              <LazyWikiActionBar
+                activeTab={wikiTab}
+                onSelectTab={(nextTab) => {
+                  if (nextTab === 'edit') {
+                    setEditInitialSection(undefined);
+                  }
+                  setWikiTab(nextTab);
+                }}
+                onUploadMedia={() => {
+                  setUploadModalOpen(true);
+                }}
+                entityLabel={person.full_name}
+              />
+            </Suspense>
+          )}
 
           {isReadingView &&
             personCompleteness !== null &&
@@ -390,10 +414,16 @@ export const PersonPage: React.FC = () => {
 
           <PluginSlot name="personDetail" person={person} />
 
-          {wikiTab === 'history' && <RevisionHistoryPanel entityType="person" entityId={person.id} />}
+          {wikiTab === 'history' && (
+            <Suspense fallback={null}>
+              <LazyRevisionHistoryPanel entityType="person" entityId={person.id} />
+            </Suspense>
+          )}
 
           {wikiTab === 'talk' && (
-            <TalkPanel entityType="person" entityId={person.id} entityTitle={person.full_name} />
+            <Suspense fallback={null}>
+              <LazyTalkPanel entityType="person" entityId={person.id} entityTitle={person.full_name} />
+            </Suspense>
           )}
 
           {isReadingView && sectionJumpItems.length >= 2 && (
@@ -505,36 +535,48 @@ export const PersonPage: React.FC = () => {
         </main>
       </div>
 
-      <EntityEditDrawer
-        open={wikiTab === 'edit'}
-        initialSection={editInitialSection}
-        entityType="person"
-        entityId={person.id}
-        revisionId={bundle.meta.max_revision_id ?? 1}
-        initialData={buildPersonEditInitialData(person)}
-        hasPrimarySource={person.has_primary_source ?? true}
-        title={person.full_name}
-        onClose={() => {
-          setEditInitialSection(undefined);
-          setWikiTab('read');
-        }}
-      />
+      {wikiTab === 'edit' && (
+        <Suspense fallback={null}>
+          <LazyEntityEditDrawer
+            open={true}
+            initialSection={editInitialSection}
+            entityType="person"
+            entityId={person.id}
+            revisionId={bundle.meta.max_revision_id ?? 1}
+            initialData={buildPersonEditInitialData(person)}
+            hasPrimarySource={person.has_primary_source ?? true}
+            title={person.full_name}
+            onClose={() => {
+              setEditInitialSection(undefined);
+              setWikiTab('read');
+            }}
+          />
+        </Suspense>
+      )}
 
-      <MediaUploaderModal
-        open={uploadModalOpen}
-        defaultPersonId={person.id}
-        onClose={() => {
-          setUploadModalOpen(false);
-        }}
-      />
+      {uploadModalOpen && (
+        <Suspense fallback={null}>
+          <LazyMediaUploaderModal
+            open={true}
+            defaultPersonId={person.id}
+            onClose={() => {
+              setUploadModalOpen(false);
+            }}
+          />
+        </Suspense>
+      )}
 
-      <CreateEntityModal
-        open={relativeModal !== null}
-        relativeContext={relativeModal ?? undefined}
-        onClose={() => {
-          setRelativeModal(null);
-        }}
-      />
+      {relativeModal !== null && (
+        <Suspense fallback={null}>
+          <LazyCreateEntityModal
+            open={true}
+            relativeContext={relativeModal}
+            onClose={() => {
+              setRelativeModal(null);
+            }}
+          />
+        </Suspense>
+      )}
 
       <PersonMediaLightbox
         lightbox={lightbox}

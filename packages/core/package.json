@@ -24,6 +24,10 @@
     "./machines": {
       "types": "./dist/machines/index.d.ts",
       "import": "./dist/machines/index.js"
+    },
+    "./schemas": {
+      "types": "./dist/schemas/index.d.ts",
+      "import": "./dist/schemas/index.js"
     }
   },
   "files": [

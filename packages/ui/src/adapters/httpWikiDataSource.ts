@@ -148,7 +148,7 @@ export class HttpWikiDataSource implements ArchiveDataSource {
     let bundle = tryValidateArchiveBundle(raw);
     if (bundle === null) {
       try {
-        const { ArchiveBundleSchema } = await import('@kinloom/core');
+        const { ArchiveBundleSchema } = await import('@kinloom/core/schemas');
         bundle = ArchiveBundleSchema.parse(raw);
       } catch (err) {
         throw new ApiClientError(
@@ -180,7 +180,7 @@ export class HttpWikiDataSource implements ArchiveDataSource {
     if (fast !== null) {
       return fast;
     }
-    const { ReadingsBundleSchema } = await import('@kinloom/core');
+    const { ReadingsBundleSchema } = await import('@kinloom/core/schemas');
     return ReadingsBundleSchema.parse(raw);
   }
 
@@ -209,7 +209,7 @@ export class HttpWikiDataSource implements ArchiveDataSource {
       return fast;
     }
     try {
-      const { MediaChecklistItemSchema } = await import('@kinloom/core');
+      const { MediaChecklistItemSchema } = await import('@kinloom/core/schemas');
       return raw.items.map((item) => MediaChecklistItemSchema.parse(item));
     } catch (err) {
       throw new ApiClientError(

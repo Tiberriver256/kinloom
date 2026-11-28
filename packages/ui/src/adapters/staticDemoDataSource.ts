@@ -14,6 +14,10 @@ import {
   tryValidateReadingsBundle,
 } from '@kinloom/core';
 
+declare global {
+  var __KINLOOM_ARCHIVE_PROMISE__: Promise<Response> | null | undefined;
+}
+
 const STATIC_ANONYMOUS_SESSION: ArchiveSessionState = {
   authenticated: false,
   principal_kind: 'anonymous',
@@ -50,7 +54,11 @@ export class StaticDemoDataSource implements ArchiveDataSource {
     etag: string | null;
     notModified: boolean;
   }> {
-    const res = await this.fetchImpl(`${this.baseUrl}data/archive.json`);
+    const preloaded = globalThis.__KINLOOM_ARCHIVE_PROMISE__;
+    if (preloaded) {
+      globalThis.__KINLOOM_ARCHIVE_PROMISE__ = null;
+    }
+    const res = preloaded ? await preloaded : await this.fetchImpl(`${this.baseUrl}data/archive.json`);
     if (!res.ok) {
       throw new Error(`HTTP ${res.status} loading archive.json`);
     }
@@ -63,7 +71,7 @@ export class StaticDemoDataSource implements ArchiveDataSource {
         notModified: false,
       };
     }
-    const { ArchiveBundleSchema } = await import('@kinloom/core');
+    const { ArchiveBundleSchema } = await import('@kinloom/core/schemas');
     const bundle = ArchiveBundleSchema.parse(raw);
     return {
       bundle,
@@ -85,7 +93,7 @@ export class StaticDemoDataSource implements ArchiveDataSource {
     if (fast !== null) {
       return fast;
     }
-    const { ReadingsBundleSchema } = await import('@kinloom/core');
+    const { ReadingsBundleSchema } = await import('@kinloom/core/schemas');
     return ReadingsBundleSchema.parse(raw);
   }
 
@@ -107,7 +115,7 @@ export class StaticDemoDataSource implements ArchiveDataSource {
     if (fast !== null) {
       return fast;
     }
-    const { MediaChecklistItemSchema } = await import('@kinloom/core');
+    const { MediaChecklistItemSchema } = await import('@kinloom/core/schemas');
     return raw.items.map((item) => MediaChecklistItemSchema.parse(item));
   }
 

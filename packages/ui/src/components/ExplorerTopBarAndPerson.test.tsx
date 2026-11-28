@@ -454,7 +454,7 @@ describe('PersonPage biography narratives and plain-English copy', () => {
     stephenView.unmount();
   });
 
-  it('shows + Add parent / + Add spouse / + Add child on PersonPage for editors even with 0 relatives and hides them for viewers', () => {
+  it('shows + Add parent / + Add spouse / + Add child on PersonPage for editors even with 0 relatives and hides them for viewers', async () => {
     const bundle = buildTestBundle([]);
 
     // Read-only viewer on a root ancestor with 0 kinship edges sees no empty strip or add buttons
@@ -499,8 +499,9 @@ describe('PersonPage biography narratives and plain-English copy', () => {
     const addParentBtn = [...(familyStrip?.querySelectorAll('button') ?? [])].find(
       (b) => b.textContent?.trim() === '+ Add parent'
     );
-    act(() => {
+    await act(async () => {
       addParentBtn?.click();
+      await new Promise((r) => setTimeout(r, 20));
     });
 
     const dialog = editorRender.container.querySelector('dialog[aria-label="Add parent of Stephen Barton"]');

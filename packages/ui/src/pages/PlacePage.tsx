@@ -1,6 +1,6 @@
 import { buildPersonThumbMap, resolvePlacePronunciation } from '@kinloom/core';
 import type React from 'react';
-import { useEffect, useMemo, useState } from 'react';
+import { lazy, Suspense, useEffect, useMemo, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { recordRecentlyViewed } from '../browser/recentlyViewed.js';
 import { resolveAssetUrl } from '../components/Atoms.js';
@@ -10,10 +10,22 @@ import { FolioMarginaliaToggle } from '../components/FolioMarginalia.js';
 import { KinloomFooter } from '../components/KinloomFooter.js';
 import { LocalSurveyMap } from '../components/LocalSurveyMap.js';
 import { PronunciationBadge } from '../components/PronunciationBadge.js';
-import { EntityEditDrawer, type EntityEditDrawerSection } from '../components/wiki/EntityEditDrawer.js';
-import { RevisionHistoryPanel } from '../components/wiki/RevisionHistoryPanel.js';
-import { TalkPanel } from '../components/wiki/TalkPanel.js';
-import { WikiActionBar, type WikiEntityTab } from '../components/wiki/WikiActionBar.js';
+import type { EntityEditDrawerSection } from '../components/wiki/EntityEditDrawer.js';
+import type { WikiEntityTab } from '../components/wiki/WikiActionBar.js';
+
+const LazyEntityEditDrawer = lazy(async () => ({
+  default: (await import('../components/wiki/EntityEditDrawer.js')).EntityEditDrawer,
+}));
+const LazyRevisionHistoryPanel = lazy(async () => ({
+  default: (await import('../components/wiki/RevisionHistoryPanel.js')).RevisionHistoryPanel,
+}));
+const LazyTalkPanel = lazy(async () => ({
+  default: (await import('../components/wiki/TalkPanel.js')).TalkPanel,
+}));
+const LazyWikiActionBar = lazy(async () => ({
+  default: (await import('../components/wiki/WikiActionBar.js')).WikiActionBar,
+}));
+
 import { useArchiveData } from '../context/ArchiveDataContext.js';
 import { useArchiveUi } from '../context/ArchiveUiContext.js';
 import { cx, joinClasses } from '../lib/cx.js';
@@ -284,22 +296,35 @@ export const PlacePage: React.FC = () => {
             </div>
           </div>
 
-          <WikiActionBar
-            activeTab={wikiTab}
-            onSelectTab={(nextTab) => {
-              if (nextTab === 'edit') {
-                setEditInitialSection(undefined);
-              }
-              setWikiTab(nextTab);
-            }}
-            entityLabel={place.full_name}
-          />
+          {(capabilities.canEdit ||
+            capabilities.hasRevisionHistory ||
+            capabilities.hasTalk ||
+            capabilities.canUploadMedia) && (
+            <Suspense fallback={null}>
+              <LazyWikiActionBar
+                activeTab={wikiTab}
+                onSelectTab={(nextTab) => {
+                  if (nextTab === 'edit') {
+                    setEditInitialSection(undefined);
+                  }
+                  setWikiTab(nextTab);
+                }}
+                entityLabel={place.full_name}
+              />
+            </Suspense>
+          )}
 
           <PluginSlot name="placeDetail" place={place} />
 
-          {wikiTab === 'history' && <RevisionHistoryPanel entityType="place" entityId={place.id} />}
+          {wikiTab === 'history' && (
+            <Suspense fallback={null}>
+              <LazyRevisionHistoryPanel entityType="place" entityId={place.id} />
+            </Suspense>
+          )}
           {wikiTab === 'talk' && (
-            <TalkPanel entityType="place" entityId={place.id} entityTitle={place.full_name} />
+            <Suspense fallback={null}>
+              <LazyTalkPanel entityType="place" entityId={place.id} entityTitle={place.full_name} />
+            </Suspense>
           )}
 
           {isReadingProfile && (
@@ -339,20 +364,24 @@ export const PlacePage: React.FC = () => {
           </>
         )}
       </main>
-      <EntityEditDrawer
-        open={wikiTab === 'edit'}
-        initialSection={editInitialSection}
-        entityType="place"
-        entityId={place.id}
-        revisionId={bundle.meta.max_revision_id ?? 1}
-        initialData={buildPlaceEditInitialData(place)}
-        hasPrimarySource={place.has_primary_source ?? true}
-        title={place.full_name}
-        onClose={() => {
-          setEditInitialSection(undefined);
-          setWikiTab('read');
-        }}
-      />
+      {wikiTab === 'edit' && (
+        <Suspense fallback={null}>
+          <LazyEntityEditDrawer
+            open={true}
+            initialSection={editInitialSection}
+            entityType="place"
+            entityId={place.id}
+            revisionId={bundle.meta.max_revision_id ?? 1}
+            initialData={buildPlaceEditInitialData(place)}
+            hasPrimarySource={place.has_primary_source ?? true}
+            title={place.full_name}
+            onClose={() => {
+              setEditInitialSection(undefined);
+              setWikiTab('read');
+            }}
+          />
+        </Suspense>
+      )}
       <KinloomFooter />
     </div>
   );

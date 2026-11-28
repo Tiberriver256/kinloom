@@ -2,7 +2,7 @@ import {
   type EntityType,
   isSafeInternalRoute,
   KinloomOnboardingStepSchema,
-  validatePluginDocumentation,
+  type PluginDocumentation,
 } from '@kinloom/core';
 import type {
   EntityCreateFormEntry,
@@ -221,6 +221,57 @@ export function resolveDynamicPluginOnboardingSteps(
  * Validate UI plugin IDs, route paths, entity form overrides, and static onboarding steps at provider startup.
  * Throws RangeError on empty/duplicate IDs, reserved or duplicate routes, conflicting form overrides, or invalid onboarding steps.
  */
+
+function assertValidUiPluginDocumentation(doc: PluginDocumentation, ownerLabel: string): void {
+  if (
+    !doc ||
+    typeof doc !== 'object' ||
+    typeof doc.id !== 'string' ||
+    doc.id.trim().length === 0 ||
+    typeof doc.title !== 'string' ||
+    doc.title.trim().length === 0 ||
+    typeof doc.summary !== 'string' ||
+    doc.summary.trim().length === 0 ||
+    !Array.isArray(doc.sections) ||
+    doc.sections.length === 0
+  ) {
+    throw new RangeError(
+      `${ownerLabel} has invalid documentation: id, title, summary, and non-empty sections are required.`
+    );
+  }
+  if (doc.externalUrl !== undefined) {
+    if (typeof doc.externalUrl !== 'string' || !/^https?:\/\//i.test(doc.externalUrl.trim())) {
+      throw new RangeError(
+        `${ownerLabel} has invalid documentation: externalUrl must use http:// or https://.`
+      );
+    }
+  }
+  const seen = new Set<string>();
+  for (const sec of doc.sections) {
+    if (
+      !sec ||
+      typeof sec !== 'object' ||
+      typeof sec.id !== 'string' ||
+      sec.id.trim().length === 0 ||
+      typeof sec.heading !== 'string' ||
+      sec.heading.trim().length === 0 ||
+      typeof sec.markdown !== 'string' ||
+      sec.markdown.trim().length === 0
+    ) {
+      throw new RangeError(
+        `${ownerLabel} has invalid documentation: each section requires non-empty id, heading, and markdown.`
+      );
+    }
+    const id = sec.id.trim();
+    if (seen.has(id)) {
+      throw new RangeError(
+        `${ownerLabel} has invalid documentation: Duplicate documentation section id '${id}'.`
+      );
+    }
+    seen.add(id);
+  }
+}
+
 export function validateAndCompileUiPlugins(plugins: readonly KinloomUiPlugin[]): CompiledKinloomUiPlugins {
   const seenPluginIds = new Set<string>();
   const seenRouteOwners = new Map<string, { pluginId: string; path: string }>();
@@ -245,7 +296,7 @@ export function validateAndCompileUiPlugins(plugins: readonly KinloomUiPlugin[])
     seenPluginIds.add(pluginId);
 
     if (plugin.documentation !== undefined) {
-      validatePluginDocumentation(plugin.documentation, `UI plugin '${pluginId}'`);
+      assertValidUiPluginDocumentation(plugin.documentation, `UI plugin '${pluginId}'`);
     }
 
     if (plugin.routes) {
