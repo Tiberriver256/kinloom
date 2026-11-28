@@ -30,22 +30,22 @@ export {
 } from './urlPolicy.js';
 
 export interface HttpRequestOptions {
-  readonly method?: 'GET' | 'POST' | 'HEAD';
-  readonly headers?: Readonly<Record<string, string>>;
-  readonly body?: string | Uint8Array;
-  readonly userAgent?: string;
-  readonly timeoutMs?: number;
-  readonly maxAttempts?: number;
-  readonly baseBackoffMs?: number;
-  readonly maxRetryAfterMs?: number;
-  readonly retryStatuses?: ReadonlySet<number>;
-  readonly maxRedirects?: number;
-  readonly urlPolicy?: UrlSecurityPolicy;
-  readonly cookieJar?: CookieJar;
+  readonly method?: 'GET' | 'POST' | 'HEAD' | undefined;
+  readonly headers?: Readonly<Record<string, string>> | undefined;
+  readonly body?: string | Uint8Array | undefined;
+  readonly userAgent?: string | undefined;
+  readonly timeoutMs?: number | undefined;
+  readonly maxAttempts?: number | undefined;
+  readonly baseBackoffMs?: number | undefined;
+  readonly maxRetryAfterMs?: number | undefined;
+  readonly retryStatuses?: ReadonlySet<number> | undefined;
+  readonly maxRedirects?: number | undefined;
+  readonly urlPolicy?: UrlSecurityPolicy | undefined;
+  readonly cookieJar?: CookieJar | undefined;
   readonly fetchImpl: typeof fetch;
   readonly sleepFn: (ms: number) => Promise<void>;
-  readonly nowMs?: () => number;
-  readonly throwOnHttpError?: boolean;
+  readonly nowMs?: (() => number) | undefined;
+  readonly throwOnHttpError?: boolean | undefined;
 }
 
 export interface HttpResponseResult {
@@ -275,18 +275,18 @@ export function defaultExecFile(
 }
 
 export interface CurlFetchOptions {
-  readonly headers?: Readonly<Record<string, string>>;
+  readonly headers?: Readonly<Record<string, string>> | undefined;
   readonly userAgent?: string;
-  readonly timeoutMs?: number;
+  readonly timeoutMs?: number | undefined;
   readonly connectTimeoutSec?: number;
   readonly maxAttempts?: number;
   readonly baseBackoffMs?: number;
   readonly maxRetryAfterMs?: number;
   readonly retryStatuses?: ReadonlySet<number>;
   readonly urlPolicy?: UrlSecurityPolicy;
-  readonly execFileImpl?: ExecFileFn;
+  readonly execFileImpl?: ExecFileFn | undefined;
   readonly sleepFn: (ms: number) => Promise<void>;
-  readonly nowMs?: () => number;
+  readonly nowMs?: (() => number) | undefined;
   readonly throwOnHttpError?: boolean;
   readonly rejectHtml?: boolean;
 }

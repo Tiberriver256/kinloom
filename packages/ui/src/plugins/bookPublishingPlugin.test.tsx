@@ -166,9 +166,10 @@ const SAMPLE_JOB: UiBookPrintJob = {
 };
 
 function setNativeInputValue(
-  el: HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement,
+  el: HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement | undefined,
   value: string
 ): void {
+  if (!el) throw new Error('Expected element');
   const proto = Object.getPrototypeOf(el) as { value?: unknown };
   const desc = Object.getOwnPropertyDescriptor(proto, 'value');
   if (desc?.set) {

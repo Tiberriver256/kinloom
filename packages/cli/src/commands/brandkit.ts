@@ -47,6 +47,7 @@ export function encodeIcoFromPngs(frames: readonly IcoPngFrame[]): Buffer {
   let dataOffset = directorySize;
   for (let i = 0; i < frames.length; i += 1) {
     const frame = frames[i];
+    if (frame === undefined) continue;
     const entryOffset = headerSize + i * entrySize;
     const dimByte = frame.size >= 256 ? 0 : frame.size;
 
@@ -75,17 +76,17 @@ export interface BrandkitFileArtifact {
 
 export interface BrandkitCommandOptions {
   readonly outDir: string;
-  readonly configPath?: string;
-  readonly title?: string;
-  readonly subtitle?: string;
-  readonly metadataLine?: string;
-  readonly accent?: string;
-  readonly surface?: BrandSurface;
-  readonly markSvgPath?: string;
-  readonly vignetteImagePath?: string;
-  readonly baseUrl?: string;
-  readonly force?: boolean;
-  readonly cwd?: string;
+  readonly configPath?: string | undefined;
+  readonly title?: string | undefined;
+  readonly subtitle?: string | undefined;
+  readonly metadataLine?: string | undefined;
+  readonly accent?: string | undefined;
+  readonly surface?: BrandSurface | undefined;
+  readonly markSvgPath?: string | undefined;
+  readonly vignetteImagePath?: string | undefined;
+  readonly baseUrl?: string | undefined;
+  readonly force?: boolean | undefined;
+  readonly cwd?: string | undefined;
 }
 
 export interface BrandkitCommandResult {
@@ -181,37 +182,41 @@ export async function runBrandkitCommand(options: BrandkitCommandOptions): Promi
   }
 
   const overrides: BrandOverrides = {
-    title: options.title,
-    subtitle: options.subtitle,
-    metadataLine: options.metadataLine,
-    accent: options.accent,
-    surface: options.surface,
-    customMarkInnerSvg,
-    vignetteDataUri,
-    baseUrl: options.baseUrl,
+    ...(options.title !== undefined ? { title: options.title } : {}),
+    ...(options.subtitle !== undefined ? { subtitle: options.subtitle } : {}),
+    ...(options.metadataLine !== undefined ? { metadataLine: options.metadataLine } : {}),
+    ...(options.accent !== undefined ? { accent: options.accent } : {}),
+    ...(options.surface !== undefined ? { surface: options.surface } : {}),
+    ...(customMarkInnerSvg !== undefined ? { customMarkInnerSvg } : {}),
+    ...(vignetteDataUri !== undefined ? { vignetteDataUri } : {}),
+    ...(options.baseUrl !== undefined ? { baseUrl: options.baseUrl } : {}),
   };
 
   const spec = resolveBrandSpec(siteConfig, overrides);
+  const accentDarkOpt =
+    siteConfig?.theme?.accentDark !== undefined ? { accentDark: siteConfig.theme.accentDark } : {};
+  const customMarkOpt = customMarkInnerSvg !== undefined ? { customMarkInnerSvg } : {};
+  const vignetteOpt = vignetteDataUri !== undefined ? { vignetteDataUri } : {};
 
   const faviconSvg = renderFaviconSvg({
     accent: spec.accent,
-    accentDark: siteConfig?.theme?.accentDark,
+    ...accentDarkOpt,
     label: `${spec.title} icon`,
-    customMarkInnerSvg,
+    ...customMarkOpt,
     mode: 'adaptive',
   });
   const faviconLightSvg = renderFaviconSvg({
     accent: spec.accent,
-    accentDark: siteConfig?.theme?.accentDark,
+    ...accentDarkOpt,
     label: `${spec.title} icon`,
-    customMarkInnerSvg,
+    ...customMarkOpt,
     mode: 'light',
   });
   const faviconDarkSvg = renderFaviconSvg({
     accent: spec.accent,
-    accentDark: siteConfig?.theme?.accentDark,
+    ...accentDarkOpt,
     label: `${spec.title} icon`,
-    customMarkInnerSvg,
+    ...customMarkOpt,
     mode: 'dark',
   });
 
@@ -223,7 +228,7 @@ export async function runBrandkitCommand(options: BrandkitCommandOptions): Promi
         surface: 'parchment',
         accent: spec.accent,
         transparentBackground: false,
-        customMarkInnerSvg,
+        ...customMarkOpt,
       });
       const png = await rasterizeSvgToPng(svg, size, size);
       return { size, png };
@@ -238,7 +243,7 @@ export async function runBrandkitCommand(options: BrandkitCommandOptions): Promi
         variant: 'apple',
         surface: spec.surface,
         accent: spec.accent,
-        customMarkInnerSvg,
+        ...customMarkOpt,
       }),
       KINLOOM_ICON_SIZES.appleTouch,
       KINLOOM_ICON_SIZES.appleTouch
@@ -249,7 +254,7 @@ export async function runBrandkitCommand(options: BrandkitCommandOptions): Promi
         variant: 'any',
         surface: spec.surface,
         accent: spec.accent,
-        customMarkInnerSvg,
+        ...customMarkOpt,
       }),
       KINLOOM_ICON_SIZES.pwaSmall,
       KINLOOM_ICON_SIZES.pwaSmall
@@ -260,7 +265,7 @@ export async function runBrandkitCommand(options: BrandkitCommandOptions): Promi
         variant: 'any',
         surface: spec.surface,
         accent: spec.accent,
-        customMarkInnerSvg,
+        ...customMarkOpt,
       }),
       KINLOOM_ICON_SIZES.pwaLarge,
       KINLOOM_ICON_SIZES.pwaLarge
@@ -271,7 +276,7 @@ export async function runBrandkitCommand(options: BrandkitCommandOptions): Promi
         variant: 'maskable',
         surface: spec.surface,
         accent: spec.accent,
-        customMarkInnerSvg,
+        ...customMarkOpt,
       }),
       KINLOOM_ICON_SIZES.maskable,
       KINLOOM_ICON_SIZES.maskable
@@ -284,8 +289,8 @@ export async function runBrandkitCommand(options: BrandkitCommandOptions): Promi
         footerCredit: spec.footerCredit,
         surface: spec.surface,
         accent: spec.accent,
-        customMarkInnerSvg,
-        vignetteDataUri,
+        ...customMarkOpt,
+        ...vignetteOpt,
       }),
       KINLOOM_OG_DIMENSIONS.width,
       KINLOOM_OG_DIMENSIONS.height,
@@ -295,7 +300,7 @@ export async function runBrandkitCommand(options: BrandkitCommandOptions): Promi
 
   const webManifest = `${JSON.stringify(buildWebManifest(siteConfig, overrides), null, 2)}\n`;
   const serviceWorkerScript = renderPrivacySafeServiceWorkerScript({
-    baseUrl: options.baseUrl,
+    ...(options.baseUrl !== undefined ? { baseUrl: options.baseUrl } : {}),
     siteTitle: spec.title,
   });
 

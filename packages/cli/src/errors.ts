@@ -48,7 +48,7 @@ export interface KinloomApiErrorOptions {
   code: string;
   message: string;
   details?: unknown;
-  conflict?: OptimisticConflictError;
+  conflict?: OptimisticConflictError | undefined;
 }
 
 export class KinloomApiError extends Error {
@@ -56,7 +56,7 @@ export class KinloomApiError extends Error {
   readonly status: number;
   readonly code: string;
   readonly details: unknown;
-  readonly conflict?: OptimisticConflictError;
+  readonly conflict?: OptimisticConflictError | undefined;
   readonly exitCode: typeof EXIT_CONFLICT | typeof EXIT_ERROR;
 
   constructor(options: KinloomApiErrorOptions) {

@@ -512,7 +512,7 @@ describe('kinloom CLI commands', () => {
             entities: [...store.values()].map((row) => ({
               entity_type: row.type,
               entity_id: row.id,
-              slug: typeof row.data.slug === 'string' ? row.data.slug : null,
+              slug: typeof row.data['slug'] === 'string' ? row.data['slug'] : null,
               data: row.data,
               current_revision_id: row.rev,
               has_primary_source: true,
@@ -592,7 +592,7 @@ describe('kinloom CLI commands', () => {
     expect(seed1Code).toBe(EXIT_OK);
     expect(seed1Cap.stdout[0]).toContain('4 created, 0 updated, 0 unchanged');
     expect(submittedBatches).toHaveLength(1);
-    expect(submittedBatches[0].author_type).toBe('system_seed');
+    expect(submittedBatches[0]!.author_type).toBe('system_seed');
 
     // Second live seed with unchanged YAML submits zero batches.
     const seed2Cap = createCaptureIo();
@@ -616,7 +616,7 @@ describe('kinloom CLI commands', () => {
 
     // Modifying one person causes only 1 update patch on the third seed.
     const updatedPeople = parsePeopleYaml(await readFile(path.join(dataDir, 'people.yaml'), 'utf8'));
-    updatedPeople[0].alt_names = ['A. Alder'];
+    updatedPeople[0]!.alt_names = ['A. Alder'];
     await writeFile(
       path.join(dataDir, 'people.yaml'),
       serializePeopleYaml(updatedPeople, { sortById: true }),
@@ -640,7 +640,7 @@ describe('kinloom CLI commands', () => {
     expect(seed3Code).toBe(EXIT_OK);
     expect(seed3Cap.stdout[0]).toContain('0 created, 1 updated, 3 unchanged');
     expect(submittedBatches).toHaveLength(2);
-    expect(submittedBatches[1].patches[0].action).toBe('update');
+    expect(submittedBatches[1]!.patches[0]!.action).toBe('update');
   });
 
   it('submit-batch validates at boundary before HTTP, commits valid batches, and exits 3 on 409 Conflict', async () => {
@@ -1015,10 +1015,10 @@ describe('kinloom CLI commands', () => {
 
     const snapshot = makeSyntheticSnapshot();
     const compiled = compileArchive({
-      places: [snapshot.entities[0].data as Place],
-      sources: [snapshot.entities[1].data as SourceRecord],
-      people: [snapshot.entities[2].data as RawPerson],
-      events: [snapshot.entities[3].data as RawEvent],
+      places: [snapshot.entities[0]!.data as Place],
+      sources: [snapshot.entities[1]!.data as SourceRecord],
+      people: [snapshot.entities[2]!.data as RawPerson],
+      events: [snapshot.entities[3]!.data as RawEvent],
       kinship: [],
       media: [],
       siteConfig,
@@ -1060,7 +1060,7 @@ describe('kinloom CLI commands', () => {
 
     // 2. Drifted cached bundle exits 1 and reports exact drifted path.
     const drifted = structuredClone(compiled);
-    drifted.people[0].full_name = 'Arthur Alder (Stale Cache)';
+    drifted.people[0]!.full_name = 'Arthur Alder (Stale Cache)';
     const driftCap = createCaptureIo();
     const driftCode = await runCli(
       ['reconcile', '--site', 'https://alder.example.test', '--config', configPath],

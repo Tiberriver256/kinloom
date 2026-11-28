@@ -67,7 +67,7 @@ async function invokeHathi(
   args: readonly string[],
   cacheDir: string,
   fetchImpl: typeof fetch
-): Promise<{ exitCode: number; stdout: string; stderr: string; cacheHit?: boolean }> {
+): Promise<{ exitCode: number; stdout: string; stderr: string; cacheHit?: boolean | undefined }> {
   const stdout: string[] = [];
   const stderr: string[] = [];
   const ctx = createRecordContext({
@@ -113,7 +113,7 @@ describe('hathi native client', () => {
     };
     expect(d1.cache_hit).toBe(false);
     expect(d2.cache_hit).toBe(true);
-    expect(d2.records['000578050'].titles).toEqual(['History of Sangamon County, Illinois']);
+    expect(d2.records['000578050']!.titles).toEqual(['History of Sangamon County, Illinois']);
     expect(r3.stdout).toContain('[cache]');
     expect(r3.stdout).toContain('History of Sangamon County, Illinois');
   });

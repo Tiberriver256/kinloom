@@ -25,19 +25,19 @@ import pronunciationBadgeStyles from './PronunciationBadge.module.css';
 export type PronunciationBadgeData = Pronunciation | ResolvedPersonPronunciation;
 
 export interface PronunciationBadgeProps {
-  pronunciation?: PronunciationBadgeData | null;
+  pronunciation?: PronunciationBadgeData | null | undefined;
   label: string;
   /** Optional prefix when the guide applies to a specific name part (e.g. "Surname"). */
-  prefix?: string;
+  prefix?: string | undefined;
   /** Coverage metadata from `resolvePersonPronunciation`. Omit or `'full'` for clean full-name display. */
-  coverage?: PronunciationCoverage;
+  coverage?: PronunciationCoverage | undefined;
   /** Specific name part matched when coverage is not `'full'` (e.g. surname). */
-  matchedPart?: string;
-  baseUrl?: string;
-  compact?: boolean;
+  matchedPart?: string | undefined;
+  baseUrl?: string | undefined;
+  compact?: boolean | undefined;
   /** Render only the speaker play button (hides inline phonetic/IPA/language text for quiet prose reading). */
-  iconOnly?: boolean;
-  className?: string;
+  iconOnly?: boolean | undefined;
+  className?: string | undefined;
 }
 
 const SAFE_EXTERNAL_URL_RE = /^https?:\/\//i;

@@ -28,9 +28,7 @@ export const RevisionHistoryPanel: React.FC<RevisionHistoryPanelProps> = ({
   const [revisions, setRevisions] = useState<readonly RevisionRecord[]>(initialRevisions ?? []);
   const [loading, setLoading] = useState<boolean>(initialRevisions === undefined);
   const [error, setError] = useState<string | null>(null);
-  const [expandedId, setExpandedId] = useState<number | null>(
-    initialRevisions && initialRevisions.length > 0 ? initialRevisions[0].revision_id : null
-  );
+  const [expandedId, setExpandedId] = useState<number | null>(initialRevisions?.[0]?.revision_id ?? null);
   const [revertingId, setRevertingId] = useState<number | null>(null);
   const [confirmingRevertId, setConfirmingRevertId] = useState<number | null>(null);
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
@@ -50,7 +48,7 @@ export const RevisionHistoryPanel: React.FC<RevisionHistoryPanelProps> = ({
       });
       setRevisions(res.items);
       if (res.items.length > 0 && expandedId === null) {
-        setExpandedId(res.items[0].revision_id);
+        setExpandedId(res.items[0]?.revision_id ?? null);
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));

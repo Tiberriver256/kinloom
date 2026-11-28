@@ -298,14 +298,18 @@ export function renderIconSvg(options: {
 
 function wrapTextLines(text: string, maxCharsPerLine: number, maxLines: number): string[] {
   const words = text.trim().split(/\s+/).filter(Boolean);
-  if (words.length === 0) {
+  const [firstWord] = words;
+  if (!firstWord) {
     return [];
   }
   const lines: string[] = [];
-  let current = words[0];
+  let current = firstWord;
 
   for (let i = 1; i < words.length; i += 1) {
     const word = words[i];
+    if (!word) {
+      continue;
+    }
     if (`${current} ${word}`.length <= maxCharsPerLine) {
       current = `${current} ${word}`;
     } else {

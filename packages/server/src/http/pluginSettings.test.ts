@@ -219,8 +219,10 @@ describe('Declarative Plugin Settings API, RBAC/CSRF, write-only secrets, and re
       google_cloud_tts_api_key: { configured: false, updated_at: null },
       openai_api_key: { configured: true, updated_at: '2026-11-27T12:00:00.000Z' },
     });
-    expect(updatedAfterSecrets.plugin.readonly_values.configured_credentials).toBe('gemini, openai-speech');
-    expect(updatedAfterSecrets.plugin.readonly_values.active_generator).toBe('openai-speech');
+    expect(updatedAfterSecrets.plugin.readonly_values['configured_credentials']).toBe(
+      'gemini, openai-speech'
+    );
+    expect(updatedAfterSecrets.plugin.readonly_values['active_generator']).toBe('openai-speech');
     expect(pronunciationPlugin.getRuntimeConfig()).toMatchObject({
       primaryBackend: 'openai-speech',
       fallbackBackend: 'gemini',
@@ -257,9 +259,9 @@ describe('Declarative Plugin Settings API, RBAC/CSRF, write-only secrets, and re
     );
     expect(partialRes.status).toBe(200);
     const partialParsed = AdminPluginSettingsUpdateResponseSchema.parse(await partialRes.json());
-    expect(partialParsed.plugin.values.default_voice).toBe('Puck');
-    expect(partialParsed.plugin.values.auto_generate_on_save).toBe(false);
-    expect(partialParsed.plugin.secrets.gemini_api_key).toEqual({
+    expect(partialParsed.plugin.values['default_voice']).toBe('Puck');
+    expect(partialParsed.plugin.values['auto_generate_on_save']).toBe(false);
+    expect(partialParsed.plugin.secrets['gemini_api_key']).toEqual({
       configured: true,
       updated_at: '2026-11-27T12:00:00.000Z',
     });
@@ -288,8 +290,8 @@ describe('Declarative Plugin Settings API, RBAC/CSRF, write-only secrets, and re
     );
     expect(clearRes.status).toBe(200);
     const clearedParsed = AdminPluginSettingsUpdateResponseSchema.parse(await clearRes.json());
-    expect(clearedParsed.plugin.secrets.openai_api_key).toEqual({ configured: false, updated_at: null });
-    expect(clearedParsed.plugin.secrets.gemini_api_key.configured).toBe(true);
+    expect(clearedParsed.plugin.secrets['openai_api_key']).toEqual({ configured: false, updated_at: null });
+    expect(clearedParsed.plugin.secrets['gemini_api_key']!.configured).toBe(true);
     expect(
       await ports.pluginSettingsStore.getSecretValue(PRONUNCIATION_PLUGIN_ID, 'openai_api_key')
     ).toBeNull();
@@ -391,8 +393,8 @@ describe('Declarative Plugin Settings API, RBAC/CSRF, write-only secrets, and re
     );
     expect(toggleRes.status).toBe(200);
     const toggled = AdminPluginSettingsUpdateResponseSchema.parse(await toggleRes.json());
-    expect(toggled.plugin.readonly_values.server_timing_status).toBe('disabled');
-    expect(toggled.plugin.readonly_values.storage_bindings).toContain('repository=in-memory');
+    expect(toggled.plugin.readonly_values['server_timing_status']).toBe('disabled');
+    expect(toggled.plugin.readonly_values['storage_bindings']).toContain('repository=in-memory');
 
     // Subsequent 200 request emits no headers and no info log.
     const afterRes = await server.fetch(new Request(`${ORIGIN}/api/auth/me`));
@@ -494,9 +496,9 @@ describe('Declarative Plugin Settings API, RBAC/CSRF, write-only secrets, and re
       error: { code: string; details: { field_errors: Record<string, string> } };
     };
     expect(invalidJson.error.code).toBe('VALIDATION_ERROR');
-    expect(invalidJson.error.details.field_errors.fallback_backend).toMatch(/must differ/);
-    expect(invalidJson.error.details.field_errors.openai_base_url).toMatch(/required/);
-    expect(invalidJson.error.details.field_errors.gemini_api_key).toMatch(/write-only/);
+    expect(invalidJson.error.details.field_errors['fallback_backend']).toMatch(/must differ/);
+    expect(invalidJson.error.details.field_errors['openai_base_url']).toMatch(/required/);
+    expect(invalidJson.error.details.field_errors['gemini_api_key']).toMatch(/write-only/);
 
     // Faulty plugin hooks are isolated while save succeeds.
     const faultyPut = await server.fetch(

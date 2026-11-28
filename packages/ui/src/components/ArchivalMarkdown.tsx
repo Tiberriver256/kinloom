@@ -27,24 +27,24 @@ export { formatNarrativeDateSpan, parseMarkdownBlocks } from './markdown/archiva
 
 export interface ArchivalMarkdownProps {
   markdown: string;
-  className?: string;
-  sourcesById?: ReadonlyMap<string, SourceRecord>;
-  mediaItems?: readonly MediaItem[];
-  events?: readonly ArchiveEvent[];
-  subjectPersonId?: string;
-  peopleById?: ReadonlyMap<string, Person>;
-  placesById?: ReadonlyMap<string, Place>;
-  pronunciations?: Readonly<Record<string, Pronunciation>>;
-  linkedPersonIds?: readonly string[];
-  linkedPlaceIds?: readonly string[];
-  narrativeSourceIds?: readonly string[];
-  readableSourceIds?: ReadonlySet<string>;
-  marginaliaMode?: 'off' | 'folio';
-  baseUrl?: string;
-  onInspectSource?: (sourceId: string) => void;
-  onReadSource?: (sourceId: string) => void;
-  onOpenMedia?: (media: MediaItem) => void;
-  resolveMediaUrl?: (media: MediaItem) => string | null;
+  className?: string | undefined;
+  sourcesById?: ReadonlyMap<string, SourceRecord> | undefined;
+  mediaItems?: readonly MediaItem[] | undefined;
+  events?: readonly ArchiveEvent[] | undefined;
+  subjectPersonId?: string | undefined;
+  peopleById?: ReadonlyMap<string, Person> | undefined;
+  placesById?: ReadonlyMap<string, Place> | undefined;
+  pronunciations?: Readonly<Record<string, Pronunciation>> | undefined;
+  linkedPersonIds?: readonly string[] | undefined;
+  linkedPlaceIds?: readonly string[] | undefined;
+  narrativeSourceIds?: readonly string[] | undefined;
+  readableSourceIds?: ReadonlySet<string> | undefined;
+  marginaliaMode?: 'off' | 'folio' | undefined;
+  baseUrl?: string | undefined;
+  onInspectSource?: ((sourceId: string) => void) | undefined;
+  onReadSource?: ((sourceId: string) => void) | undefined;
+  onOpenMedia?: ((media: MediaItem) => void) | undefined;
+  resolveMediaUrl?: ((media: MediaItem) => string | null) | undefined;
 }
 
 const EMPTY_READABLE_IDS: ReadonlySet<string> = new Set();

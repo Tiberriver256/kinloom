@@ -9,24 +9,24 @@ function isKinshipRelation(value: string): value is KinshipEdge['relation'] {
 }
 
 function toHygienePerson(record: LooseRecord): RawPerson | null {
-  const id = typeof record.id === 'string' ? record.id.trim() : '';
+  const id = typeof record['id'] === 'string' ? record['id'].trim() : '';
   if (!id) {
     return null;
   }
   return {
     id,
-    slug: typeof record.slug === 'string' && record.slug.trim() ? record.slug.trim() : id,
-    full_name: asString(record.full_name).trim() || id,
-    given_name: asString(record.given_name).trim(),
-    surname: asString(record.surname).trim(),
-    alt_names: stringListField(record.alt_names),
-    sex: asString(record.sex).trim() || 'U',
-    is_living: record.is_living === true || record.living === true,
-    lineage_group: asString(record.lineage_group).trim() || 'extended',
-    birth_edtf: asString(record.birth_edtf ?? record.birth_date).trim(),
-    death_edtf: asString(record.death_edtf ?? record.death_date).trim(),
-    portrait_url: typeof record.portrait_url === 'string' ? record.portrait_url : null,
-    ...(isPlainRecord(record.extensions) ? { extensions: { ...record.extensions } } : {}),
+    slug: typeof record['slug'] === 'string' && record['slug'].trim() ? record['slug'].trim() : id,
+    full_name: asString(record['full_name']).trim() || id,
+    given_name: asString(record['given_name']).trim(),
+    surname: asString(record['surname']).trim(),
+    alt_names: stringListField(record['alt_names']),
+    sex: asString(record['sex']).trim() || 'U',
+    is_living: record['is_living'] === true || record['living'] === true,
+    lineage_group: asString(record['lineage_group']).trim() || 'extended',
+    birth_edtf: asString(record['birth_edtf'] ?? record['birth_date']).trim(),
+    death_edtf: asString(record['death_edtf'] ?? record['death_date']).trim(),
+    portrait_url: typeof record['portrait_url'] === 'string' ? record['portrait_url'] : null,
+    ...(isPlainRecord(record['extensions']) ? { extensions: { ...record['extensions'] } } : {}),
   };
 }
 
@@ -35,25 +35,25 @@ function applyPersonFieldsForHygiene(existing: RawPerson, patchFields: LooseReco
     ...existing,
     ...(existing.extensions ? { extensions: { ...existing.extensions } } : {}),
   };
-  if (typeof patchFields.full_name === 'string' && patchFields.full_name.trim()) {
-    next.full_name = patchFields.full_name.trim();
+  if (typeof patchFields['full_name'] === 'string' && patchFields['full_name'].trim()) {
+    next.full_name = patchFields['full_name'].trim();
   }
-  if (typeof patchFields.sex === 'string' && patchFields.sex.trim()) {
-    next.sex = patchFields.sex.trim();
+  if (typeof patchFields['sex'] === 'string' && patchFields['sex'].trim()) {
+    next.sex = patchFields['sex'].trim();
   }
-  if (typeof patchFields.lineage_group === 'string' && patchFields.lineage_group.trim()) {
-    next.lineage_group = patchFields.lineage_group.trim();
+  if (typeof patchFields['lineage_group'] === 'string' && patchFields['lineage_group'].trim()) {
+    next.lineage_group = patchFields['lineage_group'].trim();
   }
-  if (patchFields.birth_edtf !== undefined || patchFields.birth_date !== undefined) {
-    next.birth_edtf = asString(patchFields.birth_edtf ?? patchFields.birth_date).trim();
+  if (patchFields['birth_edtf'] !== undefined || patchFields['birth_date'] !== undefined) {
+    next.birth_edtf = asString(patchFields['birth_edtf'] ?? patchFields['birth_date']).trim();
   }
-  if (patchFields.death_edtf !== undefined || patchFields.death_date !== undefined) {
-    next.death_edtf = asString(patchFields.death_edtf ?? patchFields.death_date).trim();
+  if (patchFields['death_edtf'] !== undefined || patchFields['death_date'] !== undefined) {
+    next.death_edtf = asString(patchFields['death_edtf'] ?? patchFields['death_date']).trim();
   }
-  if (isPlainRecord(patchFields.extensions)) {
+  if (isPlainRecord(patchFields['extensions'])) {
     next.extensions = {
       ...next.extensions,
-      ...patchFields.extensions,
+      ...patchFields['extensions'],
     };
   }
   return next;
@@ -68,13 +68,13 @@ function extractHygieneParticipants(raw: unknown): RawEvent['participants'] {
     if (!isPlainRecord(item)) {
       continue;
     }
-    const personId = typeof item.person_id === 'string' ? item.person_id.trim() : '';
+    const personId = typeof item['person_id'] === 'string' ? item['person_id'].trim() : '';
     if (!personId) {
       continue;
     }
     out.push({
       person_id: personId,
-      role: asString(item.role).trim(),
+      role: asString(item['role']).trim(),
     });
   }
   return out;
@@ -106,36 +106,36 @@ function mergeHygieneParticipants(
 }
 
 function toHygieneEvent(record: LooseRecord): RawEvent | null {
-  const id = typeof record.id === 'string' ? record.id.trim() : '';
+  const id = typeof record['id'] === 'string' ? record['id'].trim() : '';
   if (!id) {
     return null;
   }
   return {
     id,
-    title: asString(record.title),
+    title: asString(record['title']),
     scope: 'personal',
     event_kind: 'point_event',
-    ...(typeof record.category === 'string' ? { category: record.category } : {}),
-    edtf_date: asString(record.edtf_date).trim(),
-    place_id: typeof record.place_id === 'string' ? record.place_id : null,
-    summary: asString(record.summary),
-    participants: extractHygieneParticipants(record.participants),
+    ...(typeof record['category'] === 'string' ? { category: record['category'] } : {}),
+    edtf_date: asString(record['edtf_date']).trim(),
+    place_id: typeof record['place_id'] === 'string' ? record['place_id'] : null,
+    summary: asString(record['summary']),
+    participants: extractHygieneParticipants(record['participants']),
     sources: [],
   };
 }
 
 function toHygieneRemoveKinship(record: LooseRecord): RemoveKinshipEntry | null {
-  const from = typeof record.from === 'string' ? record.from.trim() : '';
-  const to = typeof record.to === 'string' ? record.to.trim() : '';
-  const rawRelation = typeof record.relation === 'string' ? record.relation.trim() : '';
+  const from = typeof record['from'] === 'string' ? record['from'].trim() : '';
+  const to = typeof record['to'] === 'string' ? record['to'].trim() : '';
+  const rawRelation = typeof record['relation'] === 'string' ? record['relation'].trim() : '';
   if (!from || !to || !isKinshipRelation(rawRelation)) {
     return null;
   }
   const familyXref =
-    typeof record.family_xref === 'string' && record.family_xref.trim().length > 0
-      ? record.family_xref.trim()
+    typeof record['family_xref'] === 'string' && record['family_xref'].trim().length > 0
+      ? record['family_xref'].trim()
       : undefined;
-  const symmetric = typeof record.symmetric === 'boolean' ? record.symmetric : true;
+  const symmetric = typeof record['symmetric'] === 'boolean' ? record['symmetric'] : true;
   return {
     from,
     to,
@@ -146,9 +146,9 @@ function toHygieneRemoveKinship(record: LooseRecord): RemoveKinshipEntry | null 
 }
 
 function toHygieneKinship(record: LooseRecord): KinshipEdge | null {
-  const from = typeof record.from === 'string' ? record.from.trim() : '';
-  const to = typeof record.to === 'string' ? record.to.trim() : '';
-  const rawRelation = typeof record.relation === 'string' ? record.relation.trim() : '';
+  const from = typeof record['from'] === 'string' ? record['from'].trim() : '';
+  const to = typeof record['to'] === 'string' ? record['to'].trim() : '';
+  const rawRelation = typeof record['relation'] === 'string' ? record['relation'].trim() : '';
   if (!from || !to || !isKinshipRelation(rawRelation)) {
     return null;
   }
@@ -156,9 +156,9 @@ function toHygieneKinship(record: LooseRecord): KinshipEdge | null {
     from,
     to,
     relation: rawRelation,
-    ...(typeof record.family_xref === 'string'
-      ? { family_xref: record.family_xref }
-      : record.family_xref === null
+    ...(typeof record['family_xref'] === 'string'
+      ? { family_xref: record['family_xref'] }
+      : record['family_xref'] === null
         ? { family_xref: null }
         : {}),
   };
@@ -217,13 +217,14 @@ export function runAuditHygieneRegressionCheck(input: {
   const postPeopleMap = new Map<string, RawPerson>();
   for (let i = 0; i < prePeople.length; i += 1) {
     const person = prePeople[i];
+    if (person === undefined) continue;
     postPeopleMap.set(person.id, person);
   }
-  for (const rawPerson of Array.isArray(input.patch.people) ? input.patch.people : []) {
-    if (!isPlainRecord(rawPerson) || typeof rawPerson.id !== 'string' || !rawPerson.id.trim()) {
+  for (const rawPerson of Array.isArray(input.patch['people']) ? input.patch['people'] : []) {
+    if (!isPlainRecord(rawPerson) || typeof rawPerson['id'] !== 'string' || !rawPerson['id'].trim()) {
       continue;
     }
-    const stagedId = rawPerson.id.trim();
+    const stagedId = rawPerson['id'].trim();
     touchedPersonIds.add(stagedId);
     const existing = postPeopleMap.get(stagedId);
     if (existing) {
@@ -237,7 +238,7 @@ export function runAuditHygieneRegressionCheck(input: {
       }
     }
   }
-  const updates = isPlainRecord(input.patch.person_updates) ? input.patch.person_updates : null;
+  const updates = isPlainRecord(input.patch['person_updates']) ? input.patch['person_updates'] : null;
   if (updates) {
     const existingTarget = postPeopleMap.get(input.personId);
     if (existingTarget && !existingTarget.is_living) {
@@ -248,15 +249,16 @@ export function runAuditHygieneRegressionCheck(input: {
   const postEventsMap = new Map<string, RawEvent>();
   for (let i = 0; i < preEvents.length; i += 1) {
     const event = preEvents[i];
+    if (event === undefined) continue;
     postEventsMap.set(event.id, event);
   }
-  for (const rawEv of Array.isArray(input.patch.events) ? input.patch.events : []) {
-    if (!isPlainRecord(rawEv) || typeof rawEv.id !== 'string' || !rawEv.id.trim()) {
+  for (const rawEv of Array.isArray(input.patch['events']) ? input.patch['events'] : []) {
+    if (!isPlainRecord(rawEv) || typeof rawEv['id'] !== 'string' || !rawEv['id'].trim()) {
       continue;
     }
-    const evId = rawEv.id.trim();
+    const evId = rawEv['id'].trim();
     touchedEventIds.add(evId);
-    const incomingParticipants = extractHygieneParticipants(rawEv.participants);
+    const incomingParticipants = extractHygieneParticipants(rawEv['participants']);
     for (const participant of incomingParticipants) {
       touchedPersonIds.add(participant.person_id);
     }
@@ -268,10 +270,10 @@ export function runAuditHygieneRegressionCheck(input: {
       }
       postEventsMap.set(evId, {
         ...existing,
-        ...(typeof rawEv.title === 'string' ? { title: rawEv.title } : {}),
-        ...(rawEv.edtf_date !== undefined ? { edtf_date: asString(rawEv.edtf_date).trim() } : {}),
-        ...(typeof rawEv.category === 'string' || rawEv.category === null
-          ? { category: rawEv.category }
+        ...(typeof rawEv['title'] === 'string' ? { title: rawEv['title'] } : {}),
+        ...(rawEv['edtf_date'] !== undefined ? { edtf_date: asString(rawEv['edtf_date']).trim() } : {}),
+        ...(typeof rawEv['category'] === 'string' || rawEv['category'] === null
+          ? { category: rawEv['category'] }
           : {}),
         participants: mergedParticipants,
       });
@@ -282,7 +284,7 @@ export function runAuditHygieneRegressionCheck(input: {
       }
     }
   }
-  for (const rawId of Array.isArray(input.patch.remove_event_ids) ? input.patch.remove_event_ids : []) {
+  for (const rawId of Array.isArray(input.patch['remove_event_ids']) ? input.patch['remove_event_ids'] : []) {
     if (typeof rawId === 'string' && rawId.trim()) {
       const trimmed = rawId.trim();
       touchedEventIds.add(trimmed);
@@ -291,7 +293,7 @@ export function runAuditHygieneRegressionCheck(input: {
   }
 
   const removeKinshipEntries: RemoveKinshipEntry[] = [];
-  for (const rawEntry of Array.isArray(input.patch.remove_kinship) ? input.patch.remove_kinship : []) {
+  for (const rawEntry of Array.isArray(input.patch['remove_kinship']) ? input.patch['remove_kinship'] : []) {
     if (!isPlainRecord(rawEntry)) {
       continue;
     }
@@ -305,7 +307,7 @@ export function runAuditHygieneRegressionCheck(input: {
   }
 
   const stagedKinshipEdges: KinshipEdge[] = [];
-  for (const rawEdge of Array.isArray(input.patch.kinship) ? input.patch.kinship : []) {
+  for (const rawEdge of Array.isArray(input.patch['kinship']) ? input.patch['kinship'] : []) {
     if (!isPlainRecord(rawEdge)) {
       continue;
     }
@@ -330,6 +332,7 @@ export function runAuditHygieneRegressionCheck(input: {
     const postKinshipMap = new Map<string, KinshipEdge>();
     for (let i = 0; i < kinshipAfterRemovals.length; i += 1) {
       const edge = kinshipAfterRemovals[i];
+      if (edge === undefined) continue;
       postKinshipMap.set(`${edge.from}|${edge.to}|${edge.relation}`, edge);
     }
     for (const edge of stagedKinshipEdges) {

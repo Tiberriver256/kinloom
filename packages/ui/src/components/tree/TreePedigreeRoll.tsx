@@ -38,11 +38,11 @@ interface RollPersonCardProps {
   readonly isDirect: boolean;
   readonly isSelected: boolean;
   readonly isLit: boolean;
-  readonly isAnchor?: boolean;
+  readonly isAnchor?: boolean | undefined;
   readonly hasSelection: boolean;
   readonly thumbUrl: string | null;
-  readonly badgeLabel?: string;
-  readonly spouseLabel?: string;
+  readonly badgeLabel?: string | undefined;
+  readonly spouseLabel?: string | undefined;
   readonly onSelect: (person: Person) => void;
 }
 
@@ -267,7 +267,7 @@ const UnionAttachments: React.FC<UnionAttachmentsProps> = ({
                       .filter((name): name is string => Boolean(name));
                     const spouseLabel =
                       siblingSpouses.length > 0
-                        ? `m. ${formatTreeCardName(siblingSpouses[0], 26)}${siblingSpouses.length > 1 ? ` (+${siblingSpouses.length - 1})` : ''}`
+                        ? `m. ${formatTreeCardName(siblingSpouses[0] ?? '', 26)}${siblingSpouses.length > 1 ? ` (+${siblingSpouses.length - 1})` : ''}`
                         : undefined;
                     return (
                       <div

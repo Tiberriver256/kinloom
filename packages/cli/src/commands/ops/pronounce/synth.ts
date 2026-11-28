@@ -39,31 +39,31 @@ export {
 };
 
 export interface PronounceSynthOptions {
-  readonly repoDir?: string;
-  readonly backend?: PronounceSynthBackend;
-  readonly endpoint?: string;
-  readonly apiKey?: string;
-  readonly model?: string;
-  readonly voice?: string;
-  readonly phonemeMode?: PhonemeMode;
-  readonly refAudioPath?: string;
-  readonly refText?: string;
-  readonly outDir?: string;
-  readonly format?: PronounceAudioFormat;
-  readonly scope?: PronounceSynthScope;
-  readonly skipExisting?: boolean;
-  readonly force?: boolean;
-  readonly updateConfig?: boolean;
-  readonly exportManifestPath?: string;
-  readonly importDir?: string;
-  readonly concurrency?: number;
-  readonly dryRun?: boolean;
-  readonly json?: boolean;
-  readonly env?: NodeJS.ProcessEnv;
-  readonly fetchImpl?: typeof fetch;
-  readonly execFileImpl?: AudioExecFileFn;
-  readonly sleepFn?: (ms: number) => Promise<void>;
-  readonly nowIso?: () => string;
+  readonly repoDir?: string | undefined;
+  readonly backend?: PronounceSynthBackend | undefined;
+  readonly endpoint?: string | undefined;
+  readonly apiKey?: string | undefined;
+  readonly model?: string | undefined;
+  readonly voice?: string | undefined;
+  readonly phonemeMode?: PhonemeMode | undefined;
+  readonly refAudioPath?: string | undefined;
+  readonly refText?: string | undefined;
+  readonly outDir?: string | undefined;
+  readonly format?: PronounceAudioFormat | undefined;
+  readonly scope?: PronounceSynthScope | undefined;
+  readonly skipExisting?: boolean | undefined;
+  readonly force?: boolean | undefined;
+  readonly updateConfig?: boolean | undefined;
+  readonly exportManifestPath?: string | undefined;
+  readonly importDir?: string | undefined;
+  readonly concurrency?: number | undefined;
+  readonly dryRun?: boolean | undefined;
+  readonly json?: boolean | undefined;
+  readonly env?: NodeJS.ProcessEnv | undefined;
+  readonly fetchImpl?: typeof fetch | undefined;
+  readonly execFileImpl?: AudioExecFileFn | undefined;
+  readonly sleepFn?: ((ms: number) => Promise<void>) | undefined;
+  readonly nowIso?: (() => string) | undefined;
 }
 
 async function runPool<T, R>(
@@ -79,7 +79,9 @@ async function runPool<T, R>(
     while (nextIndex < items.length) {
       const idx = nextIndex;
       nextIndex += 1;
-      results[idx] = await worker(items[idx]);
+      const item = items[idx];
+      if (item === undefined) continue;
+      results[idx] = await worker(item);
     }
   };
 
@@ -355,11 +357,11 @@ export async function runPronounceSynthCommand(
     );
   }
 
-  const endpointRaw = options.endpoint?.trim() || env.KINLOOM_TTS_ENDPOINT?.trim() || '';
+  const endpointRaw = options.endpoint?.trim() || env['KINLOOM_TTS_ENDPOINT']?.trim() || '';
   const openAiUrl = backend === 'openai-speech' ? normalizeSpeechEndpointUrl(endpointRaw) : '';
-  const openAiApiKey = options.apiKey?.trim() || env.OPENAI_SPEECH_API_KEY?.trim() || undefined;
+  const openAiApiKey = options.apiKey?.trim() || env['OPENAI_SPEECH_API_KEY']?.trim() || undefined;
   const geminiApiKey =
-    options.apiKey?.trim() || env.GEMINI_API_KEY?.trim() || env.GOOGLE_API_KEY?.trim() || '';
+    options.apiKey?.trim() || env['GEMINI_API_KEY']?.trim() || env['GOOGLE_API_KEY']?.trim() || '';
   if (backend === 'gemini' && !geminiApiKey) {
     throw new CliValidationError('Set GEMINI_API_KEY (or pass --api-key) for --backend gemini.');
   }

@@ -107,7 +107,7 @@ export function getCacheDir(ctx: RecordCommandContext): string {
 }
 
 export function resolveQueryTtlHours(cliTtl: number | undefined, ctx: RecordCommandContext): number {
-  if (cliTtl !== undefined || ctx.env.KINLOOM_GNIS_QUERY_TTL_HOURS?.trim()) {
+  if (cliTtl !== undefined || ctx.env['KINLOOM_GNIS_QUERY_TTL_HOURS']?.trim()) {
     return resolveEnvCacheTtlHours(cliTtl, ctx.env, 'KINLOOM_GNIS_QUERY_TTL_HOURS', DEFAULT_QUERY_TTL_HOURS);
   }
   return resolveEnvCacheTtlHours(undefined, ctx.env, 'KINLOOM_GNIS_CACHE_TTL_HOURS', DEFAULT_QUERY_TTL_HOURS);
@@ -134,7 +134,9 @@ export function extractGnisTxt(zipBytes: Uint8Array): { readonly name: string; r
   if (!txtName) {
     throw new RecordRuntimeError(`No .txt member in downloaded zip (members: ${names.join(', ')})`);
   }
-  const raw = Buffer.from(entries[txtName]).toString('utf8');
+  const entryBytes = entries[txtName];
+  if (!entryBytes) throw new RecordRuntimeError(`Missing zip member '${txtName}'`);
+  const raw = Buffer.from(entryBytes).toString('utf8');
   const text = raw.startsWith('\uFEFF') ? raw.slice(1) : raw;
   return { name: txtName, text };
 }
@@ -143,20 +145,22 @@ export function loadGnisRows(filePath: string): GnisRow[] {
   const raw = fs.readFileSync(filePath, 'utf8');
   const content = raw.startsWith('\uFEFF') ? raw.slice(1) : raw;
   const lines = content.split(/\r?\n/);
-  if (lines.length === 0 || (lines.length === 1 && lines[0].length === 0)) {
+  if (lines.length === 0 || (lines.length === 1 && (lines[0] ?? '').length === 0)) {
     return [];
   }
-  const header = lines[0].split('|').map((col) => col.trim());
+  const header = (lines[0] ?? '').split('|').map((col) => col.trim());
   const rows: GnisRow[] = [];
   for (let i = 1; i < lines.length; i += 1) {
     const line = lines[i];
+    if (line === undefined) continue;
     if (!line.trim()) {
       continue;
     }
     const fields = line.split('|');
     const row: GnisRow = {};
     for (let c = 0; c < header.length; c += 1) {
-      row[header[c]] = fields[c] ?? '';
+      const col = header[c];
+      if (col !== undefined) row[col] = fields[c] ?? '';
     }
     rows.push(row);
   }
@@ -165,16 +169,16 @@ export function loadGnisRows(filePath: string): GnisRow[] {
 
 export function compactFeature(row: GnisRow): GnisCompactFeature {
   return {
-    feature_id: row.feature_id ?? null,
-    feature_name: row.feature_name ?? null,
-    feature_class: row.feature_class ?? null,
-    state: row.state_name ?? null,
-    county: row.county_name ?? null,
-    map_name: row.map_name ?? null,
-    latitude: row.prim_lat_dec ?? null,
-    longitude: row.prim_long_dec ?? null,
-    date_created: row.date_created ?? null,
-    date_edited: row.date_edited ?? null,
+    feature_id: row['feature_id'] ?? null,
+    feature_name: row['feature_name'] ?? null,
+    feature_class: row['feature_class'] ?? null,
+    state: row['state_name'] ?? null,
+    county: row['county_name'] ?? null,
+    map_name: row['map_name'] ?? null,
+    latitude: row['prim_lat_dec'] ?? null,
+    longitude: row['prim_long_dec'] ?? null,
+    date_created: row['date_created'] ?? null,
+    date_edited: row['date_edited'] ?? null,
   };
 }
 
@@ -190,7 +194,7 @@ export function matchRows(
   const countyLower = county?.toLowerCase();
   const out: GnisRow[] = [];
   for (const row of rows) {
-    const fname = (row.feature_name ?? '').toLowerCase();
+    const fname = (row['feature_name'] ?? '').toLowerCase();
     if (exact) {
       if (fname !== needle) {
         continue;
@@ -198,10 +202,10 @@ export function matchRows(
     } else if (!fname.includes(needle)) {
       continue;
     }
-    if (classLower && (row.feature_class ?? '').toLowerCase() !== classLower) {
+    if (classLower && (row['feature_class'] ?? '').toLowerCase() !== classLower) {
       continue;
     }
-    if (countyLower && !(row.county_name ?? '').toLowerCase().includes(countyLower)) {
+    if (countyLower && !(row['county_name'] ?? '').toLowerCase().includes(countyLower)) {
       continue;
     }
     out.push(row);

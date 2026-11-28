@@ -33,8 +33,8 @@ export type BiographyQueueStatus = 'pending' | 'staged' | 'done_live';
 export type StatusSortMode = 'sparsest' | 'richest' | 'chronological';
 
 export interface StatusTextDisplay {
-  limit?: number;
-  filter?: BiographyQueueStatus;
+  limit?: number | undefined;
+  filter?: BiographyQueueStatus | undefined;
   sort?: StatusSortMode;
   endOfLine?: boolean;
   missingBiography?: boolean;
@@ -221,9 +221,10 @@ function finalizeResearchBuckets(
 ): Map<string, PersonResearchCounts> {
   for (let i = 0; i < media.length; i += 1) {
     const item = media[i];
+    if (item === undefined) continue;
     const pids = getMediaPersonIds(item);
-    for (let p = 0; p < pids.length; p += 1) {
-      getOrCreateBucket(counts, pids[p]).mediaIds.add(item.id);
+    for (const pid of pids) {
+      getOrCreateBucket(counts, pid).mediaIds.add(item.id);
     }
   }
   const flattened = new Map<string, PersonResearchCounts>();
@@ -245,6 +246,7 @@ function indexResearchCounts(
 
   for (let i = 0; i < events.length; i += 1) {
     const event = events[i];
+    if (event === undefined) continue;
     const pts = event.participants;
     const srcs = event.sources;
     const ptLen = pts.length;
@@ -252,18 +254,22 @@ function indexResearchCounts(
       continue;
     }
     if (ptLen === 1) {
-      const row = getOrCreateBucket(counts, pts[0].person_id);
+      const pt0 = pts[0];
+      if (!pt0) continue;
+      const row = getOrCreateBucket(counts, pt0.person_id);
       row.eventIds.add(event.id);
-      for (let s = 0; s < srcs.length; s += 1) {
-        row.sourceIds.add(srcs[s].source_id);
+      for (const src of srcs) {
+        row.sourceIds.add(src.source_id);
       }
       continue;
     }
     for (let p = 0; p < ptLen; p += 1) {
-      const personId = pts[p].person_id;
+      const pt = pts[p];
+      if (!pt) continue;
+      const personId = pt.person_id;
       let duplicatePt = false;
       for (let prev = 0; prev < p; prev += 1) {
-        if (pts[prev].person_id === personId) {
+        if (pts[prev]?.person_id === personId) {
           duplicatePt = true;
           break;
         }
@@ -273,8 +279,8 @@ function indexResearchCounts(
       }
       const row = getOrCreateBucket(counts, personId);
       row.eventIds.add(event.id);
-      for (let s = 0; s < srcs.length; s += 1) {
-        row.sourceIds.add(srcs[s].source_id);
+      for (const src of srcs) {
+        row.sourceIds.add(src.source_id);
       }
     }
   }
@@ -343,10 +349,12 @@ function flushScannedStatusEvent(
     return;
   }
   if (ptLen === 1) {
-    const row = getOrCreateBucket(counts, participants[0]);
+    const p0 = participants[0];
+    if (p0 === undefined) return;
+    const row = getOrCreateBucket(counts, p0);
     row.eventIds.add(eventId);
-    for (let s = 0; s < sources.length; s += 1) {
-      row.sourceIds.add(sources[s]);
+    for (const src of sources) {
+      row.sourceIds.add(src);
     }
     return;
   }
@@ -362,10 +370,11 @@ function flushScannedStatusEvent(
     if (duplicatePt) {
       continue;
     }
+    if (personId === undefined) continue;
     const row = getOrCreateBucket(counts, personId);
     row.eventIds.add(eventId);
-    for (let s = 0; s < sources.length; s += 1) {
-      row.sourceIds.add(sources[s]);
+    for (const src of sources) {
+      row.sourceIds.add(src);
     }
   }
 }
@@ -646,6 +655,7 @@ export function indexEndOfLinePersonIds(kinship: readonly KinshipEdge[]): Set<st
 
   for (let i = 0; i < kinship.length; i += 1) {
     const edge = kinship[i];
+    if (edge === undefined) continue;
     if (edge.relation === 'parent') {
       hasParent.add(edge.to);
       hasChild.add(edge.from);
@@ -675,6 +685,7 @@ function discoverStagedPatchPersonIds(repoDir: string): Set<string> {
   }
   for (let i = 0; i < entries.length; i += 1) {
     const entry = entries[i];
+    if (entry === undefined) continue;
     if (!entry.isDirectory() && !entry.isSymbolicLink()) {
       continue;
     }
@@ -691,7 +702,7 @@ function buildDeceasedQueueFromResearch(input: {
   narratives: readonly Narrative[];
   research: ReadonlyMap<string, PersonResearchCounts>;
   endOfLineIds: ReadonlySet<string> | null;
-  privacy?: Partial<PrivacyConfig>;
+  privacy?: Partial<PrivacyConfig> | undefined;
   sort: StatusSortMode;
   endOfLine: boolean;
 }): DeceasedQueueItem[] {
@@ -701,6 +712,7 @@ function buildDeceasedQueueFromResearch(input: {
   const referenceYear = input.privacy?.referenceYear ?? getCurrentReferenceYear();
   for (let i = 0; i < input.people.length; i += 1) {
     const person = input.people[i];
+    if (person === undefined) continue;
     if (resolveEffectiveLiving(person, input.privacy, referenceYear)) {
       continue;
     }
@@ -737,7 +749,7 @@ export function buildDeceasedQueue(input: {
   media: readonly MediaItem[];
   narratives: readonly Narrative[];
   kinship?: readonly KinshipEdge[];
-  privacy?: Partial<PrivacyConfig>;
+  privacy?: Partial<PrivacyConfig> | undefined;
   sort?: StatusSortMode;
   endOfLine?: boolean;
 }): DeceasedQueueItem[] {
@@ -866,9 +878,9 @@ export async function runStatusCommand(options: StatusCommandOptions = {}): Prom
 
   const dataEntries = fs.readdirSync(dataDir, { withFileTypes: true });
   const dataFiles = new Set<string>();
-  for (let i = 0; i < dataEntries.length; i += 1) {
-    if (!dataEntries[i].isDirectory()) {
-      dataFiles.add(dataEntries[i].name);
+  for (const entry of dataEntries) {
+    if (!entry.isDirectory()) {
+      dataFiles.add(entry.name);
     }
   }
   const readDataFile = (name: string): string | null =>
@@ -934,24 +946,24 @@ export async function runStatusCommand(options: StatusCommandOptions = {}): Prom
   const livingCount = people.length - allDeceased.length;
 
   let biographyCompleteCount = 0;
-  for (let i = 0; i < allDeceased.length; i += 1) {
-    if (allDeceased[i].hasBiography) {
+  for (const d of allDeceased) {
+    if (d.hasBiography) {
       biographyCompleteCount += 1;
     }
   }
   let doneLiveCount = 0;
   let stagedCount = 0;
   let pendingCount = 0;
-  for (let i = 0; i < deceased.length; i += 1) {
-    const st = deceased[i].status;
+  for (const d of deceased) {
+    const st = d.status;
     if (st === 'done_live') doneLiveCount += 1;
     else if (st === 'staged') stagedCount += 1;
     else pendingCount += 1;
   }
 
   let zeroCoordPlaces = 0;
-  for (let i = 0; i < places.length; i += 1) {
-    if (isZeroCoordPlace(places[i])) {
+  for (const pl of places) {
+    if (isZeroCoordPlace(pl)) {
       zeroCoordPlaces += 1;
     }
   }

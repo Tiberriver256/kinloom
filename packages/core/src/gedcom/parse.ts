@@ -32,7 +32,7 @@ export interface GedcomNameEntry {
   fullName: string;
   givenName: string;
   surname: string;
-  nameType?: string;
+  nameType?: string | undefined;
 }
 
 export interface GedcomIndi {
@@ -48,7 +48,7 @@ export interface GedcomIndi {
   events: GedcomEvent[];
   sources: string[];
   objes: string[];
-  resn?: string;
+  resn?: string | undefined;
 }
 
 export interface GedcomFam {
@@ -56,7 +56,7 @@ export interface GedcomFam {
   husb: string;
   wife: string;
   children: string[];
-  marr?: GedcomEvent;
+  marr?: GedcomEvent | undefined;
   events: GedcomEvent[];
   sources: string[];
 }
@@ -79,7 +79,7 @@ export function parseGedcomNameValue(rawVal: string): GedcomNameEntry {
   const unescaped = unescapeGedcomValue(rawVal);
   const cleanName = unescaped.replaceAll('/', '').replaceAll(/\s+/g, ' ').trim();
   const surMatch = /\/([^/]+)\//.exec(unescaped);
-  const surname = surMatch ? surMatch[1].trim() : '';
+  const surname = surMatch?.[1]?.trim() ?? '';
   const givenName = unescaped
     .replace(/\/[^/]*\//, '')
     .replaceAll(/\s+/g, ' ')
@@ -142,8 +142,8 @@ export function recordIndiPage(
 }
 
 export interface PhotoAttachableEvent {
-  photo_url?: string;
-  photo_placeholder_caption?: string;
+  photo_url?: string | undefined;
+  photo_placeholder_caption?: string | undefined;
 }
 
 export function attachPhotoToEvent(
@@ -195,7 +195,7 @@ export function sourceMatchesRecordScan(
 
 export interface GedcomLinkedEvent {
   id: string;
-  sources?: EventSourceRef[];
+  sources?: EventSourceRef[] | undefined;
 }
 
 export function linkRecordScans(
@@ -267,6 +267,9 @@ export function parseGedcomText(text: string): GedcomParseResult {
       continue;
     }
     const [, levelStr, xrefRaw, tag] = m;
+    if (!levelStr || !tag) {
+      continue;
+    }
     const level = Number(levelStr);
     const xref = xrefRaw || '';
     const val = tail.trim();

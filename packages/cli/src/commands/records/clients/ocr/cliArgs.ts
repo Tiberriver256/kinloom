@@ -164,8 +164,9 @@ function normalizeShortOption(arg: string): string {
     }
     throw new CliValidationError(`Unknown option: ${arg}`);
   }
-  if (arg in SHORT_ALIASES) {
-    return SHORT_ALIASES[arg];
+  const alias = SHORT_ALIASES[arg];
+  if (alias !== undefined) {
+    return alias;
   }
   if (!fs.existsSync(arg)) {
     throw new CliValidationError(`Unknown option: ${arg}`);
@@ -191,7 +192,7 @@ function extractLongOption(
   }
   return {
     key: normalized,
-    val: argv[index + 1],
+    val: argv[index + 1] ?? '',
     nextIndex: index + 1,
   };
 }
@@ -215,6 +216,7 @@ export function parseOcrArgs(argv: readonly string[]): ParsedOcrOptions {
 
   for (let i = 0; i < argv.length; i += 1) {
     const arg = argv[i];
+    if (arg === undefined) continue;
     if (arg === '-h' || arg === '--help') {
       return {
         helpRequested: true,
@@ -366,6 +368,7 @@ export function parseOcrBatchArgs(argv: readonly string[]): ParsedBatchOptions {
 
   for (let i = 0; i < argv.length; i += 1) {
     const arg = argv[i];
+    if (arg === undefined) continue;
     if (arg === '-h' || arg === '--help') {
       return {
         helpRequested: true,

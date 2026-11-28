@@ -81,9 +81,9 @@ export function parseIsoDate(raw: string, flagName: string): string {
   if (!match) {
     throw new CliValidationError(`Invalid ${flagName} '${raw}': expected YYYY-MM-DD.`);
   }
-  const year = Number.parseInt(match[1], 10);
-  const month = Number.parseInt(match[2], 10);
-  const day = Number.parseInt(match[3], 10);
+  const year = Number.parseInt(match[1] ?? '', 10);
+  const month = Number.parseInt(match[2] ?? '', 10);
+  const day = Number.parseInt(match[3] ?? '', 10);
   const dt = new Date(Date.UTC(year, month - 1, day));
   if (dt.getUTCFullYear() !== year || dt.getUTCMonth() !== month - 1 || dt.getUTCDate() !== day) {
     throw new CliValidationError(`Invalid ${flagName} '${raw}': not a real calendar date.`);
@@ -179,23 +179,23 @@ export function mapOpenSearchEntry(raw: unknown): TexasOpenSearchEntry {
 export function isTexasOpenSearchPage(value: unknown): value is TexasOpenSearchPage {
   return (
     isPlainRecord(value) &&
-    typeof value.total === 'number' &&
-    typeof value.page === 'number' &&
-    Array.isArray(value.entries)
+    typeof value['total'] === 'number' &&
+    typeof value['page'] === 'number' &&
+    Array.isArray(value['entries'])
   );
 }
 
 export function isTexasOaiRecord(value: unknown): value is TexasOaiRecord {
   return (
     isPlainRecord(value) &&
-    typeof value.ark === 'string' &&
-    Array.isArray(value.titles) &&
-    typeof value.url === 'string'
+    typeof value['ark'] === 'string' &&
+    Array.isArray(value['titles']) &&
+    typeof value['url'] === 'string'
   );
 }
 
 export function isTexasTdaCachePayload(value: unknown): value is TexasTdaCachePayload {
-  return isPlainRecord(value) && Array.isArray(value.results);
+  return isPlainRecord(value) && Array.isArray(value['results']);
 }
 
 function extractXmlNodeText(node: unknown): string {
@@ -346,15 +346,15 @@ export function parseTdaRss(feed: string, limit?: number): TexasTdaItem[] {
       isArray: (tagName) => tagName === 'item',
     });
     if (isPlainRecord(parsed)) {
-      const rssNode = isPlainRecord(parsed.rss) ? parsed.rss : parsed;
-      const channel = isPlainRecord(rssNode.channel) ? rssNode.channel : undefined;
-      const items = channel ? toArray<unknown>(channel.item) : [];
+      const rssNode = isPlainRecord(parsed['rss']) ? parsed['rss'] : parsed;
+      const channel = isPlainRecord(rssNode['channel']) ? rssNode['channel'] : undefined;
+      const items = channel ? toArray<unknown>(channel['item']) : [];
       for (const rawItem of items) {
         if (!isPlainRecord(rawItem)) {
           continue;
         }
-        const rawTitle = extractXmlNodeText(rawItem.title);
-        const link = extractXmlNodeText(rawItem.link);
+        const rawTitle = extractXmlNodeText(rawItem['title']);
+        const link = extractXmlNodeText(rawItem['link']);
         if (!rawTitle || !link || seen.has(link)) {
           continue;
         }

@@ -48,7 +48,7 @@ describe('semantic geometry tokens & CSS module hygiene (#100)', () => {
       const lines = readFileSync(file, 'utf8').split('\n');
       lines.forEach((line, idx) => {
         const match = line.match(/border-(?:(?:top|bottom)-(?:left|right)-)?radius\s*:\s*([^;]+);/);
-        if (match && /\b\d+(?:\.\d+)?px\b/.test(match[1])) {
+        if (match?.[1] && /\b\d+(?:\.\d+)?px\b/.test(match[1])) {
           violations.push(`${relative(REPO_ROOT, file)}:${idx + 1}: ${line.trim()}`);
         }
       });

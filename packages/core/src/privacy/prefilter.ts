@@ -59,8 +59,7 @@ export function registerPatternPrefilter(
   const bloomBits = new Uint8Array(512); // 4096 bits
   const wordHashes = new Set<number>();
 
-  for (let i = 0; i < names.length; i += 1) {
-    const s = names[i];
+  for (const s of names) {
     const c0 = s.charCodeAt(0);
     if (s.length < 2 || !isAsciiWordCode(c0)) {
       return;
@@ -80,8 +79,10 @@ export function registerPatternPrefilter(
     wordHashes.add(h);
     const bit1 = h & 4095;
     const bit2 = (h >>> 12) & 4095;
-    bloomBits[bit1 >>> 3] |= 1 << (bit1 & 7);
-    bloomBits[bit2 >>> 3] |= 1 << (bit2 & 7);
+    const byte1 = bit1 >>> 3;
+    const byte2 = bit2 >>> 3;
+    bloomBits[byte1] = (bloomBits[byte1] ?? 0) | (1 << (bit1 & 7));
+    bloomBits[byte2] = (bloomBits[byte2] ?? 0) | (1 << (bit2 & 7));
   }
 
   prefilters.set(pattern, {
@@ -162,9 +163,9 @@ export function mayMatchPattern(pattern: RegExp, text: string): boolean {
       if (tokLen >= 2) {
         const uh = h >>> 0;
         const bit1 = uh & 4095;
-        if ((bloomBits[bit1 >>> 3] & (1 << (bit1 & 7))) !== 0) {
+        if (((bloomBits[bit1 >>> 3] ?? 0) & (1 << (bit1 & 7))) !== 0) {
           const bit2 = (uh >>> 12) & 4095;
-          if ((bloomBits[bit2 >>> 3] & (1 << (bit2 & 7))) !== 0 && wordHashes.has(uh)) {
+          if (((bloomBits[bit2 >>> 3] ?? 0) & (1 << (bit2 & 7))) !== 0 && wordHashes.has(uh)) {
             return true;
           }
         }

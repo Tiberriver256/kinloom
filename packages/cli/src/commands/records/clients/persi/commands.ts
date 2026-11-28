@@ -116,7 +116,7 @@ export async function runSurname(
   }
   return executeSurname(
     ctx,
-    parsed.positionals[0],
+    parsed.positionals[0] ?? '',
     getNumberOption(parsed, 'limit') ?? 25,
     getBooleanOption(parsed, 'asJson'),
     getBooleanOption(parsed, 'refresh'),
@@ -144,7 +144,7 @@ export async function runTitle(
   }
   return executeTitle(
     ctx,
-    parsed.positionals[0],
+    parsed.positionals[0] ?? '',
     getNumberOption(parsed, 'limit') ?? 25,
     getBooleanOption(parsed, 'asJson'),
     getBooleanOption(parsed, 'refresh'),
@@ -240,7 +240,7 @@ export function runUrl(argv: readonly string[], ctx: RecordCommandContext): Reco
       ),
     };
   }
-  const mode = parsed.positionals[0];
+  const mode = parsed.positionals[0] ?? '';
   const page = PERSI_MODE_PAGES[mode];
   if (!page) {
     throw new CliValidationError(`Invalid mode '${mode}'. Choose from: surname, title, location.`);

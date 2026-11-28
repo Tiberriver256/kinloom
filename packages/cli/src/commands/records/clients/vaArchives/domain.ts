@@ -86,9 +86,9 @@ export interface ChanceryCaseDetail {
   readonly wills: string;
   readonly plat: string;
   readonly format: string;
-  cfn?: string;
-  case_url?: string;
-  images?: ChanceryImagesInfo;
+  cfn?: string | undefined;
+  case_url?: string | undefined;
+  images?: ChanceryImagesInfo | undefined;
 }
 
 export interface ChanceryLocalityRow {
@@ -196,11 +196,11 @@ export function normalizeLvaImageUrl(raw: string): string {
       const scheme = text.split(':', 1)[0];
       throw new Error(`Only https URLs are allowed (got '${scheme}'): ${JSON.stringify(raw)}`);
     }
-    const scheme = schemeMatch[1].toLowerCase();
+    const scheme = (schemeMatch[1] ?? '').toLowerCase();
     if (scheme !== 'https') {
       throw new Error(`Only https URLs are allowed (got '${scheme}'): ${JSON.stringify(raw)}`);
     }
-    const authority = schemeMatch[2];
+    const authority = schemeMatch[2] ?? '';
     if (authority.includes('@')) {
       throw new Error(`Credentials/ports are not allowed: ${JSON.stringify(raw)}`);
     }
@@ -277,7 +277,7 @@ export function parsePageSpec(spec: string, total: number): number[] {
       continue;
     }
     if (part.includes('-')) {
-      const [rawA, rawB] = part.split('-', 2);
+      const [rawA = '', rawB = ''] = part.split('-', 2);
       const a = Number.parseInt(rawA.trim(), 10);
       const b = Number.parseInt(rawB.trim(), 10);
       if (!Number.isInteger(a) || !Number.isInteger(b)) {
@@ -304,10 +304,10 @@ export function parsePageSpec(spec: string, total: number): number[] {
 export function isRosettaFilesCache(value: unknown): value is RosettaFilesCache {
   return (
     isPlainRecord(value) &&
-    typeof value.ie === 'string' &&
-    typeof value.delivery_url === 'string' &&
-    Array.isArray(value.files) &&
-    value.files.length > 0
+    typeof value['ie'] === 'string' &&
+    typeof value['delivery_url'] === 'string' &&
+    Array.isArray(value['files']) &&
+    value['files'].length > 0
   );
 }
 

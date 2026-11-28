@@ -83,8 +83,8 @@ export function isAdoptionEvent(event: RawEvent): boolean {
   if (ADOPTIVE_XREF_RE.test(event.title) && ADOPTIVE_MARKER_RE.test(event.title)) {
     return true;
   }
-  for (let i = 0; i < event.participants.length; i += 1) {
-    const role = event.participants[i].role;
+  for (const pt of event.participants) {
+    const role = pt.role;
     if (ADOPTIVE_XREF_RE.test(role) && ADOPTIVE_MARKER_RE.test(role)) {
       return true;
     }
@@ -153,6 +153,7 @@ export function getMarriageSpouseIds(event: RawEvent): string[] {
   const spouses = new Set<string>();
   for (let i = 0; i < event.participants.length; i += 1) {
     const participant = event.participants[i];
+    if (participant === undefined) continue;
     const roleTokens = participant.role.trim().replaceAll(/[_-]+/g, ' ');
     if (NON_SPOUSE_ROLE_RE.test(roleTokens)) {
       continue;

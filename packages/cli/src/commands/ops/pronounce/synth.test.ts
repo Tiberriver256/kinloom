@@ -285,7 +285,7 @@ describe('kinloom pronounce synth', () => {
       fs.readFileSync(path.join(repoDir, 'kinloom.config.yaml'), 'utf8')
     );
     expect(updatedConfig.pronunciations?.['Hendrik van der Meer']?.audio_url).toBe(hendrikTarget?.audio_url);
-    expect(updatedConfig.pronunciations?.Oakville?.audio_url).toBe(
+    expect(updatedConfig.pronunciations?.['Oakville']?.audio_url).toBe(
       'https://commons.wikimedia.org/wiki/Special:FilePath/En-us-Oakville.ogg'
     );
 
@@ -304,7 +304,7 @@ describe('kinloom pronounce synth', () => {
     const forcedConfig = parseKinloomConfigYaml(
       fs.readFileSync(path.join(repoDir, 'kinloom.config.yaml'), 'utf8')
     );
-    expect(forcedConfig.pronunciations?.Oakville?.audio_url).toBe(oakvilleTarget?.audio_url);
+    expect(forcedConfig.pronunciations?.['Oakville']?.audio_url).toBe(oakvilleTarget?.audio_url);
   });
 
   it('supports true --dry-run on --import-dir and updates explicit person/place overrides in YAML on --update-config', async () => {
@@ -406,7 +406,7 @@ describe('kinloom pronounce synth', () => {
     });
 
     const mockExec: AudioExecFileFn = async (_file, args) => {
-      fs.writeFileSync(args[args.length - 1], Buffer.from('NORMALIZED-WAV-BYTES'));
+      fs.writeFileSync(args[args.length - 1]!, Buffer.from('NORMALIZED-WAV-BYTES'));
       return { stdout: Buffer.alloc(0), stderr: Buffer.alloc(0) };
     };
 
@@ -429,8 +429,8 @@ describe('kinloom pronounce synth', () => {
     expect(openAiBodies).toHaveLength(2);
     for (const body of openAiBodies) {
       expect('seed' in body).toBe(false);
-      expect(body.model).toBe('fishaudio/drama-3');
-      expect(Array.isArray(body.references)).toBe(true);
+      expect(body['model']).toBe('fishaudio/drama-3');
+      expect(Array.isArray(body['references'])).toBe(true);
     }
 
     // Second run skips both existing files cleanly without calling fetch
@@ -596,7 +596,7 @@ describe('kinloom pronounce synth', () => {
     expect(dryText.rendered).toContain('Planned: 2 | Skipped existing: 0');
     const mediaDir = path.join(repoDir, 'media');
     fs.mkdirSync(mediaDir, { recursive: true });
-    fs.writeFileSync(path.join(mediaDir, dryText.items[0].filename), Buffer.from('existing'));
+    fs.writeFileSync(path.join(mediaDir, dryText.items[0]!.filename), Buffer.from('existing'));
 
     const dryWithExisting = await runPronounceSynthCommand({ repoDir, dryRun: true, scope: 'lexicon' });
     expect(dryWithExisting.summary.skipped_existing).toBe(1);
@@ -611,7 +611,7 @@ describe('kinloom pronounce synth', () => {
 
     // Gemini RIFF WAV passthrough + error branches (HTTP 400 and missing inlineData)
     const mockExec: AudioExecFileFn = async (_f, args) => {
-      fs.writeFileSync(args[args.length - 1], Buffer.from('WAV-OUT'));
+      fs.writeFileSync(args[args.length - 1]!, Buffer.from('WAV-OUT'));
       return { stdout: Buffer.alloc(0), stderr: Buffer.alloc(0) };
     };
     const riffWav = wrapPcmAsWav(Buffer.alloc(1600, 0x02), 24000);

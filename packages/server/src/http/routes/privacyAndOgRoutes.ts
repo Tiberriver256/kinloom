@@ -230,24 +230,26 @@ export async function handleDynamicOgRequest(options: DynamicOgRequestOptions): 
   }
 
   const personMatch = pathname.match(/^\/og\/person\/([^/]+)\.svg$/);
-  if (!personMatch) {
+  const rawPersonId = personMatch?.[1];
+  if (!rawPersonId) {
     return null;
   }
 
   let personId: string;
   try {
-    personId = decodeURIComponent(personMatch[1]);
+    personId = decodeURIComponent(rawPersonId);
   } catch {
-    personId = personMatch[1];
+    personId = rawPersonId;
   }
 
   const entity = await repository.getEntity('person', personId);
   const person =
     entity && !entity.deleted_at && 'data' in entity ? parseEntityPayload('person', entity.data) : null;
+  const refYear = siteConfig.privacy.referenceYear ?? clock?.currentYear();
   const ogMeta = resolveRouteOgMetadata({
     siteConfig,
     person,
-    referenceYear: siteConfig.privacy.referenceYear ?? clock?.currentYear(),
+    ...(refYear !== undefined ? { referenceYear: refYear } : {}),
   });
 
   // Living or missing people strictly render the generic site-level OG card
@@ -280,7 +282,7 @@ export interface PrivacyAndOgRouteHandlerDeps {
   readonly siteConfig: KinloomSiteConfig;
   readonly entityStore: Pick<EntityReadStore, 'getEntity'>;
   readonly clock: Clock;
-  readonly privacyDisclosures?: readonly ServerPrivacyDisclosure[];
+  readonly privacyDisclosures?: readonly ServerPrivacyDisclosure[] | undefined;
 }
 
 export function createPrivacyAndOgRouteHandler(

@@ -119,10 +119,10 @@ export interface RecipesClient {
 }
 
 export interface HttpRecipesClientOptions {
-  readonly apiBaseUrl?: string;
-  readonly fetchImpl?: typeof fetch;
-  readonly apiClient?: PluginApiClient;
-  readonly credentials?: RequestCredentials;
+  readonly apiBaseUrl?: string | undefined;
+  readonly fetchImpl?: typeof fetch | undefined;
+  readonly apiClient?: PluginApiClient | undefined;
+  readonly credentials?: RequestCredentials | undefined;
 }
 
 /**
@@ -158,7 +158,7 @@ export function createHttpRecipesClient(options: HttpRecipesClientOptions = {}):
       const qs = buildRecipesListQueryString(params);
       try {
         const parsed = await api.requestJson(`/api/plugins/recipes${qs}`, parseUiRecipeListResponse, {
-          signal: reqOptions?.signal,
+          ...(reqOptions?.signal ? { signal: reqOptions.signal } : {}),
         });
         return {
           ...parsed,
@@ -180,7 +180,7 @@ export function createHttpRecipesClient(options: HttpRecipesClientOptions = {}):
         const parsed = await api.requestJson(
           `/api/plugins/recipes/${encodeURIComponent(slugOrId)}`,
           parseUiRecipeDetailResponse,
-          { signal: reqOptions?.signal }
+          reqOptions?.signal ? { signal: reqOptions.signal } : {}
         );
         return {
           ...parsed,
@@ -207,7 +207,7 @@ export function createHttpRecipesClient(options: HttpRecipesClientOptions = {}):
         const parsed = await api.requestJson(
           `/api/plugins/recipes/by-person/${encodeURIComponent(personId)}${qs}`,
           parseUiRecipesByPersonResponse,
-          { signal: reqOptions?.signal }
+          reqOptions?.signal ? { signal: reqOptions.signal } : {}
         );
         return {
           ...parsed,
@@ -229,7 +229,7 @@ export function createHttpRecipesClient(options: HttpRecipesClientOptions = {}):
         method: 'POST',
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify(input),
-        signal: reqOptions?.signal,
+        ...(reqOptions?.signal ? { signal: reqOptions.signal } : {}),
       });
       return {
         ...parsed,
@@ -249,7 +249,7 @@ export function createHttpRecipesClient(options: HttpRecipesClientOptions = {}):
           method: 'PATCH',
           headers: { 'content-type': 'application/json' },
           body: JSON.stringify(input),
-          signal: reqOptions?.signal,
+          ...(reqOptions?.signal ? { signal: reqOptions.signal } : {}),
         }
       );
       return {
@@ -306,7 +306,7 @@ export function createHttpRecipesClient(options: HttpRecipesClientOptions = {}):
           method: 'PATCH',
           headers: { 'content-type': 'application/json' },
           body: JSON.stringify(patch),
-          signal: reqOptions?.signal,
+          ...(reqOptions?.signal ? { signal: reqOptions.signal } : {}),
         }
       );
       return {
@@ -327,7 +327,7 @@ export function createHttpRecipesClient(options: HttpRecipesClientOptions = {}):
           method: 'POST',
           headers: { 'content-type': 'application/json' },
           body: JSON.stringify({ photo_ids: photoIds }),
-          signal: reqOptions?.signal,
+          ...(reqOptions?.signal ? { signal: reqOptions.signal } : {}),
         }
       );
       return {
@@ -356,7 +356,7 @@ export function createHttpRecipesClient(options: HttpRecipesClientOptions = {}):
         parseUiRecipeStarResponse,
         {
           method: 'POST',
-          signal: reqOptions?.signal,
+          ...(reqOptions?.signal ? { signal: reqOptions.signal } : {}),
         }
       );
     },
@@ -370,7 +370,7 @@ export function createHttpRecipesClient(options: HttpRecipesClientOptions = {}):
         parseUiRecipeStarResponse,
         {
           method: 'DELETE',
-          signal: reqOptions?.signal,
+          ...(reqOptions?.signal ? { signal: reqOptions.signal } : {}),
         }
       );
     },
@@ -383,7 +383,7 @@ export function createHttpRecipesClient(options: HttpRecipesClientOptions = {}):
         return await api.requestJson(
           `/api/plugins/recipes/${encodeURIComponent(slugOrId)}/comments`,
           parseUiRecipeCommentsListResponse,
-          { signal: reqOptions?.signal }
+          reqOptions?.signal ? { signal: reqOptions.signal } : {}
         );
       } catch (err) {
         if (err instanceof ApiClientError && err.status === 404) {
@@ -408,7 +408,7 @@ export function createHttpRecipesClient(options: HttpRecipesClientOptions = {}):
             body_md: input.body_md,
             parent_comment_id: input.parent_comment_id ?? null,
           }),
-          signal: reqOptions?.signal,
+          ...(reqOptions?.signal ? { signal: reqOptions.signal } : {}),
         }
       );
     },
@@ -426,7 +426,7 @@ export function createHttpRecipesClient(options: HttpRecipesClientOptions = {}):
           method: 'PATCH',
           headers: { 'content-type': 'application/json' },
           body: JSON.stringify({ body_md: input.body_md }),
-          signal: reqOptions?.signal,
+          ...(reqOptions?.signal ? { signal: reqOptions.signal } : {}),
         }
       );
     },
@@ -446,9 +446,9 @@ export function createHttpRecipesClient(options: HttpRecipesClientOptions = {}):
 
 export interface StaticRecipesClientOptions {
   readonly recipes: readonly UiRecipeDetail[];
-  readonly photosByRecipeId?: Readonly<Record<string, readonly UiRecipePhoto[]>>;
-  readonly commentsByRecipeId?: Readonly<Record<string, readonly UiRecipeComment[]>>;
-  readonly showHomeWidget?: boolean;
+  readonly photosByRecipeId?: Readonly<Record<string, readonly UiRecipePhoto[]>> | undefined;
+  readonly commentsByRecipeId?: Readonly<Record<string, readonly UiRecipeComment[]>> | undefined;
+  readonly showHomeWidget?: boolean | undefined;
 }
 
 /**

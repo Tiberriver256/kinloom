@@ -216,7 +216,9 @@ export async function runWithConcurrency<T, R>(
           if (idx >= items.length) {
             return;
           }
-          results[idx] = await worker(items[idx], idx);
+          const item = items[idx];
+          if (item === undefined) continue;
+          results[idx] = await worker(item, idx);
         }
       })()
     );

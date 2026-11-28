@@ -17,7 +17,7 @@ export interface RecordCommandContext {
   readonly env: NodeJS.ProcessEnv;
   readonly cwd: string;
   readonly fetchImpl: typeof fetch;
-  readonly execFileImpl?: ExecFileFn;
+  readonly execFileImpl?: ExecFileFn | undefined;
   readonly sleepFn: (ms: number) => Promise<void>;
   readonly nowMs: () => number;
 }
@@ -25,7 +25,7 @@ export interface RecordCommandContext {
 export interface RecordCommandOutcome {
   readonly exitCode: number;
   readonly bytesOut: number;
-  readonly cacheHit?: boolean;
+  readonly cacheHit?: boolean | undefined;
 }
 
 export type RecordHandler = (
@@ -61,7 +61,9 @@ export function defaultSleep(ms: number): Promise<void> {
   });
 }
 
-export function createRecordContext(overrides: Partial<RecordCommandContext> = {}): RecordCommandContext {
+export function createRecordContext(
+  overrides: { [K in keyof RecordCommandContext]?: RecordCommandContext[K] | undefined } = {}
+): RecordCommandContext {
   return {
     io: overrides.io ?? DEFAULT_RECORD_IO,
     env: overrides.env ?? process.env,

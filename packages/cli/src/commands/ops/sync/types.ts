@@ -41,24 +41,24 @@ export interface WranglerBindings {
 }
 
 export interface SyncCommandOptions {
-  repoDir?: string;
-  siteUrl?: string;
-  types?: readonly EntityType[];
-  syncMissingMedia?: boolean;
-  uploadMediaPaths?: readonly string[];
-  concurrency?: number;
-  chunkSize?: number;
-  summary?: string;
-  allowDeletes?: boolean;
-  explicitDeletes?: readonly SyncDeleteTarget[];
-  includeLiving?: boolean;
-  verifyLive?: boolean;
-  dryRun?: boolean;
-  json?: boolean;
-  backupTokenLabel?: string;
-  wranglerBin?: string;
-  fetchImpl?: typeof fetch;
-  execWrangler?: WranglerExecutor;
+  repoDir?: string | undefined;
+  siteUrl?: string | undefined;
+  types?: readonly EntityType[] | undefined;
+  syncMissingMedia?: boolean | undefined;
+  uploadMediaPaths?: readonly string[] | undefined;
+  concurrency?: number | undefined;
+  chunkSize?: number | undefined;
+  summary?: string | undefined;
+  allowDeletes?: boolean | undefined;
+  explicitDeletes?: readonly SyncDeleteTarget[] | undefined;
+  includeLiving?: boolean | undefined;
+  verifyLive?: boolean | undefined;
+  dryRun?: boolean | undefined;
+  json?: boolean | undefined;
+  backupTokenLabel?: string | undefined;
+  wranglerBin?: string | undefined;
+  fetchImpl?: typeof fetch | undefined;
+  execWrangler?: WranglerExecutor | undefined;
 }
 
 export interface SanitizedLocalEntry {
@@ -237,7 +237,9 @@ export async function runWithConcurrency<TItem, TOut>(
         if (idx >= items.length) {
           return;
         }
-        results[idx] = await worker(items[idx], idx);
+        const item = items[idx];
+        if (item === undefined) continue;
+        results[idx] = await worker(item, idx);
       }
     })
   );

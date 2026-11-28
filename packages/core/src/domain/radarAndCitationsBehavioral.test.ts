@@ -286,8 +286,8 @@ describe('radarEngine overflow & spatial matching + domain citations behavioral 
     expect(findSourceUsages('src_primary', null)).toEqual({ usages: [], linkedMedia: [] });
     const usageResult = findSourceUsages('src_primary', bundle);
     expect(usageResult.usages).toHaveLength(2);
-    expect(usageResult.usages[0].primaryPersonName).toBeTruthy();
+    expect(usageResult.usages[0]?.primaryPersonName).toBeTruthy();
     expect(usageResult.linkedMedia).toHaveLength(1);
-    expect(usageResult.linkedMedia[0].id).toBe('med_census_scan');
+    expect(usageResult.linkedMedia[0]?.id).toBe('med_census_scan');
   });
 });

@@ -14,7 +14,7 @@ import type { CliIo } from './io.js';
 export interface KinloomCliPluginContext {
   readonly cwd: string;
   readonly io: CliIo;
-  readonly fetchImpl?: typeof fetch;
+  readonly fetchImpl?: typeof fetch | undefined;
   readonly siteConfig?: KinloomSiteConfig | null;
 }
 

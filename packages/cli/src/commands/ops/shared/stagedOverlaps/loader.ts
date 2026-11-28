@@ -45,97 +45,97 @@ function isKinshipRelation(value: unknown): value is KinshipEdge['relation'] {
 
 export function loadStagedPackage(personId: string, packageDir: string): ParsedPackage {
   const patch = readPatchObject(path.join(packageDir, 'patch.json'));
-  const media = readStagedMediaRefs(patch.media);
+  const media = readStagedMediaRefs(patch['media']);
 
   const sources: StagedSourceRef[] = [];
-  for (const rawItem of Array.isArray(patch.sources) ? patch.sources : []) {
-    if (!isPlainRecord(rawItem) || typeof rawItem.id !== 'string') {
+  for (const rawItem of Array.isArray(patch['sources']) ? patch['sources'] : []) {
+    if (!isPlainRecord(rawItem) || typeof rawItem['id'] !== 'string') {
       continue;
     }
-    const id = rawItem.id.trim();
+    const id = rawItem['id'].trim();
     if (id) {
       sources.push({ id });
     }
   }
 
   const eventRows: StagedEventRow[] = [];
-  for (const rawItem of Array.isArray(patch.events) ? patch.events : []) {
-    if (!isPlainRecord(rawItem) || typeof rawItem.id !== 'string') {
+  for (const rawItem of Array.isArray(patch['events']) ? patch['events'] : []) {
+    if (!isPlainRecord(rawItem) || typeof rawItem['id'] !== 'string') {
       continue;
     }
-    const id = rawItem.id.trim();
+    const id = rawItem['id'].trim();
     if (!id) {
       continue;
     }
     eventRows.push({
       id,
       person_id: personId,
-      edtf_date: nullableText(rawItem.edtf_date),
-      place_id: nullableText(rawItem.place_id),
-      place_precision: nullableText(rawItem.place_precision),
-      title: nullableText(rawItem.title),
+      edtf_date: nullableText(rawItem['edtf_date']),
+      place_id: nullableText(rawItem['place_id']),
+      place_precision: nullableText(rawItem['place_precision']),
+      title: nullableText(rawItem['title']),
     });
   }
 
   const stagedPeople: StagedPersonRow[] = [];
-  for (const rawItem of Array.isArray(patch.people) ? patch.people : []) {
-    if (!isPlainRecord(rawItem) || typeof rawItem.id !== 'string') {
+  for (const rawItem of Array.isArray(patch['people']) ? patch['people'] : []) {
+    if (!isPlainRecord(rawItem) || typeof rawItem['id'] !== 'string') {
       continue;
     }
-    const id = rawItem.id.trim();
+    const id = rawItem['id'].trim();
     if (!id) {
       continue;
     }
     stagedPeople.push({
       id,
       person_id: personId,
-      slug: nullableText(rawItem.slug),
-      full_name: nullableText(rawItem.full_name),
-      given_name: nullableText(rawItem.given_name),
-      surname: nullableText(rawItem.surname),
-      sex: nullableText(rawItem.sex),
-      birth_edtf: nullableText(rawItem.birth_edtf),
-      death_edtf: nullableText(rawItem.death_edtf),
-      lineage_group: nullableText(rawItem.lineage_group),
-      branch: nullableText(rawItem.branch),
+      slug: nullableText(rawItem['slug']),
+      full_name: nullableText(rawItem['full_name']),
+      given_name: nullableText(rawItem['given_name']),
+      surname: nullableText(rawItem['surname']),
+      sex: nullableText(rawItem['sex']),
+      birth_edtf: nullableText(rawItem['birth_edtf']),
+      death_edtf: nullableText(rawItem['death_edtf']),
+      lineage_group: nullableText(rawItem['lineage_group']),
+      branch: nullableText(rawItem['branch']),
     });
   }
 
   const kinshipAdds: StagedKinshipAdd[] = [];
-  for (const rawItem of Array.isArray(patch.kinship) ? patch.kinship : []) {
+  for (const rawItem of Array.isArray(patch['kinship']) ? patch['kinship'] : []) {
     if (!isPlainRecord(rawItem)) {
       continue;
     }
-    const from = nullableText(rawItem.from);
-    const to = nullableText(rawItem.to);
-    if (!from || !to || !isKinshipRelation(rawItem.relation)) {
+    const from = nullableText(rawItem['from']);
+    const to = nullableText(rawItem['to']);
+    if (!from || !to || !isKinshipRelation(rawItem['relation'])) {
       continue;
     }
     kinshipAdds.push({
       from,
       to,
-      relation: rawItem.relation,
-      family_xref: nullableText(rawItem.family_xref),
+      relation: rawItem['relation'],
+      family_xref: nullableText(rawItem['family_xref']),
     });
   }
 
   const removeKinshipEntries: RemoveKinshipEntry[] = [];
-  for (const rawItem of Array.isArray(patch.remove_kinship) ? patch.remove_kinship : []) {
+  for (const rawItem of Array.isArray(patch['remove_kinship']) ? patch['remove_kinship'] : []) {
     if (!isPlainRecord(rawItem)) {
       continue;
     }
-    const from = nullableText(rawItem.from);
-    const to = nullableText(rawItem.to);
-    if (!from || !to || !isKinshipRelation(rawItem.relation)) {
+    const from = nullableText(rawItem['from']);
+    const to = nullableText(rawItem['to']);
+    if (!from || !to || !isKinshipRelation(rawItem['relation'])) {
       continue;
     }
-    const familyXref = nullableText(rawItem.family_xref);
+    const familyXref = nullableText(rawItem['family_xref']);
     removeKinshipEntries.push({
       from,
       to,
-      relation: rawItem.relation,
+      relation: rawItem['relation'],
       ...(familyXref !== null ? { family_xref: familyXref } : {}),
-      symmetric: typeof rawItem.symmetric === 'boolean' ? rawItem.symmetric : true,
+      symmetric: typeof rawItem['symmetric'] === 'boolean' ? rawItem['symmetric'] : true,
     });
   }
   const kinshipRemoves = expandRemoveKinshipTargets(removeKinshipEntries);

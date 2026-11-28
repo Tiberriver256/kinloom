@@ -1,7 +1,6 @@
 import {
   DUMMY_TO_DUMMY_GAP,
   DUMMY_TO_UNIT_GAP,
-  type LayeredEdge,
   type LayeredGraph,
   type LayerItem,
 } from './layeredChannels.js';
@@ -43,36 +42,35 @@ function buildPreparedPassGraph(
 } {
   const numLayers = graph.layers.length;
   let total = 0;
-  for (let l = 0; l < numLayers; l += 1) {
-    total += graph.layers[l].length;
+  for (const layer of graph.layers) {
+    total += layer.length;
   }
 
-  const items: LayerItem[] = new Array(total);
+  const items: LayerItem[] = [];
   const idToIdx = new Map<string, number>();
-  const layers: number[][] = new Array(numLayers);
+  const layers: number[][] = [];
   const posInLayer = new Int32Array(total);
 
   let cursor = 0;
-  for (let l = 0; l < numLayers; l += 1) {
-    const srcLayer = graph.layers[l];
+  for (const srcLayer of graph.layers) {
     const len = srcLayer.length;
-    const row = new Array<number>(len);
+    const row: number[] = [];
     for (let r = 0; r < len; r += 1) {
       const item = mirrorHorizontal ? srcLayer[len - 1 - r] : srcLayer[r];
-      items[cursor] = item;
+      if (!item) continue;
+      items.push(item);
       idToIdx.set(item.id, cursor);
-      row[r] = cursor;
+      row.push(cursor);
       posInLayer[cursor] = r;
       cursor += 1;
     }
-    layers[l] = row;
+    layers.push(row);
   }
 
   const upperNeighbors: IndexedNeighbor[][] = Array.from({ length: total }, () => []);
   const lowerNeighbors: IndexedNeighbor[][] = Array.from({ length: total }, () => []);
 
-  for (let e = 0; e < graph.edges.length; e += 1) {
-    const edge: LayeredEdge = graph.edges[e];
+  for (const [e, edge] of graph.edges.entries()) {
     const srcIdx = idToIdx.get(edge.sourceId);
     const tgtIdx = idToIdx.get(edge.targetId);
     if (srcIdx === undefined || tgtIdx === undefined) {
@@ -80,17 +78,20 @@ function buildPreparedPassGraph(
     }
     const srcItem = items[srcIdx];
     const tgtItem = items[tgtIdx];
+    if (!srcItem || !tgtItem) {
+      continue;
+    }
     const srcPortX = mirrorHorizontal ? srcItem.width - edge.sourcePortOffsetX : edge.sourcePortOffsetX;
     const tgtPortX = mirrorHorizontal ? tgtItem.width - edge.targetPortOffsetX : edge.targetPortOffsetX;
 
-    lowerNeighbors[srcIdx].push({
+    lowerNeighbors[srcIdx]?.push({
       neighborIdx: tgtIdx,
       selfPortX: srcPortX,
       neighborPortX: tgtPortX,
       isInnerSegment: edge.isInnerSegment,
       edgeIdx: e,
     });
-    upperNeighbors[tgtIdx].push({
+    upperNeighbors[tgtIdx]?.push({
       neighborIdx: srcIdx,
       selfPortX: tgtPortX,
       neighborPortX: srcPortX,
@@ -100,18 +101,20 @@ function buildPreparedPassGraph(
   }
 
   const byNeighborOrder = (a: IndexedNeighbor, b: IndexedNeighbor): number => {
-    const posDiff = posInLayer[a.neighborIdx] - posInLayer[b.neighborIdx];
+    const posDiff = (posInLayer[a.neighborIdx] ?? 0) - (posInLayer[b.neighborIdx] ?? 0);
     if (posDiff !== 0) {
       return posDiff;
     }
     return a.neighborPortX - b.neighborPortX;
   };
   for (let i = 0; i < total; i += 1) {
-    if (upperNeighbors[i].length > 1) {
-      upperNeighbors[i].sort(byNeighborOrder);
+    const ups = upperNeighbors[i];
+    if (ups && ups.length > 1) {
+      ups.sort(byNeighborOrder);
     }
-    if (lowerNeighbors[i].length > 1) {
-      lowerNeighbors[i].sort(byNeighborOrder);
+    const downs = lowerNeighbors[i];
+    if (downs && downs.length > 1) {
+      downs.sort(byNeighborOrder);
     }
   }
 
@@ -119,19 +122,20 @@ function buildPreparedPassGraph(
   const conflictedEdges = new Uint8Array(graph.edges.length);
   for (let l = 1; l < numLayers - 1; l += 1) {
     const lowerRow = layers[l + 1];
-    const upperLen = layers[l].length;
-    if (lowerRow.length === 0 || upperLen === 0) {
+    const upperLen = layers[l]?.length ?? 0;
+    if (!lowerRow || lowerRow.length === 0 || upperLen === 0) {
       continue;
     }
     let k0 = 0;
     let scanStart = 0;
     for (let l1 = 0; l1 < lowerRow.length; l1 += 1) {
       const v = lowerRow[l1];
-      const ups = upperNeighbors[v];
+      if (v === undefined) continue;
+      const ups = upperNeighbors[v] ?? [];
       let innerUpperPos = -1;
-      for (let i = 0; i < ups.length; i += 1) {
-        if (ups[i].isInnerSegment) {
-          innerUpperPos = posInLayer[ups[i].neighborIdx];
+      for (const ref of ups) {
+        if (ref.isInnerSegment) {
+          innerUpperPos = posInLayer[ref.neighborIdx] ?? -1;
           break;
         }
       }
@@ -139,13 +143,12 @@ function buildPreparedPassGraph(
         const k1 = innerUpperPos >= 0 ? innerUpperPos : upperLen - 1;
         while (scanStart <= l1) {
           const w = lowerRow[scanStart];
-          const wUps = upperNeighbors[w];
-          for (let i = 0; i < wUps.length; i += 1) {
-            const ref = wUps[i];
+          const wUps = w !== undefined ? (upperNeighbors[w] ?? []) : [];
+          for (const ref of wUps) {
             if (ref.isInnerSegment) {
               continue;
             }
-            const uPos = posInLayer[ref.neighborIdx];
+            const uPos = posInLayer[ref.neighborIdx] ?? 0;
             if (uPos < k0 || uPos > k1) {
               conflictedEdges[ref.edgeIdx] = 1;
             }
@@ -194,10 +197,10 @@ function runVerticalAlignmentAndCompaction(
 
   for (let l = startLayer; l !== endLayer; l += layerStep) {
     const row = layers[l];
+    if (!row) continue;
     let lastAlignedPos = -1;
-    for (let r = 0; r < row.length; r += 1) {
-      const v = row[r];
-      const nbrs = neighborsOf[v];
+    for (const v of row) {
+      const nbrs = neighborsOf[v] ?? [];
       const deg = nbrs.length;
       if (deg === 0) {
         continue;
@@ -209,16 +212,17 @@ function runVerticalAlignmentAndCompaction(
           break;
         }
         const ref = nbrs[m];
-        if (conflictedEdges[ref.edgeIdx] === 1) {
+        if (!ref || conflictedEdges[ref.edgeIdx] === 1) {
           continue;
         }
         const u = ref.neighborIdx;
-        const uPos = posInLayer[u];
+        const uPos = posInLayer[u] ?? 0;
         if (lastAlignedPos < uPos) {
+          const rootU = root[u] ?? u;
           align[u] = v;
-          root[v] = root[u];
-          align[v] = root[v];
-          delta[v] = delta[u] + (ref.neighborPortX - ref.selfPortX);
+          root[v] = rootU;
+          align[v] = rootU;
+          delta[v] = (delta[u] ?? 0) + (ref.neighborPortX - ref.selfPortX);
           lastAlignedPos = uPos;
         }
       }
@@ -228,7 +232,7 @@ function runVerticalAlignmentAndCompaction(
   // Brandes-Kopf Algorithm 3 (ELK BKCompactor variant): acyclic block-DAG longest-path + sink-class compaction.
   const blockMembers = new Map<number, number[]>();
   for (let i = 0; i < total; i += 1) {
-    const r = root[i];
+    const r = root[i] ?? i;
     const list = blockMembers.get(r);
     if (list) {
       list.push(i);
@@ -245,8 +249,8 @@ function runVerticalAlignmentAndCompaction(
   }
   const blockCount = blockRoots.length;
   const rootToBlockIdx = new Int32Array(total).fill(-1);
-  for (let b = 0; b < blockCount; b += 1) {
-    rootToBlockIdx[blockRoots[b]] = b;
+  for (const [b, br] of blockRoots.entries()) {
+    rootToBlockIdx[br] = b;
   }
 
   // Build weighted block DAG edges: predBlock -> curBlock with weight reqDiff.
@@ -256,20 +260,23 @@ function runVerticalAlignmentAndCompaction(
   );
   const inDegree = new Int32Array(blockCount);
 
-  for (let l = 0; l < numLayers; l += 1) {
-    const row = layers[l];
+  for (const row of layers) {
     for (let r = 1; r < row.length; r += 1) {
       const pred = row[r - 1];
       const cur = row[r];
-      const pb = rootToBlockIdx[root[pred]];
-      const cb = rootToBlockIdx[root[cur]];
-      if (pb === cb) {
+      if (pred === undefined || cur === undefined) continue;
+      const pb = rootToBlockIdx[root[pred] ?? pred] ?? -1;
+      const cb = rootToBlockIdx[root[cur] ?? cur] ?? -1;
+      if (pb === cb || pb < 0 || cb < 0) {
         continue;
       }
-      const sep = minItemSeparation(items[pred], items[cur]);
-      const weight = delta[pred] + items[pred].width + sep - delta[cur];
-      outEdges[pb].push({ to: cb, weight });
-      inDegree[cb] += 1;
+      const predItem = items[pred];
+      const curItem = items[cur];
+      if (!predItem || !curItem) continue;
+      const sep = minItemSeparation(predItem, curItem);
+      const weight = (delta[pred] ?? 0) + predItem.width + sep - (delta[cur] ?? 0);
+      outEdges[pb]?.push({ to: cb, weight });
+      inDegree[cb] = (inDegree[cb] ?? 0) + 1;
     }
   }
 
@@ -286,15 +293,16 @@ function runVerticalAlignmentAndCompaction(
   }
   let topoLen = 0;
   while (qHead < qTail) {
-    const b = queue[qHead];
+    const b = queue[qHead] ?? 0;
     qHead += 1;
     topo[topoLen] = b;
     topoLen += 1;
-    const edges = outEdges[b];
-    for (let i = 0; i < edges.length; i += 1) {
-      const nxt = edges[i].to;
-      inDegree[nxt] -= 1;
-      if (inDegree[nxt] === 0) {
+    const edges = outEdges[b] ?? [];
+    for (const edge of edges) {
+      const nxt = edge.to;
+      const nextDeg = (inDegree[nxt] ?? 0) - 1;
+      inDegree[nxt] = nextDeg;
+      if (nextDeg === 0) {
         queue[qTail] = nxt;
         qTail += 1;
       }
@@ -305,10 +313,10 @@ function runVerticalAlignmentAndCompaction(
   const bx = new Float64Array(blockCount);
   const sink = new Int32Array(blockCount);
   for (let b = 0; b < blockCount; b += 1) {
-    const members = blockMemberLists[b];
+    const members = blockMemberLists[b] ?? [];
     let minDelta = 0;
-    for (let i = 0; i < members.length; i += 1) {
-      const d = delta[members[i]];
+    for (const memberIdx of members) {
+      const d = delta[memberIdx] ?? 0;
       if (d < minDelta) {
         minDelta = d;
       }
@@ -318,14 +326,15 @@ function runVerticalAlignmentAndCompaction(
   }
 
   for (let t = 0; t < topoLen; t += 1) {
-    const b = topo[t];
-    const edges = outEdges[b];
-    for (let i = 0; i < edges.length; i += 1) {
-      const e = edges[i];
-      const candidate = bx[b] + e.weight;
-      if (candidate > bx[e.to]) {
+    const b = topo[t] ?? 0;
+    const edges = outEdges[b] ?? [];
+    const bxB = bx[b] ?? 0;
+    const sinkB = sink[b] ?? b;
+    for (const e of edges) {
+      const candidate = bxB + e.weight;
+      if (candidate > (bx[e.to] ?? 0)) {
         bx[e.to] = candidate;
-        sink[e.to] = sink[b];
+        sink[e.to] = sinkB;
       }
     }
   }
@@ -333,8 +342,8 @@ function runVerticalAlignmentAndCompaction(
   // Pass 2: compact sink classes rightward in reverse topological order without violating any edge.
   const classBlocks = new Map<number, number[]>();
   for (let t = topoLen - 1; t >= 0; t -= 1) {
-    const b = topo[t];
-    const s = sink[b];
+    const b = topo[t] ?? 0;
+    const s = sink[b] ?? b;
     const list = classBlocks.get(s);
     if (list) {
       list.push(b);
@@ -345,31 +354,30 @@ function runVerticalAlignmentAndCompaction(
 
   for (const [cls, blocksInCls] of classBlocks.entries()) {
     let minSlack = Number.POSITIVE_INFINITY;
-    for (let i = 0; i < blocksInCls.length; i += 1) {
-      const b = blocksInCls[i];
-      const edges = outEdges[b];
-      for (let j = 0; j < edges.length; j += 1) {
-        const e = edges[j];
+    for (const b of blocksInCls) {
+      const edges = outEdges[b] ?? [];
+      const bxB = bx[b] ?? 0;
+      for (const e of edges) {
         if (sink[e.to] === cls) {
           continue;
         }
-        const slack = bx[e.to] - (bx[b] + e.weight);
+        const slack = (bx[e.to] ?? 0) - (bxB + e.weight);
         if (slack < minSlack) {
           minSlack = slack;
         }
       }
     }
     if (Number.isFinite(minSlack) && minSlack > 0) {
-      for (let i = 0; i < blocksInCls.length; i += 1) {
-        bx[blocksInCls[i]] += minSlack;
+      for (const b of blocksInCls) {
+        bx[b] = (bx[b] ?? 0) + minSlack;
       }
     }
   }
 
   const coords = new Float64Array(total);
   for (let i = 0; i < total; i += 1) {
-    const bIdx = rootToBlockIdx[root[i]];
-    coords[i] = bx[bIdx] + delta[i];
+    const bIdx = rootToBlockIdx[root[i] ?? i] ?? 0;
+    coords[i] = (bx[bIdx] ?? 0) + (delta[i] ?? 0);
   }
   return coords;
 }
@@ -383,8 +391,8 @@ export function assignBrandesKopfX(graph: LayeredGraph, leftPad: number): Readon
   const result = new Map<string, number>();
   const numLayers = graph.layers.length;
   let totalItems = 0;
-  for (let l = 0; l < numLayers; l += 1) {
-    totalItems += graph.layers[l].length;
+  for (const layer of graph.layers) {
+    totalItems += layer.length;
   }
   if (totalItems === 0) {
     return result;
@@ -405,13 +413,15 @@ export function assignBrandesKopfX(graph: LayeredGraph, leftPad: number): Readon
   for (let l = 0; l < numLayers; l += 1) {
     const leftRow = leftSetup.prepared.layers[l];
     const rightRow = rightSetup.prepared.layers[l];
+    if (!leftRow || !rightRow) continue;
     const len = leftRow.length;
     for (let r = 0; r < len; r += 1) {
       const leftIdx = leftRow[r];
       const rightIdx = rightRow[len - 1 - r];
-      const width = leftItems[leftIdx].width;
-      rawUR[leftIdx] = -mirroredUR[rightIdx] - width;
-      rawDR[leftIdx] = -mirroredDR[rightIdx] - width;
+      if (leftIdx === undefined || rightIdx === undefined) continue;
+      const width = leftItems[leftIdx]?.width ?? 0;
+      rawUR[leftIdx] = -(mirroredUR[rightIdx] ?? 0) - width;
+      rawDR[leftIdx] = -(mirroredDR[rightIdx] ?? 0) - width;
     }
   }
 
@@ -429,13 +439,13 @@ export function assignBrandesKopfX(graph: LayeredGraph, leftPad: number): Readon
   const passMin = new Float64Array(4);
   const passMax = new Float64Array(4);
 
-  for (let p = 0; p < 4; p += 1) {
-    const coords = passes[p].coords;
+  for (const [p, pass] of passes.entries()) {
+    const coords = pass.coords;
     let lo = Number.POSITIVE_INFINITY;
     let hi = Number.NEGATIVE_INFINITY;
     for (let i = 0; i < totalItems; i += 1) {
-      const x0 = coords[i];
-      const x1 = x0 + leftItems[i].width;
+      const x0 = coords[i] ?? 0;
+      const x1 = x0 + (leftItems[i]?.width ?? 0);
       if (x0 < lo) lo = x0;
       if (x1 > hi) hi = x1;
     }
@@ -450,66 +460,74 @@ export function assignBrandesKopfX(graph: LayeredGraph, leftPad: number): Readon
   }
 
   const shifts = new Float64Array(4);
-  for (let p = 0; p < 4; p += 1) {
-    shifts[p] = passes[p].alignSide === 'left' ? refMin - passMin[p] : refMax - passMax[p];
+  for (const [p, pass] of passes.entries()) {
+    shifts[p] = pass.alignSide === 'left' ? refMin - (passMin[p] ?? 0) : refMax - (passMax[p] ?? 0);
   }
 
   const finalX = new Float64Array(totalItems);
-  const buf = [0, 0, 0, 0];
+  const s0 = shifts[0] ?? 0;
+  const s1 = shifts[1] ?? 0;
+  const s2 = shifts[2] ?? 0;
+  const s3 = shifts[3] ?? 0;
   for (let i = 0; i < totalItems; i += 1) {
-    buf[0] = rawUL[i] + shifts[0];
-    buf[1] = rawUR[i] + shifts[1];
-    buf[2] = rawDL[i] + shifts[2];
-    buf[3] = rawDR[i] + shifts[3];
+    let b0 = (rawUL[i] ?? 0) + s0;
+    let b1 = (rawUR[i] ?? 0) + s1;
+    let b2 = (rawDL[i] ?? 0) + s2;
+    let b3 = (rawDR[i] ?? 0) + s3;
     // 4-element sorting network (branchless, zero allocations).
-    if (buf[0] > buf[1]) {
-      const t = buf[0];
-      buf[0] = buf[1];
-      buf[1] = t;
+    if (b0 > b1) {
+      const t = b0;
+      b0 = b1;
+      b1 = t;
     }
-    if (buf[2] > buf[3]) {
-      const t = buf[2];
-      buf[2] = buf[3];
-      buf[3] = t;
+    if (b2 > b3) {
+      const t = b2;
+      b2 = b3;
+      b3 = t;
     }
-    if (buf[0] > buf[2]) {
-      const t = buf[0];
-      buf[0] = buf[2];
-      buf[2] = t;
+    if (b0 > b2) {
+      const t = b0;
+      b0 = b2;
+      b2 = t;
     }
-    if (buf[1] > buf[3]) {
-      const t = buf[1];
-      buf[1] = buf[3];
-      buf[3] = t;
+    if (b1 > b3) {
+      const t = b1;
+      b1 = b3;
+      b3 = t;
     }
-    if (buf[1] > buf[2]) {
-      const t = buf[1];
-      buf[1] = buf[2];
-      buf[2] = t;
+    if (b1 > b2) {
+      const t = b1;
+      b1 = b2;
+      b2 = t;
     }
-    finalX[i] = Math.round((buf[1] + buf[2]) / 2);
+    finalX[i] = Math.round((b1 + b2) / 2);
   }
 
   // Enforce integer non-overlap after rounding.
   let globalMinX = Number.POSITIVE_INFINITY;
   let globalMaxRight = Number.NEGATIVE_INFINITY;
-  for (let l = 0; l < numLayers; l += 1) {
-    const row = leftSetup.prepared.layers[l];
+  for (const row of leftSetup.prepared.layers) {
     for (let r = 0; r < row.length; r += 1) {
       const cur = row[r];
+      if (cur === undefined) continue;
+      const curItem = leftItems[cur];
+      if (!curItem) continue;
       if (r > 0) {
         const prev = row[r - 1];
-        const minAllowed =
-          finalX[prev] + leftItems[prev].width + minItemSeparation(leftItems[prev], leftItems[cur]);
-        if (finalX[cur] < minAllowed) {
-          finalX[cur] = Math.ceil(minAllowed);
+        const prevItem = prev !== undefined ? leftItems[prev] : undefined;
+        if (prev !== undefined && prevItem) {
+          const minAllowed = (finalX[prev] ?? 0) + prevItem.width + minItemSeparation(prevItem, curItem);
+          if ((finalX[cur] ?? 0) < minAllowed) {
+            finalX[cur] = Math.ceil(minAllowed);
+          }
         }
       }
-      if (finalX[cur] < globalMinX) {
-        globalMinX = finalX[cur];
+      const curX = finalX[cur] ?? 0;
+      if (curX < globalMinX) {
+        globalMinX = curX;
       }
-      if (finalX[cur] + leftItems[cur].width > globalMaxRight) {
-        globalMaxRight = finalX[cur] + leftItems[cur].width;
+      if (curX + curItem.width > globalMaxRight) {
+        globalMaxRight = curX + curItem.width;
       }
     }
   }
@@ -518,29 +536,34 @@ export function assignBrandesKopfX(graph: LayeredGraph, leftPad: number): Readon
   const { upperNeighbors, lowerNeighbors } = leftSetup.prepared;
   for (let l = numLayers - 2; l >= 0; l -= 1) {
     const row = leftSetup.prepared.layers[l];
+    if (!row) continue;
     for (let r = 0; r < row.length; r += 1) {
       const idx = row[r];
+      if (idx === undefined) continue;
       const item = leftItems[idx];
-      if (item.kind === 'dummy') {
+      if (!item || item.kind === 'dummy') {
         continue;
       }
-      const downs = lowerNeighbors[idx];
+      const downs = lowerNeighbors[idx] ?? [];
       if (downs.length === 0) {
         continue;
       }
       let downMean = 0;
-      for (let k = 0; k < downs.length; k += 1) {
-        const ref = downs[k];
-        downMean += finalX[ref.neighborIdx] + ref.neighborPortX - ref.selfPortX;
+      for (const ref of downs) {
+        downMean += (finalX[ref.neighborIdx] ?? 0) + ref.neighborPortX - ref.selfPortX;
       }
       const desiredX = Math.round(downMean / downs.length);
+      const prevIdx = r > 0 ? row[r - 1] : undefined;
+      const prevItem = prevIdx !== undefined ? leftItems[prevIdx] : undefined;
+      const nextIdx = r < row.length - 1 ? row[r + 1] : undefined;
+      const nextItem = nextIdx !== undefined ? leftItems[nextIdx] : undefined;
       const minBound =
-        r > 0
-          ? finalX[row[r - 1]] + leftItems[row[r - 1]].width + minItemSeparation(leftItems[row[r - 1]], item)
+        prevIdx !== undefined && prevItem
+          ? (finalX[prevIdx] ?? 0) + prevItem.width + minItemSeparation(prevItem, item)
           : globalMinX;
       const maxBound =
-        r < row.length - 1
-          ? finalX[row[r + 1]] - minItemSeparation(item, leftItems[row[r + 1]]) - item.width
+        nextIdx !== undefined && nextItem
+          ? (finalX[nextIdx] ?? 0) - minItemSeparation(item, nextItem) - item.width
           : globalMaxRight - item.width;
       if (minBound <= maxBound) {
         finalX[idx] = Math.round(Math.max(minBound, Math.min(maxBound, desiredX)));
@@ -551,29 +574,34 @@ export function assignBrandesKopfX(graph: LayeredGraph, leftPad: number): Readon
   // Pull childless leaf units cleanly beneath their parent port within free horizontal space.
   for (let l = 1; l < numLayers; l += 1) {
     const row = leftSetup.prepared.layers[l];
+    if (!row) continue;
     for (let r = 0; r < row.length; r += 1) {
       const idx = row[r];
+      if (idx === undefined) continue;
       const item = leftItems[idx];
-      if (item.kind === 'dummy' || lowerNeighbors[idx].length > 0) {
+      if (!item || item.kind === 'dummy' || (lowerNeighbors[idx]?.length ?? 0) > 0) {
         continue;
       }
-      const ups = upperNeighbors[idx];
+      const ups = upperNeighbors[idx] ?? [];
       if (ups.length === 0) {
         continue;
       }
       let upMean = 0;
-      for (let k = 0; k < ups.length; k += 1) {
-        const ref = ups[k];
-        upMean += finalX[ref.neighborIdx] + ref.neighborPortX - ref.selfPortX;
+      for (const ref of ups) {
+        upMean += (finalX[ref.neighborIdx] ?? 0) + ref.neighborPortX - ref.selfPortX;
       }
       const desiredX = Math.round(upMean / ups.length);
+      const prevIdx = r > 0 ? row[r - 1] : undefined;
+      const prevItem = prevIdx !== undefined ? leftItems[prevIdx] : undefined;
+      const nextIdx = r < row.length - 1 ? row[r + 1] : undefined;
+      const nextItem = nextIdx !== undefined ? leftItems[nextIdx] : undefined;
       const minBound =
-        r > 0
-          ? finalX[row[r - 1]] + leftItems[row[r - 1]].width + minItemSeparation(leftItems[row[r - 1]], item)
+        prevIdx !== undefined && prevItem
+          ? (finalX[prevIdx] ?? 0) + prevItem.width + minItemSeparation(prevItem, item)
           : globalMinX;
       const maxBound =
-        r < row.length - 1
-          ? finalX[row[r + 1]] - minItemSeparation(item, leftItems[row[r + 1]]) - item.width
+        nextIdx !== undefined && nextItem
+          ? (finalX[nextIdx] ?? 0) - minItemSeparation(item, nextItem) - item.width
           : globalMaxRight - item.width;
       if (minBound <= maxBound) {
         finalX[idx] = Math.round(Math.max(minBound, Math.min(maxBound, desiredX)));
@@ -583,14 +611,15 @@ export function assignBrandesKopfX(graph: LayeredGraph, leftPad: number): Readon
 
   globalMinX = Number.POSITIVE_INFINITY;
   for (let i = 0; i < totalItems; i += 1) {
-    if (finalX[i] < globalMinX) {
-      globalMinX = finalX[i];
+    const x = finalX[i] ?? 0;
+    if (x < globalMinX) {
+      globalMinX = x;
     }
   }
 
   const normalizeShift = Math.round(leftPad - globalMinX);
-  for (let i = 0; i < totalItems; i += 1) {
-    result.set(leftItems[i].id, Math.round(finalX[i] + normalizeShift));
+  for (const [i, item] of leftItems.entries()) {
+    result.set(item.id, Math.round((finalX[i] ?? 0) + normalizeShift));
   }
   return result;
 }

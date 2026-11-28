@@ -43,12 +43,12 @@ function collectSiblingIds(
     return false;
   });
   for (const edge of parseMatchingYamlBlocks(blocks)) {
-    const from = typeof edge.from === 'string' ? edge.from : '';
-    const to = typeof edge.to === 'string' ? edge.to : '';
+    const from = typeof edge['from'] === 'string' ? edge['from'] : '';
+    const to = typeof edge['to'] === 'string' ? edge['to'] : '';
     let siblingId = '';
-    if (edge.relation === 'parent' && parentIds.has(from)) {
+    if (edge['relation'] === 'parent' && parentIds.has(from)) {
       siblingId = to;
-    } else if (edge.relation === 'child' && parentIds.has(to)) {
+    } else if (edge['relation'] === 'child' && parentIds.has(to)) {
       siblingId = from;
     }
     if (siblingId && !excludedIds.has(siblingId)) {
@@ -73,21 +73,21 @@ export function resolveImmediateKinship(
   const spouseIds = new Set<string>();
   const childIds = new Set<string>();
   for (const edge of relevantKinship) {
-    const from = typeof edge.from === 'string' ? edge.from : '';
-    const to = typeof edge.to === 'string' ? edge.to : '';
-    if (edge.relation === 'parent') {
+    const from = typeof edge['from'] === 'string' ? edge['from'] : '';
+    const to = typeof edge['to'] === 'string' ? edge['to'] : '';
+    if (edge['relation'] === 'parent') {
       if (to === personId && from) {
         parentIds.add(from);
       } else if (from === personId && to) {
         childIds.add(to);
       }
-    } else if (edge.relation === 'child') {
+    } else if (edge['relation'] === 'child') {
       if (from === personId && to) {
         parentIds.add(to);
       } else if (to === personId && from) {
         childIds.add(from);
       }
-    } else if (edge.relation === 'spouse') {
+    } else if (edge['relation'] === 'spouse') {
       if (from === personId && to) {
         spouseIds.add(to);
       } else if (to === personId && from) {
@@ -122,13 +122,13 @@ export function scanTargetAndUnknownYearEvents(
 } {
   const needEventYearIds = new Set<string>();
   for (const person of parsedPeople) {
-    if (typeof person.id !== 'string') {
+    if (typeof person['id'] !== 'string') {
       continue;
     }
-    const hasDeath = asNonEmptyString(person.death_edtf).length > 0;
-    const hasBirth = asNonEmptyString(person.birth_edtf).length > 0;
-    if (!person.is_living && !person.living && !hasDeath && !hasBirth) {
-      needEventYearIds.add(person.id);
+    const hasDeath = asNonEmptyString(person['death_edtf']).length > 0;
+    const hasBirth = asNonEmptyString(person['birth_edtf']).length > 0;
+    if (!person['is_living'] && !person['living'] && !hasDeath && !hasBirth) {
+      needEventYearIds.add(person['id']);
     }
   }
 
@@ -142,7 +142,7 @@ export function scanTargetAndUnknownYearEvents(
       for (const uid of needEventYearIds) {
         if (block.includes(uid)) {
           const dateMatch = /^\s+edtf_date:\s*(.*)$/m.exec(block);
-          const dateVal = dateMatch ? dateMatch[1].trim().replaceAll(/^["']|["']$/g, '') : '';
+          const dateVal = dateMatch ? (dateMatch[1] ?? '').trim().replaceAll(/^["']|["']$/g, '') : '';
           const list = unknownYearEventsByPerson.get(uid);
           if (list) {
             list.push({ edtf_date: dateVal });
@@ -156,8 +156,8 @@ export function scanTargetAndUnknownYearEvents(
 
   const rawPersonEvents = parseMatchingYamlBlocks(targetEventBlocks).filter(
     (ev) =>
-      Array.isArray(ev.participants) &&
-      ev.participants.some((pt) => isPlainRecord(pt) && pt.person_id === personId)
+      Array.isArray(ev['participants']) &&
+      ev['participants'].some((pt) => isPlainRecord(pt) && pt['person_id'] === personId)
   );
 
   return { rawPersonEvents, unknownYearEventsByPerson };
@@ -187,10 +187,10 @@ export function buildRelativesSummary(
         };
       }
       return {
-        id: String(rel.id),
-        full_name: scrubText(asNonEmptyString(rel.full_name), privacyState.livingNamePattern),
+        id: String(rel['id']),
+        full_name: scrubText(asNonEmptyString(rel['full_name']), privacyState.livingNamePattern),
         lifespan: formatLifespan(rel),
-        gedcom_xref: typeof rel.gedcom_xref === 'string' ? rel.gedcom_xref : null,
+        gedcom_xref: typeof rel['gedcom_xref'] === 'string' ? rel['gedcom_xref'] : null,
       };
     });
 
@@ -207,26 +207,26 @@ export function buildSanitizedKinshipEdges(
   livingIds: ReadonlySet<string>
 ): ContextKinshipEdge[] {
   return relevantKinship
-    .filter((edge) => edge.from === personId || edge.to === personId)
+    .filter((edge) => edge['from'] === personId || edge['to'] === personId)
     .map((edge) => {
-      const fromId = typeof edge.from === 'string' ? edge.from : '';
-      const toId = typeof edge.to === 'string' ? edge.to : '';
+      const fromId = typeof edge['from'] === 'string' ? edge['from'] : '';
+      const toId = typeof edge['to'] === 'string' ? edge['to'] : '';
       return {
         from: livingIds.has(fromId) ? REDACTED_RELATIVE_LABEL : fromId,
         to: livingIds.has(toId) ? REDACTED_RELATIVE_LABEL : toId,
-        relation: typeof edge.relation === 'string' ? edge.relation : '',
-        ...(typeof edge.family_xref === 'string' ? { family_xref: edge.family_xref } : {}),
+        relation: typeof edge['relation'] === 'string' ? edge['relation'] : '',
+        ...(typeof edge['family_xref'] === 'string' ? { family_xref: edge['family_xref'] } : {}),
       };
     });
 }
 
 function linkedMediaPersonIds(item: LooseYamlRecord): string[] {
   const ids: string[] = [];
-  if (typeof item.person_id === 'string' && item.person_id) {
-    ids.push(item.person_id);
+  if (typeof item['person_id'] === 'string' && item['person_id']) {
+    ids.push(item['person_id']);
   }
-  if (Array.isArray(item.person_ids)) {
-    for (const pid of item.person_ids) {
+  if (Array.isArray(item['person_ids'])) {
+    for (const pid of item['person_ids']) {
       if (typeof pid === 'string' && pid) {
         ids.push(pid);
       }
@@ -236,9 +236,9 @@ function linkedMediaPersonIds(item: LooseYamlRecord): string[] {
 }
 
 function eventHasLivingParticipant(event: LooseYamlRecord, livingIds: ReadonlySet<string>): boolean {
-  const participants = Array.isArray(event.participants) ? event.participants : [];
+  const participants = Array.isArray(event['participants']) ? event['participants'] : [];
   return participants.some(
-    (pt) => isPlainRecord(pt) && typeof pt.person_id === 'string' && livingIds.has(pt.person_id)
+    (pt) => isPlainRecord(pt) && typeof pt['person_id'] === 'string' && livingIds.has(pt['person_id'])
   );
 }
 
@@ -257,51 +257,53 @@ export function collectPersonEventsAndReferences(
   const referencedSourceIds = new Set<string>();
 
   const events = rawPersonEvents.map((ev) => {
-    if (typeof ev.id === 'string') {
-      personEventIds.add(ev.id);
+    if (typeof ev['id'] === 'string') {
+      personEventIds.add(ev['id']);
     }
-    const participants = Array.isArray(ev.participants) ? ev.participants : [];
+    const participants = Array.isArray(ev['participants']) ? ev['participants'] : [];
     const hasLivingParticipant = eventHasLivingParticipant(ev, privacyState.livingIds);
     let clone = structuredClone(ev);
 
     if (hasLivingParticipant) {
-      clone.participants = participants.map((pt) => {
+      clone['participants'] = participants.map((pt) => {
         if (
           isPlainRecord(pt) &&
-          typeof pt.person_id === 'string' &&
-          privacyState.livingIds.has(pt.person_id)
+          typeof pt['person_id'] === 'string' &&
+          privacyState.livingIds.has(pt['person_id'])
         ) {
-          return { person_id: REDACTED_RELATIVE_LABEL, role: pt.role };
+          return { person_id: REDACTED_RELATIVE_LABEL, role: pt['role'] };
         }
         return pt;
       });
       const yr = edtfYear(
-        typeof clone.edtf_date === 'string' || typeof clone.edtf_date === 'number' ? clone.edtf_date : null
+        typeof clone['edtf_date'] === 'string' || typeof clone['edtf_date'] === 'number'
+          ? clone['edtf_date']
+          : null
       );
-      clone.edtf_date = yr !== null ? String(yr) : '';
-      clone.place_id = null;
-      clone.summary = 'Event involves a living relative (location and exact date omitted).';
-      delete clone.photo_url;
-    } else if (typeof clone.place_id === 'string' && clone.place_id) {
-      referencedPlaceIds.add(clone.place_id);
+      clone['edtf_date'] = yr !== null ? String(yr) : '';
+      clone['place_id'] = null;
+      clone['summary'] = 'Event involves a living relative (location and exact date omitted).';
+      delete clone['photo_url'];
+    } else if (typeof clone['place_id'] === 'string' && clone['place_id']) {
+      referencedPlaceIds.add(clone['place_id']);
     }
 
     clone = scrubDeep(clone, privacyState.livingNamePattern);
 
-    for (const sRef of Array.isArray(clone.sources) ? clone.sources : []) {
-      if (isPlainRecord(sRef) && typeof sRef.source_id === 'string' && sRef.source_id) {
-        referencedSourceIds.add(sRef.source_id);
+    for (const sRef of Array.isArray(clone['sources']) ? clone['sources'] : []) {
+      if (isPlainRecord(sRef) && typeof sRef['source_id'] === 'string' && sRef['source_id']) {
+        referencedSourceIds.add(sRef['source_id']);
       }
     }
     return clone;
   });
 
-  const targetExtensions = isPlainRecord(targetPerson.extensions) ? targetPerson.extensions : null;
-  for (const extSrc of Array.isArray(targetExtensions?.sources) ? targetExtensions.sources : []) {
+  const targetExtensions = isPlainRecord(targetPerson['extensions']) ? targetPerson['extensions'] : null;
+  for (const extSrc of Array.isArray(targetExtensions?.['sources']) ? targetExtensions['sources'] : []) {
     if (typeof extSrc === 'string' && extSrc.trim()) {
       referencedSourceIds.add(extSrc.trim());
-    } else if (isPlainRecord(extSrc) && typeof extSrc.source_id === 'string') {
-      referencedSourceIds.add(extSrc.source_id);
+    } else if (isPlainRecord(extSrc) && typeof extSrc['source_id'] === 'string') {
+      referencedSourceIds.add(extSrc['source_id']);
     }
   }
 
@@ -337,12 +339,12 @@ export function collectPersonMedia(params: {
       }
       return (
         linkedPeople.has(params.personId) ||
-        (typeof item.event_id === 'string' && params.personEventIds.has(item.event_id))
+        (typeof item['event_id'] === 'string' && params.personEventIds.has(item['event_id']))
       );
     })
     .map((item) => {
-      if (typeof item.source_id === 'string' && item.source_id) {
-        params.referencedSourceIds.add(item.source_id);
+      if (typeof item['source_id'] === 'string' && item['source_id']) {
+        params.referencedSourceIds.add(item['source_id']);
       }
       return scrubDeep(structuredClone(item), params.privacyState.livingNamePattern);
     });
@@ -358,23 +360,23 @@ export function collectPersonNarratives(params: {
   return parseMatchingYamlBlocks(params.narrativeBlocks.filter((b) => b.includes(params.personId)))
     .filter(
       (nar) =>
-        nar.subject_person_id === params.personId ||
-        (Array.isArray(nar.person_ids) && nar.person_ids.includes(params.personId))
+        nar['subject_person_id'] === params.personId ||
+        (Array.isArray(nar['person_ids']) && nar['person_ids'].includes(params.personId))
     )
     .map((nar) => {
-      for (const sid of Array.isArray(nar.source_ids) ? nar.source_ids : []) {
+      for (const sid of Array.isArray(nar['source_ids']) ? nar['source_ids'] : []) {
         if (typeof sid === 'string' && sid) {
           params.referencedSourceIds.add(sid);
         }
       }
-      for (const plid of Array.isArray(nar.place_ids) ? nar.place_ids : []) {
+      for (const plid of Array.isArray(nar['place_ids']) ? nar['place_ids'] : []) {
         if (typeof plid === 'string' && plid) {
           params.referencedPlaceIds.add(plid);
         }
       }
       const clone = structuredClone(nar);
-      if (Array.isArray(clone.person_ids)) {
-        clone.person_ids = clone.person_ids.map((pid) =>
+      if (Array.isArray(clone['person_ids'])) {
+        clone['person_ids'] = clone['person_ids'].map((pid) =>
           typeof pid === 'string' && params.privacyState.livingIds.has(pid) ? REDACTED_RELATIVE_LABEL : pid
         );
       }
@@ -393,12 +395,12 @@ export function collectReferencedPlacesAndSources(params: {
   sources: Record<string, unknown>[];
 } {
   const places = parseBlocksById(params.placeBlocks, params.referencedPlaceIds).toSorted((a, b) =>
-    String(a.id ?? '').localeCompare(String(b.id ?? ''))
+    String(a['id'] ?? '').localeCompare(String(b['id'] ?? ''))
   );
 
   const sources = parseBlocksById(params.sourceBlocks, params.referencedSourceIds)
     .map((s) => scrubDeep(structuredClone(s), params.livingNamePattern))
-    .toSorted((a, b) => String(a.id ?? '').localeCompare(String(b.id ?? '')));
+    .toSorted((a, b) => String(a['id'] ?? '').localeCompare(String(b['id'] ?? '')));
 
   return { places, sources };
 }
@@ -450,31 +452,31 @@ export function collectRelativeArchiveMedia(params: {
   const parsed = parseMatchingYamlBlocks(candidateBlocks);
   const wantedEventIds = new Set<string>();
   for (const item of parsed) {
-    if (typeof item.event_id === 'string' && item.event_id) {
-      wantedEventIds.add(item.event_id);
+    if (typeof item['event_id'] === 'string' && item['event_id']) {
+      wantedEventIds.add(item['event_id']);
     }
   }
   const eventsById = new Map<string, LooseYamlRecord>();
   for (const event of parseBlocksById(params.eventBlocks, wantedEventIds)) {
-    if (typeof event.id === 'string') {
-      eventsById.set(event.id, event);
+    if (typeof event['id'] === 'string') {
+      eventsById.set(event['id'], event);
     }
   }
 
   const rows: ContextRelativeArchiveMedia[] = [];
   const seenMediaIds = new Set<string>();
   for (const item of parsed) {
-    if (typeof item.id !== 'string' || !item.id || seenMediaIds.has(item.id)) {
+    if (typeof item['id'] !== 'string' || !item['id'] || seenMediaIds.has(item['id'])) {
       continue;
     }
-    if (params.ownMediaIds.has(item.id)) {
+    if (params.ownMediaIds.has(item['id'])) {
       continue;
     }
     const linked = linkedMediaPersonIds(item);
     if (linked.some((id) => livingIds.has(id))) {
       continue;
     }
-    const eventId = typeof item.event_id === 'string' ? item.event_id : '';
+    const eventId = typeof item['event_id'] === 'string' ? item['event_id'] : '';
     const event = eventId ? eventsById.get(eventId) : undefined;
     if (event && eventHasLivingParticipant(event, livingIds)) {
       continue;
@@ -497,14 +499,14 @@ export function collectRelativeArchiveMedia(params: {
     if (!best) {
       continue;
     }
-    if (typeof item.file !== 'string' || !item.file) {
+    if (typeof item['file'] !== 'string' || !item['file']) {
       continue;
     }
-    seenMediaIds.add(item.id);
+    seenMediaIds.add(item['id']);
     rows.push({
-      id: item.id,
-      file: scrubText(item.file, livingNamePattern),
-      caption: scrubText(typeof item.caption === 'string' ? item.caption : '', livingNamePattern),
+      id: item['id'],
+      file: scrubText(item['file'], livingNamePattern),
+      caption: scrubText(typeof item['caption'] === 'string' ? item['caption'] : '', livingNamePattern),
       relation: best.relation,
       relativeId: best.relativeId,
     });

@@ -40,9 +40,9 @@ function isStrippableImageMime(mime: string): mime is StrippableImageMime {
 export interface PluginMediaServiceOptions {
   readonly mediaStore: MediaStore;
   readonly namespace: string;
-  readonly allowedMimes?: readonly StrippableImageMime[];
-  readonly maxBytes?: number;
-  readonly onUploadRejected?: (info: MediaUploadRejectionInfo) => void;
+  readonly allowedMimes?: readonly StrippableImageMime[] | undefined;
+  readonly maxBytes?: number | undefined;
+  readonly onUploadRejected?: ((info: MediaUploadRejectionInfo) => void) | undefined;
 }
 
 export interface StorePluginImageParams {
@@ -50,8 +50,8 @@ export interface StorePluginImageParams {
   readonly contentType: string;
   readonly resourceId: string;
   readonly assetId: string;
-  readonly maxBytesOverride?: number;
-  readonly onUploadRejected?: (info: MediaUploadRejectionInfo) => void;
+  readonly maxBytesOverride?: number | undefined;
+  readonly onUploadRejected?: ((info: MediaUploadRejectionInfo) => void) | undefined;
 }
 
 export interface StoredPluginImageResult {
@@ -84,7 +84,7 @@ export class PluginMediaService {
   private readonly namespace: string;
   private readonly allowedMimes: ReadonlySet<StrippableImageMime>;
   private readonly defaultMaxBytes: number;
-  private readonly defaultOnUploadRejected?: (info: MediaUploadRejectionInfo) => void;
+  private readonly defaultOnUploadRejected?: ((info: MediaUploadRejectionInfo) => void) | undefined;
 
   constructor(options: PluginMediaServiceOptions) {
     this.mediaStore = options.mediaStore;
@@ -107,10 +107,10 @@ export class PluginMediaService {
     }
     const rest = key.slice(prefix.length);
     const parts = rest.split('/');
-    if (parts.length !== 2) {
+    const [resourceSeg, fileSeg] = parts;
+    if (parts.length !== 2 || resourceSeg === undefined || fileSeg === undefined) {
       return false;
     }
-    const [resourceSeg, fileSeg] = parts;
     if (!SAFE_KEY_SEGMENT_RE.test(resourceSeg)) {
       return false;
     }

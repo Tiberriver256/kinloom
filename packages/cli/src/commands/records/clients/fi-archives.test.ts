@@ -111,7 +111,7 @@ async function invokeFi(
   args: readonly string[],
   cacheDir: string,
   fetchImpl?: typeof fetch
-): Promise<{ exitCode: number; stdout: string; stderr: string; cacheHit?: boolean }> {
+): Promise<{ exitCode: number; stdout: string; stderr: string; cacheHit?: boolean | undefined }> {
   const stdout: string[] = [];
   const stderr: string[] = [];
   const ctx = createRecordContext({
@@ -204,8 +204,8 @@ describe('fi-archives native client', () => {
     expect(p1.cache_hit).toBe(false);
     expect(p2.cache_hit).toBe(true);
     expect(p1.total).toBe(3);
-    expect(p1.parishes[0].code).toBe('0565');
-    expect(p1.parishes[0].name).toBe('Turku - Åbo');
+    expect(p1.parishes[0]!.code).toBe('0565');
+    expect(p1.parishes[0]!.name).toBe('Turku - Åbo');
 
     const h1 = JSON.parse(s1.stdout) as {
       cache_hit: boolean;
@@ -216,9 +216,9 @@ describe('fi-archives native client', () => {
     expect(h1.cache_hit).toBe(false);
     expect(h2.cache_hit).toBe(true);
     expect(h1.returned).toBe(1);
-    expect(h1.records[0].child).toBe('Anna');
-    expect(h1.records[0].father).toBe('Anders Korhonen');
-    expect(h1.records[0].comment).toBe('original - ALKUPKOMM: twin');
+    expect(h1.records[0]!.child).toBe('Anna');
+    expect(h1.records[0]!.father).toBe('Anders Korhonen');
+    expect(h1.records[0]!.comment).toBe('original - ALKUPKOMM: twin');
   });
 
   it('parses HisKi event detail fields, ISO-8859-1 names, permalink, and SSHY link', async () => {
@@ -254,7 +254,7 @@ describe('fi-archives native client', () => {
     expect(d2.cache_hit).toBe(true);
     expect(d1.parish).toBe('Ahlainen');
     expect(d1.permalink_id).toBe('t149288');
-    expect(d1.fields.Child).toBe('Johan');
+    expect(d1.fields['Child']).toBe('Johan');
     expect(d1.fields['Village / Farm']).toBe('Bocköö');
     expect(d1.sshy_url).toContain('sukuhistoria.fi');
   });
@@ -297,7 +297,7 @@ describe('fi-archives native client', () => {
     expect(a2.cache_hit).toBe(true);
     expect(a1.returned).toBe(2);
     expect(a2.returned).toBe(1);
-    expect(a2.archives[0].id).toBe('1299923671');
+    expect(a2.archives[0]!.id).toBe('1299923671');
 
     const i1 = JSON.parse(r3.stdout) as {
       cache_hit: boolean;
@@ -309,7 +309,7 @@ describe('fi-archives native client', () => {
     expect(i2.cache_hit).toBe(true);
     expect(i1.returned_children).toBe(1);
     expect(i2.returned_children).toBe(2);
-    expect(i1.children[0].id).toBe('1299937880');
+    expect(i1.children[0]!.id).toBe('1299937880');
   });
 
   it('retries transient 429 and refuses anti-bot challenges without caching', async () => {

@@ -421,7 +421,7 @@ describe('Differential: InMemoryArchiveRepository vs Cloudflare D1 + R2 (Minifla
                     action: 'restore',
                     entity_type: 'person',
                     entity_id: personId,
-                    parent_revision_id: Number(dMem.revisions[0].revision_id),
+                    parent_revision_id: Number(dMem.revisions[0]!.revision_id),
                     data: 'data' in curMem ? curMem.data : undefined,
                     summary: `Restore ${personId}`,
                   },

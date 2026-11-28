@@ -16,7 +16,7 @@ export async function apiCall(
   ctx: RecordCommandContext,
   params: Readonly<Record<string, string | number>>
 ): Promise<unknown[]> {
-  const appId = ctx.env.WIKITREE_APP_ID?.trim() || DEFAULT_APP_ID;
+  const appId = ctx.env['WIKITREE_APP_ID']?.trim() || DEFAULT_APP_ID;
   const search = new URLSearchParams();
   search.set('appId', appId);
   for (const [k, v] of Object.entries(params)) {

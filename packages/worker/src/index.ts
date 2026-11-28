@@ -355,12 +355,14 @@ export function createCloudflareWorker(
         env.CHIRP3_HD_VOICE ||
         options.pronunciationFetch
           ? {
-              geminiApiKey: env.GEMINI_API_KEY,
-              geminiModel: env.GEMINI_TTS_MODEL,
-              googleCloudTtsApiKey: env.GOOGLE_CLOUD_TTS_API_KEY,
-              gcpProjectId: env.GCP_PROJECT_ID,
-              chirpVoice: env.CHIRP3_HD_VOICE,
-              fetchImpl: options.pronunciationFetch,
+              ...(env.GEMINI_API_KEY !== undefined ? { geminiApiKey: env.GEMINI_API_KEY } : {}),
+              ...(env.GEMINI_TTS_MODEL !== undefined ? { geminiModel: env.GEMINI_TTS_MODEL } : {}),
+              ...(env.GOOGLE_CLOUD_TTS_API_KEY !== undefined
+                ? { googleCloudTtsApiKey: env.GOOGLE_CLOUD_TTS_API_KEY }
+                : {}),
+              ...(env.GCP_PROJECT_ID !== undefined ? { gcpProjectId: env.GCP_PROJECT_ID } : {}),
+              ...(env.CHIRP3_HD_VOICE !== undefined ? { chirpVoice: env.CHIRP3_HD_VOICE } : {}),
+              ...(options.pronunciationFetch !== undefined ? { fetchImpl: options.pronunciationFetch } : {}),
             }
           : undefined;
       const pronunciationLexiconStore =
@@ -374,8 +376,10 @@ export function createCloudflareWorker(
         siteConfig: options.siteConfig,
         mode,
         sessionSecret: env.SESSION_SECRET,
-        bootstrapAdminEmail: env.BOOTSTRAP_ADMIN_EMAIL,
-        onPluginError: options.onPluginError,
+        ...(env.BOOTSTRAP_ADMIN_EMAIL !== undefined
+          ? { bootstrapAdminEmail: env.BOOTSTRAP_ADMIN_EMAIL }
+          : {}),
+        ...(options.onPluginError !== undefined ? { onPluginError: options.onPluginError } : {}),
         compiledPluginRoutes,
         diagnostics: {
           workerVersion: KINLOOM_WORKER_VERSION,
@@ -392,11 +396,11 @@ export function createCloudflareWorker(
           bundleCache,
           mediaStore,
           emailSender,
-          authProvider,
+          ...(authProvider !== undefined ? { authProvider } : {}),
           clock,
           assetHandler,
-          pronunciationGenerator,
-          pronunciationEnv,
+          ...(pronunciationGenerator !== undefined ? { pronunciationGenerator } : {}),
+          ...(pronunciationEnv !== undefined ? { pronunciationEnv } : {}),
           pronunciationLexiconStore,
           pluginSettingsStore,
           pluginDatabaseFactory,

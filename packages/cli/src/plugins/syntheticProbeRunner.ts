@@ -35,7 +35,7 @@ const DEFAULT_CLOCK: SyntheticProbeClock = {
 interface ProbeTransport {
   readonly baseUrl: URL;
   readonly budgets: SyntheticProbeBudgets;
-  readonly token?: string;
+  readonly token?: string | undefined;
   readonly timeoutMs: number;
   readonly fetchImpl: typeof fetch;
   readonly clock: SyntheticProbeClock;

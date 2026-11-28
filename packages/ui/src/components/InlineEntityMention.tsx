@@ -22,17 +22,17 @@ export type InlineEntityMentionProps = (
   | {
       kind: 'person';
       person: Person;
-      place?: undefined;
+      place?: undefined | undefined;
     }
   | {
       kind: 'place';
       place: Place;
-      person?: undefined;
+      person?: undefined | undefined;
     }
 ) & {
   displayText: string;
-  baseUrl?: string;
-  pronunciations?: Readonly<Record<string, Pronunciation>>;
+  baseUrl?: string | undefined;
+  pronunciations?: Readonly<Record<string, Pronunciation>> | undefined;
 };
 
 function formatPlaceTypeLabel(placeType?: string | null): string {

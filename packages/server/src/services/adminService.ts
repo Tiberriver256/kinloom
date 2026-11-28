@@ -81,7 +81,11 @@ export class AdminService {
     });
   }
 
-  async updateUser(params: { email: string; role: UserRole; display_name?: string }): Promise<UserRecord> {
+  async updateUser(params: {
+    email: string;
+    role: UserRole;
+    display_name?: string | undefined;
+  }): Promise<UserRecord> {
     const parsed = UpdateUserSchema.parse({
       role: params.role,
       display_name: params.display_name,
@@ -134,7 +138,7 @@ export class AdminService {
 
   async createInvite(params: {
     label: string;
-    expires_in_days?: number;
+    expires_in_days?: number | undefined;
     createdBy: string;
     origin: string;
   }): Promise<{ invite: InviteRecord; invite_url: string }> {

@@ -49,7 +49,9 @@ export function formatSyncReport(report: Omit<SyncCommandResult, 'rendered'>): s
   if (report.batchesSubmitted.length > 0) {
     lines.push(`Batches submitted: ${report.batchesSubmitted.length}`);
     const last = report.batchesSubmitted[report.batchesSubmitted.length - 1];
-    lines.push(`Last batch: ${last.batch_id} -> r${last.head_revision_id} (${last.etag})`);
+    if (last) {
+      lines.push(`Last batch: ${last.batch_id} -> r${last.head_revision_id} (${last.etag})`);
+    }
   }
 
   if (report.recompile) {

@@ -25,11 +25,11 @@ const EMPTY_FACT_CONFLICTS: FactConflict[] = [];
 
 export const SourceCitationTag: React.FC<{
   sources: EventSourceRef[];
-  alternateDates?: AlternateDate[];
-  alternatePlaces?: AlternatePlace[];
-  factConflicts?: FactConflict[];
+  alternateDates?: AlternateDate[] | undefined;
+  alternatePlaces?: AlternatePlace[] | undefined;
+  factConflicts?: FactConflict[] | undefined;
   sourcesById: Map<string, SourceRecord>;
-  eventId?: string;
+  eventId?: string | undefined;
 }> = ({
   sources,
   alternateDates = EMPTY_ALTERNATE_DATES,
@@ -41,9 +41,11 @@ export const SourceCitationTag: React.FC<{
   const { readableSourceIds, baseUrl } = useArchiveData();
   const [expanded, setExpanded] = useState(false);
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
-  const [activeScan, setActiveScan] = useState<{ url: string; title: string; citation?: string } | null>(
-    null
-  );
+  const [activeScan, setActiveScan] = useState<{
+    url: string;
+    title: string;
+    citation?: string | undefined;
+  } | null>(null);
   const scanCloseRef = React.useRef<HTMLButtonElement | null>(null);
   const copyTimerRef = useRef<number | null>(null);
   const mountedRef = useRef<boolean>(true);

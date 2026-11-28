@@ -152,8 +152,7 @@ export function stringifyArchiveBundleWithBytes(bundle: ArchiveBundle): Serializ
   const topParts: string[] = [];
   let totalBytes = 2; // '{' + '}'
 
-  for (let i = 0; i < entries.length; i += 1) {
-    const [k, val] = entries[i];
+  for (const [k, val] of entries) {
     if (val === undefined) {
       continue;
     }
@@ -237,15 +236,13 @@ export function coalesceDeltaMutations(
   };
 
   let maxRevisionRecord: RevisionRecord | null = null;
-  for (let i = 0; i < existing.length; i += 1) {
-    const m = existing[i];
+  for (const m of existing) {
     if (!maxRevisionRecord || m.revision_id >= maxRevisionRecord.revision_id) {
       maxRevisionRecord = m;
     }
     appendOne(m);
   }
-  for (let i = 0; i < incoming.length; i += 1) {
-    const m = incoming[i];
+  for (const m of incoming) {
     if (!maxRevisionRecord || m.revision_id >= maxRevisionRecord.revision_id) {
       maxRevisionRecord = m;
     }
@@ -253,10 +250,8 @@ export function coalesceDeltaMutations(
   }
 
   const coalesced = [...byEntityKey.values()];
-  if (
-    maxRevisionRecord &&
-    (coalesced.length === 0 || coalesced[coalesced.length - 1].revision_id < maxRevisionRecord.revision_id)
-  ) {
+  const lastCoalesced = coalesced[coalesced.length - 1];
+  if (maxRevisionRecord && (!lastCoalesced || lastCoalesced.revision_id < maxRevisionRecord.revision_id)) {
     coalesced.push({
       ...maxRevisionRecord,
       action: 'delete',
@@ -275,24 +270,24 @@ function parseDeltaJournal(rawText: string): DeltaJournalEnvelope | null {
     }
     const rec = parsed as Record<string, unknown>;
     if (
-      rec.format !== DELTA_FORMAT_V1 ||
-      typeof rec.base_revision !== 'number' ||
-      !Number.isSafeInteger(rec.base_revision) ||
-      rec.base_revision < 0 ||
-      typeof rec.base_etag !== 'string' ||
-      rec.base_etag.length === 0 ||
-      !Array.isArray(rec.mutations)
+      rec['format'] !== DELTA_FORMAT_V1 ||
+      typeof rec['base_revision'] !== 'number' ||
+      !Number.isSafeInteger(rec['base_revision']) ||
+      rec['base_revision'] < 0 ||
+      typeof rec['base_etag'] !== 'string' ||
+      rec['base_etag'].length === 0 ||
+      !Array.isArray(rec['mutations'])
     ) {
       return null;
     }
-    const validatedMutations = RevisionRecordArraySchema.safeParse(rec.mutations);
+    const validatedMutations = RevisionRecordArraySchema.safeParse(rec['mutations']);
     if (!validatedMutations.success) {
       return null;
     }
     return {
       format: DELTA_FORMAT_V1,
-      base_revision: rec.base_revision,
-      base_etag: rec.base_etag,
+      base_revision: rec['base_revision'],
+      base_etag: rec['base_etag'],
       mutations: validatedMutations.data,
     };
   } catch {
@@ -401,11 +396,11 @@ export class R2IncrementalPatchBundleCache implements BundleCache {
       if (!headObj) {
         return { status: 'miss' };
       }
-      const headRev = parseRevisionMetadata(headObj.customMetadata?.revision);
-      if (headRev === null || headObj.customMetadata?.config_hash !== this.configHash) {
+      const headRev = parseRevisionMetadata(headObj.customMetadata?.['revision']);
+      if (headRev === null || headObj.customMetadata?.['config_hash'] !== this.configHash) {
         return { status: 'miss' };
       }
-      const headEtag = headObj.customMetadata?.etag ?? `"r${headRev}-${this.configHash}"`;
+      const headEtag = headObj.customMetadata?.['etag'] ?? `"r${headRev}-${this.configHash}"`;
       if (ifNoneMatch && matchesIfNoneMatch(ifNoneMatch, headEtag)) {
         return { status: 'not_modified', etag: headEtag };
       }
@@ -413,7 +408,7 @@ export class R2IncrementalPatchBundleCache implements BundleCache {
         memo &&
         headRev === memo.revision &&
         headEtag === memo.etag &&
-        headObj.customMetadata?.generated_at === memo.generatedAt
+        headObj.customMetadata?.['generated_at'] === memo.generatedAt
       ) {
         const encoded = ensureMemoEncoded(memo);
         return {
@@ -435,23 +430,23 @@ export class R2IncrementalPatchBundleCache implements BundleCache {
       return { status: 'miss' };
     }
 
-    const revId = parseRevisionMetadata(obj.customMetadata?.revision);
-    if (revId === null || obj.customMetadata?.config_hash !== this.configHash) {
+    const revId = parseRevisionMetadata(obj.customMetadata?.['revision']);
+    if (revId === null || obj.customMetadata?.['config_hash'] !== this.configHash) {
       await obj.body.cancel().catch(() => undefined);
       return { status: 'miss' };
     }
 
-    const etag = obj.customMetadata?.etag ?? `"r${revId}-${this.configHash}"`;
+    const etag = obj.customMetadata?.['etag'] ?? `"r${revId}-${this.configHash}"`;
     if (ifNoneMatch && matchesIfNoneMatch(ifNoneMatch, etag)) {
       await obj.body.cancel().catch(() => undefined);
       return { status: 'not_modified', etag };
     }
 
-    const generatedAt = obj.customMetadata?.generated_at ?? obj.uploaded.toISOString();
+    const generatedAt = obj.customMetadata?.['generated_at'] ?? obj.uploaded.toISOString();
 
-    if (obj.customMetadata?.format === DELTA_FORMAT_V1) {
+    if (obj.customMetadata?.['format'] === DELTA_FORMAT_V1) {
       const [deltaText, baseObj] = await Promise.all([obj.text(), this.bucket.get(this.baseKey)]);
-      if (!baseObj || baseObj.customMetadata?.config_hash !== this.configHash) {
+      if (!baseObj || baseObj.customMetadata?.['config_hash'] !== this.configHash) {
         if (baseObj) {
           await baseObj.body.cancel().catch(() => undefined);
         }
@@ -518,11 +513,12 @@ export class R2IncrementalPatchBundleCache implements BundleCache {
   }
 
   async tryApplyMutationsFromMemo(mutations: readonly RevisionRecord[]): Promise<CachedBundleObject | null> {
-    if (mutations.length === 0) {
+    const [firstMutation] = mutations;
+    if (!firstMutation) {
       return null;
     }
     const priorMemo = storedBundleMemos.get(this.bucket)?.get(this.memoKey);
-    if (!priorMemo?.r2Etag || priorMemo.revision !== mutations[0].revision_id - 1) {
+    if (!priorMemo?.r2Etag || priorMemo.revision !== firstMutation.revision_id - 1) {
       return null;
     }
 
@@ -531,9 +527,9 @@ export class R2IncrementalPatchBundleCache implements BundleCache {
       generatedAt,
     });
     let maxRev = priorMemo.bundle.meta.max_revision_id ?? 0;
-    for (let i = 0; i < mutations.length; i += 1) {
-      if (mutations[i].revision_id > maxRev) {
-        maxRev = mutations[i].revision_id;
+    for (const mut of mutations) {
+      if (mut.revision_id > maxRev) {
+        maxRev = mut.revision_id;
       }
     }
     const headRevisionId = asRevisionId(maxRev);
@@ -744,8 +740,8 @@ export class R2IncrementalPatchBundleCache implements BundleCache {
       } else {
         const existingHead = await this.bucket.head(this.key);
         if (existingHead) {
-          const existingRev = parseRevisionMetadata(existingHead.customMetadata?.revision);
-          const sameConfig = existingHead.customMetadata?.config_hash === this.configHash;
+          const existingRev = parseRevisionMetadata(existingHead.customMetadata?.['revision']);
+          const sameConfig = existingHead.customMetadata?.['config_hash'] === this.configHash;
           if (sameConfig && existingRev !== null && existingRev > headRevisionId) {
             const fresher = await this.getCached(null);
             if (fresher.status === 'hit') {

@@ -51,7 +51,7 @@ export interface PluginDocumentation {
   readonly title: string;
   readonly summary: string;
   readonly sections: readonly PluginDocumentationSection[];
-  readonly externalUrl?: string;
+  readonly externalUrl?: string | undefined;
 }
 
 export const AdminDocKindSchema = z.enum(['core', 'server_plugin', 'ui_plugin']);
@@ -76,7 +76,7 @@ export interface AdminDocEntry {
   readonly source_id: string;
   readonly source_name: string;
   readonly sections: readonly PluginDocumentationSection[];
-  readonly external_url?: string;
+  readonly external_url?: string | undefined;
 }
 
 export const AdminDocsResponseSchema = z.object({

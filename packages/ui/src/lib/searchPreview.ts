@@ -47,20 +47,20 @@ export type PreviewShortcutKey = 'Enter' | 'T' | 'M' | 'K';
 export interface SearchShortcutAction {
   readonly key: PreviewShortcutKey;
   readonly label: string;
-  readonly route?: string;
-  readonly sourceReaderTarget?: ArchiveSearchResult['sourceReaderTarget'];
+  readonly route?: string | undefined;
+  readonly sourceReaderTarget?: ArchiveSearchResult['sourceReaderTarget'] | undefined;
 }
 
 export interface SearchPreviewSlip {
   readonly kind: SearchResultKind;
   readonly eyebrow: string;
   readonly title: string;
-  readonly lifespan?: string;
-  readonly primaryPlace?: string;
-  readonly portraitName?: string;
-  readonly portraitUrl?: string | null;
+  readonly lifespan?: string | undefined;
+  readonly primaryPlace?: string | undefined;
+  readonly portraitName?: string | undefined;
+  readonly portraitUrl?: string | null | undefined;
   readonly summaryLines: readonly string[];
-  readonly excerpt?: string;
+  readonly excerpt?: string | undefined;
   readonly actions: readonly SearchShortcutAction[];
 }
 

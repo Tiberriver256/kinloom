@@ -624,19 +624,19 @@ describe('domain/timeSnapshot branch coverage', () => {
       'p_span_close',
       'p_span_far',
     ]);
-    expect(harborLane?.people[0].activityTitle).toBe('Established dockyard');
-    expect(harborLane?.people[0].activityNote.endsWith('…')).toBe(true);
-    expect(harborLane?.people[3].activityNote).toContain('Resided in Harbor');
-    expect(harborLane?.people[4].nearestEventId).toBe('ev_span_far_origin');
+    expect(harborLane?.people[0]?.activityTitle).toBe('Established dockyard');
+    expect(harborLane?.people[0]?.activityNote.endsWith('…')).toBe(true);
+    expect(harborLane?.people[3]?.activityNote).toContain('Resided in Harbor');
+    expect(harborLane?.people[4]?.nearestEventId).toBe('ev_span_far_origin');
     expect(harborLane?.localEvents.map((e) => e.id)).toEqual(['ev_loc_harbor', 'ev_loc_ohio_via_anc']);
 
     const cedarLane = snap.lanes.find((l) => l.place.id === 'plc_cedar');
-    expect(cedarLane?.people[0].tier).toBe('Possible');
-    expect(cedarLane?.people[0].activityNote).toContain('Recorded in 1890');
+    expect(cedarLane?.people[0]?.tier).toBe('Possible');
+    expect(cedarLane?.people[0]?.activityNote).toContain('Recorded in 1890');
 
     expect(snap.unlocatedPeople.map((u) => u.person.id)).toEqual(['p_unloc_2', 'p_unloc_1', 'p_unloc_3']);
-    expect(snap.unlocatedPeople[0].activityNote).toContain('1850–1920');
-    expect(snap.unlocatedPeople[2].activityNote).toContain('No specific town');
+    expect(snap.unlocatedPeople[0]?.activityNote).toContain('1850–1920');
+    expect(snap.unlocatedPeople[2]?.activityNote).toContain('No specific town');
 
     expect(snap.macroEvents.map((e) => e.id)).toEqual([
       'ev_macro_exact_high',
@@ -762,8 +762,8 @@ describe('compile/enrichment and compile/mediaAndStats branch coverage', () => {
       makeRawEvent({ id: 'ev_added', title: 'Added Event' }),
     ]);
     expect(rawEvents).toHaveLength(2);
-    expect(rawEvents[0].title).toBe('Updated Title');
-    expect(rawEvents[0].fact_conflicts).toHaveLength(1);
+    expect(rawEvents[0]?.title).toBe('Updated Title');
+    expect(rawEvents[0]?.fact_conflicts).toHaveLength(1);
 
     const rawPeople: RawPerson[] = [
       makeRawPerson({ id: 'p1', slug: 'p1', full_name: 'Arthur Alder', gedcom_xref: '@I100@' }),
@@ -776,7 +776,7 @@ describe('compile/enrichment and compile/mediaAndStats branch coverage', () => {
       }),
     ];
     const householdEvents: RawEvent[] = [
-      rawEvents[0],
+      rawEvents[0]!,
       makeRawEvent({ id: 'ev_pt', title: 'Point', event_kind: 'point_event' }),
       makeRawEvent({ id: 'ev_nopart', title: 'No part', event_kind: 'residence_anchor' }),
       makeRawEvent({
@@ -809,7 +809,7 @@ describe('compile/enrichment and compile/mediaAndStats branch coverage', () => {
       },
     ]);
     expect(enrichedCount).toBe(1);
-    expect(householdEvents[0].summary).toContain('Head of household, Blacksmith');
+    expect(householdEvents[0]?.summary).toContain('Head of household, Blacksmith');
     // Second pass skips duplicate description
     expect(
       enrichHouseholdDescriptions(householdEvents, rawPeople, [
@@ -855,7 +855,7 @@ describe('compile/enrichment and compile/mediaAndStats branch coverage', () => {
     ];
 
     const compiledPeople = compilePeopleSummaries(rawPeople, events);
-    expect(compiledPeople[0].event_count).toBe(2);
+    expect(compiledPeople[0]?.event_count).toBe(2);
 
     const media: MediaItem[] = [
       { id: 'm_bad_kind', kind: 'record_scan', file: '', caption: 'Skip', person_id: 'p1' },
@@ -893,12 +893,12 @@ describe('compile/enrichment and compile/mediaAndStats branch coverage', () => {
     });
 
     expect(finalMedia.map((m) => m.id)).toEqual(['m_dup', 'm_hero']);
-    expect(compiledPeople[0].portrait_url).toBe('/media/p1.jpg');
-    expect(compiledPeople[0].thumb_url).toBe('/media/p1_thumb.jpg');
-    expect(compiledPeople[1].portrait_url).toBeNull();
-    expect(events[0].photo_placeholder_caption).toBe('Overlay caption');
-    expect(events[1].photo_url).toBe('/media/ev2.jpg');
-    expect(events[2].photo_url).toBeUndefined();
+    expect(compiledPeople[0]?.portrait_url).toBe('/media/p1.jpg');
+    expect(compiledPeople[0]?.thumb_url).toBe('/media/p1_thumb.jpg');
+    expect(compiledPeople[1]?.portrait_url).toBeNull();
+    expect(events[0]?.photo_placeholder_caption).toBe('Overlay caption');
+    expect(events[1]?.photo_url).toBe('/media/ev2.jpg');
+    expect(events[2]?.photo_url).toBeUndefined();
   });
 });
 
@@ -1165,7 +1165,7 @@ describe('domain/radarEngine branch coverage', () => {
       'p_parent',
       'p_sibling',
     ]);
-    expect(radar.coPresenceVisible[0].tier).toBe('Confirmed');
+    expect(radar.coPresenceVisible[0]?.tier).toBe('Confirmed');
     expect(radar.localVisible.map((e) => e.id)).toEqual(['ev_local_ok', 'ev_local_anc']);
     expect(radar.macroVisible.map((e) => e.id)).toEqual(['ev_macro']);
 
@@ -1585,7 +1585,7 @@ describe('domain/geoMap and domain/placesDirectory branch coverage', () => {
 
     const allStops = buildMigrationStops(bundle, placesById, peopleById);
     expect(allStops).toHaveLength(2);
-    expect(allStops[0].personSlugs).toEqual(['p1', 'p2']);
+    expect(allStops[0]?.personSlugs).toEqual(['p1', 'p2']);
 
     const filteredStops = buildMigrationStops(bundle, placesById, peopleById, 'p1');
     expect(filteredStops).toHaveLength(2);
@@ -1594,7 +1594,7 @@ describe('domain/geoMap and domain/placesDirectory branch coverage', () => {
       personIdFilter: 'p1',
       migrationEras: customEras,
     });
-    expect(optStops[0].lineageStage).toBe('box');
+    expect(optStops[0]?.lineageStage).toBe('box');
 
     expect(buildMigrationSegments(allStops, 10_000)).toEqual([]);
     expect(buildMigrationSegments(allStops, 15)).toHaveLength(1);
@@ -1607,7 +1607,7 @@ describe('domain/geoMap and domain/placesDirectory branch coverage', () => {
       [-84, 38],
       [-80, 42],
     ]);
-    const singleBounds = computeStopsBounds([allStops[0]], 2);
+    const singleBounds = computeStopsBounds([allStops[0]!], 2);
     expect(singleBounds).toEqual([
       [-83, 39],
       [-81, 41],
@@ -1649,7 +1649,7 @@ describe('domain/geoMap and domain/placesDirectory branch coverage', () => {
       excludeIds: new Set(['plc_excl']),
     });
     expect(nearbyMarkers).toHaveLength(1);
-    expect(nearbyMarkers[0].inRadius).toBe(true);
+    expect(nearbyMarkers[0]?.inRadius).toBe(true);
   });
 
   it('covers placesDirectory canonical place climbing, thumb map priority, and span merging', () => {
@@ -1821,10 +1821,10 @@ describe('domain/geoMap and domain/placesDirectory branch coverage', () => {
 
     const dir = buildPlacesDirectory(bundle, placesById, new Map(bundle.people.map((p) => [p.id, p])));
     expect(dir).toHaveLength(1);
-    expect(dir[0].place.full_name).toBe('Cedar County, Ohio');
-    expect(dir[0].minYear).toBe(1865);
-    expect(dir[0].maxYear).toBe(1895);
-    expect(dir[0].people).toHaveLength(2);
+    expect(dir[0]?.place.full_name).toBe('Cedar County, Ohio');
+    expect(dir[0]?.minYear).toBe(1865);
+    expect(dir[0]?.maxYear).toBe(1895);
+    expect(dir[0]?.people).toHaveLength(2);
   });
 });
 
@@ -2007,9 +2007,9 @@ describe('privacy policy, redaction, and livingNameMatcher branch coverage', () 
     const livingPat = /Riley Alder/g;
     const redPublic = redactSingleEvent(compEv, new Set(['p_liv']), livingPat, 'public');
     expect(redPublic?.title).toBe('Shared with Living');
-    expect(redPublic?.alternate_dates?.[0].note).toBe('Living note');
-    expect(redPublic?.alternate_places?.[0].note).toBe('Living place');
-    expect(redPublic?.fact_conflicts?.[0].note).toBe('Living conflict');
+    expect(redPublic?.alternate_dates?.[0]?.note).toBe('Living note');
+    expect(redPublic?.alternate_places?.[0]?.note).toBe('Living place');
+    expect(redPublic?.fact_conflicts?.[0]?.note).toBe('Living conflict');
 
     const redPrivate = redactSingleEvent(compEv, new Set(['p_liv']), livingPat, 'private', {
       privacy: { privateModeShowsBirthYear: false, stripLivingPortraits: false },
@@ -2094,7 +2094,7 @@ describe('privacy policy, redaction, and livingNameMatcher branch coverage', () 
       undefined,
       { cloneInputs: false, stripLivingPortraits: false }
     );
-    expect(filteredMedia[0].person_name).toBe('Arthur Alder');
+    expect(filteredMedia[0]?.person_name).toBe('Arthur Alder');
 
     const nar: Narrative = {
       id: 'n1',
@@ -2112,10 +2112,10 @@ describe('privacy policy, redaction, and livingNameMatcher branch coverage', () 
     const filteredNars = filterNarrativesForPrivacy([nar], new Set(['p_liv']), livingPat, 'public', {
       cloneInputs: false,
     });
-    expect(filteredNars[0].title).toBe('Story of Living');
-    expect(filteredNars[0].summary).toBe('About Living');
-    expect(filteredNars[0].subject_person_id).toBeUndefined();
-    expect(filteredNars[0].person_ids).toEqual(['p_dec']);
+    expect(filteredNars[0]?.title).toBe('Story of Living');
+    expect(filteredNars[0]?.summary).toBe('About Living');
+    expect(filteredNars[0]?.subject_person_id).toBeUndefined();
+    expect(filteredNars[0]?.person_ids).toEqual(['p_dec']);
   });
 });
 
@@ -2858,9 +2858,9 @@ describe('patchArchive, revisions, and entityLifecycle branch coverage', () => {
     expect(patched.meta.max_revision_id).toBe(20);
     // p1 became living -> ev1 (all-living) redacted away, med_por & med_hero dropped, n1 scrubbed
     expect(patched.events.map((e) => e.id)).toEqual(['ev2']);
-    expect(patched.events[0].photo_url).toBe('/hero2.jpg');
+    expect(patched.events[0]?.photo_url).toBe('/hero2.jpg');
     expect(patched.media?.map((m) => m.id)).toEqual(['med_p2_hero']);
-    expect(patched.narratives?.[0].subject_person_id).toBeUndefined();
+    expect(patched.narratives?.[0]?.subject_person_id).toBeUndefined();
 
     // Now delete med_p2_hero, transition p1 back to deceased, update ev2 to living-only, and delete n1
     const patched2 = patchCompiledBundle(
@@ -2905,7 +2905,7 @@ describe('patchArchive, revisions, and entityLifecycle branch coverage', () => {
       'public',
       { referenceYear: 2026 }
     );
-    expect(patched2.events[0].photo_url).toBeUndefined();
+    expect(patched2.events[0]?.photo_url).toBeUndefined();
     expect(patched2.narratives).toEqual([]);
   });
 
@@ -3058,7 +3058,7 @@ describe('patchArchive, revisions, and entityLifecycle branch coverage', () => {
       { summaryPrefix: 'Undo batch' }
     );
     expect(batchPayloads).toHaveLength(2);
-    expect(batchPayloads[1].soft_delete).toBe(true);
+    expect(batchPayloads[1]?.soft_delete).toBe(true);
 
     // entityLifecycle machine
     const nonExistent: EntityLifecycleState = { kind: 'nonExistent' };

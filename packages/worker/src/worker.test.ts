@@ -466,20 +466,20 @@ describe('createCloudflareWorker full HTTP lifecycle (Miniflare)', () => {
       );
       expect(magicReqRes.status).toBe(202);
       expect(sentEmails).toHaveLength(1);
-      expect(sentEmails[0].from).toEqual({
+      expect(sentEmails[0]!.from).toEqual({
         email: 'noreply@familyloom.org',
         name: siteConfig.site.title,
       });
-      expect(sentEmails[0].to).toBe('founder@example.test');
-      expect(sentEmails[0].subject).toBe(`Sign in to ${siteConfig.site.title}`);
-      expect(sentEmails[0].text).toBeTypeOf('string');
-      expect(sentEmails[0].html).toBeTypeOf('string');
+      expect(sentEmails[0]!.to).toBe('founder@example.test');
+      expect(sentEmails[0]!.subject).toBe(`Sign in to ${siteConfig.site.title}`);
+      expect(sentEmails[0]!.text).toBeTypeOf('string');
+      expect(sentEmails[0]!.html).toBeTypeOf('string');
 
       const magicUrlMatch = /https:\/\/archive\.example\.test\/api\/auth\/magic-link\/verify\?[^\s]+/.exec(
-        sentEmails[0].text ?? ''
+        sentEmails[0]!.text ?? ''
       );
       expect(magicUrlMatch).not.toBeNull();
-      expect(sentEmails[0].html).toContain(magicUrlMatch![0]);
+      expect(sentEmails[0]!.html).toContain(magicUrlMatch![0]);
 
       const verifyRes = await worker.fetch(new Request(magicUrlMatch![0]), env);
       expect(verifyRes.status).toBe(302);
@@ -541,8 +541,8 @@ describe('createCloudflareWorker full HTTP lifecycle (Miniflare)', () => {
       expect(editRes.status).toBe(200);
 
       const r2BundleHead = await fixture.bucket.head(DEFAULT_COMPILED_BUNDLE_KEY);
-      expect(r2BundleHead?.customMetadata?.revision).toBe('2');
-      expect(r2BundleHead?.customMetadata?.etag).toMatch(/^"r2-[a-f0-9]{8}"$/);
+      expect(r2BundleHead?.customMetadata?.['revision']).toBe('2');
+      expect(r2BundleHead?.customMetadata?.['etag']).toMatch(/^"r2-[a-f0-9]{8}"$/);
 
       const bundleRes = await worker.fetch(
         new Request(`${CONTRACT_TEST_ORIGIN}/api/bundle`, { headers: { cookie: adminCookie } }),
@@ -790,7 +790,7 @@ describe('createCloudflareWorker full HTTP lifecycle (Miniflare)', () => {
         env
       );
       expect(cousinMagicReq.status).toBe(202);
-      const cousinEmail = sentEmails[sentEmails.length - 1];
+      const cousinEmail = sentEmails[sentEmails.length - 1]!;
       const cousinVerifyUrl = /https:\/\/archive\.example\.test\/api\/auth\/magic-link\/verify\?[^\s]+/.exec(
         cousinEmail.text ?? ''
       );
@@ -1051,12 +1051,14 @@ describe('createCloudflareWorker full HTTP lifecycle (Miniflare)', () => {
 
       // R2 must still hold revision 2 (never downgraded to revision 1)
       const headAfterRace = await fixture.bucket.head(DEFAULT_COMPILED_BUNDLE_KEY);
-      expect(headAfterRace?.customMetadata?.revision).toBe('2');
+      expect(headAfterRace?.customMetadata?.['revision']).toBe('2');
 
       // Direct out-of-order write of rev 1 after rev 2 is also ignored
       const outOfOrderResult = await cacheRev2.rebuildAndStore(snapshot1);
       expect(outOfOrderResult.revision_id).toBe(asRevisionId(2));
-      expect((await fixture.bucket.head(DEFAULT_COMPILED_BUNDLE_KEY))?.customMetadata?.revision).toBe('2');
+      expect((await fixture.bucket.head(DEFAULT_COMPILED_BUNDLE_KEY))?.customMetadata?.['revision']).toBe(
+        '2'
+      );
 
       // 2. Stale R2 read healing via createCloudflareWorker:
       // Reset R2 to rev 1 while D1 is at rev 2, then verify both plain GET and stale If-None-Match heal R2 to rev 2
@@ -1109,7 +1111,7 @@ describe('createCloudflareWorker full HTTP lifecycle (Miniflare)', () => {
 
       // R2 object is now healed to revision 2
       const healedHead = await fixture.bucket.head(DEFAULT_COMPILED_BUNDLE_KEY);
-      expect(healedHead?.customMetadata?.revision).toBe('2');
+      expect(healedHead?.customMetadata?.['revision']).toBe('2');
     } finally {
       await fixture.dispose();
     }
@@ -1436,7 +1438,7 @@ describe('createCloudflareWorker full HTTP lifecycle (Miniflare)', () => {
     });
 
     expect(captured).toHaveLength(1);
-    const msg = captured[0];
+    const msg = captured[0]!;
     expect(msg.from).toEqual({
       email: 'noreply@familyloom.org',
       name: 'Alder & <Oak> Subject: Injected',

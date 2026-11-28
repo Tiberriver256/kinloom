@@ -67,7 +67,7 @@ export const RecentChangesPage: React.FC<RecentChangesPageProps> = ({ initialRev
     setError(null);
     try {
       const res = await dataSource.listRevisions({
-        author_type: authorFilter === 'all' ? undefined : authorFilter,
+        ...(authorFilter !== 'all' ? { author_type: authorFilter } : {}),
         limit: 100,
       });
       setRevisions(res.items);
@@ -89,7 +89,7 @@ export const RecentChangesPage: React.FC<RecentChangesPageProps> = ({ initialRev
     setError(null);
     try {
       const res = await dataSource.listRevisions({
-        author_type: authorFilter === 'all' ? undefined : authorFilter,
+        ...(authorFilter !== 'all' ? { author_type: authorFilter } : {}),
         limit: 100,
         cursor: nextCursor,
       });
@@ -483,6 +483,7 @@ export const RecentChangesPage: React.FC<RecentChangesPageProps> = ({ initialRev
 
                   if (groupBatchId) {
                     const first = group.revisions[0];
+                    if (!first) return null;
                     const report = formatBatchReportSummary(group.revisions, entityLinkByKey);
                     const confirmingBatch =
                       pendingConfirm?.kind === 'batch' && pendingConfirm.batchId === groupBatchId;
@@ -685,6 +686,7 @@ export const RecentChangesPage: React.FC<RecentChangesPageProps> = ({ initialRev
                   }
 
                   const [rev] = group.revisions;
+                  if (!rev) return null;
                   return (
                     <RevisionFeedItem
                       key={group.key}

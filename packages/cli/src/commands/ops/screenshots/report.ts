@@ -50,7 +50,7 @@ export function parseCssRgbColor(raw: string | null | undefined): ParsedRgbColor
   }
   const hexMatch = /^#([0-9a-f]{3}|[0-9a-f]{6})$/.exec(trimmed);
   if (hexMatch) {
-    const hex = hexMatch[1];
+    const hex = hexMatch[1] ?? '';
     const expanded = hex.length === 3 ? hex.replace(/./g, (ch) => `${ch}${ch}`) : hex;
     return {
       r: Number.parseInt(expanded.slice(0, 2), 16),

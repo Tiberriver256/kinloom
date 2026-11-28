@@ -72,7 +72,7 @@ export async function runPage(
     };
   }
 
-  const identifier = validateIdentifier(parsed.positionals[0]);
+  const identifier = validateIdentifier(parsed.positionals[0] ?? '');
   const leafPosRaw = parsed.positionals.length > 1 ? parsed.positionals[1] : undefined;
   const leafFromPos = leafPosRaw !== undefined ? parseLeafInt(leafPosRaw) : undefined;
   const leafFlagRaw = getStringOption(parsed, 'leaf');
@@ -198,7 +198,9 @@ export async function runPage(
   }
 
   const written: WrittenPageRow[] = jobs.map((job, idx) => {
-    const [content, pageCachePath, pageCached] = fetched[idx];
+    const fetchedEntry = fetched[idx];
+    if (!fetchedEntry) throw new Error(`Missing fetched page at index ${idx}`);
+    const [content, pageCachePath, pageCached] = fetchedEntry;
     const dest = singleFileOut
       ? outResolved
       : path.join(outResolved, `${identifier}_n${job.leaf}_${job.suffix}.jpg`);
@@ -219,6 +221,7 @@ export async function runPage(
 
   if (written.length === 1) {
     const row = written[0];
+    if (!row) throw new Error('Expected at least one written page row');
     const elapsedMs = Math.round((ctx.nowMs() - t0) * 100) / 100;
     const pageHit = indexCached === null ? row.page_cached : Boolean(row.page_cached && indexCached);
     const payload: Record<string, unknown> = {
@@ -382,7 +385,7 @@ export async function runText(
     }
     pagesOut.push({
       ...info,
-      text: segments[segIdx].replace(/^\n+|\n+$/g, ''),
+      text: (segments[segIdx] ?? '').replace(/^\n+|\n+$/g, ''),
       image_url: pageImageUrl(identifier, leaf, { scale: 2 }),
       details_url: pageDetailsUrl(identifier, leaf),
     });
@@ -401,6 +404,7 @@ export async function runText(
   const lines: string[] = [];
   for (let idx = 0; idx < pagesOut.length; idx += 1) {
     const page = pagesOut[idx];
+    if (page === undefined) continue;
     if (idx > 0) {
       lines.push('');
     }

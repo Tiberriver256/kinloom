@@ -35,6 +35,7 @@ export function lintNarrativeScript(
   const lines = text.split(/\r?\n/);
   for (let i = 0; i < lines.length; i += 1) {
     const line = lines[i];
+    if (line === undefined) continue;
     for (const [label, rx] of patterns) {
       if (rx.test(line)) {
         problems.push(`${scriptLabel}:${i + 1}: ${label}: ${line.trim().slice(0, 100)}`);

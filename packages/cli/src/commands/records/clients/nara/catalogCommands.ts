@@ -100,7 +100,7 @@ export async function runSearch(
 
   const queries: readonly (string | null)[] = parsed.positionals.length > 0 ? parsed.positionals : [null];
   const filters = extractCommonSearchOptions(parsed);
-  const apiKey = getStringOption(parsed, 'apiKey') ?? ctx.env.NARA_API_KEY;
+  const apiKey = getStringOption(parsed, 'apiKey') ?? ctx.env['NARA_API_KEY'];
   const forceBrowser = getBooleanOption(parsed, 'forceBrowser');
   const refresh = getBooleanOption(parsed, 'refresh');
   const cliTtl = getNumberOption(parsed, 'cacheTtlHours');
@@ -116,7 +116,7 @@ export async function runSearch(
   const cacheRoot = getCacheRoot(ctx);
 
   // Validate query parameters before consulting cache.
-  buildQueryParams(queries[0], { ...filters, forApi: useApi });
+  buildQueryParams(queries[0] ?? null, { ...filters, forApi: useApi });
 
   const canonicalList = queries.map((q) => canonicalSearchParams(q, filters));
   const slots: (NaraSearchPayload | null)[] = Array.from({ length: queries.length }, () => null);
@@ -124,8 +124,9 @@ export async function runSearch(
   const missIndices: number[] = [];
 
   for (let idx = 0; idx < canonicalList.length; idx += 1) {
-    if (!refresh) {
-      const cached = readCachedSearch(canonicalList[idx], cacheRoot, ttlHours, ctx.nowMs);
+    const canonical = canonicalList[idx];
+    if (!refresh && canonical) {
+      const cached = readCachedSearch(canonical, cacheRoot, ttlHours, ctx.nowMs);
       if (cached !== null) {
         slots[idx] = cached;
         hitFlags[idx] = true;
@@ -149,20 +150,23 @@ export async function runSearch(
     if (useApi && apiKey) {
       const activeKey = apiKey;
       const outcomes = await runWithConcurrency(missQueries, API_MAX_WORKERS, (q) =>
-        apiSearchOne(q, activeKey, filters, ctx)
+        apiSearchOne(q ?? null, activeKey, filters, ctx)
       );
 
       const fallbackSlots: number[] = [];
       const fallbackPairs: (readonly [string | null, string])[] = [];
       for (let i = 0; i < missIndices.length; i += 1) {
         const slotIdx = missIndices[i];
-        const [entry, webUrl] = outcomes[i];
+        const outcome = outcomes[i];
+        if (slotIdx === undefined || outcome === undefined) continue;
+        const [entry, webUrl] = outcome;
         if (entry === null) {
           fallbackSlots.push(slotIdx);
-          fallbackPairs.push([queries[slotIdx], webUrl]);
+          fallbackPairs.push([queries[slotIdx] ?? null, webUrl]);
         } else {
           slots[slotIdx] = entry;
-          await writeCachedSearch(canonicalList[slotIdx], entry, cacheRoot, ctx);
+          const canon = canonicalList[slotIdx];
+          if (canon) await writeCachedSearch(canon, entry, cacheRoot, ctx);
         }
       }
 
@@ -171,24 +175,26 @@ export async function runSearch(
         for (let i = 0; i < fallbackSlots.length; i += 1) {
           const slotIdx = fallbackSlots[i];
           const fbEntry = fallbackResults[i];
-          if (fbEntry) {
+          if (fbEntry && slotIdx !== undefined) {
             slots[slotIdx] = fbEntry;
-            await writeCachedSearch(canonicalList[slotIdx], fbEntry, cacheRoot, ctx);
+            const canon = canonicalList[slotIdx];
+            if (canon) await writeCachedSearch(canon, fbEntry, cacheRoot, ctx);
           }
         }
       }
     } else {
       const urlPairs: (readonly [string | null, string])[] = missQueries.map((q) => [
-        q,
-        encodeCatalogUrl(buildQueryParams(q, { ...filters, forApi: false }), false),
+        q ?? null,
+        encodeCatalogUrl(buildQueryParams(q ?? null, { ...filters, forApi: false }), false),
       ]);
       const fetched = await browserSearch(urlPairs, ctx, browserTimeoutMs);
       for (let i = 0; i < missIndices.length; i += 1) {
         const slotIdx = missIndices[i];
         const entry = fetched[i];
-        if (entry) {
+        if (entry && slotIdx !== undefined) {
           slots[slotIdx] = entry;
-          await writeCachedSearch(canonicalList[slotIdx], entry, cacheRoot, ctx);
+          const canon = canonicalList[slotIdx];
+          if (canon) await writeCachedSearch(canon, entry, cacheRoot, ctx);
         }
       }
     }
@@ -197,8 +203,8 @@ export async function runSearch(
   const payloads: { readonly entry: NaraSearchPayload; readonly isHit: boolean }[] = [];
   for (let i = 0; i < slots.length; i += 1) {
     const entry = slots[i];
-    if (entry !== null) {
-      payloads.push({ entry, isHit: hitFlags[i] });
+    if (entry !== null && entry !== undefined) {
+      payloads.push({ entry, isHit: hitFlags[i] ?? false });
     }
   }
 
@@ -215,11 +221,14 @@ export async function runSearch(
     if (pIdx > 0) {
       lines.push('');
     }
-    const payload = payloads[pIdx].entry;
+    const payloadEntry = payloads[pIdx];
+    if (!payloadEntry) continue;
+    const payload = payloadEntry.entry;
     const hdr = payload.query ? `Query: ${payload.query} | ` : '';
     lines.push(`${hdr}Total: ${payload.total} | ${payload.searchUrl}`);
     for (let idx = 0; idx < payload.results.length; idx += 1) {
       const rec = payload.results[idx];
+      if (rec === undefined) continue;
       const metaParts = [
         rec.level,
         rec.rg !== undefined ? `RG ${rec.rg}` : undefined,
@@ -256,7 +265,7 @@ export async function runGet(
   }
 
   const naids = parsed.positionals;
-  const apiKey = getStringOption(parsed, 'apiKey') ?? ctx.env.NARA_API_KEY;
+  const apiKey = getStringOption(parsed, 'apiKey') ?? ctx.env['NARA_API_KEY'];
   const forceBrowser = getBooleanOption(parsed, 'forceBrowser');
   const objects = getBooleanOption(parsed, 'objects');
   const pages = getStringOption(parsed, 'pages') ?? 'all';
@@ -322,7 +331,7 @@ export async function runDownload(
   const refresh = getBooleanOption(parsed, 'refresh');
   const timeoutSec = getNumberOption(parsed, 'timeout') ?? DEFAULT_DOWNLOAD_TIMEOUT;
   const cliTtl = getNumberOption(parsed, 'cacheTtlHours');
-  const apiKey = getStringOption(parsed, 'apiKey') ?? ctx.env.NARA_API_KEY;
+  const apiKey = getStringOption(parsed, 'apiKey') ?? ctx.env['NARA_API_KEY'];
   const forceBrowser = getBooleanOption(parsed, 'forceBrowser');
   const asJson = getBooleanOption(parsed, 'asJson');
 
@@ -331,16 +340,17 @@ export async function runDownload(
   }
 
   const cacheRoot = getCacheRoot(ctx);
-  if (isDirectDownloadUrl(target)) {
+  const targetStr = target ?? '';
+  if (isDirectDownloadUrl(targetStr)) {
     const ttlHours = resolveQueryTtlHours(cliTtl, ctx.env);
     return downloadDirectUrl(
-      target,
+      targetStr,
       { outPath: rawOutDir, overwrite, refresh, timeoutSec, ttlHours, asJson, cacheRoot },
       ctx
     );
   }
 
-  const cleanId = validateNaid(target);
+  const cleanId = validateNaid(targetStr);
   const ttlOverride = cliTtl !== undefined ? resolveQueryTtlHours(cliTtl, ctx.env) : null;
 
   const [fullRecords, metaHits] = await loadOrFetchFullRecordsWithHits(

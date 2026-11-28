@@ -154,7 +154,7 @@ describe('compileArchive live-lexicon cache isolation (regression)', () => {
       language: 'en-US',
     });
     expect(compiledLiving.pronunciation).toBeUndefined();
-    expect(bundle.pronunciations?.Mercer?.phonetic).toBe('MER-ser-OLD');
+    expect(bundle.pronunciations?.['Mercer']?.phonetic).toBe('MER-ser-OLD');
 
     // Simulating a live D1 lexicon update must replace phonetic/ipa/language cleanly without stale shadowing
     const liveLexicon = mergePronunciationLexicons(bundle.pronunciations, {
@@ -722,7 +722,7 @@ describe('mergePronunciationLexicons', () => {
       alder: { phonetic: 'AWL-der' },
       Mercer: { phonetic: 'MUR-ser-NEW', note: 'Updated' },
     });
-    expect(merged.mercer).toBeUndefined();
+    expect(merged['mercer']).toBeUndefined();
   });
 });
 

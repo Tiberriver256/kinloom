@@ -427,7 +427,7 @@ describe('patchCompiledBundle differential equivalence', () => {
                 };
               } else {
                 const updated: RawPerson = {
-                  ...base.people[1],
+                  ...base.people[1]!,
                   full_name: 'Clara E. Mercer',
                   birth_edtf: `${year}-07-19`,
                   has_primary_source: hasPrimarySource,
@@ -476,7 +476,7 @@ describe('patchCompiledBundle differential equivalence', () => {
                 };
               } else {
                 const updated: RawEvent = {
-                  ...base.events[0],
+                  ...base.events[0]!,
                   edtf_date: String(year),
                   place_id: placeId,
                   severity_rank: year % 5,
@@ -523,7 +523,7 @@ describe('patchCompiledBundle differential equivalence', () => {
                 };
               } else {
                 const updated: Place = {
-                  ...base.places[4], // plc_oakton
+                  ...base.places[4]!, // plc_oakton
                   lat: hasPrimarySource ? 40.15 : 44.0,
                   lng: hasPrimarySource ? -83.12 : -110.0,
                   parent_id: hasPrimarySource ? 'plc_cedar_county' : 'plc_usa',
@@ -566,7 +566,7 @@ describe('patchCompiledBundle differential equivalence', () => {
                 };
               } else {
                 const updated: SourceRecord = {
-                  ...base.sources[0],
+                  ...base.sources[0]!,
                   citation: '1880 US Federal Census Revised (Ancestry GEDCOM @S1@)',
                   has_primary_source: hasPrimarySource,
                 };
@@ -608,7 +608,7 @@ describe('patchCompiledBundle differential equivalence', () => {
                 };
               } else {
                 const updated: MediaItem = {
-                  ...base.media[1],
+                  ...base.media[1]!,
                   caption: 'Updated stone caption',
                   has_primary_source: hasPrimarySource,
                 };
@@ -653,7 +653,7 @@ describe('patchCompiledBundle differential equivalence', () => {
                 };
               } else {
                 const updated: Narrative = {
-                  ...base.narratives[0],
+                  ...base.narratives[0]!,
                   title: 'Cedar Valley Settlement Revised',
                   has_primary_source: hasPrimarySource,
                 };
@@ -687,13 +687,13 @@ describe('patchCompiledBundle differential equivalence', () => {
                 mutation = {
                   revision_id: 11,
                   entity_type: 'kinship_edge',
-                  entity_id: deriveKinshipEdgeId(base.kinship[1]),
+                  entity_id: deriveKinshipEdgeId(base.kinship[1]!),
                   action: 'delete',
                   after_json: null,
                 };
               } else {
                 const updated: KinshipEdge = {
-                  ...base.kinship[0],
+                  ...base.kinship[0]!,
                   family_xref: '@F99@',
                 };
                 mutation = {
@@ -729,7 +729,7 @@ describe('patchCompiledBundle differential equivalence', () => {
       const base = buildBaseState();
       const initial = compileState(base, mode, 5);
       const nowLiving: RawPerson = {
-        ...base.people[0],
+        ...base.people[0]!,
         is_living: true,
         birth_edtf: '1970-08-15',
         death_edtf: '',
@@ -838,7 +838,7 @@ describe('patchCompiledBundle differential equivalence', () => {
     }).bundle;
 
     const updatedPerson: RawPerson = {
-      ...base.people[0],
+      ...base.people[0]!,
       full_name: 'Arthur J. Alder',
       has_primary_source: true,
     };

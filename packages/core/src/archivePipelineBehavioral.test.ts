@@ -361,12 +361,12 @@ describe('GEDCOM citation sanitization & repository inference behavior', () => {
       { id: 'src_legacy', citation: 'Legacy (Ancestry GEDCOM @S9@)', source_type: 'compiled_tree' },
     ];
     applyCitationCleanings([ev], srcs, new Set(['src_legacy']));
-    expect(ev.sources[0].source_id).toBe(UNVERIFIED_TREE_SOURCE_ID);
-    expect(ev.sources[0].citation_detail).toBe('Page 2');
-    expect(ev.alternate_dates?.[0].source_id).toBe(UNVERIFIED_TREE_SOURCE_ID);
-    expect(ev.alternate_places?.[0].source_id).toBe(UNVERIFIED_TREE_SOURCE_ID);
-    expect(ev.fact_conflicts?.[0].source_id).toBe(UNVERIFIED_TREE_SOURCE_ID);
-    expect(srcs[0].citation).toBe('Legacy');
+    expect(ev.sources[0]?.source_id).toBe(UNVERIFIED_TREE_SOURCE_ID);
+    expect(ev.sources[0]?.citation_detail).toBe('Page 2');
+    expect(ev.alternate_dates?.[0]?.source_id).toBe(UNVERIFIED_TREE_SOURCE_ID);
+    expect(ev.alternate_places?.[0]?.source_id).toBe(UNVERIFIED_TREE_SOURCE_ID);
+    expect(ev.fact_conflicts?.[0]?.source_id).toBe(UNVERIFIED_TREE_SOURCE_ID);
+    expect(srcs[0]?.citation).toBe('Legacy');
   });
 });
 
@@ -545,7 +545,7 @@ describe('GEDCOM slicing behavioral contract', () => {
       parent_revision_id: 3,
       data: { full_name: 'Henry Alder Restored' },
     });
-    expect(restored.after?.full_name).toBe('Henry Alder Restored');
+    expect(restored.after?.['full_name']).toBe('Henry Alder Restored');
 
     // YAML scalar helpers, empty parse, and deterministic sorted serializers
     expect(parseYaml('   ')).toBeNull();

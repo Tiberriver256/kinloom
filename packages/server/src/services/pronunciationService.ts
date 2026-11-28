@@ -24,20 +24,20 @@ export interface PronunciationServiceDeps {
   readonly mediaStore: MediaStore;
   readonly clock: Clock;
   readonly siteConfig: KinloomSiteConfig;
-  readonly pronunciationGenerator?: PronunciationAudioGenerator;
-  readonly pronunciationEnv?: PronunciationEnvDefaults;
-  readonly pronunciationLexiconStore?: PronunciationLexiconStore;
-  readonly pluginSettingsStore?: PluginSettingsStore;
+  readonly pronunciationGenerator?: PronunciationAudioGenerator | undefined;
+  readonly pronunciationEnv?: PronunciationEnvDefaults | undefined;
+  readonly pronunciationLexiconStore?: PronunciationLexiconStore | undefined;
+  readonly pluginSettingsStore?: PluginSettingsStore | undefined;
 }
 
 export interface GenerateEntityPronunciationInput {
   readonly entityType: 'person' | 'place';
   readonly entityId: string;
-  readonly text?: string;
-  readonly phonetic?: string;
-  readonly ipa?: string;
-  readonly language?: string;
-  readonly voice?: string;
+  readonly text?: string | undefined;
+  readonly phonetic?: string | undefined;
+  readonly ipa?: string | undefined;
+  readonly language?: string | undefined;
+  readonly voice?: string | undefined;
 }
 
 export interface UpsertLexiconTermInput {
@@ -51,10 +51,10 @@ export class PronunciationService {
   private readonly mediaStore: MediaStore;
   private readonly clock: Clock;
   private readonly siteConfig: KinloomSiteConfig;
-  private readonly pronunciationGenerator?: PronunciationAudioGenerator;
-  private readonly pronunciationEnv?: PronunciationEnvDefaults;
-  private readonly pronunciationLexiconStore?: PronunciationLexiconStore;
-  private readonly pluginSettingsStore?: PluginSettingsStore;
+  private readonly pronunciationGenerator?: PronunciationAudioGenerator | undefined;
+  private readonly pronunciationEnv?: PronunciationEnvDefaults | undefined;
+  private readonly pronunciationLexiconStore?: PronunciationLexiconStore | undefined;
+  private readonly pluginSettingsStore?: PluginSettingsStore | undefined;
 
   constructor(deps: PronunciationServiceDeps) {
     this.repository = deps.repository;

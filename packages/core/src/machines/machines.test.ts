@@ -492,8 +492,8 @@ describe('entityLifecycle (Machine 4)', () => {
     // Must unwind rev 2 first, then rev 1
     expect(result.steps.map((s) => s.revisionInsert.revertedRevisionId)).toEqual([2, 1]);
     expect(result.steps.map((s) => s.assignedRevisionId)).toEqual([3, 4]);
-    expect(result.steps[0].nextState.kind).toBe('active');
-    expect(result.steps[1].nextState.kind).toBe('softDeleted');
+    expect(result.steps[0]?.nextState.kind).toBe('active');
+    expect(result.steps[1]?.nextState.kind).toBe('softDeleted');
     expect(result.nextStatesByKey.get('person:per_x')?.kind).toBe('softDeleted');
   });
 });

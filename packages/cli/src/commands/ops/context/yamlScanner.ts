@@ -27,12 +27,12 @@ export function extractNumericXref(xref: unknown): string | null {
     return null;
   }
   const match = /(\d{6,})/.exec(xref);
-  return match ? match[1] : null;
+  return match?.[1] ?? null;
 }
 
 export function formatLifespan(person: LooseYamlRecord): string {
-  const birth = asNonEmptyString(person.birth_edtf) || '?';
-  const death = asNonEmptyString(person.death_edtf) || '?';
+  const birth = asNonEmptyString(person['birth_edtf']) || '?';
+  const death = asNonEmptyString(person['death_edtf']) || '?';
   return `${birth} - ${death}`;
 }
 

@@ -38,6 +38,11 @@ import { RecentChangesPage } from './RecentChangesPage.js';
 import { TimePage } from './TimePage.js';
 import { TreePage } from './TreePage.js';
 
+function must<T>(val: T | undefined, label = 'value'): T {
+  if (val === undefined) throw new Error(`Expected ${label}`);
+  return val;
+}
+
 declare global {
   var IS_REACT_ACT_ENVIRONMENT: boolean | undefined;
 }
@@ -2207,12 +2212,12 @@ describe('UI >=90% behavioral completion suite across pages, drawers, and machin
 
     // 2. EvidenceMediaTab + EvidenceMediaLightbox callbacks
     const mediaA = {
-      ...TEN_MEDIA[0],
+      ...must(TEN_MEDIA[0]),
       person_slug: 'henry-alder',
       person_name: 'Henry Alder',
       provenance: 'Box 1',
     };
-    const mediaB = { ...TEN_MEDIA[1], person_slug: 'henry-alder', person_name: 'Henry Alder' };
+    const mediaB = { ...must(TEN_MEDIA[1]), person_slug: 'henry-alder', person_name: 'Henry Alder' };
     const onQuery = vi.fn();
     const onKind = vi.fn();
     const onClear = vi.fn();
@@ -2292,10 +2297,10 @@ describe('UI >=90% behavioral completion suite across pages, drawers, and machin
 
     // 3. LocalSurveyMap neighbor pin click, Enter keydown, and narrow resize
     const surveyPlaces = [
-      ARCHIVE_BUNDLE.places[0],
-      ARCHIVE_BUNDLE.places[1],
+      must(ARCHIVE_BUNDLE.places[0]),
+      must(ARCHIVE_BUNDLE.places[1]),
       {
-        ...ARCHIVE_BUNDLE.places[1],
+        ...must(ARCHIVE_BUNDLE.places[1]),
         id: 'pl_zee_2',
         slug: 'zeeland-east',
         name: 'Zeeland East',
@@ -2305,7 +2310,11 @@ describe('UI >=90% behavioral completion suite across pages, drawers, and machin
     ];
     const surveyView = mountEl(
       <MemoryRouter>
-        <LocalSurveyMap center={ARCHIVE_BUNDLE.places[0]} allPlaces={surveyPlaces} scopeMode="radius15" />
+        <LocalSurveyMap
+          center={must(ARCHIVE_BUNDLE.places[0])}
+          allPlaces={surveyPlaces}
+          scopeMode="radius15"
+        />
       </MemoryRouter>
     );
     const pin = surveyView.querySelector<SVGGElement>('g[role="button"]');
@@ -2377,7 +2386,7 @@ describe('UI >=90% behavioral completion suite across pages, drawers, and machin
         onQueryChange={onTreeQuery}
         candidates={[
           {
-            person: ARCHIVE_BUNDLE.people[0],
+            person: must(ARCHIVE_BUNDLE.people[0]),
             lifespanLabel: '1855–1932',
             genLabel: 'Gen 1',
             branchId: 'alder',

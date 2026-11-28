@@ -321,10 +321,10 @@ describe('gedcom parse branch coverage', () => {
       sources: [{ sourXref: '@S1@', page: '' }],
     };
     attachPageToLastSource(sourcedEvent, '@S2@', 'p. 9');
-    expect(sourcedEvent.sources[0].page).toBe('');
+    expect(sourcedEvent.sources[0]?.page).toBe('');
     attachPageToLastSource(sourcedEvent, '@S1@', 'p. 4');
     attachPageToLastSource(sourcedEvent, '@S1@', 'p. 5');
-    expect(sourcedEvent.sources[0].page).toBe('p. 4');
+    expect(sourcedEvent.sources[0]?.page).toBe('p. 4');
 
     const eventPages = new Map<string, string[]>();
     recordIndiPage('@I1@', 'BIRT', '@S1@', 'Number: 123-45-6789', eventPages, null);
@@ -373,7 +373,7 @@ describe('gedcom parse branch coverage', () => {
     ];
     const linkResult = linkRecordScans(linkedEvents, '1880 Census', '/scans/1880.jpg', sourcesById);
     expect(linkResult).toEqual({ matchedEvId: 'ev_match', linkedCount: 1 });
-    expect(linkedEvents[1].sources?.[1].scan_url).toBe('/scans/1880.jpg');
+    expect(linkedEvents[1]?.sources?.[1]?.scan_url).toBe('/scans/1880.jpg');
   });
 
   it('parses BOM, orphan records, OBJE dimensions, CONT, duplicate links, notes, and FAM pages', () => {
@@ -473,7 +473,7 @@ describe('gedcom parse branch coverage', () => {
       givenName: 'Clara Mae',
       surname: 'Alder',
     });
-    expect(indi?.events[0].notes).toEqual(['Born at Harbor']);
+    expect(indi?.events[0]?.notes).toEqual(['Born at Harbor']);
     expect(parsed.indiObjes.get('@I1@')?.size).toBe(2);
 
     const fam = parsed.fams.get('@F2@');
@@ -827,8 +827,8 @@ describe('gedcom sliceBuilders branch coverage', () => {
       livingCutoffYears: 110,
     });
     expect(builtPeople.people).toHaveLength(2);
-    expect(builtPeople.people[0].sex).toBe('U');
-    expect(builtPeople.people[1].lineage_group).toBe('extended');
+    expect(builtPeople.people[0]?.sex).toBe('U');
+    expect(builtPeople.people[1]?.lineage_group).toBe('extended');
 
     const kinship = buildSliceKinship(fams, selection.allFamilyIds, builtPeople.xrefToPid);
     // Self-loop @I1@ -> @I1@ skipped, duplicate spouse edges from @F2@ deduped, @F_WIFE_ONLY@ adds wife-parent/child

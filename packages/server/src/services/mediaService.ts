@@ -205,7 +205,7 @@ export class MediaService {
     summary: string;
     hasPrimarySource?: boolean;
     author: RevisionAuthor;
-    onUploadRejected?: (info: MediaUploadRejectionInfo) => void;
+    onUploadRejected?: ((info: MediaUploadRejectionInfo) => void) | undefined;
   }): Promise<{
     media: MediaItem;
     url: string;
@@ -219,7 +219,7 @@ export class MediaService {
 
     const normalizedMime = params.contentType.split(';')[0]?.trim().toLowerCase() ?? '';
     const isAudioVideoKind =
-      params.metadata.kind === 'video_story' || params.metadata.kind === 'audio_oral_history';
+      params.metadata['kind'] === 'video_story' || params.metadata['kind'] === 'audio_oral_history';
 
     const maxUploadOverride =
       normalizedMime === 'application/pdf' || isAudioVideoKind
@@ -230,7 +230,7 @@ export class MediaService {
       mimeType: normalizedMime,
       sizeBytes: params.bytes.byteLength,
       targetHasLiving: false,
-      maxUploadBytes: maxUploadOverride,
+      ...(maxUploadOverride !== undefined ? { maxUploadBytes: maxUploadOverride } : {}),
       allowAudioVideo: isAudioVideoKind,
     });
 
@@ -300,8 +300,8 @@ export class MediaService {
     const publicUrl = `/media/${filename}`;
 
     const mediaId =
-      typeof params.metadata.id === 'string' && params.metadata.id.trim().length > 0
-        ? params.metadata.id.trim()
+      typeof params.metadata['id'] === 'string' && params.metadata['id'].trim().length > 0
+        ? params.metadata['id'].trim()
         : buildEntityId('media', toHex(randomBytes(8)));
 
     const parsedMedia = MediaItemSchema.parse({

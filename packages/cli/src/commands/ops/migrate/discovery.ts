@@ -11,7 +11,7 @@ const MIGRATION_FILE_RE = /^(\d+)_.*\.sql$/i;
 
 function parseWranglerTomlD1Binding(raw: string): {
   dbName: string;
-  migrationsDirHint?: string;
+  migrationsDirHint?: string | undefined;
 } {
   let inD1Section = false;
   let dbName = '';
@@ -89,12 +89,12 @@ export function resolveD1DatabaseBinding(repoDir: string): D1DatabaseBinding {
     throw new CliValidationError(`Expected a JSON object in ${configPath}.`);
   }
 
-  const d1List = Array.isArray(parsed.d1_databases) ? parsed.d1_databases : [];
+  const d1List = Array.isArray(parsed['d1_databases']) ? parsed['d1_databases'] : [];
   const firstD1 = isPlainRecord(d1List[0]) ? d1List[0] : null;
-  const dbName = typeof firstD1?.database_name === 'string' ? firstD1.database_name.trim() : '';
+  const dbName = typeof firstD1?.['database_name'] === 'string' ? firstD1['database_name'].trim() : '';
   const migrationsDirHint =
-    typeof firstD1?.migrations_dir === 'string' && firstD1.migrations_dir.trim().length > 0
-      ? firstD1.migrations_dir.trim()
+    typeof firstD1?.['migrations_dir'] === 'string' && firstD1['migrations_dir'].trim().length > 0
+      ? firstD1['migrations_dir'].trim()
       : undefined;
 
   if (!dbName) {
@@ -169,7 +169,7 @@ export function discoverMigrations(migrationsDir: string): DiscoveredMigration[]
     if (!match) {
       continue;
     }
-    const number = Number.parseInt(match[1], 10);
+    const number = Number.parseInt(match[1] ?? '', 10);
     const filePath = path.join(migrationsDir, fileName);
     let sql: string;
     const fd = fs.openSync(filePath, 'r');

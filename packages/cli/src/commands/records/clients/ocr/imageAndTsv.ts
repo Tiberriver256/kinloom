@@ -49,6 +49,7 @@ export function readJpegDimensions(data: Buffer): readonly [number, number] | nu
       break;
     }
     const marker = data[pos];
+    if (marker === undefined) continue;
     pos += 1;
     if (marker === 0xd8 || marker === 0xd9 || marker === 0x01 || (marker >= 0xd0 && marker <= 0xd7)) {
       continue;
@@ -136,8 +137,8 @@ function readWebpDimensions(data: Buffer): readonly [number, number] | null {
   }
   const chunk = data.toString('ascii', 12, 16);
   if (chunk === 'VP8X' && data.length >= 30) {
-    const width = 1 + (data[24] | (data[25] << 8) | (data[26] << 16));
-    const height = 1 + (data[27] | (data[28] << 8) | (data[29] << 16));
+    const width = 1 + ((data[24] ?? 0) | ((data[25] ?? 0) << 8) | ((data[26] ?? 0) << 16));
+    const height = 1 + ((data[27] ?? 0) | ((data[28] ?? 0) << 8) | ((data[29] ?? 0) << 16));
     return [width, height];
   }
   if (chunk === 'VP8 ' && data.length >= 30 && data[23] === 0x9d && data[24] === 0x01 && data[25] === 0x2a) {
@@ -287,6 +288,7 @@ export function rescaleTesseractTsv(
 
   for (let i = 1; i < lines.length; i += 1) {
     const rawLine = lines[i];
+    if (rawLine === undefined) continue;
     if (!rawLine.trim()) {
       continue;
     }
@@ -295,11 +297,11 @@ export function rescaleTesseractTsv(
       outLines.push(rawLine);
       continue;
     }
-    const level = Number.parseInt(cols[idxLevel], 10);
-    const left = Number.parseInt(cols[idxLeft], 10);
-    const top = Number.parseInt(cols[idxTop], 10);
-    const width = Number.parseInt(cols[idxWidth], 10);
-    const height = Number.parseInt(cols[idxHeight], 10);
+    const level = Number.parseInt(cols[idxLevel] ?? '', 10);
+    const left = Number.parseInt(cols[idxLeft] ?? '', 10);
+    const top = Number.parseInt(cols[idxTop] ?? '', 10);
+    const width = Number.parseInt(cols[idxWidth] ?? '', 10);
+    const height = Number.parseInt(cols[idxHeight] ?? '', 10);
     if (
       !Number.isFinite(level) ||
       !Number.isFinite(left) ||
@@ -347,11 +349,12 @@ export function parseTesseractTsv(tsv: string): ParsedTsvLayout {
     .filter((row) => row.trim().length > 0)
     .map((row) => row.split('\t'));
 
-  if (rows.length === 0 || rows[0][0] !== 'level') {
+  const headerRow = rows[0];
+  if (!headerRow || headerRow[0] !== 'level') {
     throw new Error('tesseract TSV output is missing its header row.');
   }
 
-  const header = rows[0];
+  const header = headerRow;
   let imageWidth = 0;
   let imageHeight = 0;
   const lineMap = new Map<
@@ -367,18 +370,20 @@ export function parseTesseractTsv(tsv: string): ParsedTsvLayout {
 
   for (let i = 1; i < rows.length; i += 1) {
     const raw = rows[i];
+    if (raw === undefined) continue;
     if (raw.length < header.length - 1) {
       continue;
     }
     const rec: Record<string, string> = {};
     for (let c = 0; c < header.length; c += 1) {
-      rec[header[c]] = raw[c] ?? '';
+      const colName = header[c];
+      if (colName !== undefined) rec[colName] = raw[c] ?? '';
     }
-    const level = Number.parseInt(rec.level ?? '', 10);
-    const left = Number.parseInt(rec.left ?? '', 10);
-    const top = Number.parseInt(rec.top ?? '', 10);
-    const width = Number.parseInt(rec.width ?? '', 10);
-    const height = Number.parseInt(rec.height ?? '', 10);
+    const level = Number.parseInt(rec['level'] ?? '', 10);
+    const left = Number.parseInt(rec['left'] ?? '', 10);
+    const top = Number.parseInt(rec['top'] ?? '', 10);
+    const width = Number.parseInt(rec['width'] ?? '', 10);
+    const height = Number.parseInt(rec['height'] ?? '', 10);
     const right = left + width;
     const bottom = top + height;
 
@@ -387,15 +392,15 @@ export function parseTesseractTsv(tsv: string): ParsedTsvLayout {
       imageHeight = Math.max(imageHeight, bottom);
       continue;
     }
-    const text = (rec.text ?? '').trim();
+    const text = (rec['text'] ?? '').trim();
     if (level !== 5 || !text) {
       continue;
     }
-    const conf = Number.parseFloat(rec.conf ?? '-1');
-    const page = Number.parseInt(rec.page_num ?? '0', 10);
-    const block = Number.parseInt(rec.block_num ?? '0', 10);
-    const par = Number.parseInt(rec.par_num ?? '0', 10);
-    const lineNum = Number.parseInt(rec.line_num ?? '0', 10);
+    const conf = Number.parseFloat(rec['conf'] ?? '-1');
+    const page = Number.parseInt(rec['page_num'] ?? '0', 10);
+    const block = Number.parseInt(rec['block_num'] ?? '0', 10);
+    const par = Number.parseInt(rec['par_num'] ?? '0', 10);
+    const lineNum = Number.parseInt(rec['line_num'] ?? '0', 10);
     const key = `${page}:${block}:${par}:${lineNum}`;
     let group = lineMap.get(key);
     if (!group) {

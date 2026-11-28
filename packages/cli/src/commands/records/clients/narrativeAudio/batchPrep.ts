@@ -42,10 +42,10 @@ export interface NarrativeBatchManifest {
 }
 
 export interface ImportedAudioMeta {
-  readonly duration_seconds?: number;
-  readonly editor_notes_start_seconds?: number;
-  readonly story_voice?: string;
-  readonly notes_voice?: string;
+  readonly duration_seconds?: number | undefined;
+  readonly editor_notes_start_seconds?: number | undefined;
+  readonly story_voice?: string | undefined;
+  readonly notes_voice?: string | undefined;
 }
 
 const NOTES_HEADING_RE = /^(?:editor'?s|research|source|archival)\s+notes?\b|^discrepanc(?:y|ies)\b/i;
@@ -107,7 +107,7 @@ export function narrativeMarkdownToSpokenScript(bodyMd: string, title?: string):
     const headingMatch = /^#{1,3}\s+(.+)$/.exec(rawLine.trim());
     if (headingMatch) {
       flushBlock();
-      const headingText = stripMarkdownToSpoken(headingMatch[1]);
+      const headingText = stripMarkdownToSpoken(headingMatch[1] ?? '');
       if (NOTES_HEADING_RE.test(headingText)) {
         inNotesSection = true;
       } else {
@@ -154,6 +154,7 @@ export function collectArchiveLexiconHints(
   const referenceYear = siteConfig.privacy.referenceYear ?? getCurrentReferenceYear();
   for (let i = 0; i < people.length; i += 1) {
     const person = people[i];
+    if (person === undefined) continue;
     if (
       person.is_living ||
       person.full_name.trim() === 'Living' ||
@@ -190,8 +191,8 @@ export function hasExistingNarrativeAudio(narrative: Narrative): boolean {
   if (!ext || !isPlainRecord(ext)) {
     return false;
   }
-  const raw = ext.narrative_audio ?? ext.audio;
-  return isPlainRecord(raw) && typeof raw.file === 'string' && raw.file.trim().length > 0;
+  const raw = ext['narrative_audio'] ?? ext['audio'];
+  return isPlainRecord(raw) && typeof raw['file'] === 'string' && raw['file'].trim().length > 0;
 }
 
 function parseMetaRecord(raw: unknown): ImportedAudioMeta | undefined {
@@ -200,17 +201,22 @@ function parseMetaRecord(raw: unknown): ImportedAudioMeta | undefined {
   }
   return {
     duration_seconds:
-      typeof raw.duration_seconds === 'number' && Number.isFinite(raw.duration_seconds)
-        ? raw.duration_seconds
+      typeof raw['duration_seconds'] === 'number' && Number.isFinite(raw['duration_seconds'])
+        ? raw['duration_seconds']
         : undefined,
     editor_notes_start_seconds:
-      typeof raw.editor_notes_start_seconds === 'number' && Number.isFinite(raw.editor_notes_start_seconds)
-        ? raw.editor_notes_start_seconds
+      typeof raw['editor_notes_start_seconds'] === 'number' &&
+      Number.isFinite(raw['editor_notes_start_seconds'])
+        ? raw['editor_notes_start_seconds']
         : undefined,
     story_voice:
-      typeof raw.story_voice === 'string' && raw.story_voice.trim() ? raw.story_voice.trim() : undefined,
+      typeof raw['story_voice'] === 'string' && raw['story_voice'].trim()
+        ? raw['story_voice'].trim()
+        : undefined,
     notes_voice:
-      typeof raw.notes_voice === 'string' && raw.notes_voice.trim() ? raw.notes_voice.trim() : undefined,
+      typeof raw['notes_voice'] === 'string' && raw['notes_voice'].trim()
+        ? raw['notes_voice'].trim()
+        : undefined,
   };
 }
 
@@ -230,11 +236,11 @@ export function loadImportMetaMap(importDir: string): Map<string, ImportedAudioM
       if (!meta) {
         continue;
       }
-      if (typeof item.id === 'string') {
-        map.set(item.id, meta);
+      if (typeof item['id'] === 'string') {
+        map.set(item['id'], meta);
       }
-      if (typeof item.slug === 'string') {
-        map.set(item.slug, meta);
+      if (typeof item['slug'] === 'string') {
+        map.set(item['slug'], meta);
       }
     }
   } else if (isPlainRecord(parsed)) {
@@ -262,8 +268,8 @@ export function withNarrativeAudioExtension(
   narrative: Narrative,
   meta: {
     readonly publicUrl: string;
-    readonly durationSeconds?: number;
-    readonly editorNotesStartSeconds?: number;
+    readonly durationSeconds?: number | undefined;
+    readonly editorNotesStartSeconds?: number | undefined;
     readonly storyVoice: string;
     readonly notesVoice: string;
   }
@@ -272,13 +278,13 @@ export function withNarrativeAudioExtension(
     file: meta.publicUrl,
   };
   if (meta.durationSeconds !== undefined) {
-    audioEntry.duration_seconds = Math.round(meta.durationSeconds);
+    audioEntry['duration_seconds'] = Math.round(meta.durationSeconds);
   }
   if (meta.editorNotesStartSeconds !== undefined) {
-    audioEntry.editor_notes_start_seconds = Math.round(meta.editorNotesStartSeconds);
+    audioEntry['editor_notes_start_seconds'] = Math.round(meta.editorNotesStartSeconds);
   }
-  audioEntry.story_voice = meta.storyVoice;
-  audioEntry.notes_voice = meta.notesVoice;
+  audioEntry['story_voice'] = meta.storyVoice;
+  audioEntry['notes_voice'] = meta.notesVoice;
 
   return {
     ...narrative,

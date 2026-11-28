@@ -101,15 +101,15 @@ export async function runSearch(
   const name = (getStringOption(parsed, 'name') ?? '').trim();
   const place = (getStringOption(parsed, 'place') ?? '').trim();
   const transcribed = (getStringOption(parsed, 'transcribed') ?? '').trim();
-  if (text) params.text = text;
-  if (name) params.name = name;
-  if (place) params.place = place;
+  if (text) params['text'] = text;
+  if (name) params['name'] = name;
+  if (place) params['place'] = place;
   if (transcribed) {
-    params.transcribed_text = transcribed;
-    params.only_digitised_materials = 'true';
+    params['transcribed_text'] = transcribed;
+    params['only_digitised_materials'] = 'true';
   }
   if (getBooleanOption(parsed, 'digitized')) {
-    params.only_digitised_materials = 'true';
+    params['only_digitised_materials'] = 'true';
   }
 
   if (!('text' in params || 'name' in params || 'place' in params || 'transcribed_text' in params)) {
@@ -117,19 +117,19 @@ export async function runSearch(
       'Provide at least one search term: --text, --name, --place, or --transcribed.'
     );
   }
-  if (yearMin !== undefined) params.year_min = yearMin;
-  if (yearMax !== undefined) params.year_max = yearMax;
+  if (yearMin !== undefined) params['year_min'] = yearMin;
+  if (yearMax !== undefined) params['year_max'] = yearMax;
 
   const facetOpt = (getStringOption(parsed, 'facet') ?? '').trim();
   const recordType = getStringOption(parsed, 'recordType') ?? 'all';
   if (facetOpt) {
-    params.facet = facetOpt;
+    params['facet'] = facetOpt;
   } else if (recordType !== 'all') {
     const facet = RECORD_TYPE_FACETS[recordType];
     if (!facet) {
       throw new CliValidationError(`Unsupported --type: '${recordType}'`);
     }
-    params.facet = facet;
+    params['facet'] = facet;
   }
 
   return executeSearchCommand({
@@ -168,11 +168,11 @@ export async function runBirths(
   const place = (getStringOption(parsed, 'place') ?? '').trim();
   const witness = (getStringOption(parsed, 'witness') ?? '').trim();
   const gender = (getStringOption(parsed, 'gender') ?? '').trim();
-  if (first) params.first_name = first;
-  if (father) params.fathers_name = father;
-  if (mother) params.mothers_name = mother;
-  if (place) params.place = place;
-  if (witness) params.baptismal_witness = witness;
+  if (first) params['first_name'] = first;
+  if (father) params['fathers_name'] = father;
+  if (mother) params['mothers_name'] = mother;
+  if (place) params['place'] = place;
+  if (witness) params['baptismal_witness'] = witness;
   if (gender) {
     const mapped = GENDER_ALIASES[gender.toLowerCase()];
     if (!mapped) {
@@ -180,10 +180,10 @@ export async function runBirths(
         `Invalid --gender '${gender}'; use Kvinna/female, Man/male, or Okänt/unknown.`
       );
     }
-    params.gender = mapped;
+    params['gender'] = mapped;
   }
-  if (yearMin !== undefined) params.year_min = yearMin;
-  if (yearMax !== undefined) params.year_max = yearMax;
+  if (yearMin !== undefined) params['year_min'] = yearMin;
+  if (yearMax !== undefined) params['year_max'] = yearMax;
 
   if (
     !(
@@ -237,14 +237,14 @@ export async function runMarriages(
   const bridePlace = (getStringOption(parsed, 'bridePlace') ?? '').trim();
   const parish = (getStringOption(parsed, 'parish') ?? '').trim();
   const county = (getStringOption(parsed, 'county') ?? '').trim();
-  if (groom) params.grooms_name = groom;
-  if (bride) params.brides_name = bride;
-  if (groomPlace) params.grooms_home_place = groomPlace;
-  if (bridePlace) params.brides_home_place = bridePlace;
-  if (parish) params.parish = parish;
-  if (county) params.county = county;
-  if (yearMin !== undefined) params.year_min = yearMin;
-  if (yearMax !== undefined) params.year_max = yearMax;
+  if (groom) params['grooms_name'] = groom;
+  if (bride) params['brides_name'] = bride;
+  if (groomPlace) params['grooms_home_place'] = groomPlace;
+  if (bridePlace) params['brides_home_place'] = bridePlace;
+  if (parish) params['parish'] = parish;
+  if (county) params['county'] = county;
+  if (yearMin !== undefined) params['year_min'] = yearMin;
+  if (yearMax !== undefined) params['year_max'] = yearMax;
 
   if (
     !(
@@ -298,13 +298,13 @@ export async function runDeeds(
   const taxUnit = (getStringOption(parsed, 'taxUnit') ?? '').trim();
   const court = (getStringOption(parsed, 'court') ?? '').trim();
   const adminUnit = (getStringOption(parsed, 'adminUnit') ?? '').trim();
-  if (parish) params.parish = parish;
-  if (propertyName) params.property_name = propertyName;
-  if (taxUnit) params.tax_unit = taxUnit;
-  if (court) params.district_court_sessions = court;
-  if (adminUnit) params.administrative_unit = adminUnit;
-  if (yearMin !== undefined) params.year_min = yearMin;
-  if (yearMax !== undefined) params.year_max = yearMax;
+  if (parish) params['parish'] = parish;
+  if (propertyName) params['property_name'] = propertyName;
+  if (taxUnit) params['tax_unit'] = taxUnit;
+  if (court) params['district_court_sessions'] = court;
+  if (adminUnit) params['administrative_unit'] = adminUnit;
+  if (yearMin !== undefined) params['year_min'] = yearMin;
+  if (yearMax !== undefined) params['year_max'] = yearMax;
 
   if (
     !(

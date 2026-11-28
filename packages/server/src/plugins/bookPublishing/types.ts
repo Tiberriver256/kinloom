@@ -124,22 +124,22 @@ export interface BookImageDpiAudit {
 }
 
 export interface BookCompileOptions {
-  readonly title?: string;
-  readonly subtitle?: string;
-  readonly dedication?: string;
-  readonly trimPreset?: BookTrimPresetId;
-  readonly binding?: BookBindingStyle;
-  readonly paperStock?: BookPaperStock;
-  readonly edition?: BookEdition;
-  readonly includeLiving?: boolean;
-  readonly allowLivingPortraits?: boolean;
-  readonly acknowledgeReviewFlags?: boolean;
-  readonly branchId?: string;
-  readonly rootPersonId?: string;
-  readonly proofMarks?: boolean;
-  readonly referenceYear?: number;
-  readonly generatedAtIso?: string;
-  readonly imageDimensionsByFile?: Readonly<Record<string, BookImageDimensions>>;
+  readonly title?: string | undefined;
+  readonly subtitle?: string | undefined;
+  readonly dedication?: string | undefined;
+  readonly trimPreset?: BookTrimPresetId | undefined;
+  readonly binding?: BookBindingStyle | undefined;
+  readonly paperStock?: BookPaperStock | undefined;
+  readonly edition?: BookEdition | undefined;
+  readonly includeLiving?: boolean | undefined;
+  readonly allowLivingPortraits?: boolean | undefined;
+  readonly acknowledgeReviewFlags?: boolean | undefined;
+  readonly branchId?: string | undefined;
+  readonly rootPersonId?: string | undefined;
+  readonly proofMarks?: boolean | undefined;
+  readonly referenceYear?: number | undefined;
+  readonly generatedAtIso?: string | undefined;
+  readonly imageDimensionsByFile?: Readonly<Record<string, BookImageDimensions>> | undefined;
 }
 
 export const BookShippingAddressSchema = z.object({
@@ -216,7 +216,7 @@ export interface BookPrintJobRecord {
   readonly externalId: string;
   readonly title: string;
   readonly status: BookPrintJobStatus;
-  readonly statusDetail?: string;
+  readonly statusDetail?: string | undefined;
   readonly trackingUrls: readonly string[];
   readonly sandbox: boolean;
   readonly quantity: number;
@@ -268,7 +268,7 @@ export interface BookCompiledPage {
   readonly kind: BookPageKind;
   readonly sectionTitle: string;
   readonly heading: string;
-  readonly subtitle?: string;
+  readonly subtitle?: string | undefined;
   readonly lines: readonly string[];
   readonly footnotes: readonly string[];
 }

@@ -15,10 +15,10 @@ export interface PlaywrightLaunchModule {
     executablePath?(): string;
     launch(options?: {
       readonly headless?: boolean;
-      readonly executablePath?: string;
+      readonly executablePath?: string | undefined;
       readonly args?: readonly string[];
-      readonly timeout?: number;
-      readonly env?: Record<string, string>;
+      readonly timeout?: number | undefined;
+      readonly env?: Record<string, string> | undefined;
     }): Promise<ScreenshotBrowserHandle>;
   };
 }
@@ -68,11 +68,11 @@ export function isExecutableBinary(filePath: string): boolean {
 
 export function resolveScreenshotChromiumPath(options: {
   readonly env: NodeJS.ProcessEnv;
-  readonly playwrightExecutablePath?: string;
-  readonly isExecutable?: (filePath: string) => boolean;
-}): { readonly executablePath?: string; readonly isSystemBinary: boolean } {
+  readonly playwrightExecutablePath?: string | undefined;
+  readonly isExecutable?: ((filePath: string) => boolean) | undefined;
+}): { readonly executablePath?: string | undefined; readonly isSystemBinary: boolean } {
   const checkExec = options.isExecutable ?? isExecutableBinary;
-  const envOverride = options.env.KINLOOM_CHROMIUM_PATH?.trim();
+  const envOverride = options.env['KINLOOM_CHROMIUM_PATH']?.trim();
   if (envOverride && checkExec(envOverride)) {
     return { executablePath: envOverride, isSystemBinary: false };
   }
@@ -85,7 +85,7 @@ export function resolveScreenshotChromiumPath(options: {
       return { executablePath: candidate, isSystemBinary: true };
     }
   }
-  const pathEnv = options.env.PATH ?? '';
+  const pathEnv = options.env['PATH'] ?? '';
   for (const dir of pathEnv.split(path.delimiter)) {
     if (!dir) {
       continue;
@@ -110,7 +110,7 @@ export function buildHeadlessEnv(env: NodeJS.ProcessEnv): Record<string, string>
   for (const key of DESKTOP_ENV_STRIP) {
     delete cleaned[key];
   }
-  cleaned.XDG_CONFIG_HOME = path.join(os.tmpdir(), 'kinloom-headless-xdg-config');
+  cleaned['XDG_CONFIG_HOME'] = path.join(os.tmpdir(), 'kinloom-headless-xdg-config');
   return cleaned;
 }
 
@@ -168,7 +168,7 @@ export async function loadPlaywrightModule(
 
 export function createPlaywrightBrowserFactory(deps?: {
   readonly loadModule?: () => Promise<PlaywrightLaunchModule>;
-  readonly isExecutable?: (filePath: string) => boolean;
+  readonly isExecutable?: ((filePath: string) => boolean) | undefined;
 }): ScreenshotBrowserFactory {
   const loadModule = deps?.loadModule ?? loadPlaywrightModule;
   const isExecutable = deps?.isExecutable;
@@ -240,7 +240,7 @@ export async function navigateAndSettlePage(options: {
   readonly waitMs: number;
   readonly isMap?: boolean;
   readonly navigationTimeoutMs?: number;
-  readonly mapSettleTimeoutMs?: number;
+  readonly mapSettleTimeoutMs?: number | undefined;
 }): Promise<void> {
   const { page, url, theme, timeoutMs, waitMs, isMap, navigationTimeoutMs, mapSettleTimeoutMs } = options;
   page.setDefaultTimeout?.(timeoutMs);
@@ -416,11 +416,11 @@ export async function inspectThemeSurface(page: ScreenshotPageHandle): Promise<R
       return null;
     }
     const backgroundColor =
-      typeof raw.backgroundColor === 'string' ? raw.backgroundColor.trim() || null : null;
-    const textColor = typeof raw.textColor === 'string' ? raw.textColor.trim() || null : null;
-    const dataTheme = typeof raw.dataTheme === 'string' ? raw.dataTheme.trim() || null : null;
-    const colorScheme = typeof raw.colorScheme === 'string' ? raw.colorScheme.trim() || null : null;
-    const prefersDark = typeof raw.prefersDark === 'boolean' ? raw.prefersDark : null;
+      typeof raw['backgroundColor'] === 'string' ? raw['backgroundColor'].trim() || null : null;
+    const textColor = typeof raw['textColor'] === 'string' ? raw['textColor'].trim() || null : null;
+    const dataTheme = typeof raw['dataTheme'] === 'string' ? raw['dataTheme'].trim() || null : null;
+    const colorScheme = typeof raw['colorScheme'] === 'string' ? raw['colorScheme'].trim() || null : null;
+    const prefersDark = typeof raw['prefersDark'] === 'boolean' ? raw['prefersDark'] : null;
     if (backgroundColor === null && textColor === null && dataTheme === null && prefersDark === null) {
       return null;
     }

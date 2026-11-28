@@ -77,7 +77,7 @@ export const STRICT_TRANSPORT_SECURITY_VALUE = 'max-age=31536000; includeSubDoma
 export interface ApplySecurityHeadersOptions {
   isSecure: boolean;
   isMedia?: boolean;
-  contentSecurityPolicy?: string;
+  contentSecurityPolicy?: string | undefined;
 }
 
 /**

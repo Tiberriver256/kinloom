@@ -41,10 +41,10 @@ export interface ParsedCell {
 
 export interface DeathRecord {
   readonly name: string;
-  readonly deceased?: string;
-  readonly spouse?: string;
-  readonly father?: string;
-  readonly mother?: string;
+  readonly deceased?: string | undefined;
+  readonly spouse?: string | undefined;
+  readonly father?: string | undefined;
+  readonly mother?: string | undefined;
   readonly age: string;
   readonly date_of_death: string;
   readonly county: string;
@@ -148,7 +148,7 @@ export function findResultsTable(
     if (table.length === 0) {
       continue;
     }
-    const header = table[0].map((c) => c.text);
+    const header = (table[0] ?? []).map((c) => c.text);
     const joined = header.join(' ');
     if (headerMarkers.some((m) => joined.includes(m))) {
       return [header, table.slice(1)];
@@ -159,7 +159,7 @@ export function findResultsTable(
 
 export function totalResults(html: string): number | null {
   const match = /Showing records \d+ to \d+ of (\d+)/.exec(html);
-  return match ? Number.parseInt(match[1], 10) : null;
+  return match ? Number.parseInt(match[1] ?? '', 10) : null;
 }
 
 export function extractFormToken(html: string): string | null {
@@ -169,7 +169,7 @@ export function extractFormToken(html: string): string | null {
     return inputVal;
   }
   const match = /name="__ncforminfo"\s+value="([^"]+)"/.exec(html);
-  return match ? match[1] : null;
+  return match?.[1] ?? null;
 }
 
 export function parseDeathName(text: string): {
@@ -202,7 +202,7 @@ export function parseDeathRows(html: string): DeathRecord[] {
       continue;
     }
     const nameInfo = parseDeathName(cells[0]);
-    const imgHref = row.length > 6 && row[6].hrefs.length > 0 ? row[6].hrefs[0] : '';
+    const imgHref = row[6]?.hrefs[0] ?? '';
     out.push({
       ...nameInfo,
       age: cells[1] ?? '',
@@ -225,9 +225,9 @@ export function parsePre1910Rows(html: string, kind: 'birth' | 'death'): Pre1910
       continue;
     }
     const lastCell = row.at(-1);
-    const detailHref = lastCell && lastCell.hrefs.length > 0 ? lastCell.hrefs[0] : '';
+    const detailHref = lastCell?.hrefs[0] ?? '';
     const idMatch = /id=(\d+)/.exec(detailHref);
-    const detailId = idMatch ? idMatch[1] : '';
+    const detailId = idMatch?.[1] ?? '';
     const detailUrl = detailHref ? new URL(detailHref, PRE1910_PAGE).toString() : '';
 
     if (kind === 'death') {
@@ -266,6 +266,7 @@ export function parseDetailFields(html: string): Record<string, string> {
     let i = 0;
     while (i < rows.length) {
       const row = rows[i];
+      if (row === undefined) continue;
       if (row.length === 1) {
         if (row[0] && row[0] !== 'NOTE') {
           notes.push(row[0]);
@@ -273,11 +274,12 @@ export function parseDetailFields(html: string): Record<string, string> {
         i += 1;
         continue;
       }
-      if (i + 1 < rows.length && rows[i + 1].length === row.length) {
+      const nextRow = rows[i + 1];
+      if (nextRow && nextRow.length === row.length) {
         for (let col = 0; col < row.length; col += 1) {
           const key = row[col];
           if (key) {
-            fields[key] = rows[i + 1][col] ?? '';
+            fields[key] = nextRow[col] ?? '';
           }
         }
         i += 2;
@@ -287,7 +289,7 @@ export function parseDetailFields(html: string): Record<string, string> {
     }
   }
   if (notes.length > 0) {
-    fields.notes = notes.join('; ');
+    fields['notes'] = notes.join('; ');
   }
   return fields;
 }

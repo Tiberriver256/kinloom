@@ -119,6 +119,11 @@ import {
 } from './tree/unionAssembly.js';
 import { formatLineageGroupLabel, formatTreeCardName, formatTreeCardPlace } from './treeNodeDisplay.js';
 
+function must<T>(val: T | undefined, label = 'value'): T {
+  if (val === undefined) throw new Error(`Expected ${label}`);
+  return val;
+}
+
 function makePerson(overrides: Partial<Person> & { id: string; full_name: string }): Person {
   const parts = overrides.full_name.trim().split(/\s+/);
   return {
@@ -355,7 +360,7 @@ describe('unionAssembly branch coverage', () => {
     });
 
     expect(generations).toHaveLength(1);
-    expect(generations[0].yearRange).toBe('Gen 1');
+    expect(generations[0]?.yearRange).toBe('Gen 1');
     expect(generations.every((g) => g.units.length > 0 && g.personIds.length > 0)).toBe(true);
     const anchorUnit = unitsById.get('per_sp1+per_anchor+per_sp2');
     expect(anchorUnit?.orderedMemberIds).toEqual(['per_sp1', 'per_anchor', 'per_sp2']);
@@ -564,10 +569,10 @@ describe('diagramLayout branch coverage', () => {
     expect(layout.hubs.length).toBe(3);
     expect(layout.buses.length).toBe(1);
     expect(layout.hangingRails.length).toBe(2);
-    expect(layout.hangingRails[0].ticks).toHaveLength(0);
-    expect(layout.hangingRails[1].ticks).toHaveLength(2);
+    expect(layout.hangingRails[0]?.ticks).toHaveLength(0);
+    expect(layout.hangingRails[1]?.ticks).toHaveLength(2);
     expect(layout.earlyLossStrips).toHaveLength(1);
-    expect(layout.earlyLossStrips[0].chips).toHaveLength(1);
+    expect(layout.earlyLossStrips[0]?.chips).toHaveLength(1);
     expect(layout.siblingToggles).toHaveLength(2);
     expect(
       formatUnionOtherChildrenLabel({
@@ -902,7 +907,7 @@ describe('treeProjections branch coverage', () => {
       defaultBranchId: 'alder',
       branchLabelsById: branchLabels,
     });
-    expect(defaultRanked[0].person.id).toBe('p_gp');
+    expect(defaultRanked[0]?.person.id).toBe('p_gp');
 
     expect(
       searchTreePeople({
@@ -913,7 +918,7 @@ describe('treeProjections branch coverage', () => {
         branchFilter: 'all',
         defaultBranchId: 'alder',
         branchLabelsById: branchLabels,
-      })[0].person.id
+      })[0]?.person.id
     ).toBe('p_pa');
 
     expect(
@@ -925,7 +930,7 @@ describe('treeProjections branch coverage', () => {
         branchFilter: 'alder',
         defaultBranchId: 'alder',
         branchLabelsById: branchLabels,
-      })[0].isOutsideCurrentBranch
+      })[0]?.isOutsideCurrentBranch
     ).toBe(true);
 
     expect(
@@ -937,7 +942,7 @@ describe('treeProjections branch coverage', () => {
         branchFilter: 'all',
         defaultBranchId: 'alder',
         branchLabelsById: branchLabels,
-      })[0].person.id
+      })[0]?.person.id
     ).toBe('p_pa');
 
     expect(
@@ -949,7 +954,7 @@ describe('treeProjections branch coverage', () => {
         branchFilter: 'all',
         defaultBranchId: 'alder',
         branchLabelsById: branchLabels,
-      })[0].person.id
+      })[0]?.person.id
     ).toBe('p_nobranch');
 
     expect(
@@ -961,7 +966,7 @@ describe('treeProjections branch coverage', () => {
         branchFilter: 'all',
         defaultBranchId: 'alder',
         branchLabelsById: branchLabels,
-      })[0].person.id
+      })[0]?.person.id
     ).toBe('p_hanging');
   });
 });
@@ -1428,7 +1433,7 @@ describe('createRegistry, MediaPlayer, and PronunciationBadge pure helpers', () 
     const surnameOnly = buildPersonCreatePayload({ ...baseDraft, surname: 'Alder' }, [], false);
     expect(surnameOnly.ok).toBe(true);
     if (surnameOnly.ok) {
-      expect(surnameOnly.payload.given_name).toBe('Alder');
+      expect(surnameOnly.payload['given_name']).toBe('Alder');
     }
 
     expect(
@@ -1450,8 +1455,8 @@ describe('createRegistry, MediaPlayer, and PronunciationBadge pure helpers', () 
     );
     expect(placeRes.ok).toBe(true);
     if (placeRes.ok) {
-      expect(placeRes.payload.lat).toBe(0);
-      expect(placeRes.payload.lng).toBe(-85.5);
+      expect(placeRes.payload['lat']).toBe(0);
+      expect(placeRes.payload['lng']).toBe(-85.5);
     }
 
     expect(
@@ -2202,20 +2207,20 @@ describe('fieldTypes, treeNodeDisplay, personViewModel, and placeViewModel branc
     expect(fam.parents).toHaveLength(1);
     expect(fam.children).toHaveLength(1);
 
-    const undatedEv: ArchiveEvent = { ...bundle.events[2], year: null };
-    expect(buildTimelineScrubberTicks([undatedEv, bundle.events[0]])).toHaveLength(1);
+    const undatedEv: ArchiveEvent = { ...must(bundle.events[2]), year: null };
+    expect(buildTimelineScrubberTicks([undatedEv, must(bundle.events[0])])).toHaveLength(1);
 
-    expect(resolvePortraitLightboxState(p2, [])).toBeNull();
-    expect(resolvePortraitLightboxState(p1, bundle.media ?? [])).toEqual({ kind: 'gallery', index: 0 });
-    expect(resolvePortraitLightboxState(p1, [])?.kind).toBe('single');
+    expect(resolvePortraitLightboxState(must(p2), [])).toBeNull();
+    expect(resolvePortraitLightboxState(must(p1), bundle.media ?? [])).toEqual({ kind: 'gallery', index: 0 });
+    expect(resolvePortraitLightboxState(must(p1), [])?.kind).toBe('single');
 
     const harbor = bundle.places[1];
-    expect(resolveMatchingPlaceIds(bundle, harbor, 'exact', placesById).has('pl_harbor')).toBe(true);
-    expect(resolveMatchingPlaceIds(bundle, harbor, 'radius15', placesById).has('pl_harbor')).toBe(true);
-    expect(resolveMatchingPlaceIds(bundle, harbor, 'county', placesById).has('pl_far')).toBe(true);
+    expect(resolveMatchingPlaceIds(bundle, must(harbor), 'exact', placesById).has('pl_harbor')).toBe(true);
+    expect(resolveMatchingPlaceIds(bundle, must(harbor), 'radius15', placesById).has('pl_harbor')).toBe(true);
+    expect(resolveMatchingPlaceIds(bundle, must(harbor), 'county', placesById).has('pl_far')).toBe(true);
 
     const evLate: ArchiveEvent = {
-      ...bundle.events[0],
+      ...must(bundle.events[0]),
       id: 'ev_late_manual',
       year: 1895,
       place_id: 'pl_harbor',
@@ -2227,7 +2232,7 @@ describe('fieldTypes, treeNodeDisplay, personViewModel, and placeViewModel branc
       ],
     };
     const evEarly: ArchiveEvent = {
-      ...bundle.events[0],
+      ...must(bundle.events[0]),
       id: 'ev_early_manual',
       year: 1875,
       place_id: 'pl_harbor',
@@ -2239,12 +2244,12 @@ describe('fieldTypes, treeNodeDisplay, personViewModel, and placeViewModel branc
       new Set(['pl_harbor']),
       peopleById
     );
-    expect(occ.rows[0].startYear).toBe(1875);
-    expect(occ.rows[0].endYear).toBe(1895);
+    expect(occ.rows[0]?.startYear).toBe(1875);
+    expect(occ.rows[0]?.endYear).toBe(1895);
 
     const localRecs = collectPlaceLocalRecords(bundle, new Set(['pl_harbor']));
     expect(localRecs).toHaveLength(2);
     expect(collectRecordDecades(localRecs)).toEqual([1880]);
-    expect(buildPlacePhotoMedia(harbor)?.caption).toContain('Archival view of');
+    expect(buildPlacePhotoMedia(must(harbor))?.caption).toContain('Archival view of');
   });
 });

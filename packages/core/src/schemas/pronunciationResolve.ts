@@ -27,8 +27,8 @@ export { resolvePlacePronunciation };
 interface ComposedTokenPart {
   readonly kind: 'resolved' | 'initial' | 'decoration';
   readonly token: string;
-  readonly entry?: Pronunciation;
-  readonly joinWithHyphen?: boolean;
+  readonly entry?: Pronunciation | undefined;
+  readonly joinWithHyphen?: boolean | undefined;
 }
 
 function resolveCompositionalPersonPronunciation(
@@ -54,7 +54,7 @@ function resolveCompositionalPersonPronunciation(
     let matchedText = '';
 
     for (let span = maxSpan; span >= 1; span -= 1) {
-      const phrase = span === 1 ? tokens[idx] : tokens.slice(idx, idx + span).join(' ');
+      const phrase = span === 1 ? (tokens[idx] ?? '') : tokens.slice(idx, idx + span).join(' ');
       const candidate = lookupCompatiblePersonLexiconEntry(lexicon, phrase, fullNameLower);
       if (candidate) {
         matchedSpan = span;
@@ -72,6 +72,10 @@ function resolveCompositionalPersonPronunciation(
     }
 
     const token = tokens[idx];
+    if (token === undefined) {
+      idx += 1;
+      continue;
+    }
 
     if (token.includes('-')) {
       const subTokens = token
@@ -91,15 +95,19 @@ function resolveCompositionalPersonPronunciation(
           }
         }
         if (allSubMatched) {
-          for (let s = 0; s < subTokens.length; s += 1) {
+          subTokens.forEach((subTok, s) => {
+            const subEntry = subEntries[s];
+            if (!subEntry) {
+              return;
+            }
             parts.push({
               kind: 'resolved',
-              token: subTokens[s],
-              entry: subEntries[s],
+              token: subTok,
+              entry: subEntry,
               joinWithHyphen: s > 0,
             });
-            resolvedEntries.push(subEntries[s]);
-          }
+            resolvedEntries.push(subEntry);
+          });
         }
         idx += 1;
         continue;
@@ -129,8 +137,7 @@ function resolveCompositionalPersonPronunciation(
   let allHavePhonetic = true;
   let allHaveIpa = true;
   let allHaveAudio = true;
-  for (let i = 0; i < resolvedEntries.length; i += 1) {
-    const e = resolvedEntries[i];
+  for (const e of resolvedEntries) {
     if (!e.phonetic?.trim()) {
       allHavePhonetic = false;
     }
@@ -145,8 +152,7 @@ function resolveCompositionalPersonPronunciation(
   let phonetic: string | undefined;
   if (allHavePhonetic) {
     let out = '';
-    for (let i = 0; i < parts.length; i += 1) {
-      const part = parts[i];
+    for (const part of parts) {
       const piece = part.kind === 'resolved' ? (part.entry?.phonetic?.trim() ?? '') : part.token;
       if (!piece) {
         continue;
@@ -159,8 +165,7 @@ function resolveCompositionalPersonPronunciation(
   let ipa: string | undefined;
   if (allHaveIpa) {
     let out = '';
-    for (let i = 0; i < parts.length; i += 1) {
-      const part = parts[i];
+    for (const part of parts) {
       if (part.kind !== 'resolved' || !part.entry?.ipa?.trim()) {
         continue;
       }
@@ -179,13 +184,9 @@ function resolveCompositionalPersonPronunciation(
 
   const language = composeLanguageTag(resolvedEntries);
   const provenance = composeProvenance(resolvedEntries);
-  let tokenAudioUrls: string[] | undefined;
-  if (allHaveAudio) {
-    tokenAudioUrls = new Array<string>(resolvedEntries.length);
-    for (let i = 0; i < resolvedEntries.length; i += 1) {
-      tokenAudioUrls[i] = resolvedEntries[i].audio_url?.trim() ?? '';
-    }
-  }
+  const tokenAudioUrls = allHaveAudio
+    ? resolvedEntries.map((entry) => entry.audio_url?.trim() ?? '')
+    : undefined;
 
   const resolved: ResolvedPersonPronunciation = {
     ...(phonetic ? { phonetic } : {}),
@@ -210,10 +211,10 @@ function resolveCompositionalPersonPronunciation(
  */
 export function inspectPersonPronunciationTokens(
   person: {
-    readonly full_name?: string;
-    readonly given_name?: string;
-    readonly surname?: string;
-    readonly is_living?: boolean;
+    readonly full_name?: string | undefined;
+    readonly given_name?: string | undefined;
+    readonly surname?: string | undefined;
+    readonly is_living?: boolean | undefined;
   },
   lexicon?: Readonly<Record<string, Pronunciation>> | null
 ): PersonPronunciationInspection {
@@ -271,7 +272,7 @@ export function inspectPersonPronunciationTokens(
     let matchedText = '';
 
     for (let span = maxSpan; span >= 1; span -= 1) {
-      const phrase = span === 1 ? rawTokens[idx] : rawTokens.slice(idx, idx + span).join(' ');
+      const phrase = span === 1 ? (rawTokens[idx] ?? '') : rawTokens.slice(idx, idx + span).join(' ');
       const candidate = lookupCompatiblePersonLexiconMatch(effectiveLexicon, phrase, fullNameLower);
       if (candidate) {
         matchedSpan = span;
@@ -319,6 +320,10 @@ export function inspectPersonPronunciationTokens(
     }
 
     const token = rawTokens[idx];
+    if (token === undefined) {
+      idx += 1;
+      continue;
+    }
 
     if (token.includes('-')) {
       const subTokens = token
@@ -330,8 +335,7 @@ export function inspectPersonPronunciationTokens(
         if (role === 'given') {
           seenGiven = true;
         }
-        for (let s = 0; s < subTokens.length; s += 1) {
-          const sub = subTokens[s];
+        subTokens.forEach((sub, s) => {
           const subMatch = lookupCompatiblePersonLexiconMatch(effectiveLexicon, sub, fullNameLower);
           inspected.push({
             kind: 'token',
@@ -341,7 +345,7 @@ export function inspectPersonPronunciationTokens(
             entry: subMatch?.entry ?? null,
             ...(s > 0 ? { joinWithHyphen: true } : {}),
           });
-        }
+        });
         idx += 1;
         continue;
       }
@@ -416,12 +420,12 @@ export function inspectPersonPronunciationTokens(
  */
 export function resolvePersonPronunciation(
   person: {
-    readonly id?: string;
-    readonly is_living?: boolean;
-    readonly full_name?: string;
-    readonly given_name?: string;
-    readonly surname?: string;
-    readonly pronunciation?: Pronunciation | null;
+    readonly id?: string | undefined;
+    readonly is_living?: boolean | undefined;
+    readonly full_name?: string | undefined;
+    readonly given_name?: string | undefined;
+    readonly surname?: string | undefined;
+    readonly pronunciation?: Pronunciation | null | undefined;
   },
   lexicon?: Readonly<Record<string, Pronunciation>> | null
 ): ResolvedPersonPronunciation | null {

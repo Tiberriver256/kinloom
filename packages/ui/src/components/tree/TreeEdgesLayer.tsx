@@ -12,10 +12,13 @@ function pointsToOrthogonalPath(points: readonly DiagramPoint[]): string {
   if (points.length === 0) {
     return '';
   }
-  let d = `M ${points[0].x} ${points[0].y}`;
+  const first = points[0];
+  if (!first) return '';
+  let d = `M ${first.x} ${first.y}`;
   for (let i = 1; i < points.length; i += 1) {
     const prev = points[i - 1];
     const cur = points[i];
+    if (!prev || !cur) continue;
     if (cur.x === prev.x) {
       d += ` V ${cur.y}`;
     } else if (cur.y === prev.y) {

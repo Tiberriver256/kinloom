@@ -776,8 +776,7 @@ describe('Security and abuse telemetry module (Issue #31)', () => {
       const server = createKinloomServer({
         siteConfig,
         ports: {
-          ...ports,
-          authProvider: undefined,
+          ...(({ authProvider: _ap, ...rest }) => rest)(ports),
           plugins: [
             createWorkersObservabilityPlugin({
               clock,

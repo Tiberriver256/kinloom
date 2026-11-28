@@ -37,8 +37,8 @@ async function makeTempDir(prefix: string): Promise<string> {
 }
 
 afterEach(async () => {
-  delete process.env.KINLOOM_TELEMETRY_FILE;
-  delete process.env.KINLOOM_TELEMETRY_PARENT;
+  delete process.env['KINLOOM_TELEMETRY_FILE'];
+  delete process.env['KINLOOM_TELEMETRY_PARENT'];
   while (tempDirs.length > 0) {
     const dir = tempDirs.pop();
     if (dir) {
@@ -291,9 +291,9 @@ describe('kinloom media dedupe', () => {
     expect(dryBody.dryRun).toBe(true);
     expect(dryBody.duplicateGroupCount).toBe(1);
     expect(dryBody.retiredCount).toBe(1);
-    expect(dryBody.groups[0].canonicalId).toBe('med_dup_2');
-    expect(dryBody.groups[0].retiredIds).toEqual(['med_dup_1']);
-    expect(dryBody.groups[0].mergedPersonIds).toEqual(['per_helen_maple', 'per_arthur_alder']);
+    expect(dryBody.groups[0]!.canonicalId).toBe('med_dup_2');
+    expect(dryBody.groups[0]!.retiredIds).toEqual(['med_dup_1']);
+    expect(dryBody.groups[0]!.mergedPersonIds).toEqual(['per_helen_maple', 'per_arthur_alder']);
     expect(dryBody.writtenYamlFiles).toEqual([]);
     expect(dryBody.stagedPackageWarnings).toEqual([
       expect.objectContaining({ personId: 'per_helen_maple', retiredMediaIds: ['med_dup_1'] }),
@@ -355,12 +355,12 @@ describe('kinloom media dedupe', () => {
     // Check merged media record preserves all person_ids, captions, provenance, and merged_from_media_ids.
     const afterMedia = parseMediaYaml(await readFile(mediaPath, 'utf8'));
     expect(afterMedia).toHaveLength(1);
-    expect(afterMedia[0].id).toBe('med_dup_1');
-    expect(afterMedia[0].person_ids).toEqual(['per_arthur_alder', 'per_helen_maple']);
-    expect(afterMedia[0].caption).toBe('1880 U.S. Census sheet 14B for Arthur Alder household');
-    expect(afterMedia[0].provenance).toBe('National Archives Roll T9-1001');
-    expect(afterMedia[0].has_primary_source).toBe(true);
-    expect(afterMedia[0].extensions).toEqual(
+    expect(afterMedia[0]!.id).toBe('med_dup_1');
+    expect(afterMedia[0]!.person_ids).toEqual(['per_arthur_alder', 'per_helen_maple']);
+    expect(afterMedia[0]!.caption).toBe('1880 U.S. Census sheet 14B for Arthur Alder household');
+    expect(afterMedia[0]!.provenance).toBe('National Archives Roll T9-1001');
+    expect(afterMedia[0]!.has_primary_source).toBe(true);
+    expect(afterMedia[0]!.extensions).toEqual(
       expect.objectContaining({
         alternate_captions: ['Helen Maple enumeration line on 1880 census'],
         alternate_provenance: ['FamilySearch film 1255001'],
@@ -370,14 +370,14 @@ describe('kinloom media dedupe', () => {
 
     // Check inline citation rewritten outside code fence, untouched inside fenced code block.
     const afterNarratives = parseNarrativesYaml(await readFile(narrativesPath, 'utf8'));
-    expect(afterNarratives[0].body_md).toContain('in 1880[^src_1880_census|med_dup_1].');
-    expect(afterNarratives[0].body_md).toContain(
+    expect(afterNarratives[0]!.body_md).toContain('in 1880[^src_1880_census|med_dup_1].');
+    expect(afterNarratives[0]!.body_md).toContain(
       'Example syntax that must remain untouched: [^src_1880_census|med_dup_2]'
     );
 
     // Check extensions.media_ids rewritten in events.yaml.
     const afterEvents = parseEventsYaml(await readFile(eventsPath, 'utf8'));
-    expect(afterEvents[0].extensions?.media_ids).toEqual(['med_dup_1']);
+    expect(afterEvents[0]!.extensions?.['media_ids']).toEqual(['med_dup_1']);
 
     // Staged research/ file was NEVER mutated.
     expect(await readFile(stagedPatchPath, 'utf8')).toBe(stagedPatchOriginal);

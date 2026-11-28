@@ -188,7 +188,9 @@ async function makeTempDir(prefix = 'kinloom-c4-'): Promise<string> {
 const VALID_JPEG = Buffer.concat([JPEG_MAGIC, Buffer.from([0xe0, 0x00, 0x10, 0x4a, 0x46, 0x49, 0x46])]);
 const VALID_PDF = Buffer.from('%PDF-1.4\n%synthetic-archive-doc\n', 'ascii');
 
-function makeCapturedContext(overrides: Partial<RecordCommandContext> = {}): {
+function makeCapturedContext(
+  overrides: { [K in keyof RecordCommandContext]?: RecordCommandContext[K] | undefined } = {}
+): {
   ctx: RecordCommandContext;
   stdout: string[];
   stderr: string[];
@@ -252,7 +254,11 @@ interface FakeBrowserPage extends OptionalBrowserPage {
 
 function makeFakeBrowser(options: {
   readonly onGoto: (url: string, page: FakeBrowserPage) => Promise<void> | void;
-  readonly waitForFunctionImpl?: (fn: string, arg?: unknown, opts?: { timeout?: number }) => Promise<unknown>;
+  readonly waitForFunctionImpl?: (
+    fn: string,
+    arg?: unknown,
+    opts?: { timeout?: number | undefined }
+  ) => Promise<unknown>;
   readonly omitWaitForTimeout?: boolean;
   readonly evaluateResult?: unknown;
 }): { browser: OptionalBrowser; closed: { page: boolean; context: boolean; browser: boolean } } {
@@ -629,11 +635,11 @@ describe('Find a Grave CLI commands, help outputs, and photo command edge cases'
         ctx
       );
       expect(res.exitCode).toBe(0);
-      expect(capturedSearchVars.birthYearFilter).toBe('exact');
-      expect(capturedSearchVars.bio).toBe('pioneer');
-      expect(capturedSearchVars.fullText).toBe('homestead');
-      expect(capturedSearchVars.linkedToName).toBe('John Doe');
-      expect(capturedSearchVars.exactName).toBe(true);
+      expect(capturedSearchVars['birthYearFilter']).toBe('exact');
+      expect(capturedSearchVars['bio']).toBe('pioneer');
+      expect(capturedSearchVars['fullText']).toBe('homestead');
+      expect(capturedSearchVars['linkedToName']).toBe('John Doe');
+      expect(capturedSearchVars['exactName']).toBe(true);
       expect(stdout.join('\n')).toContain('3001 | Jane Doe | b. 1840 | d. 1912 | Oakville Cemetery');
     }
 
@@ -1076,9 +1082,9 @@ describe('NARA browser fallback (search and get records)', () => {
     });
     expect(closed).toEqual({ page: true, context: true, browser: true });
     expect(res).toHaveLength(1);
-    expect(res[0].query).toBe('Oakville');
-    expect(res[0].total).toBe(1);
-    expect(res[0].results[0].naId).toBe('12345');
+    expect(res[0]!.query).toBe('Oakville');
+    expect(res[0]!.total).toBe(1);
+    expect(res[0]!.results[0]!.naId).toBe('12345');
 
     // Fallback to DOM evaluate when no proxy JSON captured (and query === null, no waitForTimeout)
     const { browser: domBrowser } = makeFakeBrowser({
@@ -1091,9 +1097,9 @@ describe('NARA browser fallback (search and get records)', () => {
     const domRes = await defaultBrowserSearchMany([[null, searchUrl]], ctx, 5000, {
       launcher: async () => domBrowser,
     });
-    expect(domRes[0].query).toBeUndefined();
-    expect(domRes[0].total).toBe(1);
-    expect(domRes[0].results[0].title).toBe('Meadowbrook Ledger');
+    expect(domRes[0]!.query).toBeUndefined();
+    expect(domRes[0]!.total).toBe(1);
+    expect(domRes[0]!.results[0]!.title).toBe('Meadowbrook Ledger');
   });
 
   it('captures record metadata and transcriptions in defaultBrowserGetRecords and handles missing capture', async () => {
@@ -1145,9 +1151,9 @@ describe('NARA browser fallback (search and get records)', () => {
     );
 
     expect(records).toHaveLength(2);
-    expect(records[0].naId).toBe('12345');
-    expect(records[0].title).toBe('Oakville Militia Roll');
-    expect(records[0].transcriptions).toEqual(['First transcription line', 'Second transcription line']);
+    expect(records[0]!.naId).toBe('12345');
+    expect(records[0]!.title).toBe('Oakville Militia Roll');
+    expect(records[0]!.transcriptions).toEqual(['First transcription line', 'Second transcription line']);
     expect(records[1]).toEqual({
       naId: '99999',
       url: 'https://catalog.archives.gov/id/99999',
@@ -1466,8 +1472,8 @@ describe('NARA catalog cache, transport, commands, and download helpers', () => 
       }
     );
     expect(apiCalls).toBe(2);
-    expect(recs[0].title).toBe('Browser Fallback Record');
-    expect(recs[1].error).toBe('Not found');
+    expect(recs[0]!.title).toBe('Browser Fallback Record');
+    expect(recs[1]!.error).toBe('Not found');
   });
 
   it('exercises NARA CLI help, text outputs, browser mode, and download validation errors', async () => {

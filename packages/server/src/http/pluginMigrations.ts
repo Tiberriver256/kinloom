@@ -98,8 +98,8 @@ function tokenizeSql(sql: string): SqlToken[] {
   let i = 0;
 
   while (i < len) {
-    const ch = sql[i];
-    const next = sql[i + 1];
+    const ch = sql.charAt(i);
+    const next = sql.charAt(i + 1);
 
     // Skip whitespace
     if (ch <= ' ') {
@@ -192,8 +192,8 @@ function tokenizeSql(sql: string): SqlToken[] {
     if (isIdentStart(ch)) {
       let word = ch;
       i += 1;
-      while (i < len && isIdentPart(sql[i])) {
-        word += sql[i];
+      while (i < len && isIdentPart(sql.charAt(i))) {
+        word += sql.charAt(i);
         i += 1;
       }
       tokens.push({ kind: 'word', value: word, upper: word.toUpperCase() });
@@ -409,8 +409,7 @@ function checkForbiddenTokensAndDirectives(
   mode: 'registration' | 'runtime',
   namespace: string
 ): void {
-  for (let i = 0; i < tokens.length; i += 1) {
-    const token = tokens[i];
+  for (const [i, token] of tokens.entries()) {
     if (token.kind === 'word' && FORBIDDEN_SQL_DIRECTIVES.has(token.upper)) {
       failGuard(mode, `Plugin namespace '${namespace}' SQL contains forbidden directive '${token.upper}'.`);
     }
@@ -452,6 +451,9 @@ function collectCteNames(tokens: readonly SqlToken[]): Set<string> {
   let parenDepth = 0;
   while (i < tokens.length) {
     const token = tokens[i];
+    if (!token) {
+      break;
+    }
     if (token.kind === 'punct' && token.value === '(') {
       parenDepth += 1;
       i += 1;
@@ -473,8 +475,8 @@ function collectCteNames(tokens: readonly SqlToken[]): Set<string> {
           lookahead += 1;
           while (lookahead < tokens.length && inner > 0) {
             const innerTok = tokens[lookahead];
-            if (innerTok.kind === 'punct' && innerTok.value === '(') inner += 1;
-            else if (innerTok.kind === 'punct' && innerTok.value === ')') inner -= 1;
+            if (innerTok?.kind === 'punct' && innerTok.value === '(') inner += 1;
+            else if (innerTok?.kind === 'punct' && innerTok.value === ')') inner -= 1;
             lookahead += 1;
           }
         }
@@ -496,8 +498,7 @@ function validateTableReferencesInQueryTokens(
   namespace: string,
   cteNames: ReadonlySet<string>
 ): void {
-  for (let i = 0; i < tokens.length; i += 1) {
-    const tok = tokens[i];
+  for (const [i, tok] of tokens.entries()) {
     if (tok.kind !== 'word') {
       continue;
     }
@@ -566,11 +567,10 @@ function validateTableReferencesInQueryTokens(
 function validateDdlStatement(tokens: readonly SqlToken[], namespace: string): void {
   checkForbiddenTokensAndDirectives(tokens, 'registration', namespace);
 
-  if (tokens.length === 0) {
+  const [first] = tokens;
+  if (!first) {
     return;
   }
-
-  const first = tokens[0];
   if (first.kind !== 'word') {
     throw new RangeError(
       `Plugin namespace '${namespace}' migration statement must start with a DDL keyword.`
@@ -734,7 +734,8 @@ export function validatePluginMigrationSql(namespace: string, sql: string): read
 export function assertScopedPluginSql(namespace: string, sql: string): string {
   const validNamespace = assertValidPluginNamespace(namespace);
   const statements = splitPluginSqlStatements(sql);
-  if (statements.length === 0) {
+  const [firstStatement] = statements;
+  if (!firstStatement) {
     throw new KinloomHttpError(
       500,
       'PLUGIN_SQL_SCOPE_VIOLATION',
@@ -749,8 +750,9 @@ export function assertScopedPluginSql(namespace: string, sql: string): string {
     );
   }
 
-  const tokens = tokenizeSql(statements[0]);
-  if (tokens.length === 0) {
+  const tokens = tokenizeSql(firstStatement);
+  const [head] = tokens;
+  if (!head) {
     throw new KinloomHttpError(
       500,
       'PLUGIN_SQL_SCOPE_VIOLATION',
@@ -759,8 +761,6 @@ export function assertScopedPluginSql(namespace: string, sql: string): string {
   }
 
   checkForbiddenTokensAndDirectives(tokens, 'runtime', validNamespace);
-
-  const head = tokens[0];
   if (head.kind !== 'word' || !ALLOWED_RUNTIME_HEADS.has(head.upper)) {
     throw new KinloomHttpError(
       500,
@@ -771,7 +771,7 @@ export function assertScopedPluginSql(namespace: string, sql: string): string {
 
   const cteNames = collectCteNames(tokens);
   validateTableReferencesInQueryTokens(tokens, 'runtime', validNamespace, cteNames);
-  return statements[0];
+  return firstStatement;
 }
 
 export function normalizeMigrationSql(sql: string): string {

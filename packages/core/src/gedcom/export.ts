@@ -128,7 +128,9 @@ export function buildFilteredGedcom7(options: GedcomExportOptions): string {
 
   for (const pairKey of [...spousePairs].toSorted()) {
     const [a, b] = pairKey.split('|');
-    ensureFam([a, b]);
+    if (a && b) {
+      ensureFam([a, b]);
+    }
   }
 
   for (const child of orderedPeople) {
@@ -152,9 +154,10 @@ export function buildFilteredGedcom7(options: GedcomExportOptions): string {
       continue;
     }
     const pIds = ev.participants.map((pt) => pt.person_id).filter((id) => seenIds.has(id));
-    if (pIds.length >= 2) {
-      const key = [pIds[0], pIds[1]].toSorted().join('|');
-      const fam = famByKey.get(key) ?? ensureFam([pIds[0], pIds[1]]);
+    const [p0, p1] = pIds;
+    if (p0 && p1) {
+      const key = [p0, p1].toSorted().join('|');
+      const fam = famByKey.get(key) ?? ensureFam([p0, p1]);
       fam.events.push(ev);
     }
   }
@@ -413,8 +416,8 @@ export function exportGedcom7(
     placesById,
     sourcesById,
     siteConfig,
-    filterDescription: options?.filterDescription,
-    exportDate: options?.exportDate,
+    ...(options?.filterDescription !== undefined ? { filterDescription: options.filterDescription } : {}),
+    ...(options?.exportDate !== undefined ? { exportDate: options.exportDate } : {}),
     includeRedactedLiving: options?.includeRedactedLiving ?? bundle.meta.build_mode === 'private',
   });
 }

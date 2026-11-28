@@ -133,7 +133,7 @@ describe('Cloudflare Worker 0006_plugin_migrations, D1PluginDatabaseFactory, and
     sharedMf = mf;
 
     // Applying 0006 twice is idempotent and probeD1SchemaMigrationLevel reports 0006.
-    await applySqlScript(db, CORE_MIGRATIONS[CORE_MIGRATIONS.length - 1]);
+    await applySqlScript(db, CORE_MIGRATIONS[CORE_MIGRATIONS.length - 1]!);
     expect(await probeD1SchemaMigrationLevel(db)).toBe('0006_plugin_migrations.sql');
 
     // Default archive has plugin_migrations ledger but ZERO plugin_recipes_* tables.
@@ -184,7 +184,7 @@ describe('Cloudflare Worker 0006_plugin_migrations, D1PluginDatabaseFactory, and
 
     const firstMigration = await runD1PluginMigrations(db, [recipesStubPlugin], clock);
     expect(firstMigration.applied).toHaveLength(1);
-    expect(firstMigration.applied[0].migration_id).toBe('0001_recipes_initial');
+    expect(firstMigration.applied[0]!.migration_id).toBe('0001_recipes_initial');
     expect(firstMigration.skipped).toEqual([]);
 
     const secondMigration = await runD1PluginMigrations(db, [recipesStubPlugin], clock);

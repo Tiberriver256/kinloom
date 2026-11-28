@@ -23,8 +23,7 @@ export function countBusOrderCrossings(upper: BusConstraintInput, lower: BusCons
     crossings += 1;
   }
   if (lower.railMaxX > lower.railMinX) {
-    for (let i = 0; i < upper.dropXs.length; i += 1) {
-      const dx = upper.dropXs[i];
+    for (const dx of upper.dropXs) {
       if (dx > lower.railMinX && dx < lower.railMaxX) {
         crossings += 1;
       }
@@ -47,7 +46,8 @@ export function assignBusTracksWithConstraintGraph(
     return [];
   }
   if (n === 1) {
-    return [{ id: buses[0].id, trackIndex: 0 }];
+    const only = buses[0];
+    return only ? [{ id: only.id, trackIndex: 0 }] : [];
   }
 
   const outEdges: { readonly to: number; readonly weight: number }[][] = Array.from({ length: n }, () => []);
@@ -57,40 +57,54 @@ export function assignBusTracksWithConstraintGraph(
   const spans = new Float64Array(n);
 
   for (let i = 0; i < n; i += 1) {
-    spans[i] = buses[i].railMaxX - buses[i].railMinX;
+    const bus = buses[i];
+    if (bus) {
+      spans[i] = bus.railMaxX - bus.railMinX;
+    }
   }
 
   for (let i = 0; i < n; i += 1) {
+    const busI = buses[i];
+    if (!busI) continue;
     for (let j = i + 1; j < n; j += 1) {
-      const cIJ = countBusOrderCrossings(buses[i], buses[j]);
-      const cJI = countBusOrderCrossings(buses[j], buses[i]);
+      const busJ = buses[j];
+      if (!busJ) continue;
+      const cIJ = countBusOrderCrossings(busI, busJ);
+      const cJI = countBusOrderCrossings(busJ, busI);
       if (cIJ < cJI) {
         const w = cJI - cIJ;
-        outEdges[i].push({ to: j, weight: w });
-        inDegree[j] += 1;
-        inWeight[j] += w;
-        outWeight[i] += w;
+        outEdges[i]?.push({ to: j, weight: w });
+        inDegree[j] = (inDegree[j] ?? 0) + 1;
+        inWeight[j] = (inWeight[j] ?? 0) + w;
+        outWeight[i] = (outWeight[i] ?? 0) + w;
       } else if (cJI < cIJ) {
         const w = cIJ - cJI;
-        outEdges[j].push({ to: i, weight: w });
-        inDegree[i] += 1;
-        inWeight[i] += w;
-        outWeight[j] += w;
+        outEdges[j]?.push({ to: i, weight: w });
+        inDegree[i] = (inDegree[i] ?? 0) + 1;
+        inWeight[i] = (inWeight[i] ?? 0) + w;
+        outWeight[j] = (outWeight[j] ?? 0) + w;
       }
     }
   }
 
   const placed = new Uint8Array(n);
-  const orderedIndices: number[] = new Array(n);
+  const orderedIndices: number[] = [];
 
   const compareTieBreak = (a: number, b: number): number => {
-    if (spans[a] !== spans[b]) {
-      return spans[b] - spans[a];
+    const spanA = spans[a] ?? 0;
+    const spanB = spans[b] ?? 0;
+    if (spanA !== spanB) {
+      return spanB - spanA;
     }
-    if (buses[a].hubX !== buses[b].hubX) {
-      return buses[a].hubX - buses[b].hubX;
+    const busA = buses[a];
+    const busB = buses[b];
+    if (!busA || !busB) {
+      return a - b;
     }
-    return buses[a].id.localeCompare(buses[b].id);
+    if (busA.hubX !== busB.hubX) {
+      return busA.hubX - busB.hubX;
+    }
+    return busA.id.localeCompare(busB.id);
   };
 
   for (let step = 0; step < n; step += 1) {
@@ -115,14 +129,16 @@ export function assignBusTracksWithConstraintGraph(
           chosen = i;
           continue;
         }
-        if (inWeight[i] !== inWeight[chosen]) {
-          if (inWeight[i] < inWeight[chosen]) {
+        const inW = inWeight[i] ?? 0;
+        const chosenInW = inWeight[chosen] ?? 0;
+        if (inW !== chosenInW) {
+          if (inW < chosenInW) {
             chosen = i;
           }
           continue;
         }
-        const netI = outWeight[i] - inWeight[i];
-        const netC = outWeight[chosen] - inWeight[chosen];
+        const netI = (outWeight[i] ?? 0) - inW;
+        const netC = (outWeight[chosen] ?? 0) - chosenInW;
         if (netI !== netC) {
           if (netI > netC) {
             chosen = i;
@@ -136,13 +152,12 @@ export function assignBusTracksWithConstraintGraph(
     }
 
     placed[chosen] = 1;
-    orderedIndices[step] = chosen;
-    const edges = outEdges[chosen];
-    for (let k = 0; k < edges.length; k += 1) {
-      const e = edges[k];
+    orderedIndices.push(chosen);
+    const edges = outEdges[chosen] ?? [];
+    for (const e of edges) {
       if (placed[e.to] === 0) {
-        inDegree[e.to] -= 1;
-        inWeight[e.to] -= e.weight;
+        inDegree[e.to] = (inDegree[e.to] ?? 0) - 1;
+        inWeight[e.to] = (inWeight[e.to] ?? 0) - e.weight;
       }
     }
   }
@@ -153,7 +168,11 @@ export function assignBusTracksWithConstraintGraph(
     for (let i = 0; i < n - 1; i += 1) {
       const a = orderedIndices[i];
       const b = orderedIndices[i + 1];
-      if (countBusOrderCrossings(buses[b], buses[a]) < countBusOrderCrossings(buses[a], buses[b])) {
+      if (a === undefined || b === undefined) continue;
+      const busA = buses[a];
+      const busB = buses[b];
+      if (!busA || !busB) continue;
+      if (countBusOrderCrossings(busB, busA) < countBusOrderCrossings(busA, busB)) {
         orderedIndices[i] = b;
         orderedIndices[i + 1] = a;
         swapped = true;
@@ -164,12 +183,16 @@ export function assignBusTracksWithConstraintGraph(
     }
   }
 
-  const assignments: BusTrackAssignment[] = new Array(n);
-  for (let i = 0; i < n; i += 1) {
-    assignments[i] = {
-      id: buses[orderedIndices[i]].id,
-      trackIndex: i,
-    };
+  const assignments: BusTrackAssignment[] = [];
+  for (let i = 0; i < orderedIndices.length; i += 1) {
+    const idx = orderedIndices[i];
+    const bus = idx !== undefined ? buses[idx] : undefined;
+    if (bus) {
+      assignments.push({
+        id: bus.id,
+        trackIndex: i,
+      });
+    }
   }
   return assignments;
 }

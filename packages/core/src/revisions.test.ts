@@ -201,7 +201,7 @@ describe('revision diff and revert engine', () => {
 
     const batchReverts = buildBatchRevertPayloads(new Map([['person:per_1', rev2.after_json]]), [rev1, rev2]);
     expect(batchReverts.map((r) => r.reverted_revision_id)).toEqual([11, 10]);
-    expect(batchReverts[1].after_json).toEqual({ id: 'per_1', birth_edtf: '1850' });
+    expect(batchReverts[1]?.after_json).toEqual({ id: 'per_1', birth_edtf: '1850' });
 
     const validBatch = BatchSubmissionSchema.parse({
       batch_id: 'batch_002',

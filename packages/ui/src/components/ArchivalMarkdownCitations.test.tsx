@@ -12,6 +12,11 @@ import { ArchivalMarkdown, formatNarrativeDateSpan } from './ArchivalMarkdown.js
 import { computeCitationPopoverPosition } from './CitationPopover.js';
 import { SourceInspectorDrawer } from './SourceInspectorDrawer.js';
 
+function must<T>(val: T | undefined, label = 'value'): T {
+  if (val === undefined) throw new Error(`Expected ${label}`);
+  return val;
+}
+
 declare global {
   var IS_REACT_ACT_ENVIRONMENT: boolean | undefined;
 }
@@ -202,12 +207,12 @@ describe('ArchivalMarkdown inline footnote citations and CitationPopover', () =>
     const [firstBtn, overrideBtn] = [
       ...container.querySelectorAll<HTMLButtonElement>('.archival-footnote-ref'),
     ];
-    expect(firstBtn.textContent?.trim()).toBe('[1]');
-    expect(overrideBtn.textContent?.trim()).toBe('[1]');
+    expect(must(firstBtn).textContent?.trim()).toBe('[1]');
+    expect(must(overrideBtn).textContent?.trim()).toBe('[1]');
 
     // Hover first footnote -> popover renders citation + resolved census scan
     act(() => {
-      firstBtn.dispatchEvent(new MouseEvent('mouseover', { bubbles: true }));
+      must(firstBtn).dispatchEvent(new MouseEvent('mouseover', { bubbles: true }));
     });
     const popover = document.body.querySelector<HTMLDivElement>('.citation-popover');
     expect(popover).not.toBeNull();
@@ -223,7 +228,7 @@ describe('ArchivalMarkdown inline footnote citations and CitationPopover', () =>
 
     // Leaving trigger and entering popover within 150ms keeps popover open
     act(() => {
-      firstBtn.dispatchEvent(new MouseEvent('mouseout', { bubbles: true }));
+      must(firstBtn).dispatchEvent(new MouseEvent('mouseout', { bubbles: true }));
       vi.advanceTimersByTime(80);
       popover?.dispatchEvent(new MouseEvent('mouseover', { bubbles: true }));
       vi.advanceTimersByTime(200);
@@ -236,12 +241,12 @@ describe('ArchivalMarkdown inline footnote citations and CitationPopover', () =>
       mediaBtn?.click();
     });
     expect(onOpenMedia).toHaveBeenCalledTimes(1);
-    expect(onOpenMedia.mock.calls[0][0].id).toBe('med_demo_census_scan');
+    expect(onOpenMedia.mock.calls[0]?.[0]?.id).toBe('med_demo_census_scan');
     expect(document.body.querySelector('.citation-popover')).toBeNull();
 
     // Hover explicit override token -> shows overridden journal media
     act(() => {
-      overrideBtn.dispatchEvent(new MouseEvent('mouseover', { bubbles: true }));
+      must(overrideBtn).dispatchEvent(new MouseEvent('mouseover', { bubbles: true }));
     });
     const overridePopover = document.body.querySelector<HTMLDivElement>('.citation-popover');
     expect(
@@ -397,17 +402,17 @@ describe('PersonPage synced footnote Sources (N), lightbox, and SourceInspectorD
 
     const sourceItems = [...(bioSection?.querySelectorAll('.person-biography-source-list li') ?? [])];
     expect(sourceItems.length).toBe(3);
-    expect(sourceItems[0].querySelector('.person-biography-source-num')?.textContent).toBe('[1]');
-    expect(sourceItems[0].textContent).toContain('Harriet Aldridge Farm Journal (1891).');
-    expect(sourceItems[1].querySelector('.person-biography-source-num')?.textContent).toBe('[2]');
-    expect(sourceItems[1].textContent).toContain('1880 U.S. Federal Census, Riverdale Township');
-    expect(sourceItems[2].querySelector('.person-biography-source-num')).toBeNull();
-    expect(sourceItems[2].textContent).toContain('Cedar County Marriage Register');
+    expect(sourceItems[0]?.querySelector('.person-biography-source-num')?.textContent).toBe('[1]');
+    expect(sourceItems[0]?.textContent).toContain('Harriet Aldridge Farm Journal (1891).');
+    expect(sourceItems[1]?.querySelector('.person-biography-source-num')?.textContent).toBe('[2]');
+    expect(sourceItems[1]?.textContent).toContain('1880 U.S. Federal Census, Riverdale Township');
+    expect(sourceItems[2]?.querySelector('.person-biography-source-num')).toBeNull();
+    expect(sourceItems[2]?.textContent).toContain('Cedar County Marriage Register');
 
     // Footnote [1] pins med_demo_diary_override (linked to p_thomas, NOT in Harriet's personMedia):
     // clicking its thumbnail still opens the archival lightbox cleanly!
     act(() => {
-      footnoteBtns[0].click();
+      footnoteBtns[0]?.click();
     });
     const mediaThumbBtn = document.body.querySelector<HTMLButtonElement>('.citation-popover-media-btn');
     expect(mediaThumbBtn).not.toBeNull();
@@ -425,7 +430,7 @@ describe('PersonPage synced footnote Sources (N), lightbox, and SourceInspectorD
     expect(container.querySelector('dialog[aria-label="Photo and document lightbox"]')).toBeNull();
 
     act(() => {
-      footnoteBtns[1].click();
+      footnoteBtns[1]?.click();
     });
     const inspectBtn = document.body.querySelector<HTMLButtonElement>('.citation-popover-inspect-btn');
     act(() => {

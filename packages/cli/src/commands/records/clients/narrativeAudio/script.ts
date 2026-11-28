@@ -82,10 +82,10 @@ export interface ChirpPronunciation {
 
 export interface NarrativeRecord {
   readonly id: string;
-  readonly slug?: string;
-  readonly title?: string;
-  readonly kind?: string;
-  readonly body_md?: string;
+  readonly slug?: string | undefined;
+  readonly title?: string | undefined;
+  readonly kind?: string | undefined;
+  readonly body_md?: string | undefined;
 }
 
 export interface WavStripResult {
@@ -114,7 +114,7 @@ export function countWords(text: string): number {
 
 export function ordinal(n: number): string {
   if (n >= 1 && n <= 20) {
-    return ORDINALS[n - 1];
+    return ORDINALS[n - 1] ?? `${n}th`;
   }
   if (n === 30) {
     return 'thirtieth';
@@ -149,12 +149,12 @@ export function intToWords(n: number): string {
     return `minus ${intToWords(-n)}`;
   }
   if (n < 20) {
-    return ONES[n];
+    return ONES[n] ?? String(n);
   }
   if (n < 100) {
     const t = Math.floor(n / 10);
     const r = n % 10;
-    return r === 0 ? TENS[t] : `${TENS[t]}-${ONES[r]}`;
+    return r === 0 ? (TENS[t] ?? String(n)) : `${TENS[t] ?? ''}-${ONES[r] ?? ''}`;
   }
   if (n < 1000) {
     const h = Math.floor(n / 100);
@@ -325,26 +325,26 @@ export function parseNarrativesYaml(rawYaml: string): NarrativeRecord[] {
   let list: unknown[];
   if (Array.isArray(parsed)) {
     list = parsed;
-  } else if (isPlainRecord(parsed) && Array.isArray(parsed.narratives)) {
-    list = parsed.narratives;
+  } else if (isPlainRecord(parsed) && Array.isArray(parsed['narratives'])) {
+    list = parsed['narratives'];
   } else {
     list = [];
   }
   return list
-    .filter((item): item is Record<string, unknown> => isPlainRecord(item) && typeof item.id === 'string')
+    .filter((item): item is Record<string, unknown> => isPlainRecord(item) && typeof item['id'] === 'string')
     .map((item) => ({
-      id: item.id as string,
-      slug: typeof item.slug === 'string' ? item.slug : undefined,
-      title: typeof item.title === 'string' ? item.title : undefined,
-      kind: typeof item.kind === 'string' ? item.kind : undefined,
-      body_md: typeof item.body_md === 'string' ? item.body_md : undefined,
+      id: item['id'] as string,
+      slug: typeof item['slug'] === 'string' ? item['slug'] : undefined,
+      title: typeof item['title'] === 'string' ? item['title'] : undefined,
+      kind: typeof item['kind'] === 'string' ? item['kind'] : undefined,
+      body_md: typeof item['body_md'] === 'string' ? item['body_md'] : undefined,
     }));
 }
 
 export function formatYamlSnippet(options: {
   readonly fileName: string;
   readonly durationSeconds: number;
-  readonly editorNotesStartSeconds?: number;
+  readonly editorNotesStartSeconds?: number | undefined;
   readonly storyVoice: string;
   readonly notesVoice: string;
 }): string {
@@ -367,7 +367,7 @@ export function buildSynthChunks(options: {
   readonly rawText: string;
   readonly backend: TtsBackend;
   readonly namesMap: NamesHintMap;
-  readonly phonemeMode?: PhonemeMode;
+  readonly phonemeMode?: PhonemeMode | undefined;
   readonly voice: string;
   readonly notesVoice: string;
   readonly sectionPause: number;
@@ -390,8 +390,10 @@ export function buildSynthChunks(options: {
   for (const section of sections) {
     const subChunks = options.backend === 'chirp3-hd' ? splitToByteLimit(section) : [section];
     for (let idx = 0; idx < subChunks.length; idx += 1) {
+      const subChunk = subChunks[idx];
+      if (subChunk === undefined) continue;
       chunks.push({
-        text: subChunks[idx],
+        text: subChunk,
         voice: options.voice,
         pauseBefore: idx === 0 ? options.sectionPause : 0.4,
         isNotes: false,
@@ -402,8 +404,10 @@ export function buildSynthChunks(options: {
     const notesBody = `Editor's notes.\n\n${notes.join('\n\n')}`;
     const subNotes = options.backend === 'chirp3-hd' ? splitToByteLimit(notesBody) : [notesBody];
     for (let idx = 0; idx < subNotes.length; idx += 1) {
+      const subNote = subNotes[idx];
+      if (subNote === undefined) continue;
       chunks.push({
-        text: subNotes[idx],
+        text: subNote,
         voice: options.notesVoice,
         pauseBefore: idx === 0 ? options.notesPause : 0.4,
         isNotes: true,
@@ -419,12 +423,13 @@ export function formatDryRunPlan(options: {
   readonly languageCode: string;
   readonly model: string;
   readonly namesMap: NamesHintMap;
-  readonly endpoint?: string;
-  readonly phonemeMode?: PhonemeMode;
+  readonly endpoint?: string | undefined;
+  readonly phonemeMode?: PhonemeMode | undefined;
 }): string {
   const outLines: string[] = [];
   for (let i = 0; i < options.chunks.length; i += 1) {
     const chunk = options.chunks[i];
+    if (chunk === undefined) continue;
     const label =
       options.backend === 'chirp3-hd'
         ? resolveChirpVoice(chunk.voice, options.languageCode)

@@ -179,6 +179,7 @@ export async function downloadRecordObjects(
 
   for (let idx = 0; idx < prepared.length; idx += 1) {
     const item = prepared[idx];
+    if (item === undefined) continue;
     if (!options.refresh) {
       const cachedEntry = readCachedDownloadEntry(item.cachedObjPath, item.metaSidecar, {
         url: item.objUrl,
@@ -207,6 +208,7 @@ export async function downloadRecordObjects(
   if (uncachedIndices.length > 0) {
     const fetched = await runWithConcurrency(uncachedIndices, DOWNLOAD_MAX_WORKERS, async (slotIdx) => {
       const item = prepared[slotIdx];
+      if (!item) throw new Error(`Missing download item at slot ${slotIdx}`);
       const lockPath = resolveSafeChild(
         path.join(options.cacheRoot, '_locks'),
         `object_${cleanId}_${item.cacheFilename}.lock`

@@ -9,7 +9,7 @@ export type HostAllowRule = string | RegExp | ((hostname: string) => boolean);
 
 export interface UrlSecurityPolicy {
   readonly allowedSchemes?: readonly ('https:' | 'http:')[];
-  readonly allowedHosts?: readonly HostAllowRule[];
+  readonly allowedHosts?: readonly HostAllowRule[] | undefined;
   readonly blockPrivateIps?: boolean;
 }
 
@@ -54,7 +54,7 @@ function parseIpv4Octets(ip: string): [number, number, number, number] | null {
     }
     nums.push(n);
   }
-  return [nums[0], nums[1], nums[2], nums[3]];
+  return [nums[0] ?? 0, nums[1] ?? 0, nums[2] ?? 0, nums[3] ?? 0];
 }
 
 function isPrivateOrReservedIpv4(ip: string): boolean {
@@ -98,6 +98,7 @@ function expandIpv6(ip: string): number[] | null {
     const out: number[] = [];
     for (let i = 0; i < items.length; i += 1) {
       const part = items[i];
+      if (part === undefined) continue;
       if (i === items.length - 1 && part.includes('.')) {
         const octets = parseIpv4Octets(part);
         if (!octets) {
@@ -115,12 +116,12 @@ function expandIpv6(ip: string): number[] | null {
   };
 
   if (doubleColonParts.length === 1) {
-    const groups = parseGroupList(doubleColonParts[0]);
+    const groups = parseGroupList(doubleColonParts[0] ?? '');
     return groups && groups.length === 8 ? groups : null;
   }
 
-  const left = parseGroupList(doubleColonParts[0]);
-  const right = parseGroupList(doubleColonParts[1]);
+  const left = parseGroupList(doubleColonParts[0] ?? '');
+  const right = parseGroupList(doubleColonParts[1] ?? '');
   if (!left || !right) {
     return null;
   }
@@ -147,13 +148,16 @@ export function isPrivateOrReservedIp(rawHost: string): boolean {
     const isLoopback = groups.slice(0, 7).every((g) => g === 0) && groups[7] === 1;
     if (isLoopback) return true; // ::1
     const isV4Mapped = groups.slice(0, 5).every((g) => g === 0) && (groups[5] === 0xffff || groups[5] === 0);
+    const g0 = groups[0] ?? 0;
     if (isV4Mapped) {
-      const v4 = `${groups[6] >> 8}.${groups[6] & 0xff}.${groups[7] >> 8}.${groups[7] & 0xff}`;
+      const g6 = groups[6] ?? 0;
+      const g7 = groups[7] ?? 0;
+      const v4 = `${g6 >> 8}.${g6 & 0xff}.${g7 >> 8}.${g7 & 0xff}`;
       return isPrivateOrReservedIpv4(v4);
     }
-    if ((groups[0] & 0xfe00) === 0xfc00) return true; // fc00::/7 ULA
-    if ((groups[0] & 0xffc0) === 0xfe80) return true; // fe80::/10 link-local
-    if ((groups[0] & 0xff00) === 0xff00) return true; // ff00::/8 multicast
+    if ((g0 & 0xfe00) === 0xfc00) return true; // fc00::/7 ULA
+    if ((g0 & 0xffc0) === 0xfe80) return true; // fe80::/10 link-local
+    if ((g0 & 0xff00) === 0xff00) return true; // ff00::/8 multicast
     if (groups[0] === 0x2001 && groups[1] === 0x0db8) return true; // 2001:db8::/32
     return false;
   }

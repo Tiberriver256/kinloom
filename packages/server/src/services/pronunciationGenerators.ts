@@ -17,24 +17,24 @@ export interface GeminiPronunciationAudioGeneratorOptions {
   apiKey: string;
   model?: string;
   defaultVoice?: string;
-  fetchFn?: typeof fetch;
+  fetchFn?: typeof fetch | undefined;
 }
 
 export interface OpenAiSpeechPronunciationGeneratorOptions {
   baseUrl: string;
-  apiKey?: string;
+  apiKey?: string | undefined;
   model?: string;
   defaultVoice?: string;
-  fetchFn?: typeof fetch;
+  fetchFn?: typeof fetch | undefined;
 }
 
 export interface Chirp3HdPronunciationAudioGeneratorOptions {
   apiKey: string;
-  gcpProjectId?: string;
+  gcpProjectId?: string | undefined;
   defaultVoice?: string;
   defaultLanguageCode?: string;
   endpointUrl?: string;
-  fetchFn?: typeof fetch;
+  fetchFn?: typeof fetch | undefined;
 }
 
 const GeminiInlineDataSchema = z.object({
@@ -184,7 +184,8 @@ const CHIRP_BCP47_DEFAULTS: Readonly<Record<string, string>> = {
 function formatLanguageDirective(language: string): string {
   const trimmed = language.trim();
   const lower = trimmed.toLowerCase();
-  const display = LANGUAGE_DISPLAY_NAMES[lower] ?? LANGUAGE_DISPLAY_NAMES[lower.split(/[-_]/)[0]];
+  const baseLang = lower.split(/[-_]/)[0] ?? '';
+  const display = LANGUAGE_DISPLAY_NAMES[lower] ?? LANGUAGE_DISPLAY_NAMES[baseLang];
   return display ? `${display} (${trimmed})` : trimmed;
 }
 
@@ -219,20 +220,19 @@ function normalizeChirpLanguageCode(language: string | undefined, fallback: stri
   if (directDefault) {
     return directDefault;
   }
-  const parts = normalized.split('-').filter((part) => part.length > 0);
-  if (parts.length >= 2) {
-    return `${parts[0].toLowerCase()}-${parts[1].toUpperCase()}`;
+  const [langPart, regionPart] = normalized.split('-').filter((part) => part.length > 0);
+  if (langPart && regionPart) {
+    return `${langPart.toLowerCase()}-${regionPart.toUpperCase()}`;
   }
   return fallback;
 }
 
 function extractLanguageCodeFromChirpVoice(voice: string): string | null {
-  const match = /^([a-z]{2,3}-[a-z]{2})-/i.exec(voice.trim());
-  if (!match) {
+  const match = /^([a-z]{2,3})-([a-z]{2})-/i.exec(voice.trim());
+  if (!match || !match[1] || !match[2]) {
     return null;
   }
-  const [lang, region] = match[1].split('-');
-  return `${lang.toLowerCase()}-${region.toUpperCase()}`;
+  return `${match[1].toLowerCase()}-${match[2].toUpperCase()}`;
 }
 
 export function resolveChirp3HdVoiceName(voice: string, languageCode: string): string {
@@ -494,7 +494,7 @@ export class Chirp3HdPronunciationAudioGenerator implements PronunciationAudioGe
 
     const inputPayload: Record<string, unknown> = { text: spokenText };
     if (customPronunciations) {
-      inputPayload.customPronunciations = customPronunciations;
+      inputPayload['customPronunciations'] = customPronunciations;
     }
 
     const response = await this.fetchFn(this.endpointUrl, {
@@ -583,7 +583,7 @@ export class OpenAiSpeechPronunciationGenerator implements PronunciationAudioGen
       'content-type': 'application/json',
     };
     if (this.apiKey) {
-      headers.authorization = `Bearer ${this.apiKey}`;
+      headers['authorization'] = `Bearer ${this.apiKey}`;
     }
 
     const response = await this.fetchFn(this.endpointUrl, {

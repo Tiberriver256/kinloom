@@ -104,12 +104,12 @@ export function computeLineageSpotlight(params: {
   while (cursor && !seenTrail.has(cursor.id)) {
     seenTrail.add(cursor.id);
     breadcrumb.unshift(cursor);
-    const parentIds = model.parentMap.get(cursor.id) ?? [];
+    const parentIds: readonly string[] = model.parentMap.get(cursor.id) ?? [];
     if (parentIds.length === 0) {
       break;
     }
     const preferredParentId = parentIds.find((pid) => model.directPersonIds.has(pid)) ?? parentIds[0];
-    cursor = model.peopleById.get(preferredParentId);
+    cursor = preferredParentId !== undefined ? model.peopleById.get(preferredParentId) : undefined;
   }
 
   let relationshipToPivot: string | null = null;
@@ -188,28 +188,24 @@ function getModelSurfaceIndex(model: ArchivalTreeModel): ModelSurfaceIndex {
     const visibleIds = new Set<string>();
     const collapsedUnionByPersonId = new Map<string, TreeUnion>();
     for (const g of model.generations) {
-      for (let i = 0; i < g.personIds.length; i += 1) {
-        const pid = g.personIds[i];
+      for (const pid of g.personIds) {
         if (!model.earlyLossIds.has(pid)) {
           visibleIds.add(pid);
         }
       }
     }
     for (const u of model.unions) {
-      for (let i = 0; i < u.hangingChildIds.length; i += 1) {
-        const pid = u.hangingChildIds[i];
+      for (const pid of u.hangingChildIds) {
         if (!model.earlyLossIds.has(pid)) {
           visibleIds.add(pid);
         }
       }
-      for (let i = 0; i < u.earlyLossChildIds.length; i += 1) {
-        const pid = u.earlyLossChildIds[i];
+      for (const pid of u.earlyLossChildIds) {
         if (model.earlyLossIds.has(pid)) {
           visibleIds.add(pid);
         }
       }
-      for (let i = 0; i < u.collapsedSiblingIds.length; i += 1) {
-        const pid = u.collapsedSiblingIds[i];
+      for (const pid of u.collapsedSiblingIds) {
         if (!collapsedUnionByPersonId.has(pid)) {
           collapsedUnionByPersonId.set(pid, u);
         }
@@ -290,8 +286,7 @@ export function resolveAnchorBranchFilter(params: {
   }
 
   const parentsByChild = new Map<string, string[]>();
-  for (let i = 0; i < kinship.length; i += 1) {
-    const edge = kinship[i];
+  for (const edge of kinship) {
     if (edge.relation === 'parent') {
       const list = parentsByChild.get(edge.to);
       if (list) {
@@ -315,12 +310,14 @@ export function resolveAnchorBranchFilter(params: {
   while (head < queue.length) {
     const cur = queue[head];
     head += 1;
+    if (cur === undefined) {
+      continue;
+    }
     const parentIds = parentsByChild.get(cur);
     if (!parentIds) {
       continue;
     }
-    for (let i = 0; i < parentIds.length; i += 1) {
-      const pid = parentIds[i];
+    for (const pid of parentIds) {
       if (visited.has(pid)) {
         continue;
       }
@@ -365,9 +362,9 @@ function getPersonSearchEntry(person: Person): CachedPersonSearchEntry {
     if (foldedFull) {
       parts.push(foldedFull);
     }
-    for (let i = 0; i < foldedAlts.length; i += 1) {
-      if (foldedAlts[i]) {
-        parts.push(foldedAlts[i]);
+    for (const alt of foldedAlts) {
+      if (alt) {
+        parts.push(alt);
       }
     }
     if (person.birth_year !== null) {
@@ -421,8 +418,7 @@ export function searchTreePeople(params: {
 
   const scored: { candidate: TreeSearchCandidate; score: number }[] = [];
 
-  for (let pIdx = 0; pIdx < people.length; pIdx += 1) {
-    const person = people[pIdx];
+  for (const person of people) {
     const entry = getPersonSearchEntry(person);
     if (!(isPrivateMode ? entry.eligiblePrivate : entry.eligiblePublic)) {
       continue;
@@ -458,8 +454,8 @@ export function searchTreePeople(params: {
       }
     } else {
       let allMatched = true;
-      for (let t = 0; t < queryTokens.length; t += 1) {
-        if (!entry.haystack.includes(queryTokens[t])) {
+      for (const token of queryTokens) {
+        if (!entry.haystack.includes(token)) {
           allMatched = false;
           break;
         }
@@ -480,8 +476,8 @@ export function searchTreePeople(params: {
         score += 100;
       } else {
         let matchedAlt = false;
-        for (let a = 0; a < entry.foldedAlts.length; a += 1) {
-          if (entry.foldedAlts[a].includes(normalizedQuery)) {
+        for (const alt of entry.foldedAlts) {
+          if (alt.includes(normalizedQuery)) {
             matchedAlt = true;
             break;
           }

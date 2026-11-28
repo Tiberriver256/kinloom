@@ -37,40 +37,40 @@ export function extractRecord(
   const pageSpec = options.pageSpec ?? null;
 
   const hitObj = isPlainRecord(hit) ? hit : {};
-  const src = isPlainRecord(hitObj._source) ? hitObj._source : {};
-  const rec = isPlainRecord(src.record) ? src.record : hitObj;
+  const src = isPlainRecord(hitObj['_source']) ? hitObj['_source'] : {};
+  const rec = isPlainRecord(src['record']) ? src['record'] : hitObj;
 
-  const naid = rec.naId !== undefined && rec.naId !== null ? String(rec.naId) : '';
-  const ancestors = (Array.isArray(rec.ancestors) ? rec.ancestors : []).filter(isPlainRecord);
-  const rg = ancestors.find((a) => a.levelOfDescription === 'recordGroup');
-  const series = ancestors.find((a) => a.levelOfDescription === 'series');
-  const microforms = (Array.isArray(rec.microformPublications) ? rec.microformPublications : []).filter(
+  const naid = rec['naId'] !== undefined && rec['naId'] !== null ? String(rec['naId']) : '';
+  const ancestors = (Array.isArray(rec['ancestors']) ? rec['ancestors'] : []).filter(isPlainRecord);
+  const rg = ancestors.find((a) => a['levelOfDescription'] === 'recordGroup');
+  const series = ancestors.find((a) => a['levelOfDescription'] === 'series');
+  const microforms = (Array.isArray(rec['microformPublications']) ? rec['microformPublications'] : []).filter(
     isPlainRecord
   );
-  const objs = (Array.isArray(rec.digitalObjects) ? rec.digitalObjects : []).filter(isPlainRecord);
+  const objs = (Array.isArray(rec['digitalObjects']) ? rec['digitalObjects'] : []).filter(isPlainRecord);
 
   const out: NaraRecordSummary = {
     naId: naid,
-    title: typeof rec.title === 'string' ? rec.title : '',
+    title: typeof rec['title'] === 'string' ? rec['title'] : '',
     url: naid ? `${CATALOG_WEB_BASE}/id/${naid}` : '',
   };
 
-  if (typeof rec.levelOfDescription === 'string' && rec.levelOfDescription) {
-    out.level = rec.levelOfDescription;
+  if (typeof rec['levelOfDescription'] === 'string' && rec['levelOfDescription']) {
+    out.level = rec['levelOfDescription'];
   }
 
-  const rgNum = rg ? rg.recordGroupNumber : rec.recordGroupNumber;
+  const rgNum = rg ? rg['recordGroupNumber'] : rec['recordGroupNumber'];
   if (typeof rgNum === 'string' || typeof rgNum === 'number') {
     out.rg = rgNum;
   }
-  if (rg && typeof rg.title === 'string' && rg.title) {
-    out.rgTitle = rg.title;
+  if (rg && typeof rg['title'] === 'string' && rg['title']) {
+    out.rgTitle = rg['title'];
   }
-  if (series && typeof series.title === 'string' && series.title) {
-    out.series = series.title;
+  if (series && typeof series['title'] === 'string' && series['title']) {
+    out.series = series['title'];
   }
-  if (series && series.naId !== undefined && series.naId !== null && String(series.naId)) {
-    out.seriesNaId = String(series.naId);
+  if (series && series['naId'] !== undefined && series['naId'] !== null && String(series['naId'])) {
+    out.seriesNaId = String(series['naId']);
   }
 
   const dates: string[] = [];
@@ -82,12 +82,12 @@ export function extractRecord(
     'coverageEndDate',
   ] as const) {
     const val = rec[key];
-    if (isPlainRecord(val) && val.logicalDate) {
-      dates.push(String(val.logicalDate));
+    if (isPlainRecord(val) && val['logicalDate']) {
+      dates.push(String(val['logicalDate']));
     } else if (Array.isArray(val)) {
       for (const entry of val) {
-        if (isPlainRecord(entry) && entry.logicalDate) {
-          dates.push(String(entry.logicalDate));
+        if (isPlainRecord(entry) && entry['logicalDate']) {
+          dates.push(String(entry['logicalDate']));
         }
       }
     }
@@ -98,7 +98,7 @@ export function extractRecord(
 
   const mfList: string[] = [];
   for (const m of microforms) {
-    const parts = [m.identifier, m.title, m.note]
+    const parts = [m['identifier'], m['title'], m['note']]
       .filter((p): p is string | number => p !== null && p !== undefined && String(p).trim() !== '')
       .map((p) => String(p).trim());
     if (parts.length > 0) {
@@ -109,26 +109,31 @@ export function extractRecord(
     out.microform = mfList;
   }
 
-  const access = isPlainRecord(rec.accessRestriction) ? rec.accessRestriction.status : undefined;
-  const use = isPlainRecord(rec.useRestriction) ? rec.useRestriction.status : undefined;
+  const access = isPlainRecord(rec['accessRestriction']) ? rec['accessRestriction']['status'] : undefined;
+  const use = isPlainRecord(rec['useRestriction']) ? rec['useRestriction']['status'] : undefined;
   if (typeof access === 'string' && access) {
     out.access = access;
   }
   if (typeof use === 'string' && use) {
     out.use = use;
   }
-  if (typeof rec.scopeAndContentNote === 'string' && rec.scopeAndContentNote) {
-    out.scope = rec.scopeAndContentNote;
+  if (typeof rec['scopeAndContentNote'] === 'string' && rec['scopeAndContentNote']) {
+    out.scope = rec['scopeAndContentNote'];
   }
 
   const locations: string[] = [];
-  for (const po of Array.isArray(rec.physicalOccurrences) ? rec.physicalOccurrences : []) {
+  for (const po of Array.isArray(rec['physicalOccurrences']) ? rec['physicalOccurrences'] : []) {
     if (!isPlainRecord(po)) {
       continue;
     }
-    for (const ru of Array.isArray(po.referenceUnits) ? po.referenceUnits : []) {
-      if (isPlainRecord(ru) && typeof ru.name === 'string' && ru.name && !locations.includes(ru.name)) {
-        locations.push(ru.name);
+    for (const ru of Array.isArray(po['referenceUnits']) ? po['referenceUnits'] : []) {
+      if (
+        isPlainRecord(ru) &&
+        typeof ru['name'] === 'string' &&
+        ru['name'] &&
+        !locations.includes(ru['name'])
+      ) {
+        locations.push(ru['name']);
       }
     }
   }
@@ -142,13 +147,14 @@ export function extractRecord(
       const selected = parsePageSpec(pageSpec, objs.length);
       out.objects = selected.map((p) => {
         const obj = objs[p - 1];
+        if (!obj) return { page: p, filename: '', url: '' };
         const filename =
-          typeof obj.objectFilename === 'string' && obj.objectFilename
-            ? obj.objectFilename
-            : obj.objectId !== undefined && obj.objectId !== null
-              ? String(obj.objectId)
+          typeof obj['objectFilename'] === 'string' && obj['objectFilename']
+            ? obj['objectFilename']
+            : obj['objectId'] !== undefined && obj['objectId'] !== null
+              ? String(obj['objectId'])
               : '';
-        const url = typeof obj.objectUrl === 'string' ? obj.objectUrl : '';
+        const url = typeof obj['objectUrl'] === 'string' ? obj['objectUrl'] : '';
         return { page: p, filename, url };
       });
     }
@@ -157,14 +163,15 @@ export function extractRecord(
       const texts: NaraExtractedTextItem[] = [];
       for (const p of selected) {
         const obj = objs[p - 1];
+        if (obj === undefined) continue;
         const txt =
-          (typeof obj.extractedText === 'string' && obj.extractedText) ||
-          (typeof obj.otherExtractedText === 'string' && obj.otherExtractedText) ||
+          (typeof obj['extractedText'] === 'string' && obj['extractedText']) ||
+          (typeof obj['otherExtractedText'] === 'string' && obj['otherExtractedText']) ||
           '';
         if (txt) {
           texts.push({
             page: p,
-            filename: typeof obj.objectFilename === 'string' ? obj.objectFilename : '',
+            filename: typeof obj['objectFilename'] === 'string' ? obj['objectFilename'] : '',
             text: txt,
           });
         }
@@ -183,13 +190,13 @@ export function buildSearchPayload(
   webUrl: string,
   raw: Record<string, unknown>
 ): NaraSearchPayload {
-  const body = isPlainRecord(raw.body) ? raw.body : raw;
-  const hitsObj = isPlainRecord(body.hits) ? body.hits : {};
-  const hits = Array.isArray(hitsObj.hits) ? hitsObj.hits : [];
-  const totalRaw = hitsObj.total;
+  const body = isPlainRecord(raw['body']) ? raw['body'] : raw;
+  const hitsObj = isPlainRecord(body['hits']) ? body['hits'] : {};
+  const hits = Array.isArray(hitsObj['hits']) ? hitsObj['hits'] : [];
+  const totalRaw = hitsObj['total'];
   let total = hits.length;
-  if (isPlainRecord(totalRaw) && typeof totalRaw.value === 'number') {
-    total = totalRaw.value;
+  if (isPlainRecord(totalRaw) && typeof totalRaw['value'] === 'number') {
+    total = totalRaw['value'];
   } else if (typeof totalRaw === 'number') {
     total = totalRaw;
   } else if (typeof totalRaw === 'string' && /^\d+$/.test(totalRaw)) {

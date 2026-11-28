@@ -45,11 +45,11 @@ export interface DesignAuditPlan {
   readonly runId: string;
   readonly baseUrl: string;
   readonly mode: DesignAuditMode;
-  readonly repoRoot?: string;
+  readonly repoRoot?: string | undefined;
   readonly fixedIsoTime?: string;
   readonly themes?: readonly DesignAuditTheme[];
-  readonly tokenPaths?: readonly string[];
-  readonly cssPaths?: readonly string[];
+  readonly tokenPaths?: readonly string[] | undefined;
+  readonly cssPaths?: readonly string[] | undefined;
   readonly routes: readonly DesignAuditRouteConfig[];
 }
 
@@ -61,7 +61,7 @@ export interface DesignAuditPhysicalLocation {
 
 export interface DesignAuditEvidence {
   readonly screenshotUri: string;
-  readonly boundingBoxPx?: readonly [number, number, number, number];
+  readonly boundingBoxPx?: readonly [number, number, number, number] | undefined;
   readonly pairwiseVerdict?: 'reference_wins' | 'candidate_wins' | 'tie' | 'swapped_conflict' | 'n/a';
 }
 
@@ -77,12 +77,12 @@ export interface DesignAuditFinding {
   readonly theme: DesignAuditTheme | 'all';
   readonly uiState: DesignAuditUiState;
   readonly message: string;
-  readonly measuredValue?: number | string;
-  readonly thresholdValue?: number | string;
-  readonly physicalLocation?: DesignAuditPhysicalLocation;
+  readonly measuredValue?: number | string | undefined;
+  readonly thresholdValue?: number | string | undefined;
+  readonly physicalLocation?: DesignAuditPhysicalLocation | undefined;
   readonly evidence: DesignAuditEvidence;
   readonly masterCitations: readonly string[];
-  readonly remediationHint?: string;
+  readonly remediationHint?: string | undefined;
 }
 
 export interface DesignAuditInteractiveSample {
@@ -181,7 +181,7 @@ export interface DesignAuditCssResult {
   readonly archetype: DesignAuditArchetypeId;
   readonly cssStats: DesignAuditCssStats | null;
   readonly findings: readonly DesignAuditFinding[];
-  readonly outputPath?: string;
+  readonly outputPath?: string | undefined;
 }
 
 export interface SarifRule {

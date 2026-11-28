@@ -69,7 +69,7 @@ function formatSingleEdtfDate(cleaned: string): string {
   }
 
   const yMatch = /^(\d{4})$/.exec(cleaned);
-  if (yMatch) {
+  if (yMatch && yMatch[1]) {
     return yMatch[1];
   }
 
@@ -90,7 +90,7 @@ function formatIntervalSideDate(side: string, isLeft: boolean): string {
  */
 function trimTrailingChars(value: string, chars: string): string {
   let end = value.length;
-  while (end > 0 && chars.includes(value[end - 1])) {
+  while (end > 0 && chars.includes(value.charAt(end - 1))) {
     end -= 1;
   }
   return end === value.length ? value : value.slice(0, end);

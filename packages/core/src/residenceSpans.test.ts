@@ -48,8 +48,8 @@ describe('residenceSpans and place ancestors', () => {
     ]);
 
     const anc = buildPlaceAncestors(places);
-    expect(anc.plc_oak).toEqual(['plc_oak', 'plc_cedar', 'plc_ohio', 'plc_usa']);
-    expect(anc.plc_cycle_a).toEqual(['plc_cycle_a', 'plc_cycle_b']);
+    expect(anc['plc_oak']).toEqual(['plc_oak', 'plc_cedar', 'plc_ohio', 'plc_usa']);
+    expect(anc['plc_cycle_a']).toEqual(['plc_cycle_a', 'plc_cycle_b']);
   });
 
   it('bridges anchors with Confirmed, Inferred (<=11y), and Possible (<=21y) tiers and drops living people', () => {

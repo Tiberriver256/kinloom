@@ -10,8 +10,8 @@ export interface MediaUploadMetadata {
   kind: ArchivalMediaKind;
   caption: string;
   summary: string;
-  dateEdtf?: string;
-  provenance?: string;
+  dateEdtf?: string | undefined;
+  provenance?: string | undefined;
 }
 
 export interface MediaUploadContext {
@@ -21,7 +21,7 @@ export interface MediaUploadContext {
   targets: MediaAttachTargets;
   targetHasLiving: boolean;
   allowAudioVideo: boolean;
-  maxUploadBytes?: number;
+  maxUploadBytes?: number | undefined;
   metadata: MediaUploadMetadata;
   sha256: string | null;
   r2Key: string | null;
@@ -31,7 +31,7 @@ export interface MediaUploadContext {
   rejectionReason: MediaValidationFailure | null;
   rejectionMessage: string | null;
   retryableError: string | null;
-  dataSource?: ArchiveDataSource;
+  dataSource?: ArchiveDataSource | undefined;
 }
 
 export type MediaUploadEvent =
@@ -40,9 +40,9 @@ export type MediaUploadEvent =
       file: File;
       targets: MediaAttachTargets;
       targetHasLiving: boolean;
-      metadata?: Partial<MediaUploadMetadata>;
-      allowAudioVideo?: boolean;
-      maxUploadBytes?: number;
+      metadata?: Partial<MediaUploadMetadata> | undefined;
+      allowAudioVideo?: boolean | undefined;
+      maxUploadBytes?: number | undefined;
     }
   | { type: 'CANCEL' }
   | { type: 'RETRY' }
@@ -53,8 +53,8 @@ export type UploadActorOutcome =
       kind: 'uploaded';
       uploadGen: number;
       r2Key: string;
-      url?: string;
-      media?: MediaItem;
+      url?: string | undefined;
+      media?: MediaItem | undefined;
     }
   | {
       kind: 'living_blocked';
@@ -76,9 +76,9 @@ export type AttachActorOutcome =
     };
 
 export interface MediaUploadInput {
-  dataSource?: ArchiveDataSource;
-  allowAudioVideo?: boolean;
-  maxUploadBytes?: number;
+  dataSource?: ArchiveDataSource | undefined;
+  allowAudioVideo?: boolean | undefined;
+  maxUploadBytes?: number | undefined;
 }
 
 export interface UploadMediaActorInput {
@@ -87,7 +87,7 @@ export interface UploadMediaActorInput {
   targets: MediaAttachTargets;
   metadata: MediaUploadMetadata;
   uploadGen: number;
-  dataSource?: ArchiveDataSource;
+  dataSource?: ArchiveDataSource | undefined;
 }
 
 export interface AttachMediaActorInput {

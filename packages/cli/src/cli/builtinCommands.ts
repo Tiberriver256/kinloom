@@ -22,10 +22,10 @@ export function runGuideCliCommand(rest: readonly string[], io: CliIo): CliExitC
     io.stdout(formatGuidesCatalog());
     return EXIT_OK;
   }
-  if (rest.length > 1 || rest[0].startsWith('-')) {
+  const topic = rest[0];
+  if (rest.length > 1 || topic === undefined || topic.startsWith('-')) {
     throw new CliValidationError('Usage: kinloom guide [topic]');
   }
-  const topic = rest[0];
   if (!resolveEmbeddedGuide(topic)) {
     io.stderr(`Unknown guide topic '${topic}'. Run \`kinloom guide\` to list all available guides.`);
     return EXIT_USAGE;

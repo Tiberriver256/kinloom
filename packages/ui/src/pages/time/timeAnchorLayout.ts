@@ -52,11 +52,11 @@ export function partitionDesktopAnchors<T extends AnchorYearCandidate>(
   const primaryAnchors: T[] = [];
   const overflowAnchors: T[] = [];
 
-  for (let i = 0; i < anchors.length; i += 1) {
+  for (const [i, anchor] of anchors.entries()) {
     if (primaryIndexSet.has(i)) {
-      primaryAnchors.push(anchors[i]);
+      primaryAnchors.push(anchor);
     } else {
-      overflowAnchors.push(anchors[i]);
+      overflowAnchors.push(anchor);
     }
   }
 

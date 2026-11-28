@@ -192,7 +192,7 @@ function selectScopedPeople(
 interface ChapterGroup {
   readonly id: string;
   readonly title: string;
-  readonly subtitle?: string;
+  readonly subtitle?: string | undefined;
   readonly people: readonly Person[];
 }
 
@@ -1041,10 +1041,13 @@ export function compileArchivalBook(params: {
     `Surname & Place Index ................... p. ${indexStartPage}`,
     `Colophon ................................ p. ${colophonPageNumber}`,
   ];
-  pages[tocPageIndex] = {
-    ...pages[tocPageIndex],
-    lines: tocLines,
-  };
+  const existingTocPage = pages[tocPageIndex];
+  if (existingTocPage) {
+    pages[tocPageIndex] = {
+      ...existingTocPage,
+      lines: tocLines,
+    };
+  }
 
   // Enforce hardcover minimum 24 pages & even page count
   const rawContentPages = pages.length;

@@ -158,7 +158,7 @@ export function resolveTtlHours(cliTtl: number | undefined, env: NodeJS.ProcessE
     return parseCacheTtlHours(cliTtl, DEFAULT_CACHE_TTL_HOURS, '--cache-ttl-hours');
   }
   return parseCacheTtlHours(
-    env.KINLOOM_CHRONAM_CACHE_TTL_HOURS,
+    env['KINLOOM_CHRONAM_CACHE_TTL_HOURS'],
     DEFAULT_CACHE_TTL_HOURS,
     'KINLOOM_CHRONAM_CACHE_TTL_HOURS'
   );
@@ -295,12 +295,12 @@ export function normalizeState(state: string): string {
 export function buildSearchParams(
   query: string,
   options: {
-    readonly dates?: string;
+    readonly dates?: string | undefined;
     readonly level: string;
     readonly limit: number;
     readonly page: number;
-    readonly state?: string;
-    readonly lccn?: string;
+    readonly state?: string | undefined;
+    readonly lccn?: string | undefined;
   }
 ): [string, string][] {
   const params: [string, string][] = [
@@ -326,27 +326,27 @@ export function buildSearchParams(
 }
 
 export function compactResult(item: Record<string, unknown>): Record<string, unknown> {
-  const partofTitle = firstValue(item.partof_title);
-  const title = partofTitle ? partofTitle : (item.title ?? null);
+  const partofTitle = firstValue(item['partof_title']);
+  const title = partofTitle ? partofTitle : (item['title'] ?? null);
   return {
     title,
-    date: item.date ?? null,
-    state: firstValue(item.location_state),
-    county: firstValue(item.location_county),
-    city: firstValue(item.location_city),
-    lccn: item.number_lccn ?? null,
-    page: item.number_page ?? null,
-    url: item.url ?? null,
-    id: item.id ?? null,
+    date: item['date'] ?? null,
+    state: firstValue(item['location_state']),
+    county: firstValue(item['location_county']),
+    city: firstValue(item['location_city']),
+    lccn: item['number_lccn'] ?? null,
+    page: item['number_page'] ?? null,
+    url: item['url'] ?? null,
+    id: item['id'] ?? null,
   };
 }
 
 export function searchCacheable(data: Record<string, unknown>): boolean {
   // loc.gov sometimes answers a valid query with a transient 0-hit page.
   // Never cache an empty answer, so the next call asks loc.gov again.
-  const searchObj = isPlainRecord(data.search) ? data.search : undefined;
-  const hits = searchObj?.hits;
-  const results = Array.isArray(data.results) ? data.results : [];
+  const searchObj = isPlainRecord(data['search']) ? data['search'] : undefined;
+  const hits = searchObj?.['hits'];
+  const results = Array.isArray(data['results']) ? data['results'] : [];
   return Boolean(hits) && results.length > 0;
 }
 
@@ -382,12 +382,12 @@ export function iiifJpegFromInfo(infoUrl: string, imageWidth: number | undefined
 
 export function resolvePageAssets(
   data: Record<string, unknown>,
-  options: { readonly imageWidth?: number } = {}
+  options: { readonly imageWidth?: number | undefined } = {}
 ): PageAssets {
   const rawResources =
-    Array.isArray(data.resources) && data.resources.length > 0 ? data.resources[0] : undefined;
+    Array.isArray(data['resources']) && data['resources'].length > 0 ? data['resources'][0] : undefined;
   const resources = isPlainRecord(rawResources) ? rawResources : {};
-  const pageEntries = Array.isArray(data.page) ? data.page : [];
+  const pageEntries = Array.isArray(data['page']) ? data['page'] : [];
 
   let pdfUrl: string | null = null;
   let jp2Url: string | null = null;
@@ -399,9 +399,9 @@ export function resolvePageAssets(
     if (!isPlainRecord(entry)) {
       continue;
     }
-    const mime = String(entry.mimetype ?? '').toLowerCase();
-    const entryUrl = asNonEmptyString(entry.url);
-    const infoUrl = asNonEmptyString(entry.info);
+    const mime = String(entry['mimetype'] ?? '').toLowerCase();
+    const entryUrl = asNonEmptyString(entry['url']);
+    const infoUrl = asNonEmptyString(entry['info']);
 
     if (mime === 'application/pdf' && entryUrl && !pdfUrl) {
       pdfUrl = entryUrl;
@@ -422,11 +422,11 @@ export function resolvePageAssets(
   }
 
   return {
-    pdf: pdfUrl ?? asNonEmptyString(resources.pdf) ?? null,
-    image: iiifImageUrl ?? bestJpegUrl ?? asNonEmptyString(resources.image) ?? null,
+    pdf: pdfUrl ?? asNonEmptyString(resources['pdf']) ?? null,
+    image: iiifImageUrl ?? bestJpegUrl ?? asNonEmptyString(resources['image']) ?? null,
     jp2: jp2Url,
-    text: asNonEmptyString(resources.fulltext_file) ?? xmlUrl ?? null,
-    iiif_manifest_url: asNonEmptyString(resources.iiif_manifest_url) ?? null,
+    text: asNonEmptyString(resources['fulltext_file']) ?? xmlUrl ?? null,
+    iiif_manifest_url: asNonEmptyString(resources['iiif_manifest_url']) ?? null,
   };
 }
 

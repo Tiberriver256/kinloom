@@ -38,8 +38,7 @@ export function getLexiconLowerIndexMeta(
     const byLower = new Map<string, { readonly key: string; readonly entry: Pronunciation }>();
     let maxWords = 1;
     let hasMatchContainsRule = false;
-    for (const key of Object.keys(lexicon)) {
-      const entry = lexicon[key];
+    for (const [key, entry] of Object.entries(lexicon)) {
       const trimmed = key.trim();
       const lower = trimmed.toLowerCase();
       if (!byLower.has(lower)) {
@@ -176,7 +175,10 @@ export function lookupLexiconMatch(
     return undefined;
   }
   if (Object.hasOwn(lexicon, trimmed)) {
-    return { key: trimmed, entry: lexicon[trimmed] };
+    const entry = lexicon[trimmed];
+    if (entry !== undefined) {
+      return { key: trimmed, entry };
+    }
   }
   return getLexiconLowerIndexMeta(lexicon).byLower.get(trimmed.toLowerCase());
 }
@@ -252,9 +254,9 @@ function stripParentheticals(input: string): string {
 }
 
 export function tokenizePersonName(person: {
-  readonly full_name?: string;
-  readonly given_name?: string;
-  readonly surname?: string;
+  readonly full_name?: string | undefined;
+  readonly given_name?: string | undefined;
+  readonly surname?: string | undefined;
 }): string[] {
   const rawFull = person.full_name?.trim() ?? '';
   const combined = rawFull || [person.given_name?.trim(), person.surname?.trim()].filter(Boolean).join(' ');
@@ -264,8 +266,7 @@ export function tokenizePersonName(person: {
   if (SIMPLE_PERSON_NAME_RE.test(combined)) {
     const parts = combined.split(/\s+/);
     const out: string[] = [];
-    for (let i = 0; i < parts.length; i += 1) {
-      let tok = parts[i];
+    for (let tok of parts) {
       if (tok.startsWith("'") || tok.startsWith('-') || tok.startsWith('.')) {
         tok = tok.replace(/^['.-]+/, '');
       }
@@ -315,8 +316,8 @@ export function composeLanguageTag(entries: readonly Pronunciation[]): string | 
   let firstLang: string | undefined;
   let firstLower: string | undefined;
   let allSameExact = true;
-  for (let i = 0; i < entries.length; i += 1) {
-    const raw = entries[i].language?.trim();
+  for (const entry of entries) {
+    const raw = entry.language?.trim();
     if (!raw) {
       continue;
     }
@@ -345,9 +346,9 @@ export function composeLanguageTag(entries: readonly Pronunciation[]): string | 
 }
 
 export function composeProvenance(entries: readonly Pronunciation[]): {
-  readonly source_label?: string;
-  readonly source_url?: string;
-  readonly region?: string;
+  readonly source_label?: string | undefined;
+  readonly source_url?: string | undefined;
+  readonly region?: string | undefined;
 } {
   let firstLabel: string | undefined;
   let firstLabelLower: string | undefined;
@@ -360,8 +361,7 @@ export function composeProvenance(entries: readonly Pronunciation[]): {
   let firstRegion: string | undefined;
   let multiRegion = false;
 
-  for (let i = 0; i < entries.length; i += 1) {
-    const entry = entries[i];
+  for (const entry of entries) {
     const label = entry.source_label?.trim();
     if (label) {
       const lower = label.toLowerCase();
@@ -397,9 +397,9 @@ export function composeProvenance(entries: readonly Pronunciation[]): {
   }
 
   const out: {
-    source_label?: string;
-    source_url?: string;
-    region?: string;
+    source_label?: string | undefined;
+    source_url?: string | undefined;
+    region?: string | undefined;
   } = {};
   if (extraLabels) {
     out.source_label = extraLabels.join(' + ');
@@ -423,7 +423,11 @@ export function findSurnameTokenSpan(
     return null;
   }
   let end = tokens.length;
-  while (end > 1 && PERSON_NAME_DECORATION_RE.test(tokens[end - 1])) {
+  while (end > 1) {
+    const prevTok = tokens[end - 1];
+    if (!prevTok || !PERSON_NAME_DECORATION_RE.test(prevTok)) {
+      break;
+    }
     end -= 1;
   }
   const surnameTokens = surname?.trim() ? tokenizePersonName({ full_name: surname }) : [];

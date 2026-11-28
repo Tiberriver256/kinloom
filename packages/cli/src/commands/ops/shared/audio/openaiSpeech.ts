@@ -20,7 +20,7 @@ export interface OpenAiSpeechPayload {
   readonly input: string;
   readonly voice: string;
   readonly response_format: 'wav' | 'mp3';
-  readonly speed?: number;
+  readonly speed?: number | undefined;
   readonly references?: ReadonlyArray<{ readonly audio: string; readonly text: string }>;
 }
 
@@ -30,13 +30,13 @@ export interface OpenAiSpeechRequest {
   readonly input: string;
   readonly voice: string;
   readonly responseFormat?: 'wav' | 'mp3';
-  readonly speed?: number;
-  readonly apiKey?: string;
-  readonly references?: readonly VoiceCloneReference[];
+  readonly speed?: number | undefined;
+  readonly apiKey?: string | undefined;
+  readonly references?: readonly VoiceCloneReference[] | undefined;
   readonly retries?: number;
   readonly baseRetryDelayMs?: number;
-  readonly fetchImpl?: typeof fetch;
-  readonly sleepFn?: (ms: number) => Promise<void>;
+  readonly fetchImpl?: typeof fetch | undefined;
+  readonly sleepFn?: ((ms: number) => Promise<void>) | undefined;
 }
 
 export interface OpenAiSpeechResponse {
@@ -45,7 +45,7 @@ export interface OpenAiSpeechResponse {
 }
 
 export type AudioExecFileOptions = ExecFileOptions & {
-  readonly input?: Buffer;
+  readonly input?: Buffer | undefined;
 };
 
 export type AudioExecFileFn = (
@@ -163,15 +163,15 @@ export function buildOpenAiSpeechPayload(params: {
   readonly input: string;
   readonly voice: string;
   readonly responseFormat?: 'wav' | 'mp3';
-  readonly speed?: number;
-  readonly references?: readonly VoiceCloneReference[];
+  readonly speed?: number | undefined;
+  readonly references?: readonly VoiceCloneReference[] | undefined;
 }): OpenAiSpeechPayload {
   const payload: {
     model: string;
     input: string;
     voice: string;
     response_format: 'wav' | 'mp3';
-    speed?: number;
+    speed?: number | undefined;
     references?: ReadonlyArray<{ readonly audio: string; readonly text: string }>;
   } = {
     model: params.model,
@@ -224,7 +224,7 @@ export async function synthesizeOpenAiSpeech(req: OpenAiSpeechRequest): Promise<
   };
   const trimmedKey = req.apiKey?.trim();
   if (trimmedKey) {
-    headers.authorization = `Bearer ${trimmedKey}`;
+    headers['authorization'] = `Bearer ${trimmedKey}`;
   }
 
   let lastError: Error | null = null;
@@ -275,8 +275,8 @@ export async function normalizePronunciationAudioWithFfmpeg(params: {
   readonly format: 'wav' | 'mp3';
   readonly bitrate?: string;
   readonly trimSilence?: boolean;
-  readonly execFileImpl?: AudioExecFileFn;
-  readonly env?: NodeJS.ProcessEnv;
+  readonly execFileImpl?: AudioExecFileFn | undefined;
+  readonly env?: NodeJS.ProcessEnv | undefined;
 }): Promise<{ readonly sizeBytes: number }> {
   const execFn = params.execFileImpl ?? defaultAudioExecFile;
   const filters: string[] = [];

@@ -49,7 +49,7 @@ export const DuplicateEventWarningList: React.FC<{
     </div>
   );
 
-  if (warnings.length === 1) {
+  if (warnings.length === 1 && warnings[0]) {
     return (
       <div className={cx(wikiPanelStyles, 'wiki-duplicate-warnings')}>{renderWarningCard(warnings[0])}</div>
     );

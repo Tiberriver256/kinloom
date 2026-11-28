@@ -329,6 +329,7 @@ export async function queryForvoPronunciations(params: {
       const forvoAudioNames: string[] = [];
       for (let idx = 0; idx < items.length; idx += 1) {
         const item = items[idx];
+        if (item === undefined) continue;
         const audioUrl = item.pathmp3 || item.pathogg || '';
         const ext = item.pathmp3 ? 'mp3' : 'ogg';
         const filename = `forvo-${params.term.toLowerCase().replaceAll(/[^a-z0-9]+/g, '-')}-${item.id ?? idx + 1}.${ext}`;

@@ -93,10 +93,10 @@ async function invokeTexas(
   args: readonly string[],
   cacheDir: string,
   options: {
-    readonly fetchImpl?: typeof fetch;
-    readonly execFileImpl?: ExecFileFn;
+    readonly fetchImpl?: typeof fetch | undefined;
+    readonly execFileImpl?: ExecFileFn | undefined;
   } = {}
-): Promise<{ exitCode: number; stdout: string; stderr: string; cacheHit?: boolean }> {
+): Promise<{ exitCode: number; stdout: string; stderr: string; cacheHit?: boolean | undefined }> {
   const stdout: string[] = [];
   const stderr: string[] = [];
   const ctx = createRecordContext({
@@ -177,7 +177,7 @@ describe('texas-archives native client', () => {
     };
     expect(d2.cache_hit).toBe(true);
     expect(d2.returned).toBe(1);
-    expect(d2.records[0].ark).toBe('ark:/67531/metapth100001');
+    expect(d2.records[0]!.ark).toBe('ark:/67531/metapth100001');
     expect(r3.stdout).toContain('[cache]');
   });
 

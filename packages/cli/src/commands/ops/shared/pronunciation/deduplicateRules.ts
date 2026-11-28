@@ -180,6 +180,7 @@ export function extractPromotableTokenFromPerson(
   const unresolvedIndices: number[] = [];
   for (let i = 0; i < inspection.tokens.length; i += 1) {
     const tok = inspection.tokens[i];
+    if (tok === undefined) continue;
     if (tok.kind === 'token' && tok.entry === null) {
       unresolvedIndices.push(i);
     }
@@ -189,7 +190,9 @@ export function extractPromotableTokenFromPerson(
   }
 
   const missingIdx = unresolvedIndices[0];
+  if (missingIdx === undefined) return null;
   const missingToken = inspection.tokens[missingIdx];
+  if (!missingToken) return null;
   const beforeTokens = inspection.tokens.slice(0, missingIdx);
   const afterTokens = inspection.tokens.slice(missingIdx + 1);
 

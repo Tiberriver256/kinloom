@@ -150,7 +150,7 @@ export async function runPronounceLookupCommand(
   let normalizedLang: string | null = null;
   if (options.lang !== undefined && options.lang.trim().length > 0) {
     const raw = options.lang.trim().toLowerCase();
-    const base = raw.split(/[-_]/)[0];
+    const base = raw.split(/[-_]/)[0] ?? '';
     if (!/^[a-z]{2,3}$/.test(base)) {
       throw new CliValidationError(
         `Invalid \`--lang\` '${options.lang}'. Expected an ISO language code such as nl, sv, fi, pl, de, or en.`
@@ -160,7 +160,7 @@ export async function runPronounceLookupCommand(
   }
 
   const cacheDir = getPronounceCacheDir(options.cacheDir);
-  const forvoApiKey = (options.forvoApiKey ?? process.env.FORVO_API_KEY)?.trim() || null;
+  const forvoApiKey = (options.forvoApiKey ?? process.env['FORVO_API_KEY'])?.trim() || null;
   const normalizedRegion = options.region?.trim().toLowerCase() || null;
   const cachePath = buildLookupCachePath({
     cacheDir,

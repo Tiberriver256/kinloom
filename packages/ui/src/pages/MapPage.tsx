@@ -52,7 +52,7 @@ export const MapPage: React.FC = () => {
     const eraPalette = getResolvedThemeColorTokens(isDark).eraPalette;
     const map = new Map<string, string>();
     migrationEras.forEach((era, idx) => {
-      map.set(era.id, !isDark && era.color ? era.color : eraPalette[idx % eraPalette.length]);
+      map.set(era.id, !isDark && era.color ? era.color : (eraPalette[idx % eraPalette.length] ?? '#666'));
     });
     return map;
   }, [migrationEras, isDark]);
@@ -193,7 +193,7 @@ export const MapPage: React.FC = () => {
   );
 
   const yearSpanLabel =
-    visibleStops.length > 0 ? `${visibleStops[0].year}–${visibleStops.at(-1)?.year}` : '—';
+    visibleStops.length > 0 ? `${visibleStops[0]?.year ?? ''}–${visibleStops.at(-1)?.year ?? ''}` : '—';
   const metricLabel = usePerPersonSegments
     ? `${visibleStops.length} ${visibleStops.length === 1 ? 'stop' : 'stops'}`
     : `${totalMiles.toLocaleString()} mi`;

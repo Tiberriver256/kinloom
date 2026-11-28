@@ -171,10 +171,10 @@ describe('records/runtime/browser', () => {
     expect(launchCalls[1]?.timeout).toBe(7_500);
     expect(launchCalls[1]?.args).toContain('--ozone-platform=headless');
     expect(launchCalls[1]?.args).toContain('--password-store=basic');
-    expect(launchCalls[1]?.env?.WAYLAND_DISPLAY).toBeUndefined();
-    expect(launchCalls[1]?.env?.GTK_USE_PORTAL).toBeUndefined();
-    expect(launchCalls[1]?.env?.CHROMIUM_USER_FLAGS).toBeUndefined();
-    expect(launchCalls[1]?.env?.XDG_CONFIG_HOME).toContain('kinloom-headless-xdg-config');
+    expect(launchCalls[1]?.env?.['WAYLAND_DISPLAY']).toBeUndefined();
+    expect(launchCalls[1]?.env?.['GTK_USE_PORTAL']).toBeUndefined();
+    expect(launchCalls[1]?.env?.['CHROMIUM_USER_FLAGS']).toBeUndefined();
+    expect(launchCalls[1]?.env?.['XDG_CONFIG_HOME']).toContain('kinloom-headless-xdg-config');
   });
 
   it('buildSanitizedBrowserEnv strips desktop flags and isolates XDG_CONFIG_HOME', () => {
@@ -184,10 +184,10 @@ describe('records/runtime/browser', () => {
       ELECTRON_OZONE_PLATFORM_HINT: 'wayland',
       XDG_CONFIG_HOME: '/home/test/.config',
     });
-    expect(cleaned.PATH).toBe('/usr/bin');
-    expect(cleaned.WAYLAND_DISPLAY).toBeUndefined();
-    expect(cleaned.ELECTRON_OZONE_PLATFORM_HINT).toBeUndefined();
-    expect(cleaned.XDG_CONFIG_HOME).not.toBe('/home/test/.config');
+    expect(cleaned['PATH']).toBe('/usr/bin');
+    expect(cleaned['WAYLAND_DISPLAY']).toBeUndefined();
+    expect(cleaned['ELECTRON_OZONE_PLATFORM_HINT']).toBeUndefined();
+    expect(cleaned['XDG_CONFIG_HOME']).not.toBe('/home/test/.config');
   });
 
   it('aborts a hanging launch within launchTimeoutMs and cleans up late-resolving browsers', async () => {

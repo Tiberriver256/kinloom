@@ -363,12 +363,12 @@ describe('compileArchive and living-person privacy', () => {
 
   it('enforces single-entity API boundary redaction and write sanitization', () => {
     const living = SYNTHETIC_PEOPLE[2];
-    const sanitized = sanitizePersonForWrite(living);
+    const sanitized = sanitizePersonForWrite(living!);
     expect(sanitized.full_name).toBe('Elena Alder');
     expect(sanitized.birth_edtf).toBe('1984');
     expect(sanitized.portrait_url).toBeNull();
 
-    const pub = redactSinglePerson(living, 'public');
+    const pub = redactSinglePerson(living!, 'public');
     expect(pub.full_name).toBe('Living');
     expect(pub.birth_edtf).toBe('');
     expect(pub.portrait_url).toBeNull();
@@ -392,18 +392,18 @@ describe('compileArchive and living-person privacy', () => {
 
     // Single-entity event write sanitizer
     const livingIds = new Set(['per_elena_alder']);
-    const sanitizedEvent = sanitizeEventForWrite(SYNTHETIC_EVENTS[2], livingIds);
+    const sanitizedEvent = sanitizeEventForWrite(SYNTHETIC_EVENTS[2]!, livingIds);
     expect(sanitizedEvent.edtf_date).toBe('1984');
     expect(sanitizedEvent.place_id).toBeNull();
     expect(sanitizedEvent.summary).toBe('Living relative record (location and exact date omitted).');
 
-    const sanitizedNoYear = sanitizeEventForWrite(SYNTHETIC_EVENTS[2], livingIds, {
+    const sanitizedNoYear = sanitizeEventForWrite(SYNTHETIC_EVENTS[2]!, livingIds, {
       privateModeShowsBirthYear: false,
     });
     expect(sanitizedNoYear.edtf_date).toBe('');
 
     // Single-entity media privacy assertion (direct person_ids and via event participants)
-    expect(() => assertMediaAllowedForPrivacy(SYNTHETIC_MEDIA[1], livingIds)).toThrow(PrivacyViolationError);
+    expect(() => assertMediaAllowedForPrivacy(SYNTHETIC_MEDIA[1]!, livingIds)).toThrow(PrivacyViolationError);
     const eventsById = new Map(SYNTHETIC_EVENTS.map((e) => [e.id, e]));
     expect(() =>
       assertMediaAllowedForPrivacy(
@@ -412,7 +412,7 @@ describe('compileArchive and living-person privacy', () => {
         eventsById
       )
     ).toThrow(PrivacyViolationError);
-    expect(() => assertMediaAllowedForPrivacy(SYNTHETIC_MEDIA[0], livingIds, eventsById)).not.toThrow();
+    expect(() => assertMediaAllowedForPrivacy(SYNTHETIC_MEDIA[0]!, livingIds, eventsById)).not.toThrow();
   });
 
   it('wires siteConfig.privacy cutoff, referenceYear, and config schemaVersion + wiki defaults', () => {
@@ -466,10 +466,10 @@ describe('compileArchive and living-person privacy', () => {
       mode: 'private',
       generatedAt: '2026-11-24T00:00:00.000Z',
     });
-    expect(bundle.people[0].is_living).toBe(true);
-    expect(bundle.people[0].birth_edtf).toBe('');
-    expect(bundle.people[0].birth_year).toBeNull();
-    expect(bundle.people[0].portrait_url).toBeNull();
+    expect(bundle.people[0]?.is_living).toBe(true);
+    expect(bundle.people[0]?.birth_edtf).toBe('');
+    expect(bundle.people[0]?.birth_year).toBeNull();
+    expect(bundle.people[0]?.portrait_url).toBeNull();
   });
 
   it('flags living person names mentioned in non-living public events via precompiled livingPattern', () => {
@@ -524,14 +524,14 @@ describe('compileArchive and living-person privacy', () => {
             portrait_url: '/media/photos/secret.jpg',
           };
           const { people } = applyPrivacyFilter([person], [], [], mode);
-          expect(people[0].portrait_url).toBeNull();
-          expect(people[0].birth_edtf).not.toContain('-');
+          expect(people[0]?.portrait_url).toBeNull();
+          expect(people[0]?.birth_edtf).not.toContain('-');
           if (mode === 'public') {
-            expect(people[0].full_name).toBe('Living');
-            expect(people[0].birth_edtf).toBe('');
+            expect(people[0]?.full_name).toBe('Living');
+            expect(people[0]?.birth_edtf).toBe('');
           } else {
-            expect(people[0].full_name).toBe('Morgan Mercer');
-            expect(people[0].birth_edtf).toBe(String(year));
+            expect(people[0]?.full_name).toBe('Morgan Mercer');
+            expect(people[0]?.birth_edtf).toBe(String(year));
           }
         }
       ),

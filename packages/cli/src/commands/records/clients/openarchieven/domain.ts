@@ -111,14 +111,14 @@ function asShowRecords(data: unknown): Record<string, unknown>[] {
 }
 
 export function extractScans(record: Record<string, unknown>): ScanImage[] {
-  const source = record.a2a_Source;
+  const source = record['a2a_Source'];
   if (!isPlainRecord(source)) {
     return [];
   }
-  const block = source.a2a_SourceAvailableScans;
+  const block = source['a2a_SourceAvailableScans'];
   let rawScans: unknown[];
   if (isPlainRecord(block)) {
-    const raw = block.a2a_Scan;
+    const raw = block['a2a_Scan'];
     if (raw === undefined || raw === null) {
       rawScans = scanValue(block, ['a2a_Uri', 'uri', 'Uri']) ? [block] : [];
     } else {
@@ -217,16 +217,16 @@ function fmtA2aDate(dateNode: unknown): string {
   if (!isPlainRecord(dateNode)) {
     return a2aText(dateNode);
   }
-  const year = a2aText(dateNode.a2a_Year);
-  const month = a2aText(dateNode.a2a_Month);
-  const day = a2aText(dateNode.a2a_Day);
+  const year = a2aText(dateNode['a2a_Year']);
+  const month = a2aText(dateNode['a2a_Month']);
+  const day = a2aText(dateNode['a2a_Day']);
   if (year && month && day && /^\d+$/.test(year) && /^\d+$/.test(month) && /^\d+$/.test(day)) {
     return `${padInt(Number.parseInt(year, 10), 4)}-${padInt(Number.parseInt(month, 10), 2)}-${padInt(Number.parseInt(day, 10), 2)}`;
   }
   if (year && month && /^\d+$/.test(year) && /^\d+$/.test(month)) {
     return `${padInt(Number.parseInt(year, 10), 4)}-${padInt(Number.parseInt(month, 10), 2)}`;
   }
-  return year || a2aText(dateNode.a2a_LiteralDate);
+  return year || a2aText(dateNode['a2a_LiteralDate']);
 }
 
 function fmtA2aPersonName(nameNode: unknown): string {
@@ -234,10 +234,10 @@ function fmtA2aPersonName(nameNode: unknown): string {
     return a2aText(nameNode);
   }
   return [
-    a2aText(nameNode.a2a_PersonNameFirstName),
-    a2aText(nameNode.a2a_PersonNamePatronym),
-    a2aText(nameNode.a2a_PersonNamePrefixLastName),
-    a2aText(nameNode.a2a_PersonNameLastName),
+    a2aText(nameNode['a2a_PersonNameFirstName']),
+    a2aText(nameNode['a2a_PersonNamePatronym']),
+    a2aText(nameNode['a2a_PersonNamePrefixLastName']),
+    a2aText(nameNode['a2a_PersonNameLastName']),
   ]
     .filter(Boolean)
     .join(' ');
@@ -260,7 +260,7 @@ export function parseRecordRef(archive: string, identifier: string | undefined):
   }
   const match = OPENARCH_URL_RE.exec(archive);
   if (match) {
-    return validateRecordRef(match[1], match[2]);
+    return validateRecordRef(match[1] ?? '', match[2] ?? '');
   }
   const colonIdx = archive.indexOf(':');
   if (colonIdx !== -1) {
@@ -296,17 +296,17 @@ export function formatA2aRecord(
   record: Record<string, unknown>
 ): string {
   const lines: string[] = [`Record: ${archive}:${identifier}`, `  URL: ${WEB_BASE}/${archive}:${identifier}`];
-  const source = isPlainRecord(record.a2a_Source) ? record.a2a_Source : {};
-  const sourceType = a2aText(source.a2a_SourceType);
-  const sourcePlaceNode = isPlainRecord(source.a2a_SourcePlace) ? source.a2a_SourcePlace : {};
-  const sourcePlace = a2aText(sourcePlaceNode.a2a_Place);
-  const ref = isPlainRecord(source.a2a_SourceReference) ? source.a2a_SourceReference : {};
-  const inst = a2aText(ref.a2a_InstitutionName);
-  const book = a2aText(ref.a2a_Book);
-  const collection = a2aText(ref.a2a_Collection);
-  const docNum = a2aText(ref.a2a_DocumentNumber);
-  const archiveNum = a2aText(ref.a2a_Archive);
-  const regNum = a2aText(ref.a2a_RegistryNumber);
+  const source = isPlainRecord(record['a2a_Source']) ? record['a2a_Source'] : {};
+  const sourceType = a2aText(source['a2a_SourceType']);
+  const sourcePlaceNode = isPlainRecord(source['a2a_SourcePlace']) ? source['a2a_SourcePlace'] : {};
+  const sourcePlace = a2aText(sourcePlaceNode['a2a_Place']);
+  const ref = isPlainRecord(source['a2a_SourceReference']) ? source['a2a_SourceReference'] : {};
+  const inst = a2aText(ref['a2a_InstitutionName']);
+  const book = a2aText(ref['a2a_Book']);
+  const collection = a2aText(ref['a2a_Collection']);
+  const docNum = a2aText(ref['a2a_DocumentNumber']);
+  const archiveNum = a2aText(ref['a2a_Archive']);
+  const regNum = a2aText(ref['a2a_RegistryNumber']);
 
   if (sourceType) {
     lines.push(`  Source type: ${sourceType}`);
@@ -328,12 +328,16 @@ export function formatA2aRecord(
     lines.push(`  Reference: ${refParts.join(' | ')}`);
   }
 
-  for (const ev of asList(record.a2a_Event)) {
+  for (const ev of asList(record['a2a_Event'])) {
     if (!isPlainRecord(ev)) {
       continue;
     }
-    const evPlaceNode = isPlainRecord(ev.a2a_EventPlace) ? ev.a2a_EventPlace : {};
-    const summary = [a2aText(ev.a2a_EventType), fmtA2aDate(ev.a2a_EventDate), a2aText(evPlaceNode.a2a_Place)]
+    const evPlaceNode = isPlainRecord(ev['a2a_EventPlace']) ? ev['a2a_EventPlace'] : {};
+    const summary = [
+      a2aText(ev['a2a_EventType']),
+      fmtA2aDate(ev['a2a_EventDate']),
+      a2aText(evPlaceNode['a2a_Place']),
+    ]
       .filter(Boolean)
       .join(' | ');
     if (summary) {
@@ -342,12 +346,12 @@ export function formatA2aRecord(
   }
 
   const rolesByPid = new Map<string, string[]>();
-  for (const rel of asList(record.a2a_RelationEP)) {
+  for (const rel of asList(record['a2a_RelationEP'])) {
     if (!isPlainRecord(rel)) {
       continue;
     }
-    const pid = a2aText(rel.a2a_PersonKeyRef);
-    const role = a2aText(rel.a2a_RelationType);
+    const pid = a2aText(rel['a2a_PersonKeyRef']);
+    const role = a2aText(rel['a2a_RelationType']);
     if (pid && role) {
       const existing = rolesByPid.get(pid);
       if (existing) {
@@ -358,22 +362,22 @@ export function formatA2aRecord(
     }
   }
 
-  const persons = asList(record.a2a_Person);
+  const persons = asList(record['a2a_Person']);
   if (persons.length > 0) {
     lines.push('  Persons:');
     for (const person of persons) {
       if (!isPlainRecord(person)) {
         continue;
       }
-      const pid = person.pid !== undefined && person.pid !== null ? String(person.pid) : '';
-      const name = fmtA2aPersonName(person.a2a_PersonName) || '(unnamed)';
+      const pid = person['pid'] !== undefined && person['pid'] !== null ? String(person['pid']) : '';
+      const name = fmtA2aPersonName(person['a2a_PersonName']) || '(unnamed)';
       const roleStr = (rolesByPid.get(pid) ?? []).join(', ');
-      const bdate = fmtA2aDate(person.a2a_BirthDate);
-      const bplaceNode = isPlainRecord(person.a2a_BirthPlace) ? person.a2a_BirthPlace : {};
-      const bplace = a2aText(bplaceNode.a2a_Place);
-      const resNode = isPlainRecord(person.a2a_Residence) ? person.a2a_Residence : {};
-      const res = a2aText(resNode.a2a_Place);
-      const occ = a2aText(person.a2a_Profession);
+      const bdate = fmtA2aDate(person['a2a_BirthDate']);
+      const bplaceNode = isPlainRecord(person['a2a_BirthPlace']) ? person['a2a_BirthPlace'] : {};
+      const bplace = a2aText(bplaceNode['a2a_Place']);
+      const resNode = isPlainRecord(person['a2a_Residence']) ? person['a2a_Residence'] : {};
+      const res = a2aText(resNode['a2a_Place']);
+      const occ = a2aText(person['a2a_Profession']);
       const details: string[] = [];
       if (roleStr) {
         details.push(roleStr);
@@ -403,7 +407,7 @@ export function formatA2aRecord(
     }
   }
 
-  const orig = a2aText(source.a2a_SourceDigitalOriginal);
+  const orig = a2aText(source['a2a_SourceDigitalOriginal']);
   if (orig) {
     lines.push(`  Original: ${orig}`);
   }

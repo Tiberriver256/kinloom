@@ -400,7 +400,7 @@ describe('EntityEditDrawer, CreateEntityModal, WikiActionBar, and BlankScreenWat
     // Switch back to Person and create
     if (tabs[0]) {
       act(() => {
-        tabs[0].click();
+        tabs[0]?.click();
       });
       await flushUi();
     }
@@ -461,7 +461,11 @@ describe('EntityEditDrawer, CreateEntityModal, WikiActionBar, and BlankScreenWat
   });
 
   it('never submits a person payload under an unsupported defaultKind like source or narrative', async () => {
-    const submissions: Array<{ entityType: string; entityId?: string; data: Record<string, unknown> }> = [];
+    const submissions: Array<{
+      entityType: string;
+      entityId?: string | undefined;
+      data: Record<string, unknown>;
+    }> = [];
     const ds = makeEditorDataSource({
       createEntity: async (entityType, body) => {
         submissions.push({ entityType, entityId: body.entity_id, data: body.data });
@@ -510,7 +514,7 @@ describe('EntityEditDrawer, CreateEntityModal, WikiActionBar, and BlankScreenWat
     for (const sub of submissions) {
       expect(sub.entityType).toBe('person');
       expect(sub.entityId).toMatch(/^per_/);
-      expect(sub.data.full_name).toBe('Evelyn Alder');
+      expect(sub.data['full_name']).toBe('Evelyn Alder');
     }
   });
 

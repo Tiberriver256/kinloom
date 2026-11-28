@@ -277,8 +277,8 @@ describe('UI plugin tutorialChapters validation seam and Narrative Audio referen
       },
     ]);
     expect(compiled.tutorialChapters.map((c) => c.id)).toEqual(['plugin-a:guide', 'plugin-z:guide']);
-    expect(compiled.tutorialChapters[0].pluginName).toBe('Plugin A');
-    expect(compiled.tutorialChapters[0].source).toBe('plugin');
+    expect(compiled.tutorialChapters[0]?.pluginName).toBe('Plugin A');
+    expect(compiled.tutorialChapters[0]?.source).toBe('plugin');
   });
 
   it('fault-isolates dynamic getTutorialChapters and emits Narrative Audio chapter when narrated audio exists', () => {
@@ -323,9 +323,9 @@ describe('UI plugin tutorialChapters validation seam and Narrative Audio referen
       { ...baseCtx, bundle: createDemoBundle(true) }
     );
     expect(withAudio).toHaveLength(1);
-    expect(withAudio[0].id).toBe('kinloom-narrative-audio:listening');
-    expect(withAudio[0].steps).toHaveLength(2);
-    expect(withAudio[0].steps[0].targetRoute).toBe('/person/abraham-lincoln-1809');
+    expect(withAudio[0]?.id).toBe('kinloom-narrative-audio:listening');
+    expect(withAudio[0]?.steps).toHaveLength(2);
+    expect(withAudio[0]?.steps[0]?.targetRoute).toBe('/person/abraham-lincoln-1809');
   });
 });
 

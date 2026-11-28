@@ -18,14 +18,14 @@ export interface PluginApiClient {
 
 export interface HttpPluginApiClientOptions {
   /** Base origin or path prefix; defaults to '' (same-origin). */
-  readonly apiBaseUrl?: string;
+  readonly apiBaseUrl?: string | undefined;
   /** Optional custom fetch implementation for hermetic tests or custom runtimes. */
-  readonly fetchImpl?: typeof fetch;
+  readonly fetchImpl?: typeof fetch | undefined;
   /**
    * Optional fetch credentials mode. Defaults to 'same-origin' for relative/same-origin URLs,
    * and 'include' when `apiBaseUrl` is a cross-origin absolute URL in a browser context.
    */
-  readonly credentials?: RequestCredentials;
+  readonly credentials?: RequestCredentials | undefined;
 }
 
 /**
@@ -123,7 +123,7 @@ export function createHttpPluginApiClient(options: HttpPluginApiClientOptions = 
         credentials,
         headers: { accept: 'application/json' },
         body: formData,
-        signal: reqOptions?.signal,
+        ...(reqOptions?.signal ? { signal: reqOptions.signal } : {}),
       });
       if (!res.ok) {
         throw await parseErrorEnvelope(res);
@@ -154,7 +154,7 @@ export function createHttpPluginApiClient(options: HttpPluginApiClientOptions = 
         method: 'DELETE',
         credentials,
         headers: { accept: 'application/json' },
-        signal: reqOptions?.signal,
+        ...(reqOptions?.signal ? { signal: reqOptions.signal } : {}),
       });
       if (!res.ok) {
         throw await parseErrorEnvelope(res);

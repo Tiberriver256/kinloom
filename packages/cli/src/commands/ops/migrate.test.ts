@@ -85,7 +85,7 @@ function createMockD1Executor(
     const fileIdx = args.indexOf('--file');
 
     if (fileIdx !== -1) {
-      const filePath = args[fileIdx + 1];
+      const filePath = args[fileIdx + 1]!;
       if (simulateApply) {
         const sql = fs.readFileSync(filePath, 'utf8');
         applySqlToState(sql);
@@ -96,7 +96,7 @@ function createMockD1Executor(
       };
     }
 
-    const sql = commandIdx !== -1 ? args[commandIdx + 1] : '';
+    const sql = commandIdx !== -1 ? (args[commandIdx + 1] ?? '') : '';
     if (sql.includes('FROM sqlite_master')) {
       const results = [
         ...[...state.tables].map((name) => ({ type: 'table', name })),
@@ -130,12 +130,12 @@ function createMockD1Executor(
       if (simulateApply && match) {
         state.pluginLedger ??= [];
         state.pluginLedger.push({
-          plugin_id: match[1],
-          namespace: match[2],
-          version: Number.parseInt(match[3], 10),
-          migration_id: match[4],
-          checksum_sha256: match[5],
-          applied_at: match[6],
+          plugin_id: match[1]!,
+          namespace: match[2]!,
+          version: Number.parseInt(match[3]!, 10),
+          migration_id: match[4]!,
+          checksum_sha256: match[5]!,
+          applied_at: match[6]!,
         });
       }
       return {
@@ -147,7 +147,7 @@ function createMockD1Executor(
     if (sql.includes('PRAGMA table_info(')) {
       const matches = [...sql.matchAll(/PRAGMA\s+table_info\(([^)]+)\)/gi)];
       const statements = matches.map((m) => {
-        const table = m[1].replaceAll(/^["`[]|["`\]]$/g, '').trim();
+        const table = m[1]!.replaceAll(/^["`[]|["`\]]$/g, '').trim();
         const cols = [...(state.columnsByTable.get(table) ?? [])].map((name) => ({ name }));
         return { success: true, results: cols };
       });
@@ -185,24 +185,24 @@ describe('kinloom migrate', () => {
       '0007_steward_reviews.sql',
       '0008_user_onboarding.sql',
     ]);
-    expect(migrations[0].requirements.isInitialSchema).toBe(true);
-    expect(migrations[0].requirements.createdTables).toContain('revisions');
-    expect(migrations[1].requirements.createdTables).toEqual(['pronunciation_lexicon']);
-    expect(migrations[2].requirements.onlyAlterAddColumns).toBe(true);
-    expect(migrations[2].requirements.addedColumns.map((c) => c.column)).toEqual([
+    expect(migrations[0]!.requirements.isInitialSchema).toBe(true);
+    expect(migrations[0]!.requirements.createdTables).toContain('revisions');
+    expect(migrations[1]!.requirements.createdTables).toEqual(['pronunciation_lexicon']);
+    expect(migrations[2]!.requirements.onlyAlterAddColumns).toBe(true);
+    expect(migrations[2]!.requirements.addedColumns.map((c) => c.column)).toEqual([
       'source_url',
       'source_label',
       'region',
       'variants_json',
     ]);
-    expect(migrations[3].requirements.createdTables).toEqual(['plugin_settings', 'plugin_setting_secrets']);
-    expect(migrations[4].requirements.createdTables).toEqual([
+    expect(migrations[3]!.requirements.createdTables).toEqual(['plugin_settings', 'plugin_setting_secrets']);
+    expect(migrations[4]!.requirements.createdTables).toEqual([
       'page_visit_daily',
       'observability_cache_daily',
     ]);
-    expect(migrations[5].requirements.createdTables).toEqual(['plugin_migrations']);
-    expect(migrations[6].requirements.createdTables).toEqual(['steward_reviews']);
-    expect(migrations[7].requirements.createdTables).toEqual(['user_onboarding_state']);
+    expect(migrations[5]!.requirements.createdTables).toEqual(['plugin_migrations']);
+    expect(migrations[6]!.requirements.createdTables).toEqual(['steward_reviews']);
+    expect(migrations[7]!.requirements.createdTables).toEqual(['user_onboarding_state']);
   });
 
   it('resolves D1 database binding from wrangler.jsonc, wrangler.json, and wrangler.toml', () => {
@@ -266,7 +266,7 @@ database_name = "example-toml-db" # archive database
     expect(result.dryRun).toBe(true);
     expect(result.executed).toEqual([]);
     expect(result.applied.map((m) => m.id)).toEqual(['0001_initial.sql']);
-    expect(result.applied[0].satisfiedBy).toBe('schema');
+    expect(result.applied[0]!.satisfiedBy).toBe('schema');
     expect(result.pending.map((m) => m.id)).toEqual([
       '0002_pronunciations.sql',
       '0003_pronunciation_provenance.sql',
@@ -338,25 +338,25 @@ database_name = "example-toml-db" # archive database
 
     const fileExecs = calls.filter((c) => c.args.includes('--file'));
     expect(fileExecs).toHaveLength(7);
-    expect(path.basename(fileExecs[0].args[fileExecs[0].args.indexOf('--file') + 1])).toBe(
+    expect(path.basename(fileExecs[0]!.args[fileExecs[0]!.args.indexOf('--file') + 1]!)).toBe(
       '0002_pronunciations.sql'
     );
-    expect(path.basename(fileExecs[1].args[fileExecs[1].args.indexOf('--file') + 1])).toBe(
+    expect(path.basename(fileExecs[1]!.args[fileExecs[1]!.args.indexOf('--file') + 1]!)).toBe(
       '0003_pronunciation_provenance.sql'
     );
-    expect(path.basename(fileExecs[2].args[fileExecs[2].args.indexOf('--file') + 1])).toBe(
+    expect(path.basename(fileExecs[2]!.args[fileExecs[2]!.args.indexOf('--file') + 1]!)).toBe(
       '0004_plugin_settings.sql'
     );
-    expect(path.basename(fileExecs[3].args[fileExecs[3].args.indexOf('--file') + 1])).toBe(
+    expect(path.basename(fileExecs[3]!.args[fileExecs[3]!.args.indexOf('--file') + 1]!)).toBe(
       '0005_page_visit_stats.sql'
     );
-    expect(path.basename(fileExecs[4].args[fileExecs[4].args.indexOf('--file') + 1])).toBe(
+    expect(path.basename(fileExecs[4]!.args[fileExecs[4]!.args.indexOf('--file') + 1]!)).toBe(
       '0006_plugin_migrations.sql'
     );
-    expect(path.basename(fileExecs[5].args[fileExecs[5].args.indexOf('--file') + 1])).toBe(
+    expect(path.basename(fileExecs[5]!.args[fileExecs[5]!.args.indexOf('--file') + 1]!)).toBe(
       '0007_steward_reviews.sql'
     );
-    expect(path.basename(fileExecs[6].args[fileExecs[6].args.indexOf('--file') + 1])).toBe(
+    expect(path.basename(fileExecs[6]!.args[fileExecs[6]!.args.indexOf('--file') + 1]!)).toBe(
       '0008_user_onboarding.sql'
     );
 
@@ -423,7 +423,7 @@ database_name = "example-toml-db" # archive database
     expect(result.executed).toEqual(['0003_pronunciation_provenance.sql']);
 
     const alterCall = calls.find(
-      (c) => c.args.includes('--command') && c.args[c.args.indexOf('--command') + 1].includes('ALTER TABLE')
+      (c) => c.args.includes('--command') && c.args[c.args.indexOf('--command') + 1]!.includes('ALTER TABLE')
     );
     expect(alterCall).toBeDefined();
     expect(alterCall?.args).toContain('--local');
@@ -467,7 +467,7 @@ database_name = "example-toml-db" # archive database
     expect(failedResult.ok).toBe(false);
     expect(failedResult.verified).toBe(false);
     expect(failedResult.pending).toHaveLength(1);
-    expect(failedResult.pending[0].missingObjects).toEqual([
+    expect(failedResult.pending[0]!.missingObjects).toEqual([
       'table:editorial_notes',
       'index:idx_editorial_notes_id',
     ]);
@@ -567,7 +567,7 @@ database_name = "example-toml-db" # archive database
     expect(live.verified).toBe(true);
     expect(live.executed).toEqual(['0006_plugin_migrations.sql']);
     expect(live.pluginExecuted).toEqual(['recipes/0001_recipes_initial']);
-    expect(live.pluginApplied?.[0].satisfiedBy).toBe('applied_now');
+    expect(live.pluginApplied?.[0]?.satisfiedBy).toBe('applied_now');
     expect(live.rendered).toContain('Plugin applied:');
 
     // Second live run is strictly idempotent with zero file executions.
@@ -582,7 +582,7 @@ database_name = "example-toml-db" # archive database
     expect(second.verified).toBe(true);
     expect(second.executed).toEqual([]);
     expect(second.pluginExecuted).toEqual([]);
-    expect(second.pluginApplied?.[0].satisfiedBy).toBe('plugin_migrations');
+    expect(second.pluginApplied?.[0]?.satisfiedBy).toBe('plugin_migrations');
     expect(calls.slice(beforeSecond).every((c) => !c.args.includes('--file'))).toBe(true);
 
     // Mutating the applied SQL file triggers checksum drift error before any write.
@@ -633,7 +633,7 @@ database_name = "example-toml-db" # archive database
     );
     const customDiscovered = await discoverPluginMigrations(customDir);
     expect(customDiscovered).toHaveLength(1);
-    expect(customDiscovered[0].pluginId).toBe('custom-notes-plugin');
+    expect(customDiscovered[0]!.pluginId).toBe('custom-notes-plugin');
 
     const invalidNameDir = path.join(repoDir, 'invalid-file-plugins');
     fs.mkdirSync(path.join(invalidNameDir, 'notes'), { recursive: true });

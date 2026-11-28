@@ -8,29 +8,29 @@ import { mayMatchPattern, registerPatternPrefilter } from './prefilter.js';
 export const DEFAULT_LIVING_CUTOFF_YEARS = 101;
 
 export interface LivingStatusInput {
-  explicitLiving?: boolean;
+  explicitLiving?: boolean | undefined;
   hasDeathOrBurial: boolean;
   birthYear: number | null;
   earliestEventYear: number | null;
   referenceYear: number;
-  livingCutoffYears?: number;
+  livingCutoffYears?: number | undefined;
 }
 
 export interface RedactOptions {
-  privacy?: Partial<PrivacyConfig>;
-  referenceYear?: number;
-  clone?: boolean;
+  privacy?: Partial<PrivacyConfig> | undefined;
+  referenceYear?: number | undefined;
+  clone?: boolean | undefined;
 }
 
 export interface ApplyPrivacyFilterOptions {
-  privacy?: Partial<PrivacyConfig>;
-  referenceYear?: number;
-  cloneInputs?: boolean;
+  privacy?: Partial<PrivacyConfig> | undefined;
+  referenceYear?: number | undefined;
+  cloneInputs?: boolean | undefined;
 }
 
 export interface FilterMediaPrivacyOptions {
-  cloneInputs?: boolean;
-  stripLivingPortraits?: boolean;
+  cloneInputs?: boolean | undefined;
+  stripLivingPortraits?: boolean | undefined;
 }
 
 export class PrivacyViolationError extends Error {
@@ -40,8 +40,8 @@ export class PrivacyViolationError extends Error {
   constructor(
     message: string,
     options: {
-      code?: 'LIVING_MEDIA_FORBIDDEN' | 'PRIVACY_VIOLATION';
-      blockedPersonIds?: readonly string[];
+      code?: 'LIVING_MEDIA_FORBIDDEN' | 'PRIVACY_VIOLATION' | undefined;
+      blockedPersonIds?: readonly string[] | undefined;
     } = {}
   ) {
     super(message);

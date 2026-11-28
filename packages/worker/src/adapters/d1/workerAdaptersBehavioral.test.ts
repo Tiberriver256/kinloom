@@ -348,8 +348,8 @@ describe('D1AtomicMutationStore error, conflict, and statement-variant behaviors
     if (result.kind === 'committed') {
       expect(result.head_revision_id).toBe(asRevisionId(11));
       expect(result.revisions).toHaveLength(2);
-      expect(result.revisions[0].revision_id).toBe(asRevisionId(10));
-      expect(result.revisions[1].revision_id).toBe(asRevisionId(11));
+      expect(result.revisions[0]!.revision_id).toBe(asRevisionId(10));
+      expect(result.revisions[1]!.revision_id).toBe(asRevisionId(11));
     }
 
     const kinshipUpdate = recorded.find(
@@ -690,7 +690,7 @@ describe('R2IncrementalPatchBundleCache edge paths and precondition races', () =
       size: bytes.byteLength,
       etag: meta.etag ?? 'r2-etag-1',
       uploaded: new Date(NOW_ISO),
-      customMetadata: meta.customMetadata,
+      ...(meta.customMetadata !== undefined ? { customMetadata: meta.customMetadata } : {}),
       body,
       bodyUsed: false,
       async arrayBuffer() {
@@ -810,7 +810,7 @@ describe('R2IncrementalPatchBundleCache edge paths and precondition races', () =
         size: 100,
         etag: 'stored-etag',
         uploaded: new Date(NOW_ISO),
-        customMetadata: options?.customMetadata,
+        ...(options?.customMetadata !== undefined ? { customMetadata: options.customMetadata } : {}),
       }),
       delete: async () => undefined,
     };
@@ -1068,8 +1068,8 @@ describe('D1AccessAndTalkStore and D1EntityReadStore edge and query behaviors', 
     });
     expect(revPage.next_cursor).toBeNull();
     expect(revPage.items).toHaveLength(1);
-    expect(revPage.items[0].batch_id).toBe('batch_oak_1');
-    expect(revPage.items[0].author_type).toBe('agent');
+    expect(revPage.items[0]!.batch_id).toBe('batch_oak_1');
+    expect(revPage.items[0]!.author_type).toBe('agent');
 
     const revQueryStmt = recorded.find((s) => s.sql.includes('ORDER BY revision_id DESC'));
     expect(revQueryStmt?.sql).toContain('batch_id = ? AND batch_id IS NOT NULL');
@@ -1114,7 +1114,7 @@ describe('D1AccessAndTalkStore and D1EntityReadStore edge and query behaviors', 
     const readStore = new D1EntityReadStore(db, undefined, new FixedClock(new Date(NOW_ISO)));
     const listed = await readStore.listRevisions({ limit: 5 });
     expect(listed.items).toHaveLength(1);
-    expect(listed.items[0].review).toBeUndefined();
+    expect(listed.items[0]!.review).toBeUndefined();
 
     const single = await readStore.getRevisionById(asRevisionId(4));
     expect(single?.revision_id).toBe(4);

@@ -145,17 +145,17 @@ export async function runSearch(
     return { exitCode: 0, bytesOut, cacheHit: cached };
   }
 
-  const response = isPlainRecord(data.response) ? data.response : {};
+  const response = isPlainRecord(data['response']) ? data['response'] : {};
   const status = cached ? 'cache-hit' : 'fetched';
-  const lines: string[] = [`${String(response.numFound ?? '')} items (${status})`];
-  const docs = Array.isArray(response.docs) ? response.docs : [];
+  const lines: string[] = [`${String(response['numFound'] ?? '')} items (${status})`];
+  const docs = Array.isArray(response['docs']) ? response['docs'] : [];
   for (const rawDoc of docs) {
     const doc = isPlainRecord(rawDoc) ? rawDoc : {};
-    const identifier = String(doc.identifier ?? '');
-    const title = String(doc.title ?? '');
-    const creator = String(doc.creator ?? '');
-    const date = String(doc.date ?? '');
-    const mediatypeOut = String(doc.mediatype ?? '');
+    const identifier = String(doc['identifier'] ?? '');
+    const title = String(doc['title'] ?? '');
+    const creator = String(doc['creator'] ?? '');
+    const date = String(doc['date'] ?? '');
+    const mediatypeOut = String(doc['mediatype'] ?? '');
     lines.push(`${identifier} | ${title} | ${creator} | ${date} | ${mediatypeOut} | ${itemUrl(identifier)}`);
   }
   const bytesOut = emitStdout(ctx.io, lines.join('\n'));
@@ -181,7 +181,7 @@ export async function runGet(
     };
   }
 
-  const identifier = validateIdentifier(parsed.positionals[0]);
+  const identifier = validateIdentifier(parsed.positionals[0] ?? '');
   const timeout = validatePositiveTimeout(getNumberOption(parsed, 'timeout') ?? DEFAULT_TIMEOUT_SECONDS);
   const refresh = getBooleanOption(parsed, 'refresh');
   const asJson = getBooleanOption(parsed, 'asJson');
@@ -206,26 +206,26 @@ export async function runGet(
   const meta = isPlainRecord(data.metadata) ? data.metadata : {};
   const status = cached ? 'cache-hit' : 'fetched';
   const lines: string[] = [
-    String(meta.title || identifier),
-    `  Identifier: ${String(meta.identifier ?? '')}`,
+    String(meta['title'] || identifier),
+    `  Identifier: ${String(meta['identifier'] ?? '')}`,
   ];
-  if (meta.creator) {
-    lines.push(`  Creator: ${String(meta.creator)}`);
+  if (meta['creator']) {
+    lines.push(`  Creator: ${String(meta['creator'])}`);
   }
-  if (meta.date) {
-    lines.push(`  Date: ${String(meta.date)}`);
+  if (meta['date']) {
+    lines.push(`  Date: ${String(meta['date'])}`);
   }
-  if (meta.mediatype) {
-    lines.push(`  Mediatype: ${String(meta.mediatype)}`);
+  if (meta['mediatype']) {
+    lines.push(`  Mediatype: ${String(meta['mediatype'])}`);
   }
-  if (meta.collection) {
-    const col = Array.isArray(meta.collection)
-      ? meta.collection.map(String).join(', ')
-      : String(meta.collection);
+  if (meta['collection']) {
+    const col = Array.isArray(meta['collection'])
+      ? meta['collection'].map(String).join(', ')
+      : String(meta['collection']);
     lines.push(`  Collection: ${col}`);
   }
-  if (meta.description) {
-    lines.push(`  Description: ${shortText(meta.description)}`);
+  if (meta['description']) {
+    lines.push(`  Description: ${shortText(meta['description'])}`);
   }
   const fileList = getMetadataFiles(data);
   lines.push(`  Files: ${fileList.length} | ${itemUrl(identifier)} (${status})`);
@@ -258,7 +258,7 @@ export async function runDownload(
     };
   }
 
-  const identifier = validateIdentifier(parsed.positionals[0]);
+  const identifier = validateIdentifier(parsed.positionals[0] ?? '');
   const requestedFiles = parsed.positionals.slice(1);
   const outArg = getStringOption(parsed, 'out') ?? '.';
   const listOnly = getBooleanOption(parsed, 'listOnly');
@@ -392,22 +392,22 @@ export async function runFulltext(
     return { exitCode: 0, bytesOut, cacheHit: cached };
   }
 
-  const resp = isPlainRecord(data.response) ? data.response : {};
-  const body = isPlainRecord(resp.body) ? resp.body : {};
-  const hitsBlock = isPlainRecord(body.hits) ? body.hits : {};
-  const total = hitsBlock.total ?? 0;
-  const hits = Array.isArray(hitsBlock.hits) ? hitsBlock.hits : [];
+  const resp = isPlainRecord(data['response']) ? data['response'] : {};
+  const body = isPlainRecord(resp['body']) ? resp['body'] : {};
+  const hitsBlock = isPlainRecord(body['hits']) ? body['hits'] : {};
+  const total = hitsBlock['total'] ?? 0;
+  const hits = Array.isArray(hitsBlock['hits']) ? hitsBlock['hits'] : [];
   const status = cached ? 'cache-hit' : 'fetched';
   const lines: string[] = [`${String(total)} full-text matches (showing ${hits.length}, ${status})`];
 
   for (const rawHit of hits) {
     const hit = isPlainRecord(rawHit) ? rawHit : {};
-    const fields = isPlainRecord(hit.fields) ? hit.fields : {};
-    const identifier = String(fields.identifier ?? '');
-    const title = String(fields.title ?? '');
-    const year = String(fields.year ?? fields.date ?? '');
-    const highlight = isPlainRecord(hit.highlight) ? hit.highlight : {};
-    const snippets = Array.isArray(highlight.text) ? highlight.text : [];
+    const fields = isPlainRecord(hit['fields']) ? hit['fields'] : {};
+    const identifier = String(fields['identifier'] ?? '');
+    const title = String(fields['title'] ?? '');
+    const year = String(fields['year'] ?? fields['date'] ?? '');
+    const highlight = isPlainRecord(hit['highlight']) ? hit['highlight'] : {};
+    const snippets = Array.isArray(highlight['text']) ? highlight['text'] : [];
     const firstSnippet =
       snippets.length > 0 && typeof snippets[0] === 'string'
         ? shortText(snippets[0].replaceAll('{{{', '').replaceAll('}}}', ''), 200)
@@ -441,7 +441,7 @@ export async function runLookup(
     };
   }
 
-  const identifier = validateIdentifier(parsed.positionals[0]);
+  const identifier = validateIdentifier(parsed.positionals[0] ?? '');
   const printedPage = getStringOption(parsed, 'printedPage');
   const leafFlagRaw = getStringOption(parsed, 'leaf');
   const leafArg = leafFlagRaw !== undefined ? parseLeafInt(leafFlagRaw) : undefined;
@@ -493,8 +493,8 @@ export async function runLookup(
   const sc = info.scandata_leaf !== null ? String(info.scandata_leaf) : '?';
   const lines = [
     `${identifier}: printed page ${pp} | BookReader leaf n${leaf} | scandata leaf ${sc}`,
-    `  image: ${String(payload.image_url)}`,
-    `  details: ${String(payload.details_url)}`,
+    `  image: ${String(payload['image_url'])}`,
+    `  details: ${String(payload['details_url'])}`,
   ];
   const bytesOut = emitStdout(ctx.io, lines.join('\n'));
   return { exitCode: 0, bytesOut, cacheHit: cacheEntry.cached };

@@ -56,7 +56,7 @@ export function extractAudioExtension(src: string): string {
   if (!match) {
     return DEFAULT_AUDIO_EXTENSION;
   }
-  const ext = match[1].toLowerCase();
+  const ext = (match[1] ?? '').toLowerCase();
   return KNOWN_AUDIO_EXTENSIONS.has(ext) ? ext : DEFAULT_AUDIO_EXTENSION;
 }
 

@@ -162,7 +162,7 @@ export async function runOcrBatchCommand(
           const lines = record.text.split(/\r?\n/);
           for (let lineIdx = 0; lineIdx < lines.length; lineIdx += 1) {
             const lineText = lines[lineIdx];
-            if (grepRegex.test(lineText)) {
+            if (lineText !== undefined && grepRegex.test(lineText)) {
               lineMatches.push({ line_number: lineIdx + 1, text: lineText });
             }
           }

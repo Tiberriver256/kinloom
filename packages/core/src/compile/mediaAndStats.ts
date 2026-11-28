@@ -21,29 +21,26 @@ function populatePeopleSummariesCore(
     }
   };
 
-  for (let i = 0; i < sortedEvents.length; i += 1) {
-    const ev = sortedEvents[i];
+  for (const ev of sortedEvents) {
     const pts = ev.participants;
-    const pLen = pts.length;
-    if (pLen === 0) {
+    const [pt0, pt1] = pts;
+    if (!pt0) {
       continue;
     }
-    if (pLen === 1) {
-      pushPersonEvent(pts[0].person_id, ev);
+    if (!pt1) {
+      pushPersonEvent(pt0.person_id, ev);
       continue;
     }
-    if (pLen === 2) {
-      const p0 = pts[0].person_id;
-      const p1 = pts[1].person_id;
-      pushPersonEvent(p0, ev);
-      if (p1 !== p0) {
-        pushPersonEvent(p1, ev);
+    if (pts.length === 2) {
+      pushPersonEvent(pt0.person_id, ev);
+      if (pt1.person_id !== pt0.person_id) {
+        pushPersonEvent(pt1.person_id, ev);
       }
       continue;
     }
     const seenInEvent = new Set<string>();
-    for (let j = 0; j < pLen; j += 1) {
-      const pid = pts[j].person_id;
+    for (const pt of pts) {
+      const pid = pt.person_id;
       if (seenInEvent.has(pid)) {
         continue;
       }
@@ -53,27 +50,25 @@ function populatePeopleSummariesCore(
   }
 
   const placeCounts = new Map<string, number>();
-  const out: Person[] = mutateInPlace
-    ? (redactedRawPeople as Person[])
-    : new Array<Person>(redactedRawPeople.length);
+  const out: Person[] = mutateInPlace ? (redactedRawPeople as Person[]) : [];
 
-  for (let i = 0; i < redactedRawPeople.length; i += 1) {
-    const p = redactedRawPeople[i];
+  for (const p of redactedRawPeople) {
     const pEvts = eventsByPerson.get(p.id);
     let primaryPlaceId: string | null = null;
     let eventCount = 0;
 
     if (pEvts && pEvts.length > 0) {
       eventCount = pEvts.length;
-      if (eventCount === 1) {
-        primaryPlaceId = pEvts[0].place_id ?? null;
-      } else if (eventCount === 2) {
-        primaryPlaceId = pEvts[0].place_id || pEvts[1].place_id || null;
+      const [ev0, ev1] = pEvts;
+      if (ev0 && !ev1) {
+        primaryPlaceId = ev0.place_id ?? null;
+      } else if (ev0 && ev1 && eventCount === 2) {
+        primaryPlaceId = ev0.place_id || ev1.place_id || null;
       } else {
         placeCounts.clear();
         let bestCount = -1;
-        for (let j = 0; j < eventCount; j += 1) {
-          const pid = pEvts[j].place_id;
+        for (const pev of pEvts) {
+          const pid = pev.place_id;
           if (pid) {
             const nextCount = (placeCounts.get(pid) ?? 0) + 1;
             placeCounts.set(pid, nextCount);
@@ -94,14 +89,14 @@ function populatePeopleSummariesCore(
       target.media_count = 0;
       target.primary_place_id = primaryPlaceId;
     } else {
-      out[i] = {
+      out.push({
         ...p,
         birth_year: edtfYear(p.birth_edtf),
         death_year: edtfYear(p.death_edtf),
         event_count: eventCount,
         media_count: 0,
         primary_place_id: primaryPlaceId,
-      };
+      });
     }
   }
   return out;
@@ -128,10 +123,10 @@ export function compileAndAttachMedia(params: {
   eventsById: ReadonlyMap<string, ArchiveEvent>;
   livingIds: ReadonlySet<string>;
   stripLivingPortraits: boolean;
-  compiledMediaOverlay?: CompiledMediaOverlay | null;
-  media?: readonly MediaItem[];
-  resolveThumbUrl?: (mediaUrl: string | null | undefined) => string | undefined;
-  mediaExists?: (fileUrl: string) => boolean;
+  compiledMediaOverlay?: CompiledMediaOverlay | null | undefined;
+  media?: readonly MediaItem[] | undefined;
+  resolveThumbUrl?: ((mediaUrl: string | null | undefined) => string | undefined) | undefined;
+  mediaExists?: ((fileUrl: string) => boolean) | undefined;
 }): MediaItem[] {
   const {
     compiledPeople,
@@ -150,8 +145,7 @@ export function compileAndAttachMedia(params: {
   if (!compiledMediaOverlay && !resolveThumbUrl && !mediaExists) {
     if (!media || media.length === 0) {
       if (stripLivingPortraits && livingIds.size > 0) {
-        for (let i = 0; i < compiledPeople.length; i += 1) {
-          const person = compiledPeople[i];
+        for (const person of compiledPeople) {
           if (person.is_living) {
             person.portrait_url = null;
             person.thumb_url = null;
@@ -168,8 +162,7 @@ export function compileAndAttachMedia(params: {
     const portraitFromMedia = new Map<string, string>();
     const eventPhotoFromMedia = new Map<string, MediaItem>();
 
-    for (let i = 0; i < media.length; i += 1) {
-      const item = media[i];
+    for (const item of media) {
       if (!ALLOWED_MANUAL_MEDIA_KINDS.has(item.kind) || !item.file || seenMediaIds.has(item.id)) {
         continue;
       }
@@ -177,8 +170,8 @@ export function compileAndAttachMedia(params: {
 
       const personIds = getMediaPersonIds(item);
       let blocked = false;
-      for (let j = 0; j < personIds.length; j += 1) {
-        const person = peopleById.get(personIds[j]);
+      for (const pid of personIds) {
+        const person = peopleById.get(pid);
         if (!person || (stripLivingPortraits && person.is_living)) {
           blocked = true;
           break;
@@ -191,8 +184,8 @@ export function compileAndAttachMedia(params: {
         const ev = eventsById.get(item.event_id);
         if (ev) {
           let evBlocked = false;
-          for (let j = 0; j < ev.participants.length; j += 1) {
-            if (livingIds.has(ev.participants[j].person_id)) {
+          for (const pt of ev.participants) {
+            if (livingIds.has(pt.person_id)) {
               evBlocked = true;
               break;
             }
@@ -217,8 +210,7 @@ export function compileAndAttachMedia(params: {
       }
       finalMedia.push(clone);
 
-      for (let j = 0; j < personIds.length; j += 1) {
-        const pid = personIds[j];
+      for (const pid of personIds) {
         mediaCounts.set(pid, (mediaCounts.get(pid) ?? 0) + 1);
         if (clone.kind === 'portrait' && !portraitFromMedia.has(pid)) {
           portraitFromMedia.set(pid, clone.file);
@@ -233,8 +225,7 @@ export function compileAndAttachMedia(params: {
       }
     }
 
-    for (let i = 0; i < compiledPeople.length; i += 1) {
-      const person = compiledPeople[i];
+    for (const person of compiledPeople) {
       if (person.is_living && stripLivingPortraits) {
         person.portrait_url = null;
         person.thumb_url = null;
@@ -252,8 +243,7 @@ export function compileAndAttachMedia(params: {
 
     if (eventPhotoFromMedia.size > 0) {
       const hasLivingSet = livingIds.size > 0;
-      for (let i = 0; i < sortedEvents.length; i += 1) {
-        const ev = sortedEvents[i];
+      for (const ev of sortedEvents) {
         if (ev.photo_url) {
           continue;
         }
@@ -263,8 +253,8 @@ export function compileAndAttachMedia(params: {
         }
         if (hasLivingSet && stripLivingPortraits) {
           let hasLiving = false;
-          for (let j = 0; j < ev.participants.length; j += 1) {
-            if (livingIds.has(ev.participants[j].person_id)) {
+          for (const pt of ev.participants) {
+            if (livingIds.has(pt.person_id)) {
               hasLiving = true;
               break;
             }
@@ -345,8 +335,7 @@ export function compileAndAttachMedia(params: {
     ? new Set(compiledMediaOverlay.media.map((m) => m.id).filter(Boolean))
     : null;
 
-  for (let i = 0; i < finalMedia.length; i += 1) {
-    const item = finalMedia[i];
+  for (const item of finalMedia) {
     if (resolveThumbUrl) {
       const thumb = resolveThumbUrl(item.file);
       if (thumb) {
@@ -356,8 +345,7 @@ export function compileAndAttachMedia(params: {
       }
     }
     const personIds = getMediaPersonIds(item);
-    for (let j = 0; j < personIds.length; j += 1) {
-      const pid = personIds[j];
+    for (const pid of personIds) {
       mediaCounts.set(pid, (mediaCounts.get(pid) ?? 0) + 1);
       if (item.kind === 'portrait' && !portraitFromMedia.has(pid)) {
         portraitFromMedia.set(pid, item.file);
@@ -376,8 +364,7 @@ export function compileAndAttachMedia(params: {
     }
   }
 
-  for (let i = 0; i < compiledPeople.length; i += 1) {
-    const person = compiledPeople[i];
+  for (const person of compiledPeople) {
     if (person.is_living && stripLivingPortraits) {
       person.portrait_url = null;
       person.thumb_url = null;
@@ -405,15 +392,14 @@ export function compileAndAttachMedia(params: {
   }
 
   const hasLivingSet = livingIds.size > 0;
-  for (let i = 0; i < sortedEvents.length; i += 1) {
-    const ev = sortedEvents[i];
+  for (const ev of sortedEvents) {
     if (ev.photo_url) {
       continue;
     }
     if (hasLivingSet && stripLivingPortraits) {
       let hasLiving = false;
-      for (let j = 0; j < ev.participants.length; j += 1) {
-        if (livingIds.has(ev.participants[j].person_id)) {
+      for (const pt of ev.participants) {
+        if (livingIds.has(pt.person_id)) {
           hasLiving = true;
           break;
         }

@@ -72,7 +72,7 @@ function parseWranglerTomlBindings(raw: string): {
     if (!kv) {
       continue;
     }
-    const [, key, val] = kv;
+    const [, key, val = ''] = kv;
     if (section === 'd1' && key === 'database_name' && !dbName) {
       dbName = val.trim();
     } else if (section === 'r2' && key === 'bucket_name' && !r2Bucket) {
@@ -119,19 +119,19 @@ export function loadWranglerBindings(repoDir: string, siteUrlOverride?: string):
       throw new CliValidationError(`Expected a JSON object in ${configPath}.`);
     }
 
-    const d1List = Array.isArray(parsed.d1_databases) ? parsed.d1_databases : [];
-    const r2List = Array.isArray(parsed.r2_buckets) ? parsed.r2_buckets : [];
-    const routesList = Array.isArray(parsed.routes) ? parsed.routes : [];
+    const d1List = Array.isArray(parsed['d1_databases']) ? parsed['d1_databases'] : [];
+    const r2List = Array.isArray(parsed['r2_buckets']) ? parsed['r2_buckets'] : [];
+    const routesList = Array.isArray(parsed['routes']) ? parsed['routes'] : [];
 
     const firstD1 = isPlainRecord(d1List[0]) ? d1List[0] : null;
     const firstR2 = isPlainRecord(r2List[0]) ? r2List[0] : null;
     const firstRoute = isPlainRecord(routesList[0]) ? routesList[0] : null;
 
-    dbName = typeof firstD1?.database_name === 'string' ? firstD1.database_name.trim() : '';
-    r2Bucket = typeof firstR2?.bucket_name === 'string' ? firstR2.bucket_name.trim() : '';
+    dbName = typeof firstD1?.['database_name'] === 'string' ? firstD1['database_name'].trim() : '';
+    r2Bucket = typeof firstR2?.['bucket_name'] === 'string' ? firstR2['bucket_name'].trim() : '';
     routePattern =
-      typeof firstRoute?.pattern === 'string'
-        ? firstRoute.pattern.trim()
+      typeof firstRoute?.['pattern'] === 'string'
+        ? firstRoute['pattern'].trim()
         : typeof routesList[0] === 'string'
           ? routesList[0].trim()
           : '';
@@ -291,12 +291,12 @@ async function executeD1(ctx: SyncExecutionContext, sql: string): Promise<D1Stat
   }
   const results: D1StatementResult[] = [];
   for (const stmt of parsed) {
-    if (!isPlainRecord(stmt) || stmt.success !== true) {
+    if (!isPlainRecord(stmt) || stmt['success'] !== true) {
       throw new Error(`D1 statement failed on ${ctx.bindings.dbName}.`);
     }
     results.push({
       success: true,
-      results: Array.isArray(stmt.results) ? stmt.results.filter(isPlainRecord) : [],
+      results: Array.isArray(stmt['results']) ? stmt['results'].filter(isPlainRecord) : [],
     });
   }
   return results;
@@ -321,8 +321,8 @@ export async function cleanupTempTokens(
 
   const backupRow = results[results.length - 2]?.results?.[0];
   const remainingTmpRow = results[results.length - 1]?.results?.[0];
-  const backupCount = Number(backupRow?.count ?? 0);
-  const remainingTmpCount = Number(remainingTmpRow?.count ?? -1);
+  const backupCount = Number(backupRow?.['count'] ?? 0);
+  const remainingTmpCount = Number(remainingTmpRow?.['count'] ?? -1);
 
   if (remainingTmpCount !== 0) {
     throw new Error(

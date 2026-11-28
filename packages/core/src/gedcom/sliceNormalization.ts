@@ -98,7 +98,7 @@ export function buildPlacesFromRaw(
     }
 
     const parentId = segments.length > 1 ? ensurePlace(segments.slice(1)) : null;
-    const name = segments[0];
+    const name = segments[0] ?? '';
     const slug = slugify(fullName);
     const id = `plc_${slug}`;
     const known = knownPlaces?.[key];
@@ -228,7 +228,7 @@ export function normalizePersonNames(
   }
 
   const parenMatch = /^(.+?)\s*\(([A-Za-z][A-Za-z'-]+)\)\s+([A-Za-z][A-Za-z'-]+)$/.exec(fallbackName);
-  if (parenMatch) {
+  if (parenMatch && parenMatch[1] && parenMatch[2] && parenMatch[3]) {
     const given = parenMatch[1].trim();
     const maiden = parenMatch[2].trim();
     const married = parenMatch[3].trim();

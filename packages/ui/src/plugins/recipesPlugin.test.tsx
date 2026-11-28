@@ -32,6 +32,11 @@ import { useRecipesPlugin } from './recipes/RecipesContext.js';
 import { createRecipesUiPlugin } from './recipesPlugin.js';
 import type { KinloomUiPlugin } from './types.js';
 
+function must<T>(val: T | undefined, label = 'value'): T {
+  if (val === undefined) throw new Error(`Expected ${label}`);
+  return val;
+}
+
 declare global {
   var IS_REACT_ACT_ENVIRONMENT: boolean | undefined;
 }
@@ -445,27 +450,27 @@ describe('KinloomUiPlugin seams, ArchivalPrimitives, and Family Recipes UI (#47)
 
     const tabs = [...container.querySelectorAll<HTMLButtonElement>('[role="tab"]')];
     expect(tabs).toHaveLength(3);
-    expect(tabs[0].getAttribute('aria-selected')).toBe('true');
+    expect(tabs[0]?.getAttribute('aria-selected')).toBe('true');
 
     act(() => {
-      tabs[0].dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true }));
+      tabs[0]?.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true }));
     });
-    expect(tabs[1].getAttribute('aria-selected')).toBe('true');
+    expect(tabs[1]?.getAttribute('aria-selected')).toBe('true');
 
     act(() => {
-      tabs[1].dispatchEvent(new KeyboardEvent('keydown', { key: 'End', bubbles: true }));
+      tabs[1]?.dispatchEvent(new KeyboardEvent('keydown', { key: 'End', bubbles: true }));
     });
-    expect(tabs[2].getAttribute('aria-selected')).toBe('true');
+    expect(tabs[2]?.getAttribute('aria-selected')).toBe('true');
 
     act(() => {
-      tabs[2].dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowLeft', bubbles: true }));
+      tabs[2]?.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowLeft', bubbles: true }));
     });
-    expect(tabs[1].getAttribute('aria-selected')).toBe('true');
+    expect(tabs[1]?.getAttribute('aria-selected')).toBe('true');
 
     act(() => {
-      tabs[1].dispatchEvent(new KeyboardEvent('keydown', { key: 'Home', bubbles: true }));
+      tabs[1]?.dispatchEvent(new KeyboardEvent('keydown', { key: 'Home', bubbles: true }));
     });
-    expect(tabs[0].getAttribute('aria-selected')).toBe('true');
+    expect(tabs[0]?.getAttribute('aria-selected')).toBe('true');
 
     // Toggleable & removable tag pills + toast dismiss
     const winterBtn = [...container.querySelectorAll<HTMLButtonElement>('button')].find(
@@ -879,7 +884,7 @@ describe('KinloomUiPlugin seams, ArchivalPrimitives, and Family Recipes UI (#47)
   it('covers pagination, empty-ingredient detail, living ancestor redaction, slot edge states, and missing provider error', async () => {
     // 1. Pagination across > 24 recipes
     const manyRecipes: UiRecipeDetail[] = Array.from({ length: 26 }, (_, idx) => ({
-      ...SAMPLE_RECIPES[1],
+      ...must(SAMPLE_RECIPES[1]),
       id: `rec_page_${idx + 1}`,
       slug: `recipe-item-${idx + 1}`,
       title: `Heirloom Dish ${String(idx + 1).padStart(2, '0')}`,
@@ -925,7 +930,7 @@ describe('KinloomUiPlugin seams, ArchivalPrimitives, and Family Recipes UI (#47)
 
     // 2. Detail page with empty ingredients/steps and living attributed person gets redacted
     const livingAttributedRecipe: UiRecipeDetail = {
-      ...SAMPLE_RECIPES[1],
+      ...must(SAMPLE_RECIPES[1]),
       id: 'rec_living_attr',
       slug: 'living-attributed-pie',
       attributed_person_id: 'p_living',
@@ -1283,7 +1288,7 @@ describe('ArchivalLightbox, ArchivalFileDropzone, and RecipeDetailPage photo man
     const editorClient: RecipesClient = {
       async listRecipes() {
         return {
-          recipes: [SAMPLE_RECIPES[0]],
+          recipes: [must(SAMPLE_RECIPES[0])],
           total: 1,
           limit: 40,
           offset: 0,
@@ -1292,7 +1297,7 @@ describe('ArchivalLightbox, ArchivalFileDropzone, and RecipeDetailPage photo man
       },
       async getRecipe() {
         return {
-          recipe: { ...SAMPLE_RECIPES[0], cover_photo_id: coverId },
+          recipe: { ...must(SAMPLE_RECIPES[0]), cover_photo_id: coverId },
           photos: [...photosState],
           viewer_has_starred: false,
           permissions: {
@@ -1492,7 +1497,7 @@ describe('ArchivalLightbox, ArchivalFileDropzone, and RecipeDetailPage photo man
             ...(found.id === 'rec_1'
               ? [
                   {
-                    ...SAMPLE_PHOTOS.rec_1[0],
+                    ...must(SAMPLE_PHOTOS['rec_1']?.[0]),
                     id: 'pho_2',
                     url: '/media/biscuits-back.jpg',
                     caption: 'Handwritten card back',
@@ -1519,7 +1524,7 @@ describe('ArchivalLightbox, ArchivalFileDropzone, and RecipeDetailPage photo man
       async createRecipe(input) {
         createCalls.push(input);
         const created: UiRecipeDetail = {
-          ...SAMPLE_RECIPES[1],
+          ...must(SAMPLE_RECIPES[1]),
           id: 'rec_new_1',
           slug: input.slug ?? 'spiced-oat-scones',
           title: input.title,
@@ -1546,7 +1551,7 @@ describe('ArchivalLightbox, ArchivalFileDropzone, and RecipeDetailPage photo man
       },
       async updateRecipe(slugOrId, input) {
         updateCalls.push({ slug: slugOrId, expectedVersion: input.expected_version, title: input.title });
-        const existing = storedRecipes.get(slugOrId) ?? SAMPLE_RECIPES[0];
+        const existing = must(storedRecipes.get(slugOrId) ?? SAMPLE_RECIPES[0]);
         if (simulateConflictOnce) {
           simulateConflictOnce = false;
           const serverRecipe: UiRecipeDetail = {
@@ -1702,7 +1707,7 @@ describe('ArchivalLightbox, ArchivalFileDropzone, and RecipeDetailPage photo man
     const allIngItems = container.querySelectorAll<HTMLInputElement>('input[placeholder="rolled oats"]');
     expect(allIngItems).toHaveLength(2);
     act(() => {
-      setNativeValue(allIngItems[1], 'cinnamon');
+      setNativeValue(must(allIngItems[1]), 'cinnamon');
     });
     const moveIngUpBtn = container.querySelector<HTMLButtonElement>(
       'button[aria-label="Move ingredient 2 up"]'
@@ -1713,7 +1718,7 @@ describe('ArchivalLightbox, ArchivalFileDropzone, and RecipeDetailPage photo man
     const reorderedIngItems = container.querySelectorAll<HTMLInputElement>(
       'input[placeholder="rolled oats"]'
     );
-    expect(reorderedIngItems[0].value).toBe('cinnamon');
+    expect(reorderedIngItems[0]?.value).toBe('cinnamon');
 
     // Fill step
     const firstStep = container.querySelector<HTMLTextAreaElement>(
@@ -1948,8 +1953,8 @@ describe('ArchivalLightbox, ArchivalFileDropzone, and RecipeDetailPage photo man
           return null;
         }
         return {
-          recipe: SAMPLE_RECIPES[0],
-          photos: [...(SAMPLE_PHOTOS.rec_1 ?? [])],
+          recipe: must(SAMPLE_RECIPES[0]),
+          photos: [...(SAMPLE_PHOTOS['rec_1'] ?? [])],
           viewer_has_starred: true,
           permissions: {
             can_edit: true,
@@ -1989,7 +1994,7 @@ describe('ArchivalLightbox, ArchivalFileDropzone, and RecipeDetailPage photo man
             server_updated_at: '2026-11-27T16:00:00.000Z',
             server_updated_by_name: 'Archive Steward',
             server_recipe: {
-              ...SAMPLE_RECIPES[0],
+              ...must(SAMPLE_RECIPES[0]),
               title: 'Reloaded Server Biscuits',
               version: 3,
             },
@@ -2887,7 +2892,7 @@ describe('Recipe Starring, Optimistic Rollback, and My Favorites UI (#50)', () =
                   }}
                 />
                 <IndexRecipesWidget />
-                <PersonRecipesSlot person={ada} />
+                <PersonRecipesSlot person={must(ada)} />
               </KinloomPluginProvider>
             </ArchiveProvider>
           </MemoryRouter>

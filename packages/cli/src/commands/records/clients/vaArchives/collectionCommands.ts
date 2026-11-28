@@ -94,21 +94,21 @@ export async function runCatalog(
     throw new RecordRuntimeError(`Invalid Primo PNXS JSON: ${message}`);
   }
   const obj = isPlainRecord(data) ? data : {};
-  const info = isPlainRecord(obj.info) ? obj.info : {};
-  const docs = Array.isArray(obj.docs) ? obj.docs : [];
+  const info = isPlainRecord(obj['info']) ? obj['info'] : {};
+  const docs = Array.isArray(obj['docs']) ? obj['docs'] : [];
   const records = docs.map((d) => mapPnxsRecord(d));
 
   if (asJson) {
     return emitTrackedJson(state, {
-      total: info.total ?? null,
-      first: info.first ?? null,
-      last: info.last ?? null,
+      total: info['total'] ?? null,
+      first: info['first'] ?? null,
+      last: info['last'] ?? null,
       records,
     });
   }
 
   const lines: string[] = [
-    `${String(info.total ?? 0)} result(s); showing ${String(info.first ?? 0)}-${String(info.last ?? 0)}:`,
+    `${String(info['total'] ?? 0)} result(s); showing ${String(info['first'] ?? 0)}-${String(info['last'] ?? 0)}:`,
   ];
   for (const rec of records) {
     lines.push(rec.title || '(no title)');
@@ -185,7 +185,7 @@ export async function runGrantTif(
 
   let url: string;
   try {
-    url = normalizeLvaImageUrl(parsed.positionals[0]);
+    url = normalizeLvaImageUrl(parsed.positionals[0] ?? '');
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : String(err);
     throw new CliValidationError(message);
@@ -210,8 +210,8 @@ export async function runGrantTif(
 
   if (outPath) {
     const mode = await saveImage(cachedPath, outPath);
-    result.out = outPath;
-    result.mode = mode;
+    result['out'] = outPath;
+    result['mode'] = mode;
   }
 
   if (asJson) {
@@ -219,8 +219,8 @@ export async function runGrantTif(
   }
 
   const text = outPath
-    ? `saved ${String(result.out)} (${String(result.mode)}) from ${url}`
-    : `cached ${url} -> ${cachedPath} (${String(result.bytes)} bytes); pass --out FILE to save it`;
+    ? `saved ${String(result['out'])} (${String(result['mode'])}) from ${url}`
+    : `cached ${url} -> ${cachedPath} (${String(result['bytes'])} bytes); pass --out FILE to save it`;
   return {
     exitCode: 0,
     bytesOut: emitStdout(ctx.io, text),
@@ -238,7 +238,7 @@ export async function runDunmore(
     return { exitCode: 0, bytesOut: emitStdout(ctx.io, renderDunmoreHelp()) };
   }
 
-  const [drawer, card] = parsed.positionals;
+  const [drawer = '', card = ''] = parsed.positionals;
   if (!/^\d{1,5}\/W\d{1,6}$/.test(drawer)) {
     throw new CliValidationError(`Invalid drawer (expected e.g. 0001/W0001): ${JSON.stringify(drawer)}`);
   }
@@ -284,11 +284,11 @@ export async function runDunmore(
     selected: chosen,
   };
 
-  if (outPath) {
+  if (outPath && chosen) {
     const cachedPath = await fetchFile(state, chosen.url, [LVA_IMAGE_HOST]);
     const mode = await saveImage(cachedPath, outPath);
-    result.out = outPath;
-    result.mode = mode;
+    result['out'] = outPath;
+    result['mode'] = mode;
   }
 
   if (asJson) {
@@ -303,7 +303,7 @@ export async function runDunmore(
     lines.push(` ${mark} page ${String(im.page ?? '?')}: ${im.url}`);
   }
   if (outPath) {
-    lines.push(`saved ${String(result.out)} (${String(result.mode)})`);
+    lines.push(`saved ${String(result['out'])} (${String(result['mode'])})`);
   }
   return {
     exitCode: 0,
@@ -322,7 +322,7 @@ export async function runDownloadRosetta(
     return { exitCode: 0, bytesOut: emitStdout(ctx.io, renderRosettaHelp()) };
   }
 
-  const ie = validateIeId(parsed.positionals[0]);
+  const ie = validateIeId(parsed.positionals[0] ?? '');
   const rawFl = getStringOption(parsed, 'flId');
   const flId = rawFl !== undefined ? validateFlId(rawFl) : undefined;
   const fileIndex = getNumberOption(parsed, 'fileIndex');
@@ -365,9 +365,9 @@ export async function runDownloadRosetta(
     if (fileIndex < 1 || fileIndex > files.length) {
       throw new CliValidationError(`--file must be 1..${files.length}`);
     }
-    fl = files[fileIndex - 1].fl;
+    fl = files[fileIndex - 1]?.fl ?? '';
   } else {
-    fl = info.initial ?? files[0].fl;
+    fl = info.initial ?? files[0]?.fl ?? '';
   }
 
   const expectedBinPath = path.join(state.cacheRoot, 'rosetta', ie, `${fl}.bin`);

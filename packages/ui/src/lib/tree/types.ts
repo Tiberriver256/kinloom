@@ -248,12 +248,12 @@ export interface TreeFocusPlan {
 export interface BuildArchivalTreeInput {
   readonly people: readonly Person[];
   readonly kinship: readonly KinshipEdge[];
-  readonly branchFilter?: string | null;
-  readonly defaultBranchId?: string;
-  readonly directModeBranchIds?: readonly string[];
+  readonly branchFilter?: string | null | undefined;
+  readonly defaultBranchId?: string | undefined;
+  readonly directModeBranchIds?: readonly string[] | undefined;
   readonly mode: TreeLineageMode;
-  readonly expandedUnionIds?: ReadonlySet<string>;
-  readonly anchorPersonId?: string | null;
+  readonly expandedUnionIds?: ReadonlySet<string> | undefined;
+  readonly anchorPersonId?: string | null | undefined;
 }
 
 const ROMAN_NUMERALS = ['I', 'II', 'III', 'IV', 'V', 'VI'] as const;
@@ -300,7 +300,7 @@ export function formatUnionOtherChildrenLabel(params: {
 
 export function toRomanNumeral(order: number): string {
   if (order >= 1 && order <= ROMAN_NUMERALS.length) {
-    return ROMAN_NUMERALS[order - 1];
+    return ROMAN_NUMERALS[order - 1] ?? String(order);
   }
   return String(order);
 }

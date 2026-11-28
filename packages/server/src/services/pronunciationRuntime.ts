@@ -62,9 +62,9 @@ export function parsePronunciationRuntimeConfig(
   values: Readonly<Record<string, PluginSettingScalarValue>>,
   fallback: PronunciationPluginRuntimeConfig = DEFAULT_PRONUNCIATION_RUNTIME_CONFIG
 ): PronunciationPluginRuntimeConfig {
-  const rawPrimary = values.primary_backend;
-  const rawFallback = values.fallback_backend;
-  const rawPhoneme = values.phoneme_mode;
+  const rawPrimary = values['primary_backend'];
+  const rawFallback = values['fallback_backend'];
+  const rawPhoneme = values['phoneme_mode'];
   return {
     primaryBackend:
       typeof rawPrimary === 'string' && VALID_PRIMARY_BACKENDS.has(rawPrimary as PronunciationTtsBackend)
@@ -76,28 +76,30 @@ export function parsePronunciationRuntimeConfig(
         ? (rawFallback as PronunciationFallbackBackend)
         : fallback.fallbackBackend,
     openAiBaseUrl:
-      typeof values.openai_base_url === 'string' ? values.openai_base_url.trim() : fallback.openAiBaseUrl,
+      typeof values['openai_base_url'] === 'string'
+        ? values['openai_base_url'].trim()
+        : fallback.openAiBaseUrl,
     defaultModel:
-      typeof values.default_model === 'string' && values.default_model.trim().length > 0
-        ? values.default_model.trim()
+      typeof values['default_model'] === 'string' && values['default_model'].trim().length > 0
+        ? values['default_model'].trim()
         : fallback.defaultModel,
     defaultVoice:
-      typeof values.default_voice === 'string' && values.default_voice.trim().length > 0
-        ? values.default_voice.trim()
+      typeof values['default_voice'] === 'string' && values['default_voice'].trim().length > 0
+        ? values['default_voice'].trim()
         : fallback.defaultVoice,
     chirpVoice:
-      typeof values.chirp_voice === 'string' && values.chirp_voice.trim().length > 0
-        ? values.chirp_voice.trim()
+      typeof values['chirp_voice'] === 'string' && values['chirp_voice'].trim().length > 0
+        ? values['chirp_voice'].trim()
         : fallback.chirpVoice,
     gcpProjectId:
-      typeof values.gcp_project_id === 'string' ? values.gcp_project_id.trim() : fallback.gcpProjectId,
+      typeof values['gcp_project_id'] === 'string' ? values['gcp_project_id'].trim() : fallback.gcpProjectId,
     phonemeMode:
       typeof rawPhoneme === 'string' && VALID_PHONEME_MODES.has(rawPhoneme as PronunciationPhonemeMode)
         ? (rawPhoneme as PronunciationPhonemeMode)
         : fallback.phonemeMode,
     autoGenerateOnSave:
-      typeof values.auto_generate_on_save === 'boolean'
-        ? values.auto_generate_on_save
+      typeof values['auto_generate_on_save'] === 'boolean'
+        ? values['auto_generate_on_save']
         : fallback.autoGenerateOnSave,
   };
 }
@@ -105,8 +107,8 @@ export function parsePronunciationRuntimeConfig(
 export function resolveActivePronunciationGeneratorLabel(params: {
   readonly config: PronunciationPluginRuntimeConfig;
   readonly configuredSecrets: Readonly<Record<string, boolean>>;
-  readonly injectedGenerator?: PronunciationAudioGenerator;
-  readonly envDefaults?: PronunciationEnvDefaults;
+  readonly injectedGenerator?: PronunciationAudioGenerator | undefined;
+  readonly envDefaults?: PronunciationEnvDefaults | undefined;
 }): string {
   const { config, configuredSecrets, injectedGenerator, envDefaults } = params;
   if (config.primaryBackend === 'disabled') {
@@ -120,14 +122,14 @@ export function resolveActivePronunciationGeneratorLabel(params: {
 
   for (const backend of backends) {
     if (backend === 'gemini') {
-      if (configuredSecrets.gemini_api_key || envDefaults?.geminiApiKey?.trim()) {
+      if (configuredSecrets['gemini_api_key'] || envDefaults?.geminiApiKey?.trim()) {
         return 'gemini-tts';
       }
       if (injectedGenerator) {
         return injectedGenerator.adapterKind ?? 'custom';
       }
     } else if (backend === 'chirp3-hd') {
-      if (configuredSecrets.google_cloud_tts_api_key || envDefaults?.googleCloudTtsApiKey?.trim()) {
+      if (configuredSecrets['google_cloud_tts_api_key'] || envDefaults?.googleCloudTtsApiKey?.trim()) {
         return 'chirp3-hd';
       }
     } else if (backend === 'openai-speech') {
@@ -148,7 +150,7 @@ class FallbackPronunciationGenerator implements PronunciationAudioGenerator {
   readonly adapterKind: string;
   private readonly primary: PronunciationAudioGenerator;
   private readonly fallback: PronunciationAudioGenerator;
-  private readonly primaryDefaultVoice?: string;
+  private readonly primaryDefaultVoice?: string | undefined;
 
   constructor(
     primary: PronunciationAudioGenerator,
@@ -167,10 +169,11 @@ class FallbackPronunciationGenerator implements PronunciationAudioGenerator {
     try {
       return await this.primary.generate(params);
     } catch {
-      const fallbackParams =
-        this.primaryDefaultVoice && params.voice === this.primaryDefaultVoice
-          ? { ...params, voice: undefined }
-          : params;
+      let fallbackParams = params;
+      if (this.primaryDefaultVoice && params.voice === this.primaryDefaultVoice) {
+        const { voice: _omittedVoice, ...rest } = params;
+        fallbackParams = rest;
+      }
       return this.fallback.generate(fallbackParams);
     }
   }
@@ -222,9 +225,9 @@ export async function loadPersistedPronunciationConfig(
 }
 
 export async function resolveEffectivePronunciationRuntime(params: {
-  readonly pluginSettingsStore?: PluginSettingsStore;
-  readonly injectedGenerator?: PronunciationAudioGenerator;
-  readonly envDefaults?: PronunciationEnvDefaults;
+  readonly pluginSettingsStore?: PluginSettingsStore | undefined;
+  readonly injectedGenerator?: PronunciationAudioGenerator | undefined;
+  readonly envDefaults?: PronunciationEnvDefaults | undefined;
   readonly fallbackConfig?: PronunciationPluginRuntimeConfig;
 }): Promise<EffectivePronunciationRuntime> {
   const { config, hasStoredSettings } = await loadPersistedPronunciationConfig(

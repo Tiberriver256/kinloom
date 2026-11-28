@@ -844,7 +844,7 @@ describe('shared/bundlePrivacy.ts', () => {
       ],
       events: [
         {
-          ...baseBundle.events[0],
+          ...baseBundle.events[0]!,
           id: 'evt_living',
           edtf_date: '2010-06-01',
           place_id: 'plc_oakville',
@@ -1193,9 +1193,9 @@ describe('shared/integrateEngine/entities.ts, integrity.ts, and media.ts', () =>
       ]
     );
     expect(mergedPlaces.counts).toEqual({ added: 0, updated: 1, unchanged: 0 });
-    expect(mergedPlaces.items[0].has_primary_source).toBe(true);
-    expect(mergedPlaces.items[0].sources).toEqual([{ source_id: 'src_1880_census', confidence: 'high' }]);
-    expect(mergedPlaces.items[0].extensions).toEqual({ county_fips: '39001', settled_year: 1835 });
+    expect(mergedPlaces.items[0]!.has_primary_source).toBe(true);
+    expect(mergedPlaces.items[0]!.sources).toEqual([{ source_id: 'src_1880_census', confidence: 'high' }]);
+    expect(mergedPlaces.items[0]!.extensions).toEqual({ county_fips: '39001', settled_year: 1835 });
 
     // Source update preserves optional metadata and rejects simultaneous add+remove
     const existingSource = makeSource({
@@ -1511,7 +1511,7 @@ describe('shared/integrateEngine/entities.ts, integrity.ts, and media.ts', () =>
 
     const planned1 = planScanStaging(repoDir, pkgDir, archiveLayout);
     expect(planned1).toHaveLength(1);
-    expect(planned1[0].alreadyIdentical).toBe(false);
+    expect(planned1[0]!.alreadyIdentical).toBe(false);
 
     // Dry-run staging updates overlay.virtualStagedScans
     const overlay: IntegrateExecutionOverlay = {
@@ -1519,12 +1519,12 @@ describe('shared/integrateEngine/entities.ts, integrity.ts, and media.ts', () =>
       virtualStagedScans: new Map(),
     };
     const dryStaged = stagePlannedScans(planned1, true, overlay);
-    expect(dryStaged[0].status).toBe('would_stage');
-    expect(overlay.virtualStagedScans.get(planned1[0].destPath)).toBe(planned1[0].sha256);
+    expect(dryStaged[0]!.status).toBe('would_stage');
+    expect(overlay.virtualStagedScans.get(planned1[0]!.destPath)).toBe(planned1[0]!.sha256);
 
     // Re-planning against overlay marks it alreadyIdentical
     const plannedViaOverlay = planScanStaging(repoDir, pkgDir, archiveLayout, overlay.virtualStagedScans);
-    expect(plannedViaOverlay[0].alreadyIdentical).toBe(true);
+    expect(plannedViaOverlay[0]!.alreadyIdentical).toBe(true);
 
     // validatePatchMedia error cases
     const jane = makeDeceasedPerson();
@@ -1709,7 +1709,7 @@ describe('mediaDedupe/merge.ts, rewrite.ts, report.ts, and io.ts', () => {
       preferSet: new Set(['med_pref']),
     });
     expect(triPlan.mergedMedia).toHaveLength(1);
-    const rec = triPlan.mergedMedia[0];
+    const rec = triPlan.mergedMedia[0]!;
     expect(rec.id).toBe('med_pref');
     expect(rec.person_id).toBe('per_jane_doe');
     expect(rec.person_ids).toEqual(['per_jane_doe', 'per_john_doe']);
@@ -1798,13 +1798,13 @@ describe('mediaDedupe/merge.ts, rewrite.ts, report.ts, and io.ts', () => {
     expect(rewritten.placesChanged).toBe(true);
     expect(rewritten.eventsChanged).toBe(false);
     expect(rewritten.narrativesChanged).toBe(true);
-    expect(rewritten.nextPeople[0].extensions).toEqual({
+    expect(rewritten.nextPeople[0]!.extensions).toEqual({
       gallery: [{ media_ids: ['med_keep', 42] }],
     });
-    expect(rewritten.nextPlaces[0].extensions).toEqual({
+    expect(rewritten.nextPlaces[0]!.extensions).toEqual({
       nested: { media_refs: ['med_keep'] },
     });
-    expect(rewritten.nextNarratives[0].extensions).toEqual({
+    expect(rewritten.nextNarratives[0]!.extensions).toEqual({
       media_refs: ['med_keep'],
     });
   });
@@ -2191,7 +2191,7 @@ describe('sync/planner.ts', () => {
     expect(sanitized.byType.narrative).toHaveLength(1);
     expect(sanitized.byType.kinship_edge).toHaveLength(1);
 
-    const kinshipId = sanitized.byType.kinship_edge[0].entity_id;
+    const kinshipId = sanitized.byType.kinship_edge[0]!.entity_id;
 
     // Index remote snapshot skipping deleted rows and preserving active kinship
     const snapshot: RemoteSnapshotResponse = {
@@ -2364,7 +2364,7 @@ describe('sync/remoteClient.ts', () => {
         writeToken: 'tok',
         batchLabel: 'test',
         summary: 'Sync',
-        patches: [patches[0]],
+        patches: [patches[0]!],
         chunkSize: 1,
       })
     ).rejects.toThrow(/POST \/api\/batches.*failed with HTTP 422/);
@@ -2377,7 +2377,7 @@ describe('sync/remoteClient.ts', () => {
         writeToken: 'tok',
         batchLabel: 'test',
         summary: 'Sync',
-        patches: [patches[0]],
+        patches: [patches[0]!],
         chunkSize: 1,
       })
     ).rejects.toThrow(KinloomApiError);
@@ -2392,7 +2392,7 @@ describe('sync/remoteClient.ts', () => {
         writeToken: 'tok',
         batchLabel: 'test',
         summary: 'Sync',
-        patches: [patches[0]],
+        patches: [patches[0]!],
         chunkSize: 1,
       })
     ).rejects.toThrow(/network reset/);
@@ -2452,7 +2452,7 @@ describe('sync/remoteClient.ts', () => {
       uploadedKeys: [],
       concurrency: 2,
     });
-    expect(vBadJson.failures[0].reason).toContain('Invalid JSON from /api/bundle');
+    expect(vBadJson.failures[0]!.reason).toContain('Invalid JSON from /api/bundle');
 
     // Bundle invalid schema
     const vBadSchema = await verifyLiveEndpoints({
@@ -2464,7 +2464,7 @@ describe('sync/remoteClient.ts', () => {
       uploadedKeys: [],
       concurrency: 2,
     });
-    expect(vBadSchema.failures[0].reason).toContain('Unexpected response shape');
+    expect(vBadSchema.failures[0]!.reason).toContain('Unexpected response shape');
 
     // Bundle HTTP 503
     const v503 = await verifyLiveEndpoints({
@@ -2474,7 +2474,7 @@ describe('sync/remoteClient.ts', () => {
       uploadedKeys: [],
       concurrency: 2,
     });
-    expect(v503.failures[0].reason).toContain('got HTTP 503: down');
+    expect(v503.failures[0]!.reason).toContain('got HTTP 503: down');
 
     // Bundle network error
     const vNet = await verifyLiveEndpoints({
@@ -2488,7 +2488,7 @@ describe('sync/remoteClient.ts', () => {
       uploadedKeys: [],
       concurrency: 2,
     });
-    expect(vNet.failures[0].reason).toBe('ECONNREFUSED');
+    expect(vNet.failures[0]!.reason).toBe('ECONNREFUSED');
 
     // Bundle revision mismatch + media probes (200 ok, 404, content-length: 0, empty stream, empty null-body, fetch error)
     const bundleWithRev: ArchiveBundle = {

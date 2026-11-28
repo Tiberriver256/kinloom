@@ -21,7 +21,7 @@ export interface ClassifiedStagedPackages {
 
 export interface IntegrateBatchCommandOptions {
   repoDir?: string;
-  personIds?: readonly string[];
+  personIds?: readonly string[] | undefined;
   allStaged?: boolean;
   pendingOnly?: boolean;
   markIntegrated?: boolean;

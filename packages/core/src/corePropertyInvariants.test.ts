@@ -260,7 +260,7 @@ describe('Privacy redaction invariants across arbitrary graph topologies', () =>
         ];
 
         const people: RawPerson[] = Array.from({ length: count }, (_, idx) => {
-          const isLiving = livingFlags[idx] || birthYears[idx] > 1925;
+          const isLiving = livingFlags[idx] || birthYears[idx]! > 1925;
           const uniqueToken = `Zylph${idx}Alder`;
           return {
             id: `per_${idx}`,
@@ -274,7 +274,7 @@ describe('Privacy redaction invariants across arbitrary graph topologies', () =>
             lineage_group: idx === 0 ? 'ancestor' : 'descendant',
             branch: 'alder_main',
             birth_edtf: `${birthYears[idx]}-04-12`,
-            death_edtf: isLiving ? '' : `${Math.min(birthYears[idx] + 65, 1990)}`,
+            death_edtf: isLiving ? '' : `${Math.min(birthYears[idx]! + 65, 1990)}`,
             portrait_url: `/media/portrait-${idx}.jpg`,
             thumb_url: `/media/thumb-${idx}.jpg`,
             pronunciation: { phonetic: `ZILF-${idx}` },
@@ -303,12 +303,12 @@ describe('Privacy redaction invariants across arbitrary graph topologies', () =>
           const mentioned = people[spec.mentionLivingIdx];
           return {
             id: `evt_${idx}`,
-            title: `Gathering for ${mentioned.full_name}`,
+            title: `Gathering for ${mentioned!.full_name}`,
             scope: 'family',
             event_kind: spec.kind,
             edtf_date: `${spec.year}-06-15`,
             place_id: 'plc_riverdale',
-            summary: `Recorded with ${mentioned.full_name} (${mentioned.alt_names[0]}).`,
+            summary: `Recorded with ${mentioned!.full_name} (${mentioned!.alt_names[0]}).`,
             photo_url: `/media/event-${idx}.jpg`,
             participants: spec.participantIndices.map((pi) => ({
               person_id: `per_${pi}`,
@@ -456,7 +456,7 @@ describe('Privacy redaction invariants across arbitrary graph topologies', () =>
           }
 
           const filtered = applyPrivacyFilter([person], [], [], mode, { privacy: TEST_SITE_CONFIG.privacy });
-          expect(filtered.people[0].portrait_url).toBeNull();
+          expect(filtered.people[0]?.portrait_url).toBeNull();
           expect(filtered.residenceSpans).toEqual([]);
         }
       ),

@@ -451,7 +451,7 @@ describe('createKinloomServer end-to-end HTTP transport', () => {
       tokens: Array<Record<string, unknown>>;
     };
     expect(listedTokens.tokens).toHaveLength(1);
-    expect('token_hash' in listedTokens.tokens[0]).toBe(false);
+    expect('token_hash' in listedTokens.tokens[0]!).toBe(false);
 
     // Export snapshot + 304 Not Modified with read_backup token
     const snapRes = await server.fetch(
@@ -858,7 +858,7 @@ describe('createKinloomServer end-to-end HTTP transport', () => {
     // 2. Unconfigured Google OAuth -> browser 302 redirect, API 503 JSON
     const unconfiguredServer = createKinloomServer({
       siteConfig,
-      ports: { ...ports, authProvider: undefined },
+      ports: (({ authProvider: _ap, ...rest }) => rest)(ports),
       sessionSecret: SECRET,
     });
     const unconfBrowserRes = await unconfiguredServer.fetch(

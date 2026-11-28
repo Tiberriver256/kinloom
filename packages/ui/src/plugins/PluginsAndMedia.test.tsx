@@ -22,7 +22,7 @@ const PluginSourceEditFields: React.FC<EntityEditFieldProps> = ({ draft, updateF
     <input
       data-testid="plugin-edit-source-input"
       type="text"
-      value={typeof draft.citation === 'string' ? draft.citation : ''}
+      value={typeof draft['citation'] === 'string' ? draft['citation'] : ''}
       onChange={(e) => {
         updateField('citation', e.target.value);
       }}

@@ -125,7 +125,9 @@ async function makeTempDir(prefix = 'kinloom-c5-'): Promise<string> {
   return dir;
 }
 
-function makeCtx(overrides: Partial<RecordCommandContext> = {}): {
+function makeCtx(
+  overrides: { [K in keyof RecordCommandContext]?: RecordCommandContext[K] | undefined } = {}
+): {
   readonly ctx: RecordCommandContext;
   readonly stdout: string[];
   readonly stderr: string[];
@@ -589,9 +591,9 @@ describe('ocr engines, subprocess, pipeline, and singleRunner behavioral coverag
       maxDim: 200,
       ctx: tsvCtx,
     });
-    expect(res.meta.downscaled).toBe(true);
-    expect(res.meta.original_size).toEqual([400, 200]);
-    expect(res.meta.scaled_size).toEqual([200, 100]);
+    expect(res.meta['downscaled']).toBe(true);
+    expect(res.meta['original_size']).toEqual([400, 200]);
+    expect(res.meta['scaled_size']).toEqual([200, 100]);
     const parsedTsv = parseTesseractTsv(res.output);
     expect(parsedTsv.lines[0]).toMatchObject({ text: 'Chronicle', x0: 20, y0: 40, x1: 120, y1: 60 });
 
@@ -716,7 +718,7 @@ describe('ocr engines, subprocess, pipeline, and singleRunner behavioral coverag
       hugeFake
     );
     expect(hugeRes.text).toBe('Jane Doe 1895');
-    expect(hugeRes.meta.downscaled).toBe(false);
+    expect(hugeRes.meta['downscaled']).toBe(false);
 
     // CLI cursive OCR error branches
     const runCli = (execFileImpl: ExecFileFn, customPrompt?: string) =>
@@ -1159,9 +1161,9 @@ describe('archive-org behavioral coverage', () => {
       limit: 5,
     });
     expect(flatTotal).toBe(1);
-    expect(flatHits[0].leaf).toBeNull();
-    expect(flatHits[0].snippet.startsWith('...')).toBe(true);
-    expect(flatHits[0].snippet.endsWith('...')).toBe(true);
+    expect(flatHits[0]!.leaf).toBeNull();
+    expect(flatHits[0]!.snippet.startsWith('...')).toBe(true);
+    expect(flatHits[0]!.snippet.endsWith('...')).toBe(true);
 
     // Zero-length regex terminates cleanly
     const [, zeroTotal] = grepCachedItem('item1', 'abc', flatIdx, '^', false, {

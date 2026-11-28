@@ -24,7 +24,7 @@ export function useHorizontalScrollFade(
 
     if (supportsScrollTimeline) {
       const syncOverflow = (): void => {
-        scroller.dataset.overflowing = scroller.scrollWidth > scroller.clientWidth + 1 ? 'true' : 'false';
+        scroller.dataset['overflowing'] = scroller.scrollWidth > scroller.clientWidth + 1 ? 'true' : 'false';
       };
       syncOverflow();
       if (typeof ResizeObserver !== 'function') {

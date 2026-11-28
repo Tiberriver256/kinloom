@@ -349,7 +349,7 @@ describe('open-finance integer-cents cost math and config validation', () => {
     const rootInvalid = validateOpenFinanceConfig('not-an-object');
     expect(rootInvalid.ok).toBe(false);
     if (!rootInvalid.ok) {
-      expect(typeof rootInvalid.fieldErrors._root).toBe('string');
+      expect(typeof rootInvalid.fieldErrors['_root']).toBe('string');
     }
     const multiIssue = validateOpenFinanceConfig({
       currency: 'JPY',
@@ -772,9 +772,9 @@ describe('createOpenFinancePlugin server integration', () => {
     };
     const ofSnapshot = psList.plugins.find((p) => p.plugin_id === OPEN_FINANCE_PLUGIN_ID);
     expect(ofSnapshot).toBeDefined();
-    expect(ofSnapshot?.readonly_values.monthly_operating_cost).toBe('$20.00');
-    expect(ofSnapshot?.readonly_values.annual_operating_cost).toBe('$240.00');
-    expect(ofSnapshot?.readonly_values.active_platforms_count).toBe(2);
+    expect(ofSnapshot?.readonly_values['monthly_operating_cost']).toBe('$20.00');
+    expect(ofSnapshot?.readonly_values['annual_operating_cost']).toBe('$240.00');
+    expect(ofSnapshot?.readonly_values['active_platforms_count']).toBe(2);
 
     // Declarative PUT rejects non-allowlisted host via settingsSchema validator
     const badSettingsPut = await server.fetch(
@@ -890,7 +890,7 @@ describe('createOpenFinancePlugin server integration', () => {
     });
     const server = createKinloomServer({
       siteConfig,
-      ports: { ...basePorts, pluginSettingsStore: undefined, plugins: [plugin] },
+      ports: { ...(({ pluginSettingsStore: _pss, ...rest }) => rest)(basePorts), plugins: [plugin] },
       sessionSecret: SESSION_SECRET,
       mode: 'public',
     });

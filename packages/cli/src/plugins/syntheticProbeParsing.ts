@@ -219,9 +219,9 @@ export function resolveProbeToken(
   const candidates = [
     explicitToken,
     optionToken,
-    env.KINLOOM_PROBE_TOKEN,
-    env.KINLOOM_TOKEN,
-    env.KINLOOM_AGENT_TOKEN,
+    env['KINLOOM_PROBE_TOKEN'],
+    env['KINLOOM_TOKEN'],
+    env['KINLOOM_AGENT_TOKEN'],
   ];
   for (const candidate of candidates) {
     const trimmed = candidate?.trim();

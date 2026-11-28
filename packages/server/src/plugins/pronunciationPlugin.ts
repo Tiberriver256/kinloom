@@ -104,7 +104,7 @@ function buildPronunciationSettingsSchema(options: PronunciationPluginOptions): 
               { value: 'openai-speech', label: 'OpenAI-Compatible Speech API' },
             ],
             validate: (val, all) => {
-              if (typeof val === 'string' && val !== 'none' && val === all.primary_backend) {
+              if (typeof val === 'string' && val !== 'none' && val === all['primary_backend']) {
                 return 'Fallback TTS Backend must differ from Primary TTS Backend.';
               }
               return null;
@@ -121,7 +121,7 @@ function buildPronunciationSettingsSchema(options: PronunciationPluginOptions): 
               'Optional base URL for an OpenAI-compatible speech endpoint (for example, Kokoro or a local GPU TTS proxy).',
             validate: (val, all) => {
               const usesOpenAi =
-                all.primary_backend === 'openai-speech' || all.fallback_backend === 'openai-speech';
+                all['primary_backend'] === 'openai-speech' || all['fallback_backend'] === 'openai-speech';
               if (usesOpenAi && (typeof val !== 'string' || val.trim().length === 0)) {
                 return 'OpenAI-Compatible Endpoint URL is required when OpenAI-Compatible Speech API is selected.';
               }
@@ -307,13 +307,13 @@ export function createPronunciationPlugin(
     getReadonlySettings: (ctx): Readonly<Record<string, PluginSettingScalarValue>> => {
       const effectiveConfig = parsePronunciationRuntimeConfig(ctx.values, initialConfig);
       const configuredProviders: string[] = [];
-      if (ctx.configuredSecrets.gemini_api_key) {
+      if (ctx.configuredSecrets['gemini_api_key']) {
         configuredProviders.push('gemini');
       }
-      if (ctx.configuredSecrets.google_cloud_tts_api_key) {
+      if (ctx.configuredSecrets['google_cloud_tts_api_key']) {
         configuredProviders.push('chirp3-hd');
       }
-      if (ctx.configuredSecrets.openai_api_key) {
+      if (ctx.configuredSecrets['openai_api_key']) {
         configuredProviders.push('openai-speech');
       }
       const activeGenerator = resolveActivePronunciationGeneratorLabel({

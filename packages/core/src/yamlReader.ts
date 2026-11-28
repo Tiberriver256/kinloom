@@ -3,6 +3,10 @@ import { CORE_SCHEMA, load as loadYaml } from 'js-yaml';
 const BAIL = Symbol('YAML_BAIL');
 type BailOr<T> = T | typeof BAIL;
 
+function atI32(buf: Int32Array, index: number): number {
+  return buf[index] ?? 0;
+}
+
 const CORE_READER_KEYWORDS = new Set([
   'null',
   'Null',
@@ -132,35 +136,30 @@ const KNOWN_YAML_KEYS = [
 const KNOWN_KEYS_BY_LEN: readonly (readonly string[])[] = (() => {
   const buckets: string[][] = Array.from({ length: 28 }, () => []);
   for (const key of KNOWN_YAML_KEYS) {
-    if (key.length < buckets.length) {
-      buckets[key.length].push(key);
-    }
+    buckets[key.length]?.push(key);
   }
   return buckets;
 })();
 
 function internYamlKeySpan(text: string, start: number, end: number): string {
   const len = end - start;
-  if (len >= 2 && len < KNOWN_KEYS_BY_LEN.length) {
-    const bucket = KNOWN_KEYS_BY_LEN[len];
-    if (bucket.length > 0) {
-      const c0 = text.charCodeAt(start);
-      const cLast = text.charCodeAt(end - 1);
-      for (let b = 0; b < bucket.length; b += 1) {
-        const cand = bucket[b];
-        if (cand.charCodeAt(0) !== c0 || cand.charCodeAt(len - 1) !== cLast) {
-          continue;
+  const bucket = len >= 2 ? KNOWN_KEYS_BY_LEN[len] : undefined;
+  if (bucket && bucket.length > 0) {
+    const c0 = text.charCodeAt(start);
+    const cLast = text.charCodeAt(end - 1);
+    for (const cand of bucket) {
+      if (cand.charCodeAt(0) !== c0 || cand.charCodeAt(len - 1) !== cLast) {
+        continue;
+      }
+      let match = true;
+      for (let k = 1; k < len - 1; k += 1) {
+        if (text.charCodeAt(start + k) !== cand.charCodeAt(k)) {
+          match = false;
+          break;
         }
-        let match = true;
-        for (let k = 1; k < len - 1; k += 1) {
-          if (text.charCodeAt(start + k) !== cand.charCodeAt(k)) {
-            match = false;
-            break;
-          }
-        }
-        if (match) {
-          return cand;
-        }
+      }
+      if (match) {
+        return cand;
       }
     }
   }
@@ -531,10 +530,10 @@ function parseNodeSpanAt(
     return null;
   }
   const base = cursor.idx * 3;
-  if (buf[base] !== expectedIndent) {
+  if (atI32(buf, base) !== expectedIndent) {
     return BAIL;
   }
-  if (isSequenceLine(text, buf[base + 1], buf[base + 2])) {
+  if (isSequenceLine(text, atI32(buf, base + 1), atI32(buf, base + 2))) {
     return parseSequenceSpanAt(text, buf, lineCount, cursor, expectedIndent);
   }
   return parseMappingSpanAt(text, buf, lineCount, cursor, expectedIndent, null, 0, 0);
@@ -555,7 +554,7 @@ function parseMappingEntryValueSpan(
   if (cursor.idx >= lineCount) {
     return null;
   }
-  const childIndent = buf[cursor.idx * 3];
+  const childIndent = atI32(buf, cursor.idx * 3);
   if (childIndent <= parentIndent) {
     return null;
   }
@@ -595,15 +594,15 @@ function parseMappingSpanAt(
 
   while (cursor.idx < lineCount) {
     const base = cursor.idx * 3;
-    const indent = buf[base];
+    const indent = atI32(buf, base);
     if (indent < mapIndent) {
       break;
     }
     if (indent > mapIndent) {
       return BAIL;
     }
-    const start = buf[base + 1];
-    const end = buf[base + 2];
+    const start = atI32(buf, base + 1);
+    const end = atI32(buf, base + 2);
     if (isSequenceLine(text, start, end)) {
       break;
     }
@@ -638,25 +637,26 @@ function parseSequenceSpanAt(
 
   while (cursor.idx < lineCount) {
     const base = cursor.idx * 3;
-    const indent = buf[base];
+    const indent = atI32(buf, base);
     if (indent < seqIndent) {
       break;
     }
     if (indent > seqIndent) {
       return BAIL;
     }
-    const start = buf[base + 1];
-    const end = buf[base + 2];
+    const start = atI32(buf, base + 1);
+    const end = atI32(buf, base + 2);
     if (!isSequenceLine(text, start, end)) {
       break;
     }
 
     cursor.idx += 1;
     if (end === start + 1) {
-      if (cursor.idx >= lineCount || buf[cursor.idx * 3] <= seqIndent) {
+      const nextIndent = atI32(buf, cursor.idx * 3);
+      if (cursor.idx >= lineCount || nextIndent <= seqIndent) {
         arr.push(null);
       } else {
-        const nested = parseNodeSpanAt(text, buf, lineCount, cursor, buf[cursor.idx * 3]);
+        const nested = parseNodeSpanAt(text, buf, lineCount, cursor, nextIndent);
         if (nested === BAIL) {
           return BAIL;
         }
@@ -687,7 +687,7 @@ function parseSequenceSpanAt(
     if (scalar === BAIL) {
       return BAIL;
     }
-    if (cursor.idx < lineCount && buf[cursor.idx * 3] > seqIndent) {
+    if (cursor.idx < lineCount && atI32(buf, cursor.idx * 3) > seqIndent) {
       return BAIL;
     }
     arr.push(scalar);
@@ -703,9 +703,10 @@ export function parseYamlFast(text: string): unknown {
       return null;
     }
     const buf = sharedSpanBuf;
-    if (lineCount === 1 && buf[0] === 0) {
-      const s0 = buf[1];
-      const e0 = buf[2];
+    const indent0 = atI32(buf, 0);
+    if (lineCount === 1 && indent0 === 0) {
+      const s0 = atI32(buf, 1);
+      const e0 = atI32(buf, 2);
       const len = e0 - s0;
       if (len === 2) {
         const c0 = text.charCodeAt(s0);
@@ -725,7 +726,7 @@ export function parseYamlFast(text: string): unknown {
       }
     }
     const cursor = { idx: 0 };
-    const parsed = parseNodeSpanAt(text, buf, lineCount, cursor, buf[0]);
+    const parsed = parseNodeSpanAt(text, buf, lineCount, cursor, indent0);
     if (parsed !== BAIL && cursor.idx === lineCount) {
       return parsed;
     }

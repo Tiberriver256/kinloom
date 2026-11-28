@@ -9,16 +9,38 @@ export interface PivotCrumb {
   year: number | null;
 }
 
+export type LooseOptional<T> = {
+  [K in keyof T]: undefined extends T[K] ? T[K] | undefined : T[K];
+};
+
+export type SourceReaderRequestInput = {
+  [K in keyof SourceReaderRequest]: SourceReaderRequest[K] | undefined;
+} & Pick<SourceReaderRequest, 'sourceId'>;
+
+export type SourceInspectorRequestInput = {
+  [K in keyof SourceInspectorRequest]: SourceInspectorRequest[K] | undefined;
+} & Pick<SourceInspectorRequest, 'sourceId'>;
+
+function stripUndefinedProps<T extends object>(obj: T): T {
+  const out: Record<string, unknown> = {};
+  for (const [k, v] of Object.entries(obj)) {
+    if (v !== undefined) {
+      out[k] = v;
+    }
+  }
+  return out as T;
+}
+
 export interface ArchiveUiContextValue {
   activeYear: number | null;
   setActiveYear: (y: number | null) => void;
   pivotTrail: PivotCrumb[];
   pushPivot: (crumb: PivotCrumb) => void;
   sourceReader: SourceReaderRequest | null;
-  openSourceReader: (req: SourceReaderRequest) => void;
+  openSourceReader: (req: SourceReaderRequestInput) => void;
   closeSourceReader: () => void;
   sourceInspector: SourceInspectorRequest | null;
-  openSourceInspector: (req: SourceInspectorRequest) => void;
+  openSourceInspector: (req: SourceInspectorRequestInput) => void;
   closeSourceInspector: () => void;
   searchOpen: boolean;
   openSearch: () => void;
@@ -42,10 +64,10 @@ export const ArchiveUiProvider: React.FC<{ children: React.ReactNode }> = ({ chi
   const [inlineGuideBannerVisible, setInlineGuideBannerVisible] = useState(false);
 
   const openSourceReader = useCallback(
-    (req: SourceReaderRequest) => {
+    (req: SourceReaderRequestInput) => {
       ensureReadings();
       setSourceInspector(null);
-      setSourceReader(req);
+      setSourceReader(stripUndefinedProps(req) as SourceReaderRequest);
     },
     [ensureReadings]
   );
@@ -54,8 +76,8 @@ export const ArchiveUiProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     setSourceReader(null);
   }, []);
 
-  const openSourceInspector = useCallback((req: SourceInspectorRequest) => {
-    setSourceInspector(req);
+  const openSourceInspector = useCallback((req: SourceInspectorRequestInput) => {
+    setSourceInspector(stripUndefinedProps(req) as SourceInspectorRequest);
   }, []);
 
   const closeSourceInspector = useCallback(() => {

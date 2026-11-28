@@ -20,12 +20,12 @@ import wikiFormStyles from './WikiForms.module.css';
 import wikiPanelStyles from './WikiPanels.module.css';
 
 export interface AuthSignInFlowProps {
-  initialUrlError?: AuthUrlError | null;
-  inviteLabel?: string;
-  showInviteHelper?: boolean;
-  onNavigateToInvite?: (invitePath: string) => void;
-  emailInputRef?: React.RefObject<HTMLInputElement | null>;
-  feedbackRef?: React.RefObject<HTMLDivElement | null>;
+  initialUrlError?: AuthUrlError | null | undefined;
+  inviteLabel?: string | undefined;
+  showInviteHelper?: boolean | undefined;
+  onNavigateToInvite?: ((invitePath: string) => void) | undefined;
+  emailInputRef?: React.RefObject<HTMLInputElement | null> | undefined;
+  feedbackRef?: React.RefObject<HTMLDivElement | null> | undefined;
 }
 
 function buildGoogleUrl(

@@ -574,9 +574,10 @@ describe('MilestoneStoryCard 56ch figcaption cap and EvidencePage editorial seri
     const articles = container.querySelectorAll('article');
     expect(articles).toHaveLength(24);
     const firstArticle = articles[0];
-    const firstHeading = firstArticle.querySelector('h2');
-    const firstDate = firstArticle.querySelector('[class*="date-stamp"]');
-    const firstBadge = firstArticle.querySelector('[class*="evidence-discrepancy-badge"]');
+    expect(firstArticle).toBeDefined();
+    const firstHeading = firstArticle?.querySelector('h2');
+    const firstDate = firstArticle?.querySelector('[class*="date-stamp"]');
+    const firstBadge = firstArticle?.querySelector('[class*="evidence-discrepancy-badge"]');
     expect(firstHeading?.textContent).toBe('Discrepancy Event 1');
     expect(firstDate).not.toBeNull();
     expect(firstBadge).not.toBeNull();

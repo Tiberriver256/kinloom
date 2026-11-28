@@ -48,7 +48,7 @@ interface InvokeResult {
   readonly stdout: string;
   readonly stderr: string;
   readonly bytesOut: number;
-  readonly cacheHit?: boolean;
+  readonly cacheHit?: boolean | undefined;
 }
 
 async function invokeChronam(
@@ -56,9 +56,9 @@ async function invokeChronam(
   options: {
     readonly cacheDir: string;
     readonly fetchImpl: typeof fetch;
-    readonly cwd?: string;
-    readonly sleepFn?: (ms: number) => Promise<void>;
-    readonly env?: NodeJS.ProcessEnv;
+    readonly cwd?: string | undefined;
+    readonly sleepFn?: ((ms: number) => Promise<void>) | undefined;
+    readonly env?: NodeJS.ProcessEnv | undefined;
   }
 ): Promise<InvokeResult> {
   const stdout: string[] = [];
@@ -159,7 +159,7 @@ describe('chronam CLI & HTTP retry behavior', () => {
 
     expect(res.exitCode, res.stderr).toBe(0);
     expect(capturedUrls).toHaveLength(1);
-    const params = capturedUrls[0].searchParams;
+    const params = capturedUrls[0]!.searchParams;
     expect(params.get('q')).toBe('Lincoln');
     expect(params.get('at')).toBe('search,results');
     expect(params.get('dates')).toBe('1860/1865');
@@ -173,7 +173,7 @@ describe('chronam CLI & HTTP retry behavior', () => {
     };
     expect(payload.hits).toBe(1);
     expect(payload.cache_hit).toBe(false);
-    expect(payload.results[0].title).toBe('Chicago daily tribune');
+    expect(payload.results[0]!.title).toBe('Chicago daily tribune');
   });
 
   it('2. read timeout fails fast without retrying under short timeout budget', async () => {
@@ -237,7 +237,7 @@ describe('chronam CLI & HTTP retry behavior', () => {
     });
 
     expect(attempts).toBe(2);
-    expect((data.search as { hits: number }).hits).toBe(5);
+    expect((data['search'] as { hits: number }).hits).toBe(5);
   });
 
   it('5. multi-attempt 429 and 503 recover with Retry-After', async () => {
@@ -268,7 +268,7 @@ describe('chronam CLI & HTTP retry behavior', () => {
 
     expect(attempts).toBe(3);
     expect(sleepsMs).toEqual([2000, 3000]);
-    expect((data.search as { hits: number }).hits).toBe(7);
+    expect((data['search'] as { hits: number }).hits).toBe(7);
   });
 
   it('6. remote protocol / transport error recovers on retry', async () => {
@@ -290,7 +290,7 @@ describe('chronam CLI & HTTP retry behavior', () => {
     });
 
     expect(attempts).toBe(2);
-    expect((data.search as { hits: number }).hits).toBe(2);
+    expect((data['search'] as { hits: number }).hits).toBe(2);
   });
 
   it('7. 429 honors Retry-After then succeeds', async () => {
@@ -318,7 +318,7 @@ describe('chronam CLI & HTTP retry behavior', () => {
 
     expect(attempts).toBe(2);
     expect(sleepsMs).toEqual([3000]);
-    expect((data.search as { hits: number }).hits).toBe(1);
+    expect((data['search'] as { hits: number }).hits).toBe(1);
   });
 
   it('8. default timeout covers measured loc.gov latency (>= 90s)', () => {
@@ -383,7 +383,7 @@ describe('chronam search cache and aliases', () => {
     expect(p2.cache_hit).toBe(true);
     expect(first.cacheHit).toBe(false);
     expect(second.cacheHit).toBe(true);
-    expect(p2.results[0].title).toBe('Sacramento daily union');
+    expect(p2.results[0]!.title).toBe('Sacramento daily union');
     expect(elapsedMs).toBeLessThan(1000);
     expect(fs.readdirSync(cacheDir).filter((f) => f.endsWith('.json'))).toHaveLength(1);
   });
@@ -456,7 +456,7 @@ describe('chronam search cache and aliases', () => {
 
     expect(res.exitCode, res.stderr).toBe(0);
     expect(harness.calls).toHaveLength(1);
-    const params = harness.calls[0];
+    const params = harness.calls[0]!;
     expect(params.get('q')).toBe('Abraham Lincoln');
     expect(params.get('fa')).toBe('location_state:illinois');
     expect(params.get('dates')).toBe('1860/1865');
@@ -473,7 +473,7 @@ describe('chronam search cache and aliases', () => {
     });
 
     expect(res.exitCode, res.stderr).toBe(0);
-    expect(harness.calls[0].get('dates')).toBe('1865/1865');
+    expect(harness.calls[0]!.get('dates')).toBe('1865/1865');
   });
 
   it('15. bad --dates exits with code 2 without network call', async () => {
@@ -576,12 +576,12 @@ describe('chronam get, page, and download cache', () => {
     expect(first.exitCode, first.stderr).toBe(0);
     const pdfs = fs.readdirSync(outDir).filter((f) => f.endsWith('.pdf'));
     expect(pdfs).toHaveLength(1);
-    const pdfPath = path.join(outDir, pdfs[0]);
+    const pdfPath = path.join(outDir, pdfs[0]!);
     expect(fs.readFileSync(pdfPath)).toEqual(Buffer.from('%PDF-1.4 Lincoln'));
     expect(first.stdout).not.toContain('[cache]');
     expect(getCalls).toHaveLength(1);
     expect(downloadCalls).toHaveLength(1);
-    expect(downloadCalls[0].startsWith('https://tile.loc.gov/')).toBe(true);
+    expect(downloadCalls[0]!.startsWith('https://tile.loc.gov/')).toBe(true);
 
     const second = await invokeChronam(args, { cacheDir, fetchImpl });
     expect(second.exitCode, second.stderr).toBe(0);
@@ -611,9 +611,9 @@ describe('chronam get, page, and download cache', () => {
     const workDir = await makeTempDir('kinloom-chronam-work-');
     const outDir = path.join(workDir, 'out');
     const item = makeEveningStarItem();
-    const itemMeta = item.item as Record<string, unknown>;
-    itemMeta.date = '../../outside';
-    itemMeta.number_lccn = ['../sn83045462'];
+    const itemMeta = item['item'] as Record<string, unknown>;
+    itemMeta['date'] = '../../outside';
+    itemMeta['number_lccn'] = ['../sn83045462'];
 
     const fetchImpl: typeof fetch = async (input) => {
       const url = String(input);
@@ -635,7 +635,7 @@ describe('chronam get, page, and download cache', () => {
     const written = listFilesRecursive(workDir);
     const pdfs = written.filter((p) => p.endsWith('.pdf'));
     expect(pdfs).toHaveLength(1);
-    expect(fs.readFileSync(pdfs[0])).toEqual(Buffer.from('%PDF-1.4 Lincoln'));
+    expect(fs.readFileSync(pdfs[0]!)).toEqual(Buffer.from('%PDF-1.4 Lincoln'));
 
     const resolvedOut = path.resolve(outDir);
     for (const filePath of written) {
@@ -674,7 +674,7 @@ describe('chronam get, page, and download cache', () => {
     const workDir = await makeTempDir('kinloom-chronam-work-');
     const outDir = path.join(workDir, 'papers');
     const item = makeEveningStarItem();
-    item.page = [
+    item['page'] = [
       {
         mimetype: 'image/jp2',
         url: 'https://tile.loc.gov/storage-services/service/ndnp/sn83045462/0004.jp2',
@@ -719,11 +719,11 @@ describe('chronam get, page, and download cache', () => {
     };
     expect(p1.cache_hit).toBe(false);
     expect(p1.metadata_cache_hit).toBe(false);
-    expect(p1.files[0].url).toBe(
+    expect(p1.files[0]!.url).toBe(
       'https://tile.loc.gov/image-services/iiif/service:ndnp:sn83045462:0004/full/2000,/0/default.jpg'
     );
-    expect(p1.files[0].path.endsWith('_sp4.jpg')).toBe(true);
-    expect(fs.readFileSync(p1.files[0].path)).toEqual(jpegBytes);
+    expect(p1.files[0]!.path.endsWith('_sp4.jpg')).toBe(true);
+    expect(fs.readFileSync(p1.files[0]!.path)).toEqual(jpegBytes);
 
     const r2 = await invokeChronam(args, { cacheDir, fetchImpl });
     expect(r2.exitCode, r2.stderr).toBe(0);
@@ -734,7 +734,7 @@ describe('chronam get, page, and download cache', () => {
     };
     expect(p2.cache_hit).toBe(true);
     expect(p2.metadata_cache_hit).toBe(true);
-    expect(p2.files[0].cache_hit).toBe(true);
+    expect(p2.files[0]!.cache_hit).toBe(true);
     expect(downloadCalls).toHaveLength(1);
   });
 });

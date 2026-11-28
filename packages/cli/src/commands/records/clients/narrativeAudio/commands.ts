@@ -60,7 +60,7 @@ export function runList(argv: readonly string[], ctx: RecordCommandContext): Rec
     return { exitCode: 0, bytesOut: emitStdout(ctx.io, renderListHelp()) };
   }
 
-  const yamlPath = requireExistingFile(parsed.positionals[0], 'narratives YAML', ctx);
+  const yamlPath = requireExistingFile(parsed.positionals[0] ?? '', 'narratives YAML', ctx);
   const kind = getStringOption(parsed, 'kind') ?? 'biography';
   const rows = loadNarratives(yamlPath)
     .filter((n) => !kind || n.kind === kind)
@@ -84,7 +84,7 @@ export function runExtract(argv: readonly string[], ctx: RecordCommandContext): 
     return { exitCode: 0, bytesOut: emitStdout(ctx.io, renderExtractHelp()) };
   }
 
-  const yamlPath = requireExistingFile(parsed.positionals[0], 'narratives YAML', ctx);
+  const yamlPath = requireExistingFile(parsed.positionals[0] ?? '', 'narratives YAML', ctx);
   const narrativeId = parsed.positionals[1];
   const found = loadNarratives(yamlPath).find((n) => n.id === narrativeId);
   if (!found) {
@@ -100,7 +100,7 @@ export function runCheck(argv: readonly string[], ctx: RecordCommandContext): Re
     return { exitCode: 0, bytesOut: emitStdout(ctx.io, renderCheckHelp()) };
   }
 
-  const scriptArg = parsed.positionals[0];
+  const scriptArg = parsed.positionals[0] ?? '';
   const scriptPath = requireExistingFile(scriptArg, 'script file', ctx);
   const namesArg = getStringOption(parsed, 'names');
   const namesMap = namesArg ? readNamesJson(requireExistingFile(namesArg, 'names file', ctx)) : undefined;
@@ -128,13 +128,13 @@ export async function runSynth(
     return { exitCode: 0, bytesOut: emitStdout(ctx.io, renderSynthHelp()) };
   }
 
-  const scriptPath = requireExistingFile(parsed.positionals[0], 'script file', ctx);
+  const scriptPath = requireExistingFile(parsed.positionals[0] ?? '', 'script file', ctx);
   const namesArg = getStringOption(parsed, 'names');
   const namesMap = namesArg ? readNamesJson(requireExistingFile(namesArg, 'names file', ctx)) : {};
 
   const rawBackend = (
     getStringOption(parsed, 'backend') ??
-    ctx.env.NARRATIVE_AUDIO_BACKEND ??
+    ctx.env['NARRATIVE_AUDIO_BACKEND'] ??
     DEFAULT_BACKEND
   )
     .trim()
@@ -148,7 +148,7 @@ export async function runSynth(
 
   const languageCode = (
     getStringOption(parsed, 'languageCode') ??
-    ctx.env.NARRATIVE_AUDIO_LANGUAGE ??
+    ctx.env['NARRATIVE_AUDIO_LANGUAGE'] ??
     DEFAULT_LANGUAGE
   ).trim();
   const gcpProject = getStringOption(parsed, 'gcpProject');
@@ -159,11 +159,11 @@ export async function runSynth(
       : DEFAULT_TTS_MODEL;
   const endpointRaw = (
     getStringOption(parsed, 'endpoint') ??
-    ctx.env.KINLOOM_TTS_ENDPOINT ??
-    ctx.env.NARRATIVE_AUDIO_ENDPOINT ??
+    ctx.env['KINLOOM_TTS_ENDPOINT'] ??
+    ctx.env['NARRATIVE_AUDIO_ENDPOINT'] ??
     ''
   ).trim();
-  const apiKey = getStringOption(parsed, 'apiKey') ?? ctx.env.OPENAI_SPEECH_API_KEY;
+  const apiKey = getStringOption(parsed, 'apiKey') ?? ctx.env['OPENAI_SPEECH_API_KEY'];
   const rawPhonemeMode = getStringOption(parsed, 'phonemeMode');
   const phonemeMode =
     rawPhonemeMode !== undefined
@@ -282,7 +282,7 @@ export async function runTranscribe(
     return { exitCode: 0, bytesOut: emitStdout(ctx.io, renderTranscribeHelp()) };
   }
 
-  const audioPath = requireExistingFile(parsed.positionals[0], 'audio file', ctx);
+  const audioPath = requireExistingFile(parsed.positionals[0] ?? '', 'audio file', ctx);
   const model = getStringOption(parsed, 'model') ?? DEFAULT_TEXT_MODEL;
   const keyFile = getStringOption(parsed, 'keyFile');
   const outArg = getStringOption(parsed, 'out');

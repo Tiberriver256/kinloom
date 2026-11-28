@@ -54,7 +54,7 @@ function makeWav(pcm: Buffer, sampleRate = 24000): Buffer {
 
 async function invokeNarrativeAudio(
   args: readonly string[],
-  overrides: Partial<RecordCommandContext> = {}
+  overrides: { [K in keyof RecordCommandContext]?: RecordCommandContext[K] | undefined } = {}
 ): Promise<{ exitCode: number; stdout: string; stderr: string }> {
   const stdout: string[] = [];
   const stderr: string[] = [];
@@ -321,8 +321,8 @@ describe('narrative-audio openai-speech backend', () => {
     const mockExec: ExecFileFn = async (file, args) => {
       expect(file).toBe('ffmpeg');
       const inputIdx = args.indexOf('-i');
-      capturedPcmBytes = fs.statSync(args[inputIdx + 1]).size;
-      fs.writeFileSync(args[args.length - 1], Buffer.from('ID3-openai-mp3'));
+      capturedPcmBytes = fs.statSync(args[inputIdx + 1]!).size;
+      fs.writeFileSync(args[args.length - 1]!, Buffer.from('ID3-openai-mp3'));
       return { stdout: Buffer.alloc(0), stderr: Buffer.alloc(0) };
     };
 
@@ -359,13 +359,13 @@ describe('narrative-audio openai-speech backend', () => {
     expect(payloads).toHaveLength(2);
     for (const body of payloads) {
       expect('seed' in body).toBe(false);
-      expect(body.model).toBe('fishaudio/drama-3');
-      expect(body.response_format).toBe('wav');
+      expect(body['model']).toBe('fishaudio/drama-3');
+      expect(body['response_format']).toBe('wav');
     }
-    expect(payloads[0]?.references).toEqual([
+    expect(payloads[0]?.['references']).toEqual([
       { audio: Buffer.from('RIFF-story-ref').toString('base64'), text: 'Story sample.' },
     ]);
-    expect(payloads[1]?.references).toEqual([
+    expect(payloads[1]?.['references']).toEqual([
       { audio: Buffer.from('RIFF-notes-ref').toString('base64'), text: 'Notes sample.' },
     ]);
     // 0.5s story + 1.0s silence + 0.5s notes = 2.0s = 96000 bytes
@@ -475,7 +475,7 @@ describe('narrative-audio markdown prep and archive batch mode', () => {
       fs.readFileSync(path.join(repoDir, 'data', 'narratives.yaml'), 'utf8')
     );
     const hendrikNar = updatedNarratives.find((n) => n.id === 'nar_hendrik');
-    expect(hendrikNar?.extensions?.narrative_audio).toEqual({
+    expect(hendrikNar?.extensions?.['narrative_audio']).toEqual({
       file: '/media/audio-hendrik-van-der-meer.mp3',
       duration_seconds: 142,
       editor_notes_start_seconds: 118,
@@ -510,7 +510,7 @@ describe('narrative-audio markdown prep and archive batch mode', () => {
       return new Response(wavChunk, { status: 200, headers: { 'content-type': 'audio/wav' } });
     });
     const mockExec: ExecFileFn = async (_file, args) => {
-      fs.writeFileSync(args[args.length - 1], Buffer.from('ID3-batch-mp3'));
+      fs.writeFileSync(args[args.length - 1]!, Buffer.from('ID3-batch-mp3'));
       return { stdout: Buffer.alloc(0), stderr: Buffer.alloc(0) };
     };
 
@@ -668,7 +668,7 @@ describe('narrative-audio markdown prep and archive batch mode', () => {
     const gemOutDir = path.join(repoDir, 'gem-batch');
     const wavChunk = makeWav(Buffer.alloc(24000, 0x02), 24000);
     const mockExec: ExecFileFn = async (_f, args) => {
-      fs.writeFileSync(args[args.length - 1], Buffer.from('ID3-gem-batch'));
+      fs.writeFileSync(args[args.length - 1]!, Buffer.from('ID3-gem-batch'));
       return { stdout: Buffer.alloc(0), stderr: Buffer.alloc(0) };
     };
     const gemBatch = await invokeNarrativeAudio(

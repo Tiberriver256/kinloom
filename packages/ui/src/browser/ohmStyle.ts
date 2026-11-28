@@ -172,7 +172,7 @@ function isPlainObject(value: unknown): value is Record<string, unknown> {
 }
 
 function isLayerSpecLike(value: unknown): boolean {
-  return isPlainObject(value) && typeof value.id === 'string' && typeof value.type === 'string';
+  return isPlainObject(value) && typeof value['id'] === 'string' && typeof value['type'] === 'string';
 }
 
 function isMapLibreStyleDocument(value: unknown): value is StyleSpecification {
@@ -180,10 +180,10 @@ function isMapLibreStyleDocument(value: unknown): value is StyleSpecification {
     return false;
   }
   return (
-    value.version === 8 &&
-    isPlainObject(value.sources) &&
-    Array.isArray(value.layers) &&
-    value.layers.every(isLayerSpecLike)
+    value['version'] === 8 &&
+    isPlainObject(value['sources']) &&
+    Array.isArray(value['layers']) &&
+    value['layers'].every(isLayerSpecLike)
   );
 }
 

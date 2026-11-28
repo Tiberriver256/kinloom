@@ -258,8 +258,8 @@ describe('PronunciationBadge playback and fallback', () => {
     });
 
     expect(createdAudios).toHaveLength(1);
-    expect(createdAudios[0].src).toBe('/archive/audio/plc_leiden.mp3');
-    expect(createdAudios[0].play).toHaveBeenCalledTimes(1);
+    expect(createdAudios[0]?.src).toBe('/archive/audio/plc_leiden.mp3');
+    expect(createdAudios[0]?.play).toHaveBeenCalledTimes(1);
     expect(leidenBtn!.getAttribute('aria-pressed')).toBe('true');
 
     // Playing a second badge stops the first audio clip
@@ -267,15 +267,15 @@ describe('PronunciationBadge playback and fallback', () => {
       thomasBtn!.click();
     });
 
-    expect(createdAudios[0].pause).toHaveBeenCalledTimes(1);
+    expect(createdAudios[0]?.pause).toHaveBeenCalledTimes(1);
     expect(leidenBtn!.getAttribute('aria-pressed')).toBe('false');
     expect(createdAudios).toHaveLength(2);
-    expect(createdAudios[1].src).toBe('/archive/audio/per_thomas.mp3');
+    expect(createdAudios[1]?.src).toBe('/archive/audio/per_thomas.mp3');
     expect(thomasBtn!.getAttribute('aria-pressed')).toBe('true');
 
     // Trigger ended event resets playing state
     act(() => {
-      createdAudios[1].listeners.get('ended')?.();
+      createdAudios[1]?.listeners.get('ended')?.();
     });
     expect(thomasBtn!.getAttribute('aria-pressed')).toBe('false');
 
@@ -329,7 +329,7 @@ describe('PronunciationBadge playback and fallback', () => {
       krakowBtn!.click();
     });
     expect(speak).toHaveBeenCalledTimes(1);
-    const plUtterance = speak.mock.calls[0][0] as MockUtterance;
+    const plUtterance = speak.mock.calls[0]?.[0] as MockUtterance;
     expect(plUtterance.text).toBe('Kraków');
     expect(plUtterance.lang).toBe('pl');
     expect(krakowBtn!.getAttribute('aria-pressed')).toBe('true');
@@ -344,7 +344,7 @@ describe('PronunciationBadge playback and fallback', () => {
       goesBtn!.click();
     });
     expect(speak).toHaveBeenCalledTimes(2);
-    const nlUtterance = speak.mock.calls[1][0] as MockUtterance;
+    const nlUtterance = speak.mock.calls[1]?.[0] as MockUtterance;
     expect(nlUtterance.text).toBe('Goes');
     expect(nlUtterance.lang).toBe('nl');
 
@@ -353,7 +353,7 @@ describe('PronunciationBadge playback and fallback', () => {
       maryBtn!.click();
     });
     expect(speak).toHaveBeenCalledTimes(3);
-    const enUtterance = speak.mock.calls[2][0] as MockUtterance;
+    const enUtterance = speak.mock.calls[2]?.[0] as MockUtterance;
     expect(enUtterance.text).toBe('Mary Ann Mercer');
     expect(enUtterance.lang).toBe('en-US');
 
@@ -387,7 +387,7 @@ describe('PronunciationBadge playback and fallback', () => {
         }
 
         getChannelData(channel: number): Float32Array {
-          return this.channels[channel];
+          return this.channels[channel] ?? new Float32Array();
         }
       }
 
@@ -508,13 +508,13 @@ describe('PronunciationBadge playback and fallback', () => {
 
       expect(fetchSpy).toHaveBeenCalledTimes(3);
       expect(createdSources).toHaveLength(1);
-      expect(createdSources[0].start).toHaveBeenCalledWith(0);
+      expect(createdSources[0]?.start).toHaveBeenCalledWith(0);
       // 3 clips * 10 samples + 2 gaps * 70 samples = 170 samples
-      expect(createdSources[0].buffer?.length).toBe(170);
+      expect(createdSources[0]?.buffer?.length).toBe(170);
       expect(maryBtn!.getAttribute('aria-pressed')).toBe('true');
 
       act(() => {
-        createdSources[0].onended?.();
+        createdSources[0]?.onended?.();
       });
       expect(maryBtn!.getAttribute('aria-pressed')).toBe('false');
       expect(closeSpy).toHaveBeenCalled();
@@ -525,17 +525,17 @@ describe('PronunciationBadge playback and fallback', () => {
       });
       expect(fetchSpy).toHaveBeenCalledTimes(3);
       expect(createdAudios).toHaveLength(1);
-      expect(createdAudios[0].src).toBe('/media/pronunciation-hendrik.wav');
+      expect(createdAudios[0]?.src).toBe('/media/pronunciation-hendrik.wav');
       expect(hendrikBtn!.getAttribute('aria-pressed')).toBe('true');
 
       act(() => {
-        createdAudios[0].listeners.get('ended')?.();
+        createdAudios[0]?.listeners.get('ended')?.();
         vi.advanceTimersByTime(65);
       });
       expect(createdAudios).toHaveLength(2);
-      expect(createdAudios[1].src).toBe('https://commons.wikimedia.org/wiki/Special:FilePath/Nl-mercer.ogg');
+      expect(createdAudios[1]?.src).toBe('https://commons.wikimedia.org/wiki/Special:FilePath/Nl-mercer.ogg');
       act(() => {
-        createdAudios[1].listeners.get('ended')?.();
+        createdAudios[1]?.listeners.get('ended')?.();
       });
       expect(hendrikBtn!.getAttribute('aria-pressed')).toBe('false');
 
@@ -550,13 +550,13 @@ describe('PronunciationBadge playback and fallback', () => {
         await Promise.resolve();
       });
       expect(createdAudios).toHaveLength(3);
-      expect(createdAudios[2].src).toBe('/media/pronunciation-mary.wav');
+      expect(createdAudios[2]?.src).toBe('/media/pronunciation-mary.wav');
 
       // Clicking stop while playing cancels cleanly
       act(() => {
         maryBtn!.click();
       });
-      expect(createdAudios[2].pause).toHaveBeenCalledTimes(1);
+      expect(createdAudios[2]?.pause).toHaveBeenCalledTimes(1);
       expect(maryBtn!.getAttribute('aria-pressed')).toBe('false');
 
       unmount();
@@ -645,7 +645,7 @@ describe('PronunciationBadge playback and fallback', () => {
       playBtn!.click();
     });
     expect(createdAudios).toHaveLength(1);
-    expect(createdAudios[0].src).toBe('/audio/zeeland-mi.wav');
+    expect(createdAudios[0]?.src).toBe('/audio/zeeland-mi.wav');
 
     // Pronunciation details disclosure starts collapsed and toggles open for IPA, source, and variants (#109)
     const detailsToggle = fullBadge.querySelector<HTMLButtonElement>('button.pronunciation-details-toggle');
@@ -977,7 +977,7 @@ describe('EntityEditDrawer pronunciation editing and audio generation', () => {
     expect(container.querySelector('.wiki-error-list')?.textContent ?? null).toBeNull();
     expect(savedSnapshots).toHaveLength(1);
     // audio_url was still set from Generate Audio, so only audio_url remains without empty strings
-    expect(savedSnapshots[0].pronunciation).toEqual({
+    expect(savedSnapshots[0]?.['pronunciation']).toEqual({
       audio_url: '/audio/generated-leiden.mp3',
     });
 
@@ -1057,7 +1057,7 @@ describe('EntityEditDrawer pronunciation editing and audio generation', () => {
     });
 
     expect(emptySaveSnapshots).toHaveLength(1);
-    expect(emptySaveSnapshots[0].pronunciation).toBeNull();
+    expect(emptySaveSnapshots[0]?.['pronunciation']).toBeNull();
     secondRender.unmount();
   });
 
@@ -1123,7 +1123,7 @@ describe('EntityEditDrawer pronunciation editing and audio generation', () => {
       const { pronunciations } = useArchiveData();
       return (
         <div data-testid="lexicon-probe">
-          {pronunciations.Mercer?.phonetic ?? 'none'}|{pronunciations.Mercer?.audio_url ?? ''}
+          {pronunciations['Mercer']?.phonetic ?? 'none'}|{pronunciations['Mercer']?.audio_url ?? ''}
         </div>
       );
     };
@@ -1269,11 +1269,11 @@ describe('ArchivalMarkdown inline entity mentions and hover popovers', () => {
     // Second paragraph: longest match first (Oxford Township before Oxford), first occurrence per paragraph
     const oxfordTwpLinks = allEntityLinks.filter((a) => a.textContent === 'Oxford Township');
     expect(oxfordTwpLinks).toHaveLength(1);
-    expect(oxfordTwpLinks[0].getAttribute('href')).toBe('/place/oxford-township');
+    expect(oxfordTwpLinks[0]?.getAttribute('href')).toBe('/place/oxford-township');
 
     const oxfordLinks = allEntityLinks.filter((a) => a.textContent === 'Oxford');
     expect(oxfordLinks).toHaveLength(1);
-    expect(oxfordLinks[0].getAttribute('href')).toBe('/place/oxford');
+    expect(oxfordLinks[0]?.getAttribute('href')).toBe('/place/oxford');
 
     // Leiden has pronunciation so it auto-links in paragraph 2 even though not in linkedPlaceIds
     const autoLeiden = allEntityLinks.find((a) => a.textContent === 'Leiden');

@@ -236,9 +236,9 @@ async function apiGetOneRecord(
     }
     throw err;
   }
-  const body = isPlainRecord(raw.body) ? raw.body : raw;
-  const hitsObj = isPlainRecord(body.hits) ? body.hits : {};
-  const hits = Array.isArray(hitsObj.hits) ? hitsObj.hits : [];
+  const body = isPlainRecord(raw['body']) ? raw['body'] : raw;
+  const hitsObj = isPlainRecord(body['hits']) ? body['hits'] : {};
+  const hits = Array.isArray(hitsObj['hits']) ? hitsObj['hits'] : [];
   if (hits.length > 0) {
     return extractRecord(hits[0], {
       includeObjects: options.includeObjects,
@@ -273,8 +273,9 @@ export async function loadOrFetchFullRecordsWithHits(
   const missIndices: number[] = [];
 
   for (let idx = 0; idx < cleanIds.length; idx += 1) {
-    if (!options.refresh) {
-      const cached = readCachedRecord(cleanIds[idx], options.cacheRoot, options.includeText);
+    const cleanId = cleanIds[idx];
+    if (!options.refresh && cleanId !== undefined) {
+      const cached = readCachedRecord(cleanId, options.cacheRoot, options.includeText);
       if (cached !== null) {
         slots[idx] = cached;
         hitFlags[idx] = true;
@@ -299,7 +300,7 @@ export async function loadOrFetchFullRecordsWithHits(
       const activeKey = options.apiKey;
       const fetchedSlots = await runWithConcurrency(missIds, API_MAX_WORKERS, (id) =>
         apiGetOneRecord(
-          id,
+          id ?? '',
           activeKey,
           { includeObjects: true, includeText: options.includeText, pageSpec: 'all' },
           ctx
@@ -311,12 +312,15 @@ export async function loadOrFetchFullRecordsWithHits(
       for (let i = 0; i < missIndices.length; i += 1) {
         const slotIdx = missIndices[i];
         const rec = fetchedSlots[i];
-        if (rec === null) {
+        if (slotIdx === undefined) continue;
+        const cid = cleanIds[slotIdx];
+        if (cid === undefined) continue;
+        if (rec === null || rec === undefined) {
           fallbackSlots.push(slotIdx);
-          fallbackNaids.push(cleanIds[slotIdx]);
+          fallbackNaids.push(cid);
         } else {
           slots[slotIdx] = rec;
-          await writeCachedRecord(cleanIds[slotIdx], rec, options.cacheRoot, options.includeText, ctx);
+          await writeCachedRecord(cid, rec, options.cacheRoot, options.includeText, ctx);
         }
       }
 
@@ -334,15 +338,17 @@ export async function loadOrFetchFullRecordsWithHits(
         for (let i = 0; i < fallbackSlots.length; i += 1) {
           const slotIdx = fallbackSlots[i];
           const fbRec = fallbackRecs[i];
-          if (fbRec) {
+          if (fbRec && slotIdx !== undefined) {
+            const cid = cleanIds[slotIdx];
             slots[slotIdx] = fbRec;
-            await writeCachedRecord(cleanIds[slotIdx], fbRec, options.cacheRoot, options.includeText, ctx);
+            if (cid !== undefined)
+              await writeCachedRecord(cid, fbRec, options.cacheRoot, options.includeText, ctx);
           }
         }
       }
     } else {
       const fetchedRecs = await browserGet(
-        missIds,
+        missIds.filter((x): x is string => x !== undefined),
         {
           includeObjects: true,
           includeText: options.includeText,
@@ -354,9 +360,11 @@ export async function loadOrFetchFullRecordsWithHits(
       for (let i = 0; i < missIndices.length; i += 1) {
         const slotIdx = missIndices[i];
         const rec = fetchedRecs[i];
-        if (rec) {
+        if (rec && slotIdx !== undefined) {
+          const cid = cleanIds[slotIdx];
           slots[slotIdx] = rec;
-          await writeCachedRecord(cleanIds[slotIdx], rec, options.cacheRoot, options.includeText, ctx);
+          if (cid !== undefined)
+            await writeCachedRecord(cid, rec, options.cacheRoot, options.includeText, ctx);
         }
       }
     }
@@ -366,9 +374,9 @@ export async function loadOrFetchFullRecordsWithHits(
   const hits: boolean[] = [];
   for (let i = 0; i < slots.length; i += 1) {
     const rec = slots[i];
-    if (rec !== null) {
+    if (rec !== null && rec !== undefined) {
       records.push(rec);
-      hits.push(hitFlags[i]);
+      hits.push(hitFlags[i] ?? false);
     }
   }
   return [records, hits];

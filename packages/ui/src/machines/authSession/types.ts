@@ -22,12 +22,12 @@ export interface AuthSessionContext {
   authErrorDetail: unknown;
   urlError: AuthUrlErrorState | null;
   serverCapabilities: ArchiveCapabilities | null;
-  capabilitiesOverride?: Partial<ArchiveCapabilities>;
+  capabilitiesOverride?: Partial<ArchiveCapabilities> | undefined;
   authProviders: ArchiveAuthProviders;
   hasServerAuthProviders: boolean;
   hasExplicitSession: boolean;
-  initialSession?: ArchiveSessionState | null;
-  dataSource?: ArchiveDataSource;
+  initialSession?: ArchiveSessionState | null | undefined;
+  dataSource?: ArchiveDataSource | undefined;
 }
 
 export type AuthSessionEvent =
@@ -36,8 +36,8 @@ export type AuthSessionEvent =
   | { type: 'CANCEL_MAGIC_LINK' }
   | { type: 'SET_URL_ERROR'; urlError: AuthUrlErrorState | null }
   | { type: 'CLEAR_AUTH_ERROR' }
-  | { type: 'SYNC_DATA_SOURCE'; dataSource?: ArchiveDataSource }
-  | { type: 'SYNC_CAPABILITIES_OVERRIDE'; capabilities?: Partial<ArchiveCapabilities> }
+  | { type: 'SYNC_DATA_SOURCE'; dataSource?: ArchiveDataSource | undefined }
+  | { type: 'SYNC_CAPABILITIES_OVERRIDE'; capabilities?: Partial<ArchiveCapabilities> | undefined }
   | { type: 'SYNC_EXPLICIT_SESSION'; session: ArchiveSessionState | null }
   | { type: 'SIGN_OUT' }
   | { type: 'REFRESH_SESSION' };
@@ -48,26 +48,26 @@ export type HydrateOutcome =
       email: string;
       displayName: string;
       role: AuthMemberRole;
-      capabilities?: ArchiveCapabilities;
-      authProviders?: ArchiveAuthProviders;
+      capabilities?: ArchiveCapabilities | undefined;
+      authProviders?: ArchiveAuthProviders | undefined;
     }
   | {
       kind: 'invite_valid';
       token: string;
       label: string;
-      capabilities?: ArchiveCapabilities;
-      authProviders?: ArchiveAuthProviders;
+      capabilities?: ArchiveCapabilities | undefined;
+      authProviders?: ArchiveAuthProviders | undefined;
     }
   | {
       kind: 'anonymous';
-      capabilities?: ArchiveCapabilities;
-      authProviders?: ArchiveAuthProviders;
+      capabilities?: ArchiveCapabilities | undefined;
+      authProviders?: ArchiveAuthProviders | undefined;
     };
 
 export interface AuthSessionInput {
-  initialInviteToken?: string | null;
-  initialSession?: ArchiveSessionState | null;
-  hasExplicitSession?: boolean;
-  capabilitiesOverride?: Partial<ArchiveCapabilities>;
-  dataSource?: ArchiveDataSource;
+  initialInviteToken?: string | null | undefined;
+  initialSession?: ArchiveSessionState | null | undefined;
+  hasExplicitSession?: boolean | undefined;
+  capabilitiesOverride?: Partial<ArchiveCapabilities> | undefined;
+  dataSource?: ArchiveDataSource | undefined;
 }

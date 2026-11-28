@@ -220,6 +220,9 @@ export function computeTimeSnapshot(
         return (a.end_year ?? 0) - (a.start_year ?? 0) - ((b.end_year ?? 0) - (b.start_year ?? 0));
       });
       const [bestSpan] = pSpans;
+      if (!bestSpan) {
+        continue;
+      }
       const place = resolveCanonicalPlace(placesById.get(bestSpan.place_id), placesById);
       if (!place) {
         continue;
@@ -454,10 +457,11 @@ export function pickDefaultSnapshotYear(
   const markers = getSuggestedSnapshotYears(bundle, placesById, anchorYears);
   const modern = markers.filter((m) => m.year >= 1880 && m.year <= 1945);
   const pool = modern.length > 0 ? modern : markers;
-  if (pool.length === 0) {
+  const [firstMarker] = pool;
+  if (!firstMarker) {
     return 1900;
   }
-  let [best] = pool;
+  let best = firstMarker;
   for (const m of pool) {
     if (m.locatedCount > best.locatedCount) {
       best = m;

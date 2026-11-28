@@ -143,25 +143,26 @@ export function evaluateCaptureTelemetry(
     );
     if (tiny.length > 0) {
       const sample = tiny[0];
-      findings.push({
-        ruleId: 'DA-10-TOUCH-TARGET-BELOW-24PX',
-        metricId: '10',
-        pillar: 'IV',
-        provenance: 'deterministic',
-        severity: 'error',
-        confidence: 1.0,
-        route: cap.route,
-        viewport: cap.viewport,
-        theme: cap.theme,
-        uiState: cap.uiState,
-        message: `${tiny.length} interactive controls fall below the 24x24px WCAG 2.2 AA minimum (sample: "${sample.text || sample.tag}").`,
-        measuredValue: `${sample.rect[2]}x${sample.rect[3]}`,
-        thresholdValue: '24x24 (44x44 recommended)',
-        evidence: { screenshotUri: cap.screenshotUri, boundingBoxPx: sample.rect, pairwiseVerdict: 'n/a' },
-        masterCitations: ['Steven Hoober — Design for Fingers', 'WCAG 2.2 SC 2.5.8 Target Size'],
-        remediationHint:
-          'Expand interactive hit areas to at least 44x44px with >= 8px gap between adjacent controls.',
-      });
+      if (sample)
+        findings.push({
+          ruleId: 'DA-10-TOUCH-TARGET-BELOW-24PX',
+          metricId: '10',
+          pillar: 'IV',
+          provenance: 'deterministic',
+          severity: 'error',
+          confidence: 1.0,
+          route: cap.route,
+          viewport: cap.viewport,
+          theme: cap.theme,
+          uiState: cap.uiState,
+          message: `${tiny.length} interactive controls fall below the 24x24px WCAG 2.2 AA minimum (sample: "${sample.text || sample.tag}").`,
+          measuredValue: `${sample.rect[2]}x${sample.rect[3]}`,
+          thresholdValue: '24x24 (44x44 recommended)',
+          evidence: { screenshotUri: cap.screenshotUri, boundingBoxPx: sample.rect, pairwiseVerdict: 'n/a' },
+          masterCitations: ['Steven Hoober — Design for Fingers', 'WCAG 2.2 SC 2.5.8 Target Size'],
+          remediationHint:
+            'Expand interactive hit areas to at least 44x44px with >= 8px gap between adjacent controls.',
+        });
     }
   }
 
@@ -196,29 +197,30 @@ export function evaluateCaptureTelemetry(
   // Metric 05: Text spacing clipping (WCAG 1.4.12)
   if (tel.textSpacingClipped && tel.textSpacingClipped.length > 0) {
     const sample = tel.textSpacingClipped[0];
-    findings.push({
-      ruleId: 'DA-05-TEXT-SPACING-CLIP',
-      metricId: '05',
-      pillar: 'II',
-      provenance: 'deterministic',
-      severity: 'error',
-      confidence: 1.0,
-      route: cap.route,
-      viewport: cap.viewport,
-      theme: cap.theme,
-      uiState: 'text-spacing',
-      message: `${tel.textSpacingClipped.length} text elements clip when WCAG 1.4.12 text-spacing overrides are applied.`,
-      measuredValue: tel.textSpacingClipped.length,
-      thresholdValue: 0,
-      evidence: {
-        screenshotUri: cap.screenshotUri,
-        boundingBoxPx: sample.rect,
-        pairwiseVerdict: 'n/a',
-      },
-      masterCitations: ['Matthew Butterick — Practical Typography', 'WCAG 2.2 SC 1.4.12 Text Spacing'],
-      remediationHint:
-        'Replace fixed container height + overflow: hidden with min-height so enlarged text expands cleanly.',
-    });
+    if (sample)
+      findings.push({
+        ruleId: 'DA-05-TEXT-SPACING-CLIP',
+        metricId: '05',
+        pillar: 'II',
+        provenance: 'deterministic',
+        severity: 'error',
+        confidence: 1.0,
+        route: cap.route,
+        viewport: cap.viewport,
+        theme: cap.theme,
+        uiState: 'text-spacing',
+        message: `${tel.textSpacingClipped.length} text elements clip when WCAG 1.4.12 text-spacing overrides are applied.`,
+        measuredValue: tel.textSpacingClipped.length,
+        thresholdValue: 0,
+        evidence: {
+          screenshotUri: cap.screenshotUri,
+          boundingBoxPx: sample.rect,
+          pairwiseVerdict: 'n/a',
+        },
+        masterCitations: ['Matthew Butterick — Practical Typography', 'WCAG 2.2 SC 1.4.12 Text Spacing'],
+        remediationHint:
+          'Replace fixed container height + overflow: hidden with min-height so enlarged text expands cleanly.',
+      });
   }
 
   // Metric 09: APCA Perceptual Contrast + Dark Mode Halation + WCAG 2 check

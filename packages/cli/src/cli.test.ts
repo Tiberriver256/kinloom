@@ -37,7 +37,7 @@ function createCaptureIo(): { io: CliIo; stdout: string[]; stderr: string[] } {
 }
 
 afterEach(async () => {
-  delete process.env.KINLOOM_TELEMETRY_FILE;
+  delete process.env['KINLOOM_TELEMETRY_FILE'];
   while (tempDirs.length > 0) {
     const dir = tempDirs.pop();
     if (dir) {
@@ -76,7 +76,7 @@ describe('unified kinloom CLI dispatch', () => {
 
   it('renders embedded guides with kinloom invocations for help <cmd> and <cmd> --help', async () => {
     const tmp = await makeTempDir('kinloom-cli-help-');
-    process.env.KINLOOM_TELEMETRY_FILE = path.join(tmp, 'calls.jsonl');
+    process.env['KINLOOM_TELEMETRY_FILE'] = path.join(tmp, 'calls.jsonl');
 
     const helpNara = createCaptureIo();
     expect(await runCli(['help', 'nara'], { io: helpNara.io })).toBe(EXIT_OK);
@@ -100,7 +100,7 @@ describe('unified kinloom CLI dispatch', () => {
 
   it('serves help for all ops commands and scan/OCR utilities', async () => {
     const tmp = await makeTempDir('kinloom-cli-ops-help-');
-    process.env.KINLOOM_TELEMETRY_FILE = path.join(tmp, 'calls.jsonl');
+    process.env['KINLOOM_TELEMETRY_FILE'] = path.join(tmp, 'calls.jsonl');
 
     const checks: Array<[string[], string]> = [
       [['context', '--help'], 'Usage: kinloom context'],
@@ -150,13 +150,13 @@ describe('unified kinloom CLI dispatch', () => {
       rows: Array<{ subcmd: string; count: number }>;
     };
     expect(parsed.totalEvents).toBe(1);
-    expect(parsed.rows[0].subcmd).toBe('context');
+    expect(parsed.rows[0]!.subcmd).toBe('context');
   });
 
   it('dispatches verify against a synthetic archive repo and records telemetry', async () => {
     const repoDir = await makeTempDir('kinloom-cli-verify-');
     const telPath = path.join(repoDir, 'telemetry.jsonl');
-    process.env.KINLOOM_TELEMETRY_FILE = telPath;
+    process.env['KINLOOM_TELEMETRY_FILE'] = telPath;
 
     const dataDir = path.join(repoDir, 'data');
     const mediaDir = path.join(repoDir, 'media');
@@ -316,7 +316,7 @@ describe('unified kinloom CLI dispatch', () => {
   it('dispatches dates weekday, diff, and age and logs clean telemetry without date arguments', async () => {
     const tmp = await makeTempDir('kinloom-cli-dates-');
     const telPath = path.join(tmp, 'calls.jsonl');
-    process.env.KINLOOM_TELEMETRY_FILE = telPath;
+    process.env['KINLOOM_TELEMETRY_FILE'] = telPath;
 
     const wkCap = createCaptureIo();
     expect(await runCli(['dates', 'weekday', '1898-02-07'], { io: wkCap.io })).toBe(EXIT_OK);
@@ -383,7 +383,7 @@ describe('unified kinloom CLI dispatch', () => {
 
   it('documents seed --chunk-size, supports audit/sync aliases, honors programmatic cwd, and keeps pronounce docs aligned', async () => {
     const tmp = await makeTempDir('kinloom-cli-wave52b-');
-    process.env.KINLOOM_TELEMETRY_FILE = path.join(tmp, 'calls.jsonl');
+    process.env['KINLOOM_TELEMETRY_FILE'] = path.join(tmp, 'calls.jsonl');
 
     // 1. seed --help documents --chunk-size
     const seedHelp = createCaptureIo();

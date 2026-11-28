@@ -189,15 +189,15 @@ export function validateRetirementIntegrity(input: RetirementIntegrityInput): vo
     }
     for (const person of mergedPeople) {
       const extSources =
-        isPlainObject(person.extensions) && Array.isArray(person.extensions.sources)
-          ? person.extensions.sources
+        isPlainObject(person.extensions) && Array.isArray(person.extensions['sources'])
+          ? person.extensions['sources']
           : [];
       for (const entry of extSources) {
         const refId =
           typeof entry === 'string'
             ? entry.trim()
-            : isPlainObject(entry) && typeof entry.source_id === 'string'
-              ? entry.source_id
+            : isPlainObject(entry) && typeof entry['source_id'] === 'string'
+              ? entry['source_id']
               : null;
         if (refId && topLevelRemoveSourceIds.has(refId)) {
           throw new Error(

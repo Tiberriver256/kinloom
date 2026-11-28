@@ -195,6 +195,7 @@ export function runPronounceDeduplicateCommand(
       a.localeCompare(b)
     )) {
       const first = candidates[0];
+      if (!first) continue;
       if (livingIdsLower.has(lower) || livingFullNamesLower.has(lower)) {
         skippedPromotions.push({
           term: first.term,

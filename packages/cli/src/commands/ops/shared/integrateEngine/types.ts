@@ -18,13 +18,13 @@ export const INTEGRATE_YAML_FILES = [
 ] as const;
 
 export interface IntegrateCommandOptions {
-  repoDir?: string;
+  repoDir?: string | undefined;
   personId: string;
-  packageDir?: string;
-  dryRun?: boolean;
-  json?: boolean;
-  preloadedRepo?: LoadedLocalArchiveRepo;
-  preparsedPatch?: Record<string, unknown>;
+  packageDir?: string | undefined;
+  dryRun?: boolean | undefined;
+  json?: boolean | undefined;
+  preloadedRepo?: LoadedLocalArchiveRepo | undefined;
+  preparsedPatch?: Record<string, unknown> | undefined;
 }
 
 export interface UpsertCounts {

@@ -8,7 +8,7 @@ import type {
 
 export interface PluginProbeTransport {
   readonly baseUrl: URL;
-  readonly token?: string;
+  readonly token?: string | undefined;
   readonly timeoutMs: number;
   readonly fetchImpl: typeof fetch;
   readonly clock: SyntheticProbeClock;
@@ -68,9 +68,9 @@ function readErrorCode(payload: unknown): string | null {
   if (!isObjectRecord(payload)) {
     return null;
   }
-  const errorObj = payload.error;
-  if (isObjectRecord(errorObj) && typeof errorObj.code === 'string' && errorObj.code.trim()) {
-    return errorObj.code.trim();
+  const errorObj = payload['error'];
+  if (isObjectRecord(errorObj) && typeof errorObj['code'] === 'string' && errorObj['code'].trim()) {
+    return errorObj['code'].trim();
   }
   return null;
 }
@@ -242,7 +242,9 @@ async function checkPageVisitStats(
   const violations: string[] = [];
   const parsed = parseJsonSafe(res.bodyText);
   const validShape =
-    isObjectRecord(parsed) && parsed.enabled === true && typeof parsed.public_badges_enabled === 'boolean';
+    isObjectRecord(parsed) &&
+    parsed['enabled'] === true &&
+    typeof parsed['public_badges_enabled'] === 'boolean';
   if (!validShape) {
     violations.push(`${pluginId}: /api/observability/config returned invalid JSON schema.`);
   }
@@ -252,8 +254,8 @@ async function checkPageVisitStats(
   }
 
   let totalDuration = res.durationMs;
-  let badgeSummary = validShape && parsed.public_badges_enabled ? 'badges=on' : 'badges=off';
-  if (validShape && parsed.public_badges_enabled && discoveredPersonSlug) {
+  let badgeSummary = validShape && parsed['public_badges_enabled'] ? 'badges=on' : 'badges=off';
+  if (validShape && parsed['public_badges_enabled'] && discoveredPersonSlug) {
     const countRes = await fetchEndpoint(
       transport,
       `/api/observability/page-visits?kind=person&slug=${encodeURIComponent(discoveredPersonSlug)}`,
@@ -268,13 +270,13 @@ async function checkPageVisitStats(
       const countJson = parseJsonSafe(countRes.bodyText);
       const validCount =
         isObjectRecord(countJson) &&
-        typeof countJson.total_views === 'number' &&
-        Number.isInteger(countJson.total_views) &&
-        countJson.total_views >= 0;
+        typeof countJson['total_views'] === 'number' &&
+        Number.isInteger(countJson['total_views']) &&
+        countJson['total_views'] >= 0;
       if (!validCount) {
         violations.push(`${pluginId}: /api/observability/page-visits returned invalid total_views.`);
       } else {
-        badgeSummary = `badges=on sample_views=${countJson.total_views}`;
+        badgeSummary = `badges=on sample_views=${countJson['total_views']}`;
       }
     }
   }
@@ -342,17 +344,17 @@ async function checkOpenFinance(
 
   const violations: string[] = [];
   const parsed = parseJsonSafe(res.bodyText);
-  const platforms = isObjectRecord(parsed) && Array.isArray(parsed.platforms) ? parsed.platforms : null;
+  const platforms = isObjectRecord(parsed) && Array.isArray(parsed['platforms']) ? parsed['platforms'] : null;
   const validShape =
     isObjectRecord(parsed) &&
-    isObjectRecord(parsed.visibility) &&
+    isObjectRecord(parsed['visibility']) &&
     platforms !== null &&
-    Array.isArray(parsed.cost_items);
+    Array.isArray(parsed['cost_items']);
   if (!validShape || platforms === null) {
     violations.push(`${pluginId}: /api/open-finance/summary returned invalid JSON schema.`);
   } else {
     for (const platform of platforms) {
-      const url = isObjectRecord(platform) ? platform.url : null;
+      const url = isObjectRecord(platform) ? platform['url'] : null;
       if (typeof url !== 'string' || !url.startsWith('https://')) {
         violations.push(`${pluginId}: donation platform URL must use https://.`);
         break;
@@ -429,7 +431,7 @@ async function checkRecipes(
   }
 
   const parsed = parseJsonSafe(res.bodyText);
-  if (!isObjectRecord(parsed) || !Array.isArray(parsed.recipes)) {
+  if (!isObjectRecord(parsed) || !Array.isArray(parsed['recipes'])) {
     const violation = `${pluginId}: /api/plugins/recipes returned invalid JSON schema.`;
     return {
       pluginId,
@@ -446,7 +448,7 @@ async function checkRecipes(
     status: 'pass',
     httpStatus: res.status,
     durationMs: res.durationMs,
-    detail: `Healthy (sampled=${parsed.recipes.length})`,
+    detail: `Healthy (sampled=${parsed['recipes'].length})`,
     violations: [],
   };
 }
@@ -572,7 +574,7 @@ async function checkPronunciation(
   }
 
   const parsed = parseJsonSafe(res.bodyText);
-  if (!isObjectRecord(parsed) || !isObjectRecord(parsed.pronunciations)) {
+  if (!isObjectRecord(parsed) || !isObjectRecord(parsed['pronunciations'])) {
     const violation = `${pluginId}: /api/pronunciations returned invalid JSON schema.`;
     return {
       pluginId,
@@ -585,7 +587,7 @@ async function checkPronunciation(
   }
 
   const cacheControl = (res.headers.get('cache-control') ?? '').toLowerCase();
-  const termCount = Object.keys(parsed.pronunciations).length;
+  const termCount = Object.keys(parsed['pronunciations']).length;
   if (!cacheControl.includes('no-store')) {
     return {
       pluginId,
@@ -642,16 +644,17 @@ async function checkAdminDiagnostics(
   }
 
   const violations: string[] = [];
-  const pluginsField = parsed.plugins;
+  const pluginsField = parsed['plugins'];
   if (Array.isArray(pluginsField)) {
     for (const entry of pluginsField) {
       if (!isObjectRecord(entry)) {
         continue;
       }
-      const id = typeof entry.id === 'string' ? entry.id : 'unknown';
-      const status = typeof entry.status === 'string' ? entry.status : '';
+      const id = typeof entry['id'] === 'string' ? entry['id'] : 'unknown';
+      const status = typeof entry['status'] === 'string' ? entry['status'] : '';
       if (status === 'degraded' || status === 'error') {
-        const detail = typeof entry.detail === 'string' && entry.detail.trim() ? `: ${entry.detail}` : '';
+        const detail =
+          typeof entry['detail'] === 'string' && entry['detail'].trim() ? `: ${entry['detail']}` : '';
         violations.push(`Admin diagnostics reported plugin '${id}' in '${status}' state${detail}.`);
       }
     }

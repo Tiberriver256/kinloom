@@ -5,12 +5,12 @@ import type { IntegrateCommandResult } from '../shared/integrateEngine/types.js'
 import type { TreeHygieneWarning } from '../tree-hygiene.js';
 
 export interface AuditCommandOptions {
-  repoDir?: string;
+  repoDir?: string | undefined;
   personId: string;
-  packageDir?: string;
-  json?: boolean;
-  plugins?: readonly KinloomCliPlugin[];
-  preloadedRepo?: LoadedLocalArchiveRepo;
+  packageDir?: string | undefined;
+  json?: boolean | undefined;
+  plugins?: readonly KinloomCliPlugin[] | undefined;
+  preloadedRepo?: LoadedLocalArchiveRepo | undefined;
 }
 
 export type ParsedAuditEdtf = ParsedEdtfInterval;

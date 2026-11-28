@@ -12,8 +12,8 @@ export interface AuditBatchResult {
   people: AuditBatchPerson[];
   overlaps: AuditOverlaps;
   summary: AuditBatchSummary;
-  skippedAlreadyIntegrated?: string[];
-  skippedDrifted?: string[];
+  skippedAlreadyIntegrated?: string[] | undefined;
+  skippedDrifted?: string[] | undefined;
   duration_ms: number;
   rendered: string;
 }

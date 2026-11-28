@@ -78,10 +78,10 @@ export async function runSearch(
     cacheable: searchCacheable,
   });
 
-  const rawResults = Array.isArray(data.results) ? data.results : [];
+  const rawResults = Array.isArray(data['results']) ? data['results'] : [];
   const results = rawResults.filter(isPlainRecord);
-  const searchObj = isPlainRecord(data.search) ? data.search : undefined;
-  const hits = searchObj?.hits;
+  const searchObj = isPlainRecord(data['search']) ? data['search'] : undefined;
+  const hits = searchObj?.['hits'];
 
   if (hits && results.length === 0) {
     ctx.io.stderr(
@@ -110,7 +110,7 @@ export async function runSearch(
   for (const item of results) {
     const c = compactResult(item);
     lines.push(
-      `- ${formatTextField(c.date)} | ${formatTextField(c.title)} | ${formatTextField(c.state)} | ${formatTextField(c.url)}`
+      `- ${formatTextField(c['date'])} | ${formatTextField(c['title'])} | ${formatTextField(c['state'])} | ${formatTextField(c['url'])}`
     );
   }
   const bytesOut = emitStdout(ctx.io, lines.join('\n'));
@@ -156,15 +156,15 @@ export async function runGetPage(
     return { exitCode: 0, bytesOut, cacheHit };
   }
 
-  const item = isPlainRecord(data.item) ? data.item : {};
-  const resource = isPlainRecord(data.resource) ? data.resource : {};
-  const titleVal = resource.title || item.title;
-  const lccnVal = firstValue(item.number_lccn) || item.lccn;
+  const item = isPlainRecord(data['item']) ? data['item'] : {};
+  const resource = isPlainRecord(data['resource']) ? data['resource'] : {};
+  const titleVal = resource['title'] || item['title'];
+  const lccnVal = firstValue(item['number_lccn']) || item['lccn'];
   const lines: string[] = [
     `title: ${formatTextField(titleVal)}${cacheHit ? ' [cache]' : ''}`,
-    `date: ${formatTextField(item.date)}`,
+    `date: ${formatTextField(item['date'])}`,
     `lccn: ${formatTextField(lccnVal)}`,
-    `place: ${formatTextField(firstValue(item.location_city))}, ${formatTextField(firstValue(item.location_state))}`,
+    `place: ${formatTextField(firstValue(item['location_city']))}, ${formatTextField(firstValue(item['location_state']))}`,
     `url: ${resourceUrl}`,
   ];
   const assets = resolvePageAssets(data);
@@ -235,9 +235,9 @@ export async function runDownload(
     ttlHours,
   });
 
-  const item = isPlainRecord(data.item) ? data.item : {};
-  const itemLccn = firstValue(item.number_lccn);
-  const itemDate = item.date;
+  const item = isPlainRecord(data['item']) ? data['item'] : {};
+  const itemLccn = firstValue(item['number_lccn']);
+  const itemDate = item['date'];
   const stem = safeOutputFilename(
     `${itemLccn ? String(itemLccn) : 'loc'}_${itemDate ? String(itemDate) : 'nodate'}_sp${resolvedSeq}`
   );
@@ -301,7 +301,7 @@ export async function runDownload(
       {
         resource_url: resourceUrl,
         item,
-        resources: data.resources ?? null,
+        resources: data['resources'] ?? null,
       },
       null,
       2

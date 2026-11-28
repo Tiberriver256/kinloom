@@ -39,13 +39,14 @@ function stringField(raw: Record<string, unknown>, key: string): string {
 
 export function normalizePeopleHit(recordType: string, raw: Record<string, unknown>): NormalizedPeopleHit {
   const recordId = stringField(raw, 'id').trim();
-  const nameParts = [raw.firstName, raw.middleName, raw.familyName, raw.suffix]
+  const nameParts = [raw['firstName'], raw['middleName'], raw['familyName'], raw['suffix']]
     .filter((p): p is string => typeof p === 'string' && p.trim().length > 0)
     .map((p) => p.trim());
   const fullName = nameParts.join(' ');
   const dateField = RECORD_TYPE_SPECS[recordType]?.dateField ?? null;
   const primaryDate = dateField ? trimIsoDate(raw[dateField]) : '';
-  const countyRaw = raw.county ?? raw.burialLocation ?? raw.residencePriorToService ?? raw.residence ?? '';
+  const countyRaw =
+    raw['county'] ?? raw['burialLocation'] ?? raw['residencePriorToService'] ?? raw['residence'] ?? '';
   const county = String(countyRaw ?? '').trim();
   const recordUrl = recordId
     ? `${MNHS_PEOPLE_RECORD_URL}?uuid=${encodeURIComponent(recordId)}&recordType=${encodeURIComponent(recordType)}`
@@ -55,28 +56,28 @@ export function normalizePeopleHit(recordType: string, raw: Record<string, unkno
     id: recordId,
     record_type: recordType,
     name: fullName,
-    first_name: typeof raw.firstName === 'string' ? raw.firstName : '',
-    middle_name: typeof raw.middleName === 'string' ? raw.middleName : '',
-    family_name: typeof raw.familyName === 'string' ? raw.familyName : '',
+    first_name: typeof raw['firstName'] === 'string' ? raw['firstName'] : '',
+    middle_name: typeof raw['middleName'] === 'string' ? raw['middleName'] : '',
+    family_name: typeof raw['familyName'] === 'string' ? raw['familyName'] : '',
     certificate_id: stringField(raw, 'certificateId'),
     date: primaryDate,
     county,
     url: recordUrl,
-    ...(raw.mothersMaidenName ? { mothers_maiden_name: String(raw.mothersMaidenName) } : {}),
-    ...(raw.birthDate ? { birth_date: trimIsoDate(raw.birthDate) } : {}),
-    ...(raw.birthPlace ? { birth_place: String(raw.birthPlace) } : {}),
-    ...(raw.age !== null && raw.age !== undefined && String(raw.age).trim()
-      ? { age: String(raw.age).trim() }
+    ...(raw['mothersMaidenName'] ? { mothers_maiden_name: String(raw['mothersMaidenName']) } : {}),
+    ...(raw['birthDate'] ? { birth_date: trimIsoDate(raw['birthDate']) } : {}),
+    ...(raw['birthPlace'] ? { birth_place: String(raw['birthPlace']) } : {}),
+    ...(raw['age'] !== null && raw['age'] !== undefined && String(raw['age']).trim()
+      ? { age: String(raw['age']).trim() }
       : {}),
-    ...(raw.locality ? { locality: String(raw.locality).trim() } : {}),
-    ...(raw.lineInImage !== null && raw.lineInImage !== undefined ? { line: raw.lineInImage } : {}),
+    ...(raw['locality'] ? { locality: String(raw['locality']).trim() } : {}),
+    ...(raw['lineInImage'] !== null && raw['lineInImage'] !== undefined ? { line: raw['lineInImage'] } : {}),
   };
 
-  if (Array.isArray(raw.militaryServices) && raw.militaryServices.length > 0) {
+  if (Array.isArray(raw['militaryServices']) && raw['militaryServices'].length > 0) {
     const services: string[] = [];
-    for (const item of raw.militaryServices) {
-      if (isPlainRecord(item) && item.value) {
-        services.push(String(item.value).trim());
+    for (const item of raw['militaryServices']) {
+      if (isPlainRecord(item) && item['value']) {
+        services.push(String(item['value']).trim());
       }
     }
     if (services.length > 0) {
@@ -100,7 +101,7 @@ function extractDocIdFromHref(href: string): string {
 
 export function parseNewspapersSearchHtml(html: string): readonly [number | null, NewspaperSearchItem[]] {
   const countMatch = /\bpsRecCnt\s*=\s*(\d+)\b/.exec(html);
-  const total = countMatch ? Number.parseInt(countMatch[1], 10) : null;
+  const total = countMatch ? Number.parseInt(countMatch[1] ?? '', 10) : null;
   const $ = loadHtml(html);
   const items: NewspaperSearchItem[] = [];
 
@@ -127,7 +128,7 @@ export function parseNewspapersSearchHtml(html: string): readonly [number | null
       const text = collapseWhitespace($(divEl).text());
       const pubMatch = /^Publication Date:\s*(.+)$/i.exec(text);
       if (pubMatch) {
-        item.publication_date = pubMatch[1].trim();
+        item.publication_date = (pubMatch[1] ?? '').trim();
       } else if (text && !item.detail) {
         item.detail = text;
       }
@@ -219,22 +220,22 @@ export function looksLikeHtml(data: Uint8Array, contentType: string): boolean {
 }
 
 export function isPeopleSearchResult(value: unknown): value is PeopleSearchResult {
-  return isPlainRecord(value) && typeof value.record_type === 'string' && Array.isArray(value.results);
+  return isPlainRecord(value) && typeof value['record_type'] === 'string' && Array.isArray(value['results']);
 }
 
 export function isPeopleRecordDetailResult(value: unknown): value is PeopleRecordDetailResult {
   return (
     isPlainRecord(value) &&
-    typeof value.id === 'string' &&
-    isPlainRecord(value.summary) &&
-    isPlainRecord(value.record)
+    typeof value['id'] === 'string' &&
+    isPlainRecord(value['summary']) &&
+    isPlainRecord(value['record'])
   );
 }
 
 export function isNewspaperSearchResult(value: unknown): value is NewspaperSearchResult {
-  return isPlainRecord(value) && Array.isArray(value.results);
+  return isPlainRecord(value) && Array.isArray(value['results']);
 }
 
 export function isNewspaperMetadataResult(value: unknown): value is NewspaperMetadataResult {
-  return isPlainRecord(value) && isPlainRecord(value.fields);
+  return isPlainRecord(value) && isPlainRecord(value['fields']);
 }

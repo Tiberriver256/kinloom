@@ -26,12 +26,12 @@ export interface DesignAuditBrowserPage {
       continue: () => Promise<void>;
     }) => Promise<void>
   ) => Promise<void>;
-  goto: (url: string, opts?: { waitUntil?: string; timeout?: number }) => Promise<unknown>;
+  goto: (url: string, opts?: { waitUntil?: string; timeout?: number | undefined }) => Promise<unknown>;
   waitForTimeout?: (ms: number) => Promise<void>;
   screenshot: (opts: {
     path: string;
-    fullPage?: boolean;
-    animations?: 'disabled' | 'allow';
+    fullPage?: boolean | undefined;
+    animations?: 'disabled' | 'allow' | undefined;
     caret?: 'hide' | 'initial';
   }) => Promise<unknown>;
   evaluate: <T = unknown>(fn: string | ((...args: never[]) => T)) => Promise<T>;
@@ -348,8 +348,8 @@ async function auditFocusOcclusion(page: DesignAuditBrowserPage): Promise<Design
 export async function runDesignAuditCaptureMatrix(options: {
   readonly plan: DesignAuditPlan;
   readonly bundleDir: string;
-  readonly browserFactory?: DesignAuditBrowserFactory;
-  readonly loadingDelayMs?: number;
+  readonly browserFactory?: DesignAuditBrowserFactory | undefined;
+  readonly loadingDelayMs?: number | undefined;
 }): Promise<DesignAuditManifest> {
   const { plan, bundleDir } = options;
   const shotsDir = path.join(bundleDir, 'screenshots');

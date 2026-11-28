@@ -77,12 +77,19 @@ export class D1AtomicMutationStore implements AtomicMutationStore {
 
     for (let i = 0; i < ops.length; i += 1) {
       const op = ops[i];
+      if (!op) {
+        continue;
+      }
       const key = entityCompositeKey(op.entity_type, op.entity_id);
 
       if (op.action === 'create') {
         let runEnd = i;
-        while (runEnd < ops.length && ops[runEnd].action === 'create') {
-          mutatedInBatch.add(entityCompositeKey(ops[runEnd].entity_type, ops[runEnd].entity_id));
+        while (runEnd < ops.length) {
+          const runOp = ops[runEnd];
+          if (!runOp || runOp.action !== 'create') {
+            break;
+          }
+          mutatedInBatch.add(entityCompositeKey(runOp.entity_type, runOp.entity_id));
           runEnd += 1;
         }
         pushCreateRunStatements(this.db, {
@@ -102,7 +109,7 @@ export class D1AtomicMutationStore implements AtomicMutationStore {
         let runEnd = i;
         while (runEnd < ops.length) {
           const candidate = ops[runEnd];
-          if (!isBulkEligibleEntityUpdateOp(candidate)) {
+          if (!candidate || !isBulkEligibleEntityUpdateOp(candidate)) {
             break;
           }
           const candidateKey = entityCompositeKey(candidate.entity_type, candidate.entity_id);
@@ -167,12 +174,16 @@ export class D1AtomicMutationStore implements AtomicMutationStore {
           }
           // RETURNING order is unspecified; AUTOINCREMENT revision_id follows insertion order.
           const sortedIds = revRows.toSorted((a, b) => a.revision_id - b.revision_id);
-          for (let j = 0; j < sortedIds.length; j += 1) {
+          for (const [j, sortedId] of sortedIds.entries()) {
+            const entryOp = entry.ops[j];
+            if (!entryOp) {
+              continue;
+            }
             committedRevisions.push(
               buildCommittedRevisionRecord({
-                revisionId: sortedIds[j].revision_id,
+                revisionId: sortedId.revision_id,
                 parentRevisionId: null,
-                op: entry.ops[j],
+                op: entryOp,
                 batchId: params.batch_id,
                 author: params.author,
                 nowIso: params.nowIso,
@@ -187,12 +198,16 @@ export class D1AtomicMutationStore implements AtomicMutationStore {
             );
           }
           const sortedRows = revRows.toSorted((a, b) => a.revision_id - b.revision_id);
-          for (let j = 0; j < sortedRows.length; j += 1) {
+          for (const [j, sortedRow] of sortedRows.entries()) {
+            const entryOp = entry.ops[j];
+            if (!entryOp) {
+              continue;
+            }
             committedRevisions.push(
               buildCommittedRevisionRecord({
-                revisionId: sortedRows[j].revision_id,
-                parentRevisionId: sortedRows[j].parent_revision_id,
-                op: entry.ops[j],
+                revisionId: sortedRow.revision_id,
+                parentRevisionId: sortedRow.parent_revision_id,
+                op: entryOp,
                 batchId: params.batch_id,
                 author: params.author,
                 nowIso: params.nowIso,
@@ -205,11 +220,15 @@ export class D1AtomicMutationStore implements AtomicMutationStore {
             throw new Error('D1 revision insert did not return the inserted revision row.');
           }
           const revRow = parseDbReturningRevisionPairRow(firstRow);
+          const singleOp = entry.ops[0];
+          if (!singleOp) {
+            throw new Error('Missing operation for single revision entry.');
+          }
           committedRevisions.push(
             buildCommittedRevisionRecord({
               revisionId: revRow.revision_id,
               parentRevisionId: revRow.parent_revision_id,
-              op: entry.ops[0],
+              op: singleOp,
               batchId: params.batch_id,
               author: params.author,
               nowIso: params.nowIso,
@@ -223,6 +242,9 @@ export class D1AtomicMutationStore implements AtomicMutationStore {
         );
       }
       const lastRevision = committedRevisions[committedRevisions.length - 1];
+      if (!lastRevision) {
+        throw new Error('D1 batch returned no committed revisions.');
+      }
       const headRevisionId = asRevisionId(lastRevision.revision_id);
       this.readStore.notifyCommittedMutations?.(ops, headRevisionId);
       return {

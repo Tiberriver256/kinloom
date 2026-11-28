@@ -147,44 +147,44 @@ export type PluginSettingFieldValidator = (
 
 export type PluginSettingField =
   | (z.infer<typeof SerializableStringPluginSettingFieldSchema> & {
-      readonly validate?: PluginSettingFieldValidator;
+      readonly validate?: PluginSettingFieldValidator | undefined;
     })
   | (z.infer<typeof SerializableTextPluginSettingFieldSchema> & {
-      readonly validate?: PluginSettingFieldValidator;
+      readonly validate?: PluginSettingFieldValidator | undefined;
     })
   | (z.infer<typeof SerializableUrlPluginSettingFieldSchema> & {
-      readonly validate?: PluginSettingFieldValidator;
+      readonly validate?: PluginSettingFieldValidator | undefined;
     })
   | (z.infer<typeof SerializableNumberPluginSettingFieldSchema> & {
-      readonly validate?: PluginSettingFieldValidator;
+      readonly validate?: PluginSettingFieldValidator | undefined;
     })
   | (z.infer<typeof SerializableBooleanPluginSettingFieldSchema> & {
-      readonly validate?: PluginSettingFieldValidator;
+      readonly validate?: PluginSettingFieldValidator | undefined;
     })
   | (z.infer<typeof SerializableSelectPluginSettingFieldSchema> & {
-      readonly validate?: PluginSettingFieldValidator;
+      readonly validate?: PluginSettingFieldValidator | undefined;
     })
   | (z.infer<typeof SerializableSecretPluginSettingFieldSchema> & {
-      readonly validate?: PluginSettingFieldValidator;
+      readonly validate?: PluginSettingFieldValidator | undefined;
     })
   | z.infer<typeof SerializableReadonlyPluginSettingFieldSchema>;
 
 export interface PluginSettingsSection {
   readonly id: string;
   readonly title: string;
-  readonly description?: string;
+  readonly description?: string | undefined;
   readonly fields: readonly PluginSettingField[];
 }
 
 export interface PluginSettingsSchema {
-  readonly title?: string;
-  readonly description?: string;
+  readonly title?: string | undefined;
+  readonly description?: string | undefined;
   readonly sections: readonly PluginSettingsSection[];
   /**
    * Optional auxiliary non-secret keys persisted in plugin_settings.values_json by a dedicated
    * plugin admin endpoint that must be carried forward untouched during declarative settings saves.
    */
-  readonly preserveKeys?: readonly string[];
+  readonly preserveKeys?: readonly string[] | undefined;
 }
 
 export const PluginSecretFieldStateSchema = z.object({
@@ -235,11 +235,11 @@ export type AdminPluginSettingsUpdateResponse = z.infer<typeof AdminPluginSettin
 export interface PluginSettingsSecretWriteOp {
   readonly key: string;
   readonly action: 'set' | 'clear';
-  readonly value?: string;
+  readonly value?: string | undefined;
 }
 
 export function isSecretPluginSettingField(
-  field: Pick<PluginSettingField, 'type'> & { readonly secret?: boolean }
+  field: Pick<PluginSettingField, 'type'> & { readonly secret?: boolean | undefined }
 ): boolean {
   return (
     field.type === 'secret' || ((field.type === 'string' || field.type === 'text') && field.secret === true)
@@ -451,11 +451,11 @@ export function extractPluginSettingsDefaults(schema: PluginSettingsSchema): {
 function validateStringConstraints(
   field: {
     readonly label: string;
-    readonly minLength?: number;
-    readonly maxLength?: number;
-    readonly pattern?: string;
-    readonly patternMessage?: string;
-    readonly allowlist?: readonly string[];
+    readonly minLength?: number | undefined;
+    readonly maxLength?: number | undefined;
+    readonly pattern?: string | undefined;
+    readonly patternMessage?: string | undefined;
+    readonly allowlist?: readonly string[] | undefined;
   },
   value: string,
   isSecret: boolean

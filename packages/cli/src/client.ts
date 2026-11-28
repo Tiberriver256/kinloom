@@ -22,9 +22,9 @@ import { CliValidationError, KinloomApiError } from './errors.js';
 
 export interface KinloomApiClientOptions {
   baseUrl: string;
-  token?: string;
-  fetchImpl?: typeof fetch;
-  userAgent?: string;
+  token?: string | undefined;
+  fetchImpl?: typeof fetch | undefined;
+  userAgent?: string | undefined;
 }
 
 const SubmitBatchResponseSchema = z.object({
@@ -230,7 +230,7 @@ async function parseJsonBody<TSchema extends z.ZodTypeAny>(
 
 export class KinloomApiClient {
   readonly baseUrl: string;
-  private readonly token?: string;
+  private readonly token?: string | undefined;
   private readonly fetchImpl: typeof fetch;
   private readonly userAgent: string;
 
@@ -271,7 +271,7 @@ export class KinloomApiClient {
     return parseJsonBody(response, SubmitBatchResponseSchema, endpoint);
   }
 
-  async exportYaml(options?: { ifNoneMatch?: string }): Promise<ExportYamlResult> {
+  async exportYaml(options?: { ifNoneMatch?: string | undefined }): Promise<ExportYamlResult> {
     const endpoint = '/api/export/yaml';
     const extraHeaders: Record<string, string> = {};
     if (options?.ifNoneMatch) {
@@ -300,7 +300,7 @@ export class KinloomApiClient {
     };
   }
 
-  async exportSnapshot(options?: { ifNoneMatch?: string }): Promise<ExportSnapshotResult> {
+  async exportSnapshot(options?: { ifNoneMatch?: string | undefined }): Promise<ExportSnapshotResult> {
     const endpoint = '/api/export/snapshot';
     const extraHeaders: Record<string, string> = {};
     if (options?.ifNoneMatch) {
@@ -352,9 +352,9 @@ export class KinloomApiClient {
   }
 
   async getBundle(options?: {
-    ifNoneMatch?: string;
+    ifNoneMatch?: string | undefined;
     cacheControl?: string;
-    headers?: Readonly<Record<string, string>>;
+    headers?: Readonly<Record<string, string>> | undefined;
     signal?: AbortSignal;
   }): Promise<GetBundleResult> {
     const endpoint = '/api/bundle';
@@ -414,7 +414,7 @@ export class KinloomApiClient {
 }
 
 export function resolveAuthToken(explicitToken?: string): string | undefined {
-  const candidate = explicitToken ?? process.env.KINLOOM_TOKEN;
+  const candidate = explicitToken ?? process.env['KINLOOM_TOKEN'];
   const trimmed = candidate?.trim();
   return trimmed ? trimmed : undefined;
 }

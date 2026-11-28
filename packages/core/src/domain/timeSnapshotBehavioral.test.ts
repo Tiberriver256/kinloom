@@ -345,8 +345,8 @@ describe('timeSnapshot domain behavioral suite', () => {
     );
     const hudsonvilleEntries = directory.filter((d) => d.place.name === 'Hudsonville');
     expect(hudsonvilleEntries).toHaveLength(1);
-    expect(hudsonvilleEntries[0].eventCount).toBe(2);
-    expect(hudsonvilleEntries[0].minYear).toBe(1900);
-    expect(hudsonvilleEntries[0].maxYear).toBeGreaterThanOrEqual(1910);
+    expect(hudsonvilleEntries[0]?.eventCount).toBe(2);
+    expect(hudsonvilleEntries[0]?.minYear).toBe(1900);
+    expect(hudsonvilleEntries[0]?.maxYear).toBeGreaterThanOrEqual(1910);
   });
 });

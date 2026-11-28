@@ -74,8 +74,8 @@ export class HttpWikiDataSource implements ArchiveDataSource {
   private readonly apiBase: string;
   private readonly assetBase: string;
   private readonly fetchImpl: typeof fetch;
-  private readonly hasReadingsOption?: boolean;
-  private readonly hasMediaChecklistOption?: boolean;
+  private readonly hasReadingsOption?: boolean | undefined;
+  private readonly hasMediaChecklistOption?: boolean | undefined;
   private cachedCapabilities: ArchiveCapabilities | null = null;
   private cachedBundle: ArchiveBundle | null = null;
   private cachedEtag: string | null = null;
@@ -242,16 +242,18 @@ export class HttpWikiDataSource implements ArchiveDataSource {
     capabilities: ArchiveCapabilities;
     authProviders?: ArchiveAuthProviders;
   }> {
-    const result = await this.requestJson('/api/auth/me', parseSessionResponse, {
-      signal: options?.signal,
-    });
+    const result = await this.requestJson(
+      '/api/auth/me',
+      parseSessionResponse,
+      options?.signal ? { signal: options.signal } : {}
+    );
     this.cachedCapabilities = result.capabilities;
     return result;
   }
 
   async getOnboardingState(options?: { signal?: AbortSignal }): Promise<OnboardingSessionResponse> {
     return this.requestJson('/api/auth/me/onboarding', parseOnboardingSessionResponse, {
-      signal: options?.signal,
+      ...(options?.signal ? { signal: options.signal } : {}),
     });
   }
 
@@ -263,7 +265,7 @@ export class HttpWikiDataSource implements ArchiveDataSource {
       method: 'PUT',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify(patch),
-      signal: options?.signal,
+      ...(options?.signal ? { signal: options.signal } : {}),
     });
   }
 
@@ -281,7 +283,7 @@ export class HttpWikiDataSource implements ArchiveDataSource {
     return this.requestJson(
       `/api/entities/${encodeURIComponent(entityType)}/${encodeURIComponent(entityId)}`,
       parseEntityGetResponse,
-      { signal: options?.signal }
+      options?.signal ? { signal: options.signal } : {}
     );
   }
 
@@ -312,7 +314,7 @@ export class HttpWikiDataSource implements ArchiveDataSource {
         credentials: 'same-origin',
         headers: { accept: 'application/json', 'content-type': 'application/json' },
         body: JSON.stringify(input),
-        signal: options?.signal,
+        ...(options?.signal ? { signal: options.signal } : {}),
       }
     );
 
@@ -469,7 +471,7 @@ export class HttpWikiDataSource implements ArchiveDataSource {
       method: 'POST',
       credentials: 'same-origin',
       body: formData,
-      signal: options?.signal,
+      ...(options?.signal ? { signal: options.signal } : {}),
     });
     if (!res.ok) {
       throw await parseErrorEnvelope(res);
@@ -523,7 +525,7 @@ export class HttpWikiDataSource implements ArchiveDataSource {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify(options?.next ? { email, next: options.next } : { email }),
-      signal: options?.signal,
+      ...(options?.signal ? { signal: options.signal } : {}),
     });
   }
 
@@ -541,7 +543,7 @@ export class HttpWikiDataSource implements ArchiveDataSource {
     const res = await this.fetchImpl(this.apiUrl('/api/pronunciations'), {
       credentials: 'same-origin',
       headers: { accept: 'application/json' },
-      signal: options?.signal,
+      ...(options?.signal ? { signal: options.signal } : {}),
     });
     if (res.status === 404) {
       return undefined;
@@ -566,7 +568,7 @@ export class HttpWikiDataSource implements ArchiveDataSource {
         method: 'PUT',
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify(entry),
-        signal: options?.signal,
+        ...(options?.signal ? { signal: options.signal } : {}),
       }
     );
   }
@@ -579,7 +581,7 @@ export class HttpWikiDataSource implements ArchiveDataSource {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify(input),
-      signal: options?.signal,
+      ...(options?.signal ? { signal: options.signal } : {}),
     });
   }
 

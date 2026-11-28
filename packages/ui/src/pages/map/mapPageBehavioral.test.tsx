@@ -463,7 +463,7 @@ describe('MapPage behavioral migration journey flows', () => {
 
     const origGetBoundingClientRect = HTMLElement.prototype.getBoundingClientRect;
     vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(function (this: HTMLElement) {
-      const key = this.dataset?.measureEra;
+      const key = this.dataset?.['measureEra'];
       if (key === 'all') {
         return new DOMRect(0, 0, 100, 32);
       }
@@ -473,10 +473,10 @@ describe('MapPage behavioral migration journey flows', () => {
       if (key?.startsWith('era_')) {
         return new DOMRect(0, 0, 180, 32);
       }
-      if (this.dataset?.mapTraceLabel === 'true') {
+      if (this.dataset?.['mapTraceLabel'] === 'true') {
         return new DOMRect(0, 0, 220, 32);
       }
-      if (this.dataset?.mapRouteMode === 'true') {
+      if (this.dataset?.['mapRouteMode'] === 'true') {
         return new DOMRect(0, 0, 200, 32);
       }
       return origGetBoundingClientRect.call(this);
@@ -693,14 +693,14 @@ describe('MapPage behavioral migration journey flows', () => {
 
     const origGetBoundingClientRect = HTMLElement.prototype.getBoundingClientRect;
     vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(function (this: HTMLElement) {
-      const key = this.dataset?.measureEra;
+      const key = this.dataset?.['measureEra'];
       if (key && key in wideMetrics) {
         return new DOMRect(0, 0, wideMetrics[key], 28);
       }
-      if (this.dataset?.mapTraceLabel === 'true') {
+      if (this.dataset?.['mapTraceLabel'] === 'true') {
         return new DOMRect(0, 0, 118, 28);
       }
-      if (this.dataset?.mapRouteMode === 'true') {
+      if (this.dataset?.['mapRouteMode'] === 'true') {
         return new DOMRect(0, 0, 168, 28);
       }
       return origGetBoundingClientRect.call(this);

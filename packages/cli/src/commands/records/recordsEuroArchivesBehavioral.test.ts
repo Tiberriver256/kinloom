@@ -120,11 +120,11 @@ async function makeTempDir(prefix = 'kinloom-c6a-'): Promise<string> {
 }
 
 function makeCtx(options: {
-  readonly env?: NodeJS.ProcessEnv;
-  readonly cwd?: string;
-  readonly fetchImpl?: typeof fetch;
-  readonly nowMs?: () => number;
-  readonly sleepFn?: (ms: number) => Promise<void>;
+  readonly env?: NodeJS.ProcessEnv | undefined;
+  readonly cwd?: string | undefined;
+  readonly fetchImpl?: typeof fetch | undefined;
+  readonly nowMs?: (() => number) | undefined;
+  readonly sleepFn?: ((ms: number) => Promise<void>) | undefined;
   readonly stdout?: string[];
   readonly stderr?: string[];
 }): RecordCommandContext {
@@ -214,7 +214,7 @@ describe('fiArchives behavioral edge cases', () => {
     cacheDir: string,
     fetchImpl?: typeof fetch,
     envOverride?: NodeJS.ProcessEnv
-  ): Promise<{ exitCode: number; stdout: string; stderr: string; cacheHit?: boolean }> {
+  ): Promise<{ exitCode: number; stdout: string; stderr: string; cacheHit?: boolean | undefined }> {
     const stdout: string[] = [];
     const stderr: string[] = [];
     const ctx = makeCtx({
@@ -639,7 +639,7 @@ describe('seArchives behavioral edge cases', () => {
     args: readonly string[],
     cacheDir: string,
     fetchImpl?: typeof fetch
-  ): Promise<{ exitCode: number; stdout: string; stderr: string; cacheHit?: boolean }> {
+  ): Promise<{ exitCode: number; stdout: string; stderr: string; cacheHit?: boolean | undefined }> {
     const stdout: string[] = [];
     const stderr: string[] = [];
     const ctx = makeCtx({
@@ -826,8 +826,8 @@ describe('seArchives behavioral edge cases', () => {
       'A1',
       'https://lbiiif.riksarkivet.se/collection/arkiv/A1'
     );
-    expect(coll.items[0].archive_id).toBe('SubCol1');
-    expect(coll.items[1].bildid).toBeUndefined();
+    expect(coll.items[0]!.archive_id).toBe('SubCol1');
+    expect(coll.items[1]!.bildid).toBeUndefined();
 
     const canvas = extractCanvasInfo(3, {
       id: 'not-a-url',
@@ -1114,7 +1114,7 @@ describe('openarchieven behavioral edge cases', () => {
     args: readonly string[],
     cacheDir: string,
     fetchImpl?: typeof fetch
-  ): Promise<{ exitCode: number; stdout: string; stderr: string; cacheHit?: boolean }> {
+  ): Promise<{ exitCode: number; stdout: string; stderr: string; cacheHit?: boolean | undefined }> {
     const stdout: string[] = [];
     const stderr: string[] = [];
     const ctx = makeCtx({
@@ -1193,7 +1193,7 @@ describe('openarchieven behavioral edge cases', () => {
       a2a_Source: { a2a_SourceAvailableScans: { uri: 'https://scans.example.test/single.jpg' } },
     });
     expect(directBlock).toHaveLength(1);
-    expect(directBlock[0].uri).toBe('https://scans.example.test/single.jpg');
+    expect(directBlock[0]!.uri).toBe('https://scans.example.test/single.jpg');
 
     const arrayScans = extractScans({
       a2a_Source: {
@@ -1366,12 +1366,12 @@ describe('openarchieven behavioral edge cases', () => {
       fetchImpl
     );
     expect(sRes.exitCode).toBe(0);
-    expect(seenSearchUrls[0].searchParams.get('name')).toBe('Pieter van Dijk 1860');
-    expect(seenSearchUrls[0].searchParams.get('sourcetype')).toBe('BS Geboorte');
-    expect(seenSearchUrls[0].searchParams.get('birthplace')).toBe('Zundert');
-    expect(seenSearchUrls[0].searchParams.get('archive')).toBe('bhi');
-    expect(seenSearchUrls[0].searchParams.get('relationtype')).toBe('Kind');
-    expect(seenSearchUrls[0].searchParams.get('country_code')).toBe('NL');
+    expect(seenSearchUrls[0]!.searchParams.get('name')).toBe('Pieter van Dijk 1860');
+    expect(seenSearchUrls[0]!.searchParams.get('sourcetype')).toBe('BS Geboorte');
+    expect(seenSearchUrls[0]!.searchParams.get('birthplace')).toBe('Zundert');
+    expect(seenSearchUrls[0]!.searchParams.get('archive')).toBe('bhi');
+    expect(seenSearchUrls[0]!.searchParams.get('relationtype')).toBe('Kind');
+    expect(seenSearchUrls[0]!.searchParams.get('country_code')).toBe('NL');
     expect(sRes.stdout).toContain('- bhi:id-1 | (unnamed) () | Geboorte | 1860 | Delft');
     expect(sRes.stdout).toContain('  https://www.openarchieven.nl/bhi:id-1');
 
@@ -1381,8 +1381,8 @@ describe('openarchieven behavioral edge cases', () => {
       cacheDir,
       fetchImpl
     );
-    expect(seenSearchUrls[1].searchParams.get('eventtype')).toBe('Geboorte');
-    expect(seenSearchUrls[1].searchParams.get('sourcetype')).toBe('BS Geboorte');
+    expect(seenSearchUrls[1]!.searchParams.get('eventtype')).toBe('Geboorte');
+    expect(seenSearchUrls[1]!.searchParams.get('sourcetype')).toBe('BS Geboorte');
 
     // Show empty array & multi-record array (JSON + text)
     const emptyShow = await runOa(['show', 'bhi:empty-arr'], cacheDir, fetchImpl);
@@ -1594,7 +1594,7 @@ describe('wikitree behavioral edge cases', () => {
     cacheDir: string,
     fetchImpl?: typeof fetch,
     extraEnv: NodeJS.ProcessEnv = {}
-  ): Promise<{ exitCode: number; stdout: string; stderr: string; cacheHit?: boolean }> {
+  ): Promise<{ exitCode: number; stdout: string; stderr: string; cacheHit?: boolean | undefined }> {
     const stdout: string[] = [];
     const stderr: string[] = [];
     const ctx = makeCtx({
@@ -1747,10 +1747,10 @@ describe('wikitree behavioral edge cases', () => {
       { WIKITREE_APP_ID: 'KinloomTestApp' }
     );
     expect(sSparse.exitCode).toBe(0);
-    expect(seenUrls[0].searchParams.get('appId')).toBe('KinloomTestApp');
-    expect(seenUrls[0].searchParams.get('DeathDate')).toBe('1970');
-    expect(seenUrls[0].searchParams.get('DeathLocation')).toBe('Oakville');
-    expect(seenUrls[0].searchParams.get('dateInclude')).toBe('both');
+    expect(seenUrls[0]!.searchParams.get('appId')).toBe('KinloomTestApp');
+    expect(seenUrls[0]!.searchParams.get('DeathDate')).toBe('1970');
+    expect(seenUrls[0]!.searchParams.get('DeathLocation')).toBe('Oakville');
+    expect(seenUrls[0]!.searchParams.get('dateInclude')).toBe('both');
     expect(sSparse.stdout).toBe(
       '1 match(es), showing 1:\nId 555: sparse match, run `person 555` for details'
     );
@@ -1762,8 +1762,8 @@ describe('wikitree behavioral edge cases', () => {
       fetchImpl
     );
     expect(pBio.exitCode).toBe(0);
-    expect(seenUrls[1].searchParams.get('fields')).toContain(',Bio');
-    expect(seenUrls[1].searchParams.get('resolveRedirect')).toBe('1');
+    expect(seenUrls[1]!.searchParams.get('fields')).toContain(',Bio');
+    expect(seenUrls[1]!.searchParams.get('resolveRedirect')).toBe('1');
     expect(pBio.stdout).toBe('Doe-101: Jane Doe (b. 1900-01-01)\n== Bio ==\nSynthetic test biography.');
 
     const pStar = await runWt(
@@ -1772,7 +1772,7 @@ describe('wikitree behavioral edge cases', () => {
       fetchImpl
     );
     expect(pStar.exitCode).toBe(0);
-    expect(seenUrls[2].searchParams.get('fields')).toBe('*');
+    expect(seenUrls[2]!.searchParams.get('fields')).toBe('*');
 
     const pMissing = await runWt(['person', 'Missing-1'], cacheDir, fetchImpl);
     expect(pMissing.exitCode).toBe(1);
@@ -1822,7 +1822,7 @@ describe('caArchives behavioral edge cases', () => {
     cacheDir: string,
     fetchImpl?: typeof fetch,
     overrides?: CaArchivesOverrides
-  ): Promise<{ exitCode: number; stdout: string; stderr: string; cacheHit?: boolean }> {
+  ): Promise<{ exitCode: number; stdout: string; stderr: string; cacheHit?: boolean | undefined }> {
     const stdout: string[] = [];
     const stderr: string[] = [];
     const ctx = makeCtx({

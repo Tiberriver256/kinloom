@@ -164,11 +164,11 @@ export async function runHiski(
     kieli: 'en',
     maxkpl: hiskiMaxkpl(limit),
   };
-  if (fy) formData.alkuvuosi = fy;
-  if (ty) formData.loppuvuosi = ty;
+  if (fy) formData['alkuvuosi'] = fy;
+  if (ty) formData['loppuvuosi'] = ty;
 
   const village = getStringOption(parsed, 'village')?.trim();
-  if (village) formData.ikyla = village;
+  if (village) formData['ikyla'] = village;
 
   const given = getStringOption(parsed, 'given')?.trim();
   const fatherGiven = getStringOption(parsed, 'fatherGiven')?.trim();
@@ -178,22 +178,22 @@ export async function runHiski(
   const motherSurname = getStringOption(parsed, 'motherSurname')?.trim();
 
   if (bookCode === 'kastetut') {
-    if (given) formData.etunimi = given;
-    if (fatherGiven) formData.ietunimi = fatherGiven;
-    if (fatherPatronymic) formData.ipatronyymi = fatherPatronymic;
-    if (surname) formData.isukunimi = surname;
-    if (motherGiven) formData.aetunimi = motherGiven;
-    if (motherSurname) formData.asukunimi = motherSurname;
+    if (given) formData['etunimi'] = given;
+    if (fatherGiven) formData['ietunimi'] = fatherGiven;
+    if (fatherPatronymic) formData['ipatronyymi'] = fatherPatronymic;
+    if (surname) formData['isukunimi'] = surname;
+    if (motherGiven) formData['aetunimi'] = motherGiven;
+    if (motherSurname) formData['asukunimi'] = motherSurname;
   } else {
     if (given) {
-      formData.ietunimi = given;
+      formData['ietunimi'] = given;
     } else if (fatherGiven) {
-      formData.ietunimi = fatherGiven;
+      formData['ietunimi'] = fatherGiven;
     }
-    if (fatherPatronymic) formData.ipatronyymi = fatherPatronymic;
-    if (surname) formData.isukunimi = surname;
-    if (motherGiven) formData.aetunimi = motherGiven;
-    if (motherSurname) formData.asukunimi = motherSurname;
+    if (fatherPatronymic) formData['ipatronyymi'] = fatherPatronymic;
+    if (surname) formData['isukunimi'] = surname;
+    if (motherGiven) formData['aetunimi'] = motherGiven;
+    if (motherSurname) formData['asukunimi'] = motherSurname;
   }
 
   const filterKeys = [
@@ -239,22 +239,22 @@ export async function runHiski(
   for (const rec of records) {
     const parishTag = rec.parish ? `${rec.parish} (${rec.parish_code})` : rec.parish_code;
     if (rec.book_code === 'kastetut') {
-      const dateS = String(rec.born || rec.christened || '');
+      const dateS = String(rec['born'] || rec['christened'] || '');
       lines.push(
-        `- ${dateS} | ${parishTag} | Child: ${String(rec.child ?? '')} | Parents: ${String(rec.father ?? '')} & ${String(rec.mother ?? '')}`
+        `- ${dateS} | ${parishTag} | Child: ${String(rec['child'] ?? '')} | Parents: ${String(rec['father'] ?? '')} & ${String(rec['mother'] ?? '')}`
       );
     } else if (rec.book_code === 'vihityt') {
-      const dateS = String(rec.married || rec.announced || '');
-      lines.push(`- ${dateS} | ${parishTag} | ${String(rec.groom ?? '')} & ${String(rec.bride ?? '')}`);
+      const dateS = String(rec['married'] || rec['announced'] || '');
+      lines.push(`- ${dateS} | ${parishTag} | ${String(rec['groom'] ?? '')} & ${String(rec['bride'] ?? '')}`);
     } else if (rec.book_code === 'haudatut') {
-      const dateS = String(rec.died || rec.buried || '');
+      const dateS = String(rec['died'] || rec['buried'] || '');
       lines.push(
-        `- ${dateS} | ${parishTag} | ${String(rec.person ?? '')} | Cause: ${String(rec.cause ?? '')}`
+        `- ${dateS} | ${parishTag} | ${String(rec['person'] ?? '')} | Cause: ${String(rec['cause'] ?? '')}`
       );
     } else {
-      const dateS = String(rec.arrival || rec.departure || '');
+      const dateS = String(rec['arrival'] || rec['departure'] || '');
       lines.push(
-        `- ${dateS} | ${parishTag} | ${String(rec.person ?? '')} | Place: ${String(rec.other_place ?? '')}`
+        `- ${dateS} | ${parishTag} | ${String(rec['person'] ?? '')} | Place: ${String(rec['other_place'] ?? '')}`
       );
     }
     lines.push(`  ${rec.event_url}`);
@@ -280,7 +280,7 @@ export async function runEvent(
       ),
     };
   }
-  const [parishCode, bookCode, rowId] = parseEventRef(parsed.positionals[0]);
+  const [parishCode, bookCode, rowId] = parseEventRef(parsed.positionals[0] ?? '');
   const refresh = getBooleanOption(parsed, 'refresh');
   const ttlHours = resolveTtlHours(getNumberOption(parsed, 'cacheTtlHours'), ctx);
 
@@ -412,7 +412,7 @@ export async function runArchiveInspect(
   if (limit < 1 || limit > 500) {
     throw new CliValidationError('--limit must be between 1 and 500.');
   }
-  const archiveId = parseArchiveId(parsed.positionals[0]);
+  const archiveId = parseArchiveId(parsed.positionals[0] ?? '');
   const refresh = getBooleanOption(parsed, 'refresh');
   const ttlHours = resolveTtlHours(getNumberOption(parsed, 'cacheTtlHours'), ctx);
   const digitizedOnly = getBooleanOption(parsed, 'digitized');

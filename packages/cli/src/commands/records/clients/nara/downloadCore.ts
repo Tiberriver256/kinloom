@@ -123,7 +123,7 @@ export function readCachedDownloadEntry(
   }
   const meta = readJsonRecordIfValid(metaPath);
   if (meta !== null && options.ttlHours !== null) {
-    const cachedAt = meta.cached_at;
+    const cachedAt = meta['cached_at'];
     if (
       typeof cachedAt === 'number' &&
       Number.isFinite(cachedAt) &&
@@ -132,7 +132,7 @@ export function readCachedDownloadEntry(
       return null;
     }
   }
-  const contentType = typeof meta?.content_type === 'string' ? meta.content_type : '';
+  const contentType = typeof meta?.['content_type'] === 'string' ? meta['content_type'] : '';
   let nbytes: number;
   try {
     nbytes = validateDownloadedFile(binPath, {
@@ -144,7 +144,7 @@ export function readCachedDownloadEntry(
     return null;
   }
   if (meta !== null) {
-    const expectedBytes = meta.bytes;
+    const expectedBytes = meta['bytes'];
     if (typeof expectedBytes === 'number' && Number.isInteger(expectedBytes) && expectedBytes > 0) {
       if (nbytes !== expectedBytes) {
         return null;
@@ -194,7 +194,7 @@ export async function downloadObjectToCache(
         throw new RecordRuntimeError(`HTTP ${resp.status} downloading ${validatedUrl}`);
       }
 
-      const contentType = (resp.headers.get('content-type') ?? '').split(';', 1)[0].trim();
+      const contentType = ((resp.headers.get('content-type') ?? '').split(';', 1)[0] ?? '').trim();
       const contentEncoding = (resp.headers.get('content-encoding') ?? '').trim().toLowerCase();
       const rawLen = (resp.headers.get('content-length') ?? '').trim();
       let expectedLen: number | null = null;

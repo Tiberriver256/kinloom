@@ -34,6 +34,7 @@ export async function executeBatchTargets(
       for (let i = 0; i < targetIds.length; i += 1) {
         const personId = targetIds[i];
         try {
+          if (personId === undefined) continue;
           const single = await executeIntegrateSingle(
             { repoDir, personId, dryRun: true, json: false },
             overlay
@@ -62,6 +63,7 @@ export async function executeBatchTargets(
   for (let i = 0; i < targetIds.length; i += 1) {
     const personId = targetIds[i];
     try {
+      if (personId === undefined) continue;
       const single = await executeIntegrateSingle({
         repoDir,
         personId,

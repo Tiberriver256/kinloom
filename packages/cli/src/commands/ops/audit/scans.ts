@@ -84,10 +84,10 @@ export function runScanInventoryCheck(
   };
 
   const referencedBasenames = new Set<string>();
-  for (const rawItem of Array.isArray(patch.media) ? patch.media : []) {
+  for (const rawItem of Array.isArray(patch['media']) ? patch['media'] : []) {
     const item = isPlainRecord(rawItem) ? rawItem : {};
-    const mediaId = typeof item.id === 'string' ? item.id : null;
-    const fileUrl = typeof item.file === 'string' ? item.file : null;
+    const mediaId = typeof item['id'] === 'string' ? item['id'] : null;
+    const fileUrl = typeof item['file'] === 'string' ? item['file'] : null;
     if (!fileUrl) {
       errors.push(`Media entry '${mediaId ?? 'unknown'}' missing 'file' field.`);
       continue;

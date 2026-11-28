@@ -107,8 +107,8 @@ function checkEventChronologyForPerson(params: {
   warnings: string[];
 }): void {
   const { ev, dt, birth, death, role, labelPrefix, errors, warnings } = params;
-  const evId = asString(ev.id);
-  const textBlob = `${evId} ${asString(ev.event_kind)} ${asString(ev.title)} ${asString(ev.summary)}`;
+  const evId = asString(ev['id']);
+  const textBlob = `${evId} ${asString(ev['event_kind'])} ${asString(ev['title'])} ${asString(ev['summary'])}`;
   const isPostMortemAllowed = POST_MORTEM_RE.test(textBlob);
   const normalizedRole = role
     .trim()
@@ -116,8 +116,8 @@ function checkEventChronologyForPerson(params: {
     .replaceAll(/[\s-]+/g, '_');
   const isPassivePostMortemRole = POST_MORTEM_PASSIVE_ROLES.has(normalizedRole);
   const isPreBirthContext = PRE_BIRTH_CONTEXT_RE.test(textBlob);
-  const isCensus = CENSUS_RE.test(`${evId} ${asString(ev.title)}`);
-  const isMarriage = MARRIAGE_RE.test(`${evId} ${asString(ev.event_kind)} ${asString(ev.title)}`);
+  const isCensus = CENSUS_RE.test(`${evId} ${asString(ev['title'])}`);
+  const isMarriage = MARRIAGE_RE.test(`${evId} ${asString(ev['event_kind'])} ${asString(ev['title'])}`);
 
   const birthMinMs = birth ? auditLowerMs(birth) : null;
   const deathMaxMs = death ? auditUpperMs(death) : null;
@@ -194,9 +194,9 @@ export function runChronologyCheck(
   patch: LooseRecord,
   existingPersonEvents: readonly LooseRecord[]
 ): ChronologyCheckResult {
-  const updates = isPlainRecord(patch.person_updates) ? patch.person_updates : {};
-  const birthRaw = updates.birth_edtf ?? updates.birth_date ?? targetPerson?.birth_edtf ?? '';
-  const deathRaw = updates.death_edtf ?? updates.death_date ?? targetPerson?.death_edtf ?? '';
+  const updates = isPlainRecord(patch['person_updates']) ? patch['person_updates'] : {};
+  const birthRaw = updates['birth_edtf'] ?? updates['birth_date'] ?? targetPerson?.['birth_edtf'] ?? '';
+  const deathRaw = updates['death_edtf'] ?? updates['death_date'] ?? targetPerson?.['death_edtf'] ?? '';
   const birth = parseAuditEdtf(asString(birthRaw));
   const death = parseAuditEdtf(asString(deathRaw));
   const lifespan = computeLifespan(birth, death);
@@ -211,21 +211,21 @@ export function runChronologyCheck(
     errors.push(`Implausible lifespan: ${lifespan.label} (${birth?.raw} to ${death?.raw}).`);
   }
 
-  const personId = typeof patch.person_id === 'string' ? patch.person_id : '';
+  const personId = typeof patch['person_id'] === 'string' ? patch['person_id'] : '';
   const stagedPeopleBounds = new Map<
     string,
     { birth: ParsedAuditEdtf | null; death: ParsedAuditEdtf | null }
   >();
-  for (const rawPerson of Array.isArray(patch.people) ? patch.people : []) {
-    if (!isPlainRecord(rawPerson) || typeof rawPerson.id !== 'string' || !rawPerson.id.trim()) {
+  for (const rawPerson of Array.isArray(patch['people']) ? patch['people'] : []) {
+    if (!isPlainRecord(rawPerson) || typeof rawPerson['id'] !== 'string' || !rawPerson['id'].trim()) {
       continue;
     }
-    const stagedId = rawPerson.id.trim();
+    const stagedId = rawPerson['id'].trim();
     if (stagedId === personId) {
       continue;
     }
-    const stagedBirth = parseAuditEdtf(asString(rawPerson.birth_edtf));
-    const stagedDeath = parseAuditEdtf(asString(rawPerson.death_edtf));
+    const stagedBirth = parseAuditEdtf(asString(rawPerson['birth_edtf']));
+    const stagedDeath = parseAuditEdtf(asString(rawPerson['death_edtf']));
     const stagedLifespan = computeLifespan(stagedBirth, stagedDeath);
     if (stagedBirth && stagedDeath && stagedBirth.startMs > stagedDeath.endMs) {
       errors.push(`[${stagedId}] Birth (${stagedBirth.raw}) is after death (${stagedDeath.raw}).`);
@@ -240,16 +240,16 @@ export function runChronologyCheck(
 
   const eventMap = new Map<string, LooseRecord>();
   for (const ev of existingPersonEvents) {
-    if (typeof ev.id === 'string' && ev.id) {
-      eventMap.set(ev.id, ev);
+    if (typeof ev['id'] === 'string' && ev['id']) {
+      eventMap.set(ev['id'], ev);
     }
   }
-  for (const rawEv of Array.isArray(patch.events) ? patch.events : []) {
-    if (isPlainRecord(rawEv) && typeof rawEv.id === 'string' && rawEv.id) {
-      eventMap.set(rawEv.id, rawEv);
+  for (const rawEv of Array.isArray(patch['events']) ? patch['events'] : []) {
+    if (isPlainRecord(rawEv) && typeof rawEv['id'] === 'string' && rawEv['id']) {
+      eventMap.set(rawEv['id'], rawEv);
     }
   }
-  for (const rawId of Array.isArray(patch.remove_event_ids) ? patch.remove_event_ids : []) {
+  for (const rawId of Array.isArray(patch['remove_event_ids']) ? patch['remove_event_ids'] : []) {
     if (typeof rawId === 'string' && rawId.trim()) {
       eventMap.delete(rawId.trim());
     }
@@ -258,15 +258,15 @@ export function runChronologyCheck(
   let checkedEvents = 0;
 
   for (const ev of eventMap.values()) {
-    const dt = parseAuditEdtf(asString(ev.edtf_date));
+    const dt = parseAuditEdtf(asString(ev['edtf_date']));
     if (!dt) {
       continue;
     }
     checkedEvents += 1;
 
-    const participants = Array.isArray(ev.participants) ? ev.participants : [];
+    const participants = Array.isArray(ev['participants']) ? ev['participants'] : [];
     const participantRecords = participants.filter((pt): pt is LooseRecord => isPlainRecord(pt));
-    const subjectPart = participantRecords.find((pt) => pt.person_id === personId);
+    const subjectPart = participantRecords.find((pt) => pt['person_id'] === personId);
     const appliesToTarget = participantRecords.length === 0 || subjectPart !== undefined;
 
     if (appliesToTarget) {
@@ -276,7 +276,7 @@ export function runChronologyCheck(
         personId,
         birth,
         death,
-        role: subjectPart ? asString(subjectPart.role) : '',
+        role: subjectPart ? asString(subjectPart['role']) : '',
         labelPrefix: '',
         errors,
         warnings,
@@ -284,7 +284,7 @@ export function runChronologyCheck(
     }
 
     for (const pt of participantRecords) {
-      const ptId = typeof pt.person_id === 'string' ? pt.person_id : '';
+      const ptId = typeof pt['person_id'] === 'string' ? pt['person_id'] : '';
       if (!ptId || ptId === personId) {
         continue;
       }
@@ -298,7 +298,7 @@ export function runChronologyCheck(
         personId: ptId,
         birth: stagedBounds.birth,
         death: stagedBounds.death,
-        role: asString(pt.role),
+        role: asString(pt['role']),
         labelPrefix: `[${ptId}] `,
         errors,
         warnings,

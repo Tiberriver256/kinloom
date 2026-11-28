@@ -50,7 +50,7 @@ function createCaptureIo(): { io: CliIo; stdout: string[]; stderr: string[] } {
 }
 
 afterEach(async () => {
-  delete process.env.KINLOOM_TELEMETRY_FILE;
+  delete process.env['KINLOOM_TELEMETRY_FILE'];
   while (tempDirs.length > 0) {
     const dir = tempDirs.pop();
     if (dir) {
@@ -258,12 +258,12 @@ describe('design-audit deterministic probes, capture matrix & SARIF 2.1.0', () =
 
     // Add a VLM finding on the same target to verify deterministic supersession & SARIF baseline ratchet
     const vlmDuplicate: DesignAuditFinding = {
-      ...findings[0],
+      ...findings[0]!,
       provenance: 'vlm-reference-anchored',
       message: 'VLM duplicate should be superseded',
     };
     const vlmUnique: DesignAuditFinding = {
-      ...findings[0],
+      ...findings[0]!,
       ruleId: 'DA-04-VLM-SQUINT',
       metricId: '04',
       pillar: 'II',
@@ -271,8 +271,8 @@ describe('design-audit deterministic probes, capture matrix & SARIF 2.1.0', () =
       severity: 'warning',
       message: 'Squint hierarchy note',
     };
-    expect(dedupeFindings([vlmDuplicate, findings[0]]).length).toBe(1);
-    expect(dedupeFindings([vlmDuplicate, findings[0]])[0].provenance).toBe('deterministic');
+    expect(dedupeFindings([vlmDuplicate, findings[0]!]).length).toBe(1);
+    expect(dedupeFindings([vlmDuplicate, findings[0]!])[0]!.provenance).toBe('deterministic');
 
     fs.writeFileSync(path.join(tmp, 'track-b-findings.json'), JSON.stringify([vlmUnique]), 'utf8');
     const firstSarif = emitSarifAndDossier({ bundleDir: tmp });
@@ -375,7 +375,7 @@ describe('design-audit deterministic probes, capture matrix & SARIF 2.1.0', () =
 describe('kinloom design-audit CLI subcommand dispatch', () => {
   it('supports help, guide, archetypes, standards, init, css, static-only run, and sarif', async () => {
     const tmp = await makeTempDir('kinloom-da-cli-');
-    process.env.KINLOOM_TELEMETRY_FILE = path.join(tmp, 'calls.jsonl');
+    process.env['KINLOOM_TELEMETRY_FILE'] = path.join(tmp, 'calls.jsonl');
 
     const helpCap = createCaptureIo();
     expect(await runCli(['design-audit', '--help'], { io: helpCap.io })).toBe(EXIT_OK);
@@ -441,7 +441,7 @@ describe('kinloom design-audit CLI subcommand dispatch', () => {
 
   it('exercises UI Stack route interceptors, focus occlusion trace, plan-based runs, and text/fail-on-error CLI paths', async () => {
     const tmp = await makeTempDir('kinloom-da-branches-');
-    process.env.KINLOOM_TELEMETRY_FILE = path.join(tmp, 'calls.jsonl');
+    process.env['KINLOOM_TELEMETRY_FILE'] = path.join(tmp, 'calls.jsonl');
 
     const fulfilledStatuses: number[] = [];
     const fakeBrowser: DesignAuditBrowser = {
@@ -588,7 +588,7 @@ describe('kinloom design-audit CLI subcommand dispatch', () => {
 
   it('covers clean telemetry, empty SARIF dossier, phase-3b override, APCA low-clip, and CLI theme/state flags', async () => {
     const tmp = await makeTempDir('kinloom-da-edge-');
-    process.env.KINLOOM_TELEMETRY_FILE = path.join(tmp, 'calls.jsonl');
+    process.env['KINLOOM_TELEMETRY_FILE'] = path.join(tmp, 'calls.jsonl');
 
     // APCA low-clip both polarities & default archetype
     expect(parseCssRgbTuple(undefined)).toBeNull();

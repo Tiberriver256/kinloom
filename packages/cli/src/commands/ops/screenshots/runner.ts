@@ -37,27 +37,27 @@ export interface ResolvedScreenshotRunConfig {
   readonly explicitPluginRoutes: readonly string[];
   readonly samplePeople: number;
   readonly samplePlaces: number;
-  readonly authCookie?: string;
+  readonly authCookie?: string | undefined;
   readonly authHeaders: readonly AuthHeader[];
   readonly cookieSpecs: readonly ScreenshotCookieSpec[];
   readonly extraHeaders: Readonly<Record<string, string>>;
   readonly fullPage: boolean;
   readonly waitMs: number;
   readonly timeoutMs: number;
-  readonly heavyTimeoutMs?: number;
-  readonly mapSettleTimeoutMs?: number;
-  readonly env?: NodeJS.ProcessEnv;
+  readonly heavyTimeoutMs?: number | undefined;
+  readonly mapSettleTimeoutMs?: number | undefined;
+  readonly env?: NodeJS.ProcessEnv | undefined;
   readonly concurrency: number;
   readonly json: boolean;
 }
 
 export function isMapCaptureTarget(target: CaptureTarget): boolean {
-  const pathOnly = target.route.split('?')[0].toLowerCase();
+  const pathOnly = (target.route.split('?')[0] ?? '').toLowerCase();
   return (target.category === 'page' && target.isMap === true) || pathOnly === '/map';
 }
 
 export function isHeavyCaptureTarget(target: CaptureTarget): boolean {
-  const pathOnly = target.route.split('?')[0].toLowerCase();
+  const pathOnly = (target.route.split('?')[0] ?? '').toLowerCase();
   return (target.category === 'page' && target.isHeavyPage === true) || pathOnly === '/evidence';
 }
 
@@ -162,6 +162,9 @@ export async function discoverLiveDomMetadata(
   const probeViewport = config.viewports[config.viewports.length - 1];
   const probeTheme = config.themes[0];
   let context: ScreenshotContextHandle | undefined;
+  if (!probeViewport || !probeTheme) {
+    return { navExtraCoreRoutes: [], discoveredPluginRoutes: [], discoveredSlots: [] };
+  }
   try {
     context = await openConfiguredContext(browser, probeViewport, probeTheme, config);
     const page = await context.newPage();
@@ -471,7 +474,9 @@ export async function runWithBoundedConcurrency<Item, Result>(
     while (cursor < items.length) {
       const idx = cursor;
       cursor += 1;
-      results[idx] = await worker(items[idx], idx);
+      const item = items[idx];
+      if (item === undefined) continue;
+      results[idx] = await worker(item, idx);
     }
   };
 

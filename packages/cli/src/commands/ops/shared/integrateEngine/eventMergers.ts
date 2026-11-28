@@ -113,11 +113,11 @@ export function mergeEventsPatch(
       return rawEv;
     }
     const removeIds = parseOptionalStringList(
-      rawEv.remove_source_ids,
+      rawEv['remove_source_ids'],
       `patch.events[${idx}].remove_source_ids`
     );
     const copy: Record<string, unknown> = { ...rawEv };
-    delete copy.remove_source_ids;
+    delete copy['remove_source_ids'];
     const parsedEv = RawEventSchema.parse(copy);
     if (removeIds.length > 0) {
       const removeSet = new Set(removeIds);

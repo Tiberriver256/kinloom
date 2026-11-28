@@ -105,7 +105,7 @@ export function formatSourceTypeLabel(sourceType?: string): string {
   }
   return sourceType
     .split('_')
-    .map((part) => (part ? part[0].toUpperCase() + part.slice(1) : ''))
+    .map((part) => (part ? (part[0] ?? '').toUpperCase() + part.slice(1) : ''))
     .join(' ');
 }
 

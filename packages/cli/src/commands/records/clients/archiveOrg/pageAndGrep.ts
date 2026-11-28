@@ -22,17 +22,17 @@ function resolveSegmentPage(
   if (mode === 'bookreader') {
     const b2s = pageIndex.bookreader_to_scandata ?? {};
     const b2p = pageIndex.bookreader_to_printed ?? {};
-    const scandataLeaf = Object.hasOwn(b2s, key) ? b2s[key] : null;
-    const printed = Object.hasOwn(b2p, key) ? b2p[key] : null;
+    const scandataLeaf = Object.hasOwn(b2s, key) ? (b2s[key] ?? null) : null;
+    const printed = Object.hasOwn(b2p, key) ? (b2p[key] ?? null) : null;
     return [segIdx, scandataLeaf, printed];
   }
   const s2b = pageIndex.scandata_to_bookreader ?? {};
   const s2p = pageIndex.scandata_to_printed ?? {};
-  let brN: number | null = Object.hasOwn(s2b, key) ? s2b[key] : null;
+  let brN: number | null = Object.hasOwn(s2b, key) ? (s2b[key] ?? null) : null;
   if (brN === null && Object.keys(s2b).length === 0) {
     brN = segIdx;
   }
-  const printed = Object.hasOwn(s2p, key) ? s2p[key] : null;
+  const printed = Object.hasOwn(s2p, key) ? (s2p[key] ?? null) : null;
   return [brN, segIdx, printed];
 }
 
@@ -142,14 +142,14 @@ export function resolvePrintedPageToLeaf(
   const b2s = pageIndex.bookreader_to_scandata ?? {};
   if (Object.hasOwn(p2b, target)) {
     const brN = Number(p2b[target]);
-    const scLeaf = Object.hasOwn(b2s, String(brN)) ? b2s[String(brN)] : null;
+    const scLeaf = Object.hasOwn(b2s, String(brN)) ? (b2s[String(brN)] ?? null) : null;
     return [brN, scLeaf];
   }
   const p2bCi = pageIndex.printed_to_bookreader_ci ?? {};
   const lower = target.toLowerCase();
   if (Object.hasOwn(p2bCi, lower)) {
     const brN = Number(p2bCi[lower]);
-    const scLeaf = Object.hasOwn(b2s, String(brN)) ? b2s[String(brN)] : null;
+    const scLeaf = Object.hasOwn(b2s, String(brN)) ? (b2s[String(brN)] ?? null) : null;
     return [brN, scLeaf];
   }
   const p2s = pageIndex.printed_to_scandata ?? {};
@@ -178,8 +178,8 @@ export function describeLeaf(
   const b2p = pageIndex.bookreader_to_printed ?? {};
   return {
     leaf: leafN,
-    scandata_leaf: Object.hasOwn(b2s, key) ? b2s[key] : null,
-    printed_page: Object.hasOwn(b2p, key) ? b2p[key] : null,
+    scandata_leaf: Object.hasOwn(b2s, key) ? (b2s[key] ?? null) : null,
+    printed_page: Object.hasOwn(b2p, key) ? (b2p[key] ?? null) : null,
   };
 }
 
@@ -300,8 +300,8 @@ export function parseLeafSpec(spec: string): number[] {
     const rangeMatch = /^[nN]?(\d+)\s*-\s*[nN]?(\d+)$/.exec(part);
     let chunk: number[];
     if (rangeMatch) {
-      const start = Number.parseInt(rangeMatch[1], 10);
-      const end = Number.parseInt(rangeMatch[2], 10);
+      const start = Number.parseInt(rangeMatch[1] ?? '', 10);
+      const end = Number.parseInt(rangeMatch[2] ?? '', 10);
       if (end < start) {
         throw new CliValidationError(`Invalid --leaves range '${part}': ${end} precedes ${start}.`);
       }
@@ -347,8 +347,8 @@ export function parsePrintedPageSpec(spec: string): string[] {
     const rangeMatch = /^(\d+)\s*-\s*(\d+)$/.exec(part);
     let chunk: string[];
     if (rangeMatch) {
-      const start = Number.parseInt(rangeMatch[1], 10);
-      const end = Number.parseInt(rangeMatch[2], 10);
+      const start = Number.parseInt(rangeMatch[1] ?? '', 10);
+      const end = Number.parseInt(rangeMatch[2] ?? '', 10);
       if (end < start) {
         throw new CliValidationError(`Invalid --printed-pages range '${part}': ${end} precedes ${start}.`);
       }
@@ -392,7 +392,7 @@ export function pageSuffixAndUrl(
 export function resolveSearchQuery(
   queryParts: readonly string[],
   queryFlag: string | undefined,
-  options: { readonly mediatype?: string; readonly collections?: readonly string[] } = {}
+  options: { readonly mediatype?: string | undefined; readonly collections?: readonly string[] } = {}
 ): string {
   const posText = queryParts
     .filter((p) => p.length > 0)

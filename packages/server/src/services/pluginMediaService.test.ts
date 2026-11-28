@@ -271,7 +271,7 @@ describe('stripImageMetadata (pure-TS JPEG/PNG/WebP EXIF/XMP/IPTC scrubber)', ()
   it('rejects malformed or CRC-corrupt PNG payloads', () => {
     const valid = buildSyntheticPngWithMetadata(16, 16);
     const corruptCrc = valid.slice();
-    corruptCrc[corruptCrc.byteLength - 1] ^= 0xff; // Flip bit in IEND CRC
+    corruptCrc[corruptCrc.byteLength - 1] = (corruptCrc[corruptCrc.byteLength - 1] ?? 0) ^ 0xff; // Flip bit in IEND CRC
     expect(() => stripImageMetadata(corruptCrc, 'image/png')).toThrow(/CRC verification/);
 
     expect(() => stripImageMetadata(new Uint8Array([0x01, 0x02, 0x03]), 'image/png')).toThrow(
@@ -296,14 +296,14 @@ describe('stripImageMetadata (pure-TS JPEG/PNG/WebP EXIF/XMP/IPTC scrubber)', ()
     expect(text).not.toContain('WEBP_EXIF_GPS_SECRET');
     expect(text).not.toContain('WEBP_XMP_SECRET');
     // VP8X flags byte is at offset 12 (RIFF header) + 8 (VP8X header) = 20
-    expect(stripped.bytes[20] & (0x08 | 0x04)).toBe(0);
-    expect(stripped.bytes[20] & 0x10).toBe(0x10); // Alpha bit preserved
+    expect(stripped.bytes[20]! & (0x08 | 0x04)).toBe(0);
+    expect(stripped.bytes[20]! & 0x10).toBe(0x10); // Alpha bit preserved
     // RIFF header declared size matches actual buffer size - 8
     const riffSize =
-      (stripped.bytes[4] |
-        (stripped.bytes[5] << 8) |
-        (stripped.bytes[6] << 16) |
-        (stripped.bytes[7] << 24)) >>>
+      (stripped.bytes[4]! |
+        (stripped.bytes[5]! << 8) |
+        (stripped.bytes[6]! << 16) |
+        (stripped.bytes[7]! << 24)) >>>
       0;
     expect(riffSize).toBe(stripped.bytes.byteLength - 8);
 

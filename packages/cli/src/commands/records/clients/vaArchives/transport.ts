@@ -67,7 +67,7 @@ export function isCacheMetaValid(
   } catch {
     return undefined;
   }
-  const cachedAt = meta.cached_at;
+  const cachedAt = meta['cached_at'];
   if (typeof cachedAt !== 'number' || !Number.isFinite(cachedAt)) {
     return undefined;
   }
@@ -78,10 +78,10 @@ export function isCacheMetaValid(
     }
   }
   return {
-    url: typeof meta.url === 'string' ? meta.url : '',
-    content_type: typeof meta.content_type === 'string' ? meta.content_type : '',
+    url: typeof meta['url'] === 'string' ? meta['url'] : '',
+    content_type: typeof meta['content_type'] === 'string' ? meta['content_type'] : '',
     cached_at: cachedAt,
-    size: typeof meta.size === 'number' ? meta.size : 0,
+    size: typeof meta['size'] === 'number' ? meta['size'] : 0,
   };
 }
 
@@ -118,10 +118,10 @@ export async function cachedFetch(
   cachePath: string,
   options: {
     readonly method?: 'GET' | 'POST';
-    readonly params?: Readonly<Record<string, string>>;
-    readonly data?: Readonly<Record<string, string>>;
+    readonly params?: Readonly<Record<string, string>> | undefined;
+    readonly data?: Readonly<Record<string, string>> | undefined;
     readonly ttlHours: number | null;
-    readonly allowedHosts?: readonly string[];
+    readonly allowedHosts?: readonly string[] | undefined;
   }
 ): Promise<{ readonly path: string; readonly meta: CachedMeta; readonly cacheHit: boolean }> {
   if (!state.refresh) {
@@ -190,9 +190,9 @@ export async function fetchText(
   url: string,
   options: {
     readonly method?: 'GET' | 'POST';
-    readonly params?: Readonly<Record<string, string>>;
-    readonly data?: Readonly<Record<string, string>>;
-    readonly allowedHosts?: readonly string[];
+    readonly params?: Readonly<Record<string, string>> | undefined;
+    readonly data?: Readonly<Record<string, string>> | undefined;
+    readonly allowedHosts?: readonly string[] | undefined;
   } = {}
 ): Promise<string> {
   const method = options.method ?? 'GET';
@@ -294,7 +294,7 @@ export async function resolveRosetta(
   if (!viewerUrl) {
     const params: Record<string, string> = { search: 'hide', dps_pid: ie };
     if (info.dps_dvs) {
-      params.dps_dvs = info.dps_dvs;
+      params['dps_dvs'] = info.dps_dvs;
     }
     viewerUrl = buildUrlWithParams(ROSETTA_VIEWER, params);
   }

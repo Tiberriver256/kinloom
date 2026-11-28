@@ -18,7 +18,7 @@ export class KinloomHttpError extends Error {
 export function toErrorResponseData(error: unknown): {
   status: number;
   body: ApiErrorEnvelope;
-  headers?: Record<string, string>;
+  headers?: Record<string, string> | undefined;
 } {
   if (error instanceof KinloomHttpError) {
     const headers: Record<string, string> | undefined =

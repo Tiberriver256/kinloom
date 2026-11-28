@@ -104,12 +104,11 @@ function parseSimplePronunciationFast(v: unknown): PronResult {
   if (v === undefined || v === null) {
     return v;
   }
-  if (!isObj(v) || v.variants !== undefined || v.match_full_name_contains !== undefined) {
+  if (!isObj(v) || v['variants'] !== undefined || v['match_full_name_contains'] !== undefined) {
     return PRON_FAIL;
   }
   const out: Pronunciation = {};
-  for (let i = 0; i < PRON_STR_FIELDS.length; i += 1) {
-    const field = PRON_STR_FIELDS[i];
+  for (const field of PRON_STR_FIELDS) {
     const fv = v[field];
     if (fv === undefined) {
       continue;
@@ -140,23 +139,23 @@ export function tryFastParseRawPerson(raw: unknown, ownsInput = false): RawPerso
   }
 
   let altNames: string[];
-  if (raw.alt_names === undefined) {
+  if (raw['alt_names'] === undefined) {
     altNames = [];
   } else {
-    if (!Array.isArray(raw.alt_names)) {
+    if (!Array.isArray(raw['alt_names'])) {
       return null;
     }
     if (ownsInput) {
-      for (let i = 0; i < raw.alt_names.length; i += 1) {
-        if (typeof raw.alt_names[i] !== 'string') {
+      for (let i = 0; i < raw['alt_names'].length; i += 1) {
+        if (typeof raw['alt_names'][i] !== 'string') {
           return null;
         }
       }
-      altNames = raw.alt_names as string[];
+      altNames = raw['alt_names'] as string[];
     } else {
-      altNames = new Array<string>(raw.alt_names.length);
-      for (let i = 0; i < raw.alt_names.length; i += 1) {
-        const a = raw.alt_names[i];
+      altNames = new Array<string>(raw['alt_names'].length);
+      for (let i = 0; i < raw['alt_names'].length; i += 1) {
+        const a = raw['alt_names'][i];
         if (typeof a !== 'string') {
           return null;
         }
@@ -165,62 +164,62 @@ export function tryFastParseRawPerson(raw: unknown, ownsInput = false): RawPerso
     }
   }
 
-  const sex = raw.sex === undefined ? 'U' : raw.sex;
+  const sex = raw['sex'] === undefined ? 'U' : raw['sex'];
   if (typeof sex !== 'string') {
     return null;
   }
-  const isLiving = raw.is_living === undefined ? false : raw.is_living;
+  const isLiving = raw['is_living'] === undefined ? false : raw['is_living'];
   if (typeof isLiving !== 'boolean') {
     return null;
   }
-  const lineageGroup = raw.lineage_group === undefined ? 'extended' : raw.lineage_group;
+  const lineageGroup = raw['lineage_group'] === undefined ? 'extended' : raw['lineage_group'];
   if (typeof lineageGroup !== 'string') {
     return null;
   }
-  const birthEdtf = coerceEdtf(raw.birth_edtf);
-  const deathEdtf = coerceEdtf(raw.death_edtf);
+  const birthEdtf = coerceEdtf(raw['birth_edtf']);
+  const deathEdtf = coerceEdtf(raw['death_edtf']);
   if (birthEdtf === undefined || deathEdtf === undefined) {
     return null;
   }
-  const portraitUrl = raw.portrait_url === undefined ? null : raw.portrait_url;
+  const portraitUrl = raw['portrait_url'] === undefined ? null : raw['portrait_url'];
   if (portraitUrl !== null && typeof portraitUrl !== 'string') {
     return null;
   }
-  const gedcomXref = raw.gedcom_xref;
+  const gedcomXref = raw['gedcom_xref'];
   if (gedcomXref !== undefined && gedcomXref !== null && typeof gedcomXref !== 'string') {
     return null;
   }
-  const branch = raw.branch;
+  const branch = raw['branch'];
   if (branch !== undefined && typeof branch !== 'string') {
     return null;
   }
-  const thumbUrl = raw.thumb_url;
+  const thumbUrl = raw['thumb_url'];
   if (thumbUrl !== undefined && thumbUrl !== null && typeof thumbUrl !== 'string') {
     return null;
   }
-  const hasPrimarySource = raw.has_primary_source;
+  const hasPrimarySource = raw['has_primary_source'];
   if (hasPrimarySource !== undefined && typeof hasPrimarySource !== 'boolean') {
     return null;
   }
-  const extensions = raw.extensions;
+  const extensions = raw['extensions'];
   if (extensions !== undefined && !isObj(extensions)) {
     return null;
   }
-  const pron = parseSimplePronunciationFast(raw.pronunciation);
+  const pron = parseSimplePronunciationFast(raw['pronunciation']);
   if (pron === PRON_FAIL) {
     return null;
   }
 
   if (
     ownsInput &&
-    raw.alt_names === altNames &&
-    raw.sex === sex &&
-    raw.is_living === isLiving &&
-    raw.lineage_group === lineageGroup &&
-    raw.birth_edtf === birthEdtf &&
-    raw.death_edtf === deathEdtf &&
-    raw.portrait_url === portraitUrl &&
-    raw.pronunciation === undefined
+    raw['alt_names'] === altNames &&
+    raw['sex'] === sex &&
+    raw['is_living'] === isLiving &&
+    raw['lineage_group'] === lineageGroup &&
+    raw['birth_edtf'] === birthEdtf &&
+    raw['death_edtf'] === deathEdtf &&
+    raw['portrait_url'] === portraitUrl &&
+    raw['pronunciation'] === undefined
   ) {
     let expectedKeys = 12;
     if (gedcomXref !== undefined) expectedKeys += 1;
@@ -318,13 +317,13 @@ function tryFastParseEventSourceRefs(raw: unknown, ownsInput = false): EventSour
       ) {
         return null;
       }
-      const claimed = coerceOptNullableStrFast(item.claimed_date);
+      const claimed = coerceOptNullableStrFast(item['claimed_date']);
       if (claimed === OPT_STR_FAIL) {
         return null;
       }
-      const citationDetail = item.citation_detail;
-      const scanUrl = item.scan_url;
-      const scanTitle = item.scan_title;
+      const citationDetail = item['citation_detail'];
+      const scanUrl = item['scan_url'];
+      const scanTitle = item['scan_title'];
       if (
         (citationDetail !== undefined && citationDetail !== null && typeof citationDetail !== 'string') ||
         (scanUrl !== undefined && scanUrl !== null && typeof scanUrl !== 'string') ||
@@ -337,7 +336,7 @@ function tryFastParseEventSourceRefs(raw: unknown, ownsInput = false): EventSour
       if (citationDetail !== undefined) expectedKeys += 1;
       if (scanUrl !== undefined) expectedKeys += 1;
       if (scanTitle !== undefined) expectedKeys += 1;
-      if (claimed !== item.claimed_date || countOwnEnumerableKeys(item) !== expectedKeys) {
+      if (claimed !== item['claimed_date'] || countOwnEnumerableKeys(item) !== expectedKeys) {
         canReuse = false;
         break;
       }
@@ -362,13 +361,13 @@ function tryFastParseEventSourceRefs(raw: unknown, ownsInput = false): EventSour
     ) {
       return null;
     }
-    const claimed = coerceOptNullableStrFast(item.claimed_date);
+    const claimed = coerceOptNullableStrFast(item['claimed_date']);
     if (claimed === OPT_STR_FAIL) {
       return null;
     }
-    const citationDetail = item.citation_detail;
-    const scanUrl = item.scan_url;
-    const scanTitle = item.scan_title;
+    const citationDetail = item['citation_detail'];
+    const scanUrl = item['scan_url'];
+    const scanTitle = item['scan_title'];
     if (
       (citationDetail !== undefined && citationDetail !== null && typeof citationDetail !== 'string') ||
       (scanUrl !== undefined && scanUrl !== null && typeof scanUrl !== 'string') ||
@@ -414,33 +413,33 @@ export function tryFastParseRawEvent(raw: unknown, ownsInput = false): RawEvent 
     return null;
   }
   if (
-    raw.alternate_places !== undefined ||
-    raw.fact_conflicts !== undefined ||
-    raw.weather_metrics !== undefined
+    raw['alternate_places'] !== undefined ||
+    raw['fact_conflicts'] !== undefined ||
+    raw['weather_metrics'] !== undefined
   ) {
     return null;
   }
-  const edtfDate = coerceEdtf(raw.edtf_date);
+  const edtfDate = coerceEdtf(raw['edtf_date']);
   if (edtfDate === undefined) {
     return null;
   }
-  const placeId = raw.place_id === undefined ? null : raw.place_id;
+  const placeId = raw['place_id'] === undefined ? null : raw['place_id'];
   if (placeId !== null && typeof placeId !== 'string') {
     return null;
   }
-  const rawSummary = raw.summary === undefined || raw.summary === null ? '' : raw.summary;
+  const rawSummary = raw['summary'] === undefined || raw['summary'] === null ? '' : raw['summary'];
   if (typeof rawSummary !== 'string') {
     return null;
   }
-  const category = raw.category;
+  const category = raw['category'];
   if (category !== undefined && category !== null && typeof category !== 'string') {
     return null;
   }
-  const placePrecision = raw.place_precision;
+  const placePrecision = raw['place_precision'];
   if (placePrecision !== undefined && placePrecision !== null && typeof placePrecision !== 'string') {
     return null;
   }
-  const severityRank = raw.severity_rank;
+  const severityRank = raw['severity_rank'];
   if (
     severityRank !== undefined &&
     severityRank !== null &&
@@ -448,67 +447,67 @@ export function tryFastParseRawEvent(raw: unknown, ownsInput = false): RawEvent 
   ) {
     return null;
   }
-  const sourceUrl = raw.source_url;
+  const sourceUrl = raw['source_url'];
   if (sourceUrl !== undefined && sourceUrl !== null && typeof sourceUrl !== 'string') {
     return null;
   }
-  const photoUrl = raw.photo_url;
+  const photoUrl = raw['photo_url'];
   if (photoUrl !== undefined && photoUrl !== null && typeof photoUrl !== 'string') {
     return null;
   }
-  const photoCaption = raw.photo_placeholder_caption;
+  const photoCaption = raw['photo_placeholder_caption'];
   if (photoCaption !== undefined && photoCaption !== null && typeof photoCaption !== 'string') {
     return null;
   }
-  const hasPrimarySource = raw.has_primary_source;
+  const hasPrimarySource = raw['has_primary_source'];
   if (hasPrimarySource !== undefined && typeof hasPrimarySource !== 'boolean') {
     return null;
   }
-  const extensions = raw.extensions;
+  const extensions = raw['extensions'];
   if (extensions !== undefined && !isObj(extensions)) {
     return null;
   }
 
   let alternateDates: AlternateDate[] | undefined;
-  if (raw.alternate_dates !== undefined) {
-    if (!Array.isArray(raw.alternate_dates)) {
+  if (raw['alternate_dates'] !== undefined) {
+    if (!Array.isArray(raw['alternate_dates'])) {
       return null;
     }
-    alternateDates = new Array<AlternateDate>(raw.alternate_dates.length);
-    for (let i = 0; i < raw.alternate_dates.length; i += 1) {
-      const ad = raw.alternate_dates[i];
-      if (!isObj(ad) || typeof ad.source_id !== 'string' || ad.source_id.length === 0) {
+    alternateDates = new Array<AlternateDate>(raw['alternate_dates'].length);
+    for (let i = 0; i < raw['alternate_dates'].length; i += 1) {
+      const ad = raw['alternate_dates'][i];
+      if (!isObj(ad) || typeof ad['source_id'] !== 'string' || ad['source_id'].length === 0) {
         return null;
       }
-      const adEdtf = coerceEdtf(ad.edtf_date);
+      const adEdtf = coerceEdtf(ad['edtf_date']);
       if (adEdtf === undefined) {
         return null;
       }
-      const note = ad.note === undefined || ad.note === null ? '' : ad.note;
+      const note = ad['note'] === undefined || ad['note'] === null ? '' : ad['note'];
       if (typeof note !== 'string') {
         return null;
       }
-      alternateDates[i] = { edtf_date: adEdtf, source_id: ad.source_id, note };
+      alternateDates[i] = { edtf_date: adEdtf, source_id: ad['source_id'], note };
     }
   }
 
   let participants: EventParticipant[];
-  if (raw.participants === undefined) {
+  if (raw['participants'] === undefined) {
     participants = [];
   } else {
-    if (!Array.isArray(raw.participants)) {
+    if (!Array.isArray(raw['participants'])) {
       return null;
     }
     if (ownsInput) {
       let canReusePts = true;
-      for (let i = 0; i < raw.participants.length; i += 1) {
-        const pt = raw.participants[i];
+      for (let i = 0; i < raw['participants'].length; i += 1) {
+        const pt = raw['participants'][i];
         if (
           !isObj(pt) ||
-          typeof pt.person_id !== 'string' ||
-          pt.person_id.length === 0 ||
-          typeof pt.role !== 'string' ||
-          pt.role.length === 0
+          typeof pt['person_id'] !== 'string' ||
+          pt['person_id'].length === 0 ||
+          typeof pt['role'] !== 'string' ||
+          pt['role'].length === 0
         ) {
           return null;
         }
@@ -518,54 +517,54 @@ export function tryFastParseRawEvent(raw: unknown, ownsInput = false): RawEvent 
         }
       }
       if (canReusePts) {
-        participants = raw.participants as EventParticipant[];
+        participants = raw['participants'] as EventParticipant[];
       } else {
-        participants = new Array<EventParticipant>(raw.participants.length);
-        for (let i = 0; i < raw.participants.length; i += 1) {
-          const pt = raw.participants[i];
+        participants = new Array<EventParticipant>(raw['participants'].length);
+        for (let i = 0; i < raw['participants'].length; i += 1) {
+          const pt = raw['participants'][i];
           if (
             !isObj(pt) ||
-            typeof pt.person_id !== 'string' ||
-            pt.person_id.length === 0 ||
-            typeof pt.role !== 'string' ||
-            pt.role.length === 0
+            typeof pt['person_id'] !== 'string' ||
+            pt['person_id'].length === 0 ||
+            typeof pt['role'] !== 'string' ||
+            pt['role'].length === 0
           ) {
             return null;
           }
-          participants[i] = { person_id: pt.person_id, role: pt.role };
+          participants[i] = { person_id: pt['person_id'], role: pt['role'] };
         }
       }
     } else {
-      participants = new Array<EventParticipant>(raw.participants.length);
-      for (let i = 0; i < raw.participants.length; i += 1) {
-        const pt = raw.participants[i];
+      participants = new Array<EventParticipant>(raw['participants'].length);
+      for (let i = 0; i < raw['participants'].length; i += 1) {
+        const pt = raw['participants'][i];
         if (
           !isObj(pt) ||
-          typeof pt.person_id !== 'string' ||
-          pt.person_id.length === 0 ||
-          typeof pt.role !== 'string' ||
-          pt.role.length === 0
+          typeof pt['person_id'] !== 'string' ||
+          pt['person_id'].length === 0 ||
+          typeof pt['role'] !== 'string' ||
+          pt['role'].length === 0
         ) {
           return null;
         }
-        participants[i] = { person_id: pt.person_id, role: pt.role };
+        participants[i] = { person_id: pt['person_id'], role: pt['role'] };
       }
     }
   }
 
-  const sources = tryFastParseEventSourceRefs(raw.sources, ownsInput);
+  const sources = tryFastParseEventSourceRefs(raw['sources'], ownsInput);
   if (!sources) {
     return null;
   }
 
   if (
     ownsInput &&
-    raw.edtf_date === edtfDate &&
-    raw.place_id === placeId &&
-    raw.summary === rawSummary &&
-    raw.participants === participants &&
-    raw.sources === sources &&
-    raw.alternate_dates === undefined
+    raw['edtf_date'] === edtfDate &&
+    raw['place_id'] === placeId &&
+    raw['summary'] === rawSummary &&
+    raw['participants'] === participants &&
+    raw['sources'] === sources &&
+    raw['alternate_dates'] === undefined
   ) {
     let expectedKeys = 9;
     if (category !== undefined) expectedKeys += 1;
@@ -651,41 +650,41 @@ export function tryFastParsePlace(raw: unknown, ownsInput = false): Place | null
     return null;
   }
   if (
-    raw.historical_names !== undefined ||
-    raw.sources !== undefined ||
-    raw.ancestor_ids !== undefined ||
-    raw.min_lat !== undefined ||
-    raw.max_lat !== undefined ||
-    raw.min_lng !== undefined ||
-    raw.max_lng !== undefined
+    raw['historical_names'] !== undefined ||
+    raw['sources'] !== undefined ||
+    raw['ancestor_ids'] !== undefined ||
+    raw['min_lat'] !== undefined ||
+    raw['max_lat'] !== undefined ||
+    raw['min_lng'] !== undefined ||
+    raw['max_lng'] !== undefined
   ) {
     return null;
   }
-  const summary = raw.summary;
+  const summary = raw['summary'];
   if (summary !== undefined && summary !== null && typeof summary !== 'string') {
     return null;
   }
-  const photoUrl = raw.photo_url;
+  const photoUrl = raw['photo_url'];
   if (photoUrl !== undefined && photoUrl !== null && typeof photoUrl !== 'string') {
     return null;
   }
-  const photoCaption = raw.photo_caption;
+  const photoCaption = raw['photo_caption'];
   if (photoCaption !== undefined && photoCaption !== null && typeof photoCaption !== 'string') {
     return null;
   }
-  const hasPrimarySource = raw.has_primary_source;
+  const hasPrimarySource = raw['has_primary_source'];
   if (hasPrimarySource !== undefined && typeof hasPrimarySource !== 'boolean') {
     return null;
   }
-  const extensions = raw.extensions;
+  const extensions = raw['extensions'];
   if (extensions !== undefined && !isObj(extensions)) {
     return null;
   }
-  const pron = parseSimplePronunciationFast(raw.pronunciation);
+  const pron = parseSimplePronunciationFast(raw['pronunciation']);
   if (pron === PRON_FAIL) {
     return null;
   }
-  if (ownsInput && raw.pronunciation === undefined) {
+  if (ownsInput && raw['pronunciation'] === undefined) {
     let expectedKeys = 8;
     if (summary !== undefined) expectedKeys += 1;
     if (photoUrl !== undefined) expectedKeys += 1;
@@ -740,12 +739,12 @@ export function tryFastParseSourceRecord(raw: unknown, ownsInput = false): Sourc
   ) {
     return null;
   }
-  const gedcomXref = raw.gedcom_xref;
-  const author = raw.author;
-  const publisher = raw.publisher;
-  const repository = raw.repository;
-  const url = raw.url;
-  const hasPrimarySource = raw.has_primary_source;
+  const gedcomXref = raw['gedcom_xref'];
+  const author = raw['author'];
+  const publisher = raw['publisher'];
+  const repository = raw['repository'];
+  const url = raw['url'];
+  const hasPrimarySource = raw['has_primary_source'];
   if (
     (gedcomXref !== undefined && gedcomXref !== null && typeof gedcomXref !== 'string') ||
     (author !== undefined && author !== null && typeof author !== 'string') ||
@@ -797,7 +796,7 @@ export function tryFastParseKinshipEdge(raw: unknown, ownsInput = false): Kinshi
     return null;
   }
   const { from, to, relation } = raw;
-  const familyXref = raw.family_xref;
+  const familyXref = raw['family_xref'];
   if (
     typeof from !== 'string' ||
     from.length === 0 ||
@@ -839,24 +838,24 @@ export function tryFastParseMediaItem(raw: unknown, ownsInput = false): MediaIte
   ) {
     return null;
   }
-  const dateEdtf = coerceOptNullableStrFast(raw.date_edtf);
+  const dateEdtf = coerceOptNullableStrFast(raw['date_edtf']);
   if (dateEdtf === OPT_STR_FAIL) {
     return null;
   }
-  const sourceId = raw.source_id;
-  const page = raw.page;
-  const personId = raw.person_id;
-  const personSlug = raw.person_slug;
-  const personName = raw.person_name;
-  const eventId = raw.event_id;
-  const thumbFile = raw.thumb_file;
-  const provenance = raw.provenance;
-  const mimeType = raw.mime_type;
-  const durationSeconds = raw.duration_seconds;
-  const posterUrl = raw.poster_url;
-  const transcriptUrl = raw.transcript_url;
-  const hasPrimarySource = raw.has_primary_source;
-  const extensions = raw.extensions;
+  const sourceId = raw['source_id'];
+  const page = raw['page'];
+  const personId = raw['person_id'];
+  const personSlug = raw['person_slug'];
+  const personName = raw['person_name'];
+  const eventId = raw['event_id'];
+  const thumbFile = raw['thumb_file'];
+  const provenance = raw['provenance'];
+  const mimeType = raw['mime_type'];
+  const durationSeconds = raw['duration_seconds'];
+  const posterUrl = raw['poster_url'];
+  const transcriptUrl = raw['transcript_url'];
+  const hasPrimarySource = raw['has_primary_source'];
+  const extensions = raw['extensions'];
   if (
     (sourceId !== undefined && sourceId !== null && typeof sourceId !== 'string') ||
     (page !== undefined && page !== null && (typeof page !== 'number' || !Number.isInteger(page))) ||
@@ -885,15 +884,19 @@ export function tryFastParseMediaItem(raw: unknown, ownsInput = false): MediaIte
   }
 
   let personIds: string[] | undefined;
-  if (raw.person_ids !== undefined) {
-    const validatedIds = tryCopyNonEmptyStringArray(raw.person_ids, ownsInput);
+  if (raw['person_ids'] !== undefined) {
+    const validatedIds = tryCopyNonEmptyStringArray(raw['person_ids'], ownsInput);
     if (!validatedIds) {
       return null;
     }
     personIds = validatedIds;
   }
 
-  if (ownsInput && raw.date_edtf === dateEdtf && (personIds === undefined || raw.person_ids === personIds)) {
+  if (
+    ownsInput &&
+    raw['date_edtf'] === dateEdtf &&
+    (personIds === undefined || raw['person_ids'] === personIds)
+  ) {
     let expectedKeys = 4;
     if (sourceId !== undefined) expectedKeys += 1;
     if (page !== undefined) expectedKeys += 1;
@@ -1013,52 +1016,52 @@ export function tryFastParseNarrative(raw: unknown, ownsInput = false): Narrativ
   ) {
     return null;
   }
-  const kind = raw.kind;
+  const kind = raw['kind'];
   if (kind !== undefined && (typeof kind !== 'string' || !NARRATIVE_KINDS.has(kind))) {
     return null;
   }
-  const subjectPersonId = raw.subject_person_id;
+  const subjectPersonId = raw['subject_person_id'];
   if (
     subjectPersonId !== undefined &&
     (typeof subjectPersonId !== 'string' || subjectPersonId.length === 0)
   ) {
     return null;
   }
-  const summary = raw.summary;
+  const summary = raw['summary'];
   if (summary !== undefined && typeof summary !== 'string') {
     return null;
   }
-  const dateEdtf = coerceOptNullableStrFast(raw.date_edtf);
+  const dateEdtf = coerceOptNullableStrFast(raw['date_edtf']);
   if (dateEdtf === OPT_STR_FAIL) {
     return null;
   }
-  const updatedAt = raw.updated_at;
+  const updatedAt = raw['updated_at'];
   if (updatedAt !== undefined && typeof updatedAt !== 'string') {
     return null;
   }
-  const hasPrimarySource = raw.has_primary_source;
+  const hasPrimarySource = raw['has_primary_source'];
   if (hasPrimarySource !== undefined && typeof hasPrimarySource !== 'boolean') {
     return null;
   }
-  const extensions = raw.extensions;
+  const extensions = raw['extensions'];
   if (extensions !== undefined && !isObj(extensions)) {
     return null;
   }
-  const personIds = tryCopyNonEmptyStringArray(raw.person_ids, ownsInput);
-  const placeIds = tryCopyNonEmptyStringArray(raw.place_ids, ownsInput);
-  const eventIds = tryCopyNonEmptyStringArray(raw.event_ids, ownsInput);
-  const sourceIds = tryCopyNonEmptyStringArray(raw.source_ids, ownsInput);
+  const personIds = tryCopyNonEmptyStringArray(raw['person_ids'], ownsInput);
+  const placeIds = tryCopyNonEmptyStringArray(raw['place_ids'], ownsInput);
+  const eventIds = tryCopyNonEmptyStringArray(raw['event_ids'], ownsInput);
+  const sourceIds = tryCopyNonEmptyStringArray(raw['source_ids'], ownsInput);
   if (!personIds || !placeIds || !eventIds || !sourceIds) {
     return null;
   }
 
   if (
     ownsInput &&
-    raw.date_edtf === dateEdtf &&
-    raw.person_ids === personIds &&
-    raw.place_ids === placeIds &&
-    raw.event_ids === eventIds &&
-    raw.source_ids === sourceIds
+    raw['date_edtf'] === dateEdtf &&
+    raw['person_ids'] === personIds &&
+    raw['place_ids'] === placeIds &&
+    raw['event_ids'] === eventIds &&
+    raw['source_ids'] === sourceIds
   ) {
     let expectedKeys = 8;
     if (kind !== undefined) expectedKeys += 1;

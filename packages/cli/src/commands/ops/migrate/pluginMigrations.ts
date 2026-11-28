@@ -93,7 +93,7 @@ export async function discoverPluginMigrations(
           `Invalid plugin migration filename '${fileName}' under '${nsDir}': expected NNNN_<lowercase_name>.sql.`
         );
       }
-      const version = Number.parseInt(match[1], 10);
+      const version = Number.parseInt(match[1] ?? '', 10);
       const migrationId = fileName.slice(0, -'.sql'.length);
       const filePath = path.join(nsDir, fileName);
       const sql = fs.readFileSync(filePath, 'utf8');

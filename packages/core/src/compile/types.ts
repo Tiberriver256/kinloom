@@ -13,20 +13,20 @@ import type {
 } from '../schemas/entities.js';
 
 export interface AncestryHouseholdEvent {
-  type?: string;
-  description?: string;
-  date?: string;
+  type?: string | undefined;
+  description?: string | undefined;
+  date?: string | undefined;
 }
 
 export interface AncestryPersonRecord {
-  personId?: string | number;
-  events?: AncestryHouseholdEvent[];
+  personId?: string | number | undefined;
+  events?: AncestryHouseholdEvent[] | undefined;
 }
 
 export interface CompiledMediaOverlay {
-  media?: readonly MediaItem[];
-  people?: readonly { id: string; portrait_url?: string | null }[];
-  events?: readonly { id: string; photo_url?: string }[];
+  media?: readonly MediaItem[] | undefined;
+  people?: readonly { id: string; portrait_url?: string | null | undefined }[] | undefined;
+  events?: readonly { id: string; photo_url?: string | undefined }[] | undefined;
 }
 
 export interface ExtractedSnapshotCollections {
@@ -45,22 +45,22 @@ export interface CompileArchiveInput {
   places: readonly Place[];
   sources: readonly SourceRecord[];
   kinship: readonly KinshipEdge[];
-  enrichments?: readonly NarrativeEnrichment[];
-  contextEvents?: readonly RawEvent[];
-  contextSources?: readonly SourceRecord[];
-  media?: readonly MediaItem[];
-  narratives?: readonly Narrative[];
-  ancestryPeople?: readonly AncestryPersonRecord[];
-  compiledMediaOverlay?: CompiledMediaOverlay | null;
-  resolveThumbUrl?: (mediaUrl: string | null | undefined) => string | undefined;
-  mediaExists?: (fileUrl: string) => boolean;
+  enrichments?: readonly NarrativeEnrichment[] | undefined;
+  contextEvents?: readonly RawEvent[] | undefined;
+  contextSources?: readonly SourceRecord[] | undefined;
+  media?: readonly MediaItem[] | undefined;
+  narratives?: readonly Narrative[] | undefined;
+  ancestryPeople?: readonly AncestryPersonRecord[] | undefined;
+  compiledMediaOverlay?: CompiledMediaOverlay | null | undefined;
+  resolveThumbUrl?: ((mediaUrl: string | null | undefined) => string | undefined) | undefined;
+  mediaExists?: ((fileUrl: string) => boolean) | undefined;
   siteConfig: KinloomSiteConfig;
   mode: BuildMode;
-  generatedAt?: string;
-  referenceYear?: number;
-  version?: string;
-  maxRevisionId?: number;
-  legacyContainerSourceIds?: ReadonlySet<string>;
+  generatedAt?: string | undefined;
+  referenceYear?: number | undefined;
+  version?: string | undefined;
+  maxRevisionId?: number | undefined;
+  legacyContainerSourceIds?: ReadonlySet<string> | undefined;
 }
 
 export interface CompileArchiveResult {

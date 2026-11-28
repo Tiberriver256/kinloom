@@ -272,126 +272,126 @@ describe('Bundle fast-validation behavioral equivalence with Zod schemas', () =>
       [],
       { meta: null },
       cloneWith((d) => {
-        d.meta.build_mode = 'staging';
+        d['meta'].build_mode = 'staging';
       }),
       cloneWith((d) => {
-        d.meta.max_revision_id = -1;
+        d['meta'].max_revision_id = -1;
       }),
       cloneWith((d) => {
-        d.meta.uncited_entity_keys = [123];
+        d['meta'].uncited_entity_keys = [123];
       }),
       cloneWith((d) => {
-        d.meta.counts.people = -3;
+        d['meta'].counts.people = -3;
       }),
       cloneWith((d) => {
-        d.meta.counts.media = 'bad';
+        d['meta'].counts.media = 'bad';
       }),
       cloneWith((d) => {
-        d.people = 'not-array';
+        d['people'] = 'not-array';
       }),
       cloneWith((d) => {
-        d.place_ancestors = [];
+        d['place_ancestors'] = [];
       }),
       cloneWith((d) => {
-        d.people[0] = null;
+        d['people'][0] = null;
       }),
       cloneWith((d) => {
-        d.people[0].id = '';
+        d['people'][0].id = '';
       }),
       cloneWith((d) => {
-        d.people[0].birth_year = 1880.5;
+        d['people'][0].birth_year = 1880.5;
       }),
       cloneWith((d) => {
-        d.people[0].pronunciation = 'AL-der';
+        d['people'][0].pronunciation = 'AL-der';
       }),
       cloneWith((d) => {
-        d.people[0].pronunciation = { phonetic: 123 };
+        d['people'][0].pronunciation = { phonetic: 123 };
       }),
       cloneWith((d) => {
-        d.people[0].pronunciation = { phonetic: 'AL-der', variants: [] };
+        d['people'][0].pronunciation = { phonetic: 'AL-der', variants: [] };
       }),
       cloneWith((d) => {
-        d.events[0] = 'bad';
+        d['events'][0] = 'bad';
       }),
       cloneWith((d) => {
-        d.events[0].scope = 'galactic';
+        d['events'][0].scope = 'galactic';
       }),
       cloneWith((d) => {
-        d.events[0].alternate_places = [
+        d['events'][0].alternate_places = [
           { place_name: 'Old Hudsonville', place_id: 'plc_mi', source_id: 'src_1', note: '' },
         ];
       }),
       cloneWith((d) => {
-        d.events[0].alternate_dates = 'bad';
+        d['events'][0].alternate_dates = 'bad';
       }),
       cloneWith((d) => {
-        d.events[0].alternate_dates = [{ edtf_date: '1880', source_id: '', note: '' }];
+        d['events'][0].alternate_dates = [{ edtf_date: '1880', source_id: '', note: '' }];
       }),
       cloneWith((d) => {
-        d.events[0].participants = 'bad';
+        d['events'][0].participants = 'bad';
       }),
       cloneWith((d) => {
-        d.events[0].participants = [{ person_id: '', role: 'head' }];
+        d['events'][0].participants = [{ person_id: '', role: 'head' }];
       }),
       cloneWith((d) => {
-        d.events[0].sources = 'bad';
+        d['events'][0].sources = 'bad';
       }),
       cloneWith((d) => {
-        d.events[0].sources = [null];
+        d['events'][0].sources = [null];
       }),
       cloneWith((d) => {
-        d.events[0].sources = [{ source_id: 'src_1', confidence: 'certain' }];
+        d['events'][0].sources = [{ source_id: 'src_1', confidence: 'certain' }];
       }),
       cloneWith((d) => {
-        d.events[0].sources = [{ source_id: 'src_1', confidence: 'high', scan_url: 42 }];
+        d['events'][0].sources = [{ source_id: 'src_1', confidence: 'high', scan_url: 42 }];
       }),
       cloneWith((d) => {
-        d.residence_spans = [{ id: '', person_id: 'p', place_id: 'plc', time_min: 1, time_max: 2 }];
+        d['residence_spans'] = [{ id: '', person_id: 'p', place_id: 'plc', time_min: 1, time_max: 2 }];
       }),
       cloneWith((d) => {
-        d.places[0] = null;
+        d['places'][0] = null;
       }),
       cloneWith((d) => {
-        d.places[0].lat = 120;
+        d['places'][0].lat = 120;
       }),
       cloneWith((d) => {
-        d.places[0].historical_names = [{ name: 'Old Town' }];
+        d['places'][0].historical_names = [{ name: 'Old Town' }];
       }),
       cloneWith((d) => {
-        d.place_ancestors.plc_hudsonville = [42];
+        d['place_ancestors'].plc_hudsonville = [42];
       }),
       cloneWith((d) => {
-        d.kinship[0].relation = 'cousin';
+        d['kinship'][0].relation = 'cousin';
       }),
       cloneWith((d) => {
-        d.sources[0].url = 99;
+        d['sources'][0].url = 99;
       }),
       cloneWith((d) => {
-        d.media = 'bad';
+        d['media'] = 'bad';
       }),
       cloneWith((d) => {
-        d.media[0].duration_seconds = -5;
+        d['media'][0].duration_seconds = -5;
       }),
       cloneWith((d) => {
-        d.media[0].person_ids = [''];
+        d['media'][0].person_ids = [''];
       }),
       cloneWith((d) => {
-        d.media[0].extensions = { raw: true };
+        d['media'][0].extensions = { raw: true };
       }),
       cloneWith((d) => {
-        d.narratives = 'bad';
+        d['narratives'] = 'bad';
       }),
       cloneWith((d) => {
-        d.narratives[0].kind = 'poem';
+        d['narratives'][0].kind = 'poem';
       }),
       cloneWith((d) => {
-        d.narratives[0].extensions = { draft: true };
+        d['narratives'][0].extensions = { draft: true };
       }),
       cloneWith((d) => {
-        d.pronunciations = [];
+        d['pronunciations'] = [];
       }),
       cloneWith((d) => {
-        d.pronunciations.alder = null;
+        d['pronunciations'].alder = null;
       }),
     ];
 
@@ -760,7 +760,7 @@ describe('YAML fast reader, canonical emitter, and fast entity parsers', () => {
       KinshipEdgeSchema.array().parse(loadJsYaml(kinshipYaml, { schema: CORE_SCHEMA }))
     );
     const sortedKinshipYaml = serializeKinshipYaml(parsedKinship, { sortDeterministic: true });
-    expect(parseKinshipYaml(sortedKinshipYaml)[0].from).toBe('per_alder_1');
+    expect(parseKinshipYaml(sortedKinshipYaml)[0]?.from).toBe('per_alder_1');
     expect(serializeKinshipYaml(parseKinshipYaml(sortedKinshipYaml), { sortDeterministic: true })).toBe(
       sortedKinshipYaml
     );

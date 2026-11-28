@@ -63,12 +63,12 @@ export interface ServerRequestResponseEvent {
   readonly status: number;
   readonly durationMs: number;
   readonly errorCode: string | null;
-  readonly waitUntil?: (promise: Promise<unknown>) => void;
-  readonly reportPluginError?: (pluginId: string, error: unknown) => void;
-  readonly ports?: KinloomServerPorts;
-  readonly siteConfig?: KinloomSiteConfig;
-  readonly mode?: 'private' | 'public';
-  readonly principal?: CallerPrincipal;
+  readonly waitUntil?: ((promise: Promise<unknown>) => void) | undefined;
+  readonly reportPluginError?: ((pluginId: string, error: unknown) => void) | undefined;
+  readonly ports?: KinloomServerPorts | undefined;
+  readonly siteConfig?: KinloomSiteConfig | undefined;
+  readonly mode?: 'private' | 'public' | undefined;
+  readonly principal?: CallerPrincipal | undefined;
 }
 
 export interface ServerRequestErrorEvent {
@@ -346,10 +346,10 @@ export function createRequestTelemetryTracker(params: {
   request: Request;
   method: string;
   route: string;
-  clock?: Clock;
-  securityPlugins?: readonly KinloomServerPlugin[];
-  waitUntil?: (promise: Promise<unknown>) => void;
-  onPluginError?: (pluginId: string, error: unknown) => void;
+  clock?: Clock | undefined;
+  securityPlugins?: readonly KinloomServerPlugin[] | undefined;
+  waitUntil?: ((promise: Promise<unknown>) => void) | undefined;
+  onPluginError?: ((pluginId: string, error: unknown) => void) | undefined;
 }): ServerRequestTelemetryTracker {
   const startedAtMs = readHighResNow();
   const spans: Partial<Record<ServerTimingSpanName, number>> = {};

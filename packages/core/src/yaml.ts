@@ -40,7 +40,7 @@ export function parseYamlWithSchema<TSchema extends z.ZodTypeAny>(
 
 export function stringifyYaml(
   value: unknown,
-  options?: { preferredKeyOrder?: readonly string[]; lineWidth?: number }
+  options?: { preferredKeyOrder?: readonly string[] | undefined; lineWidth?: number | undefined }
 ): string {
   return emitCanonicalYaml(value, options);
 }
@@ -198,11 +198,13 @@ const CONFIG_KEY_ORDER = [
 function sortByEntityId<T extends { readonly id: string }>(items: readonly T[]): readonly T[] {
   // Fast linear sortedness check avoids cloning & O(N log N) sorting on already-sorted arrays!
   let alreadySorted = true;
-  for (let i = 1; i < items.length; i += 1) {
-    if (fastLocaleCompare(items[i - 1].id, items[i].id) > 0) {
+  let prevId: string | undefined;
+  for (const item of items) {
+    if (prevId !== undefined && fastLocaleCompare(prevId, item.id) > 0) {
       alreadySorted = false;
       break;
     }
+    prevId = item.id;
   }
   if (alreadySorted) {
     return items;
@@ -260,17 +262,19 @@ export function serializeKinshipYaml(
   let list: readonly KinshipEdge[] = kinship;
   if (options?.sortDeterministic) {
     let alreadySorted = true;
-    for (let i = 1; i < kinship.length; i += 1) {
-      const prev = kinship[i - 1];
-      const curr = kinship[i];
-      const cmp =
-        fastLocaleCompare(prev.from, curr.from) ||
-        fastLocaleCompare(prev.to, curr.to) ||
-        fastLocaleCompare(prev.relation, curr.relation);
-      if (cmp > 0) {
-        alreadySorted = false;
-        break;
+    let prev: KinshipEdge | undefined;
+    for (const curr of kinship) {
+      if (prev) {
+        const cmp =
+          fastLocaleCompare(prev.from, curr.from) ||
+          fastLocaleCompare(prev.to, curr.to) ||
+          fastLocaleCompare(prev.relation, curr.relation);
+        if (cmp > 0) {
+          alreadySorted = false;
+          break;
+        }
       }
+      prev = curr;
     }
     if (!alreadySorted) {
       list = [...kinship].toSorted(

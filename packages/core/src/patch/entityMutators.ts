@@ -50,12 +50,7 @@ function participantsHaveSamePersonIds(
   if (a.length !== b.length) {
     return false;
   }
-  for (let i = 0; i < a.length; i += 1) {
-    if (a[i].person_id !== b[i].person_id) {
-      return false;
-    }
-  }
-  return true;
+  return a.every((pt, i) => pt.person_id === b[i]?.person_id);
 }
 
 function applySourceMutation(state: PatchWorkingState, mutation: BundlePatchMutation): void {
@@ -174,16 +169,16 @@ function applyPersonMutation(state: PatchWorkingState, mutation: BundlePatchMuta
   const { entity_id, after_json } = mutation;
   const roPeopleIdx = state.ensurePeopleIndex(false);
   const existingIdx = roPeopleIdx.idxById.get(entity_id);
-  const prevPerson = existingIdx !== undefined ? state.people[existingIdx] : null;
+  const prevPerson = existingIdx !== undefined ? (state.people[existingIdx] ?? null) : null;
 
   if (after_json === null) {
     const { idxById, living } = state.ensurePeopleIndex(true);
     if (existingIdx !== undefined) {
       state.people.splice(existingIdx, 1);
       idxById.clear();
-      for (let i = 0; i < state.people.length; i += 1) {
-        idxById.set(state.people[i].id, i);
-      }
+      state.people.forEach((p, i) => {
+        idxById.set(p.id, i);
+      });
     }
     living.delete(entity_id);
     state.markLivingPatternDirty();
@@ -292,7 +287,7 @@ function applyEventMutation(state: PatchWorkingState, mutation: BundlePatchMutat
   const { living } = state.ensurePeopleIndex();
   const evIdxMap = state.ensureEventsIndex();
   const existingIdx = evIdxMap.get(entity_id);
-  const prevEvent = existingIdx !== undefined ? state.events[existingIdx] : null;
+  const prevEvent = existingIdx !== undefined ? (state.events[existingIdx] ?? null) : null;
 
   if (after_json === null) {
     if (prevEvent) {
@@ -407,7 +402,7 @@ function applyMediaMutation(state: PatchWorkingState, mutation: BundlePatchMutat
   const { entity_id, after_json } = mutation;
   state.mediaMutated = true;
   const existingIdx = state.media.findIndex((m) => m.id === entity_id);
-  const prevMedia = existingIdx !== -1 ? state.media[existingIdx] : null;
+  const prevMedia = existingIdx !== -1 ? (state.media[existingIdx] ?? null) : null;
   if (prevMedia) {
     for (const pid of getMediaPersonIds(prevMedia)) {
       state.affectedMediaPersonIds.add(pid);
@@ -448,20 +443,22 @@ function applyMediaMutation(state: PatchWorkingState, mutation: BundlePatchMutat
   const peopleLookup = new Map<string, Person>();
   for (const pid of getMediaPersonIds(parsed)) {
     const pIdx = idxById.get(pid);
-    if (pIdx !== undefined) {
-      peopleLookup.set(pid, state.people[pIdx]);
+    const person = pIdx !== undefined ? state.people[pIdx] : undefined;
+    if (person) {
+      peopleLookup.set(pid, person);
     }
   }
   let eventsLookup: Map<string, ArchiveEvent> | undefined;
   if (parsed.event_id) {
     const eIdx = state.ensureEventsIndex().get(parsed.event_id);
-    if (eIdx !== undefined) {
-      const ev = state.events[eIdx];
+    const ev = eIdx !== undefined ? state.events[eIdx] : undefined;
+    if (ev) {
       eventsLookup = new Map([[ev.id, ev]]);
       for (const pt of ev.participants) {
         const pIdx = idxById.get(pt.person_id);
-        if (pIdx !== undefined) {
-          peopleLookup.set(pt.person_id, state.people[pIdx]);
+        const person = pIdx !== undefined ? state.people[pIdx] : undefined;
+        if (person) {
+          peopleLookup.set(pt.person_id, person);
         }
       }
     }

@@ -7,7 +7,7 @@ import { ArchiveUiProvider } from './ArchiveUiContext.js';
 import { OnboardingProvider } from './OnboardingContext.js';
 
 export interface ArchiveProviderProps extends ArchiveDataProviderProps {
-  plugins?: readonly KinloomUiPlugin[];
+  plugins?: readonly KinloomUiPlugin[] | undefined;
 }
 
 export const ArchiveProvider: React.FC<ArchiveProviderProps> = ({ children, plugins, ...dataProps }) => (

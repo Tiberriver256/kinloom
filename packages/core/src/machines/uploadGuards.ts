@@ -134,8 +134,8 @@ export function validateMediaSelection(input: {
   const normalizedMime = input.mimeType.trim().toLowerCase();
   if (
     !isAllowedMediaMime(normalizedMime, {
-      allowAudioVideo: input.allowAudioVideo,
-      extraAllowedMimes: input.extraAllowedMimes,
+      ...(input.allowAudioVideo !== undefined ? { allowAudioVideo: input.allowAudioVideo } : {}),
+      ...(input.extraAllowedMimes !== undefined ? { extraAllowedMimes: input.extraAllowedMimes } : {}),
     })
   ) {
     const allowedSummary = input.allowAudioVideo

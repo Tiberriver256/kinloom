@@ -15,9 +15,9 @@ export interface SharedTokenPronunciationEditorProps {
   readonly tokens: readonly InspectedPersonPronunciationToken[];
   readonly composed: Pronunciation | null;
   readonly previewLabel: string;
-  readonly baseUrl?: string;
+  readonly baseUrl?: string | undefined;
   readonly isBusy: boolean;
-  readonly primaryFocusRef?: React.RefObject<HTMLElement | null>;
+  readonly primaryFocusRef?: React.RefObject<HTMLElement | null> | undefined;
   readonly activeTokenDraft: SharedTokenDraft | null;
   readonly sharedSaveStatus: 'idle' | 'saving' | 'success' | 'error';
   readonly sharedSaveMessage: string | null;

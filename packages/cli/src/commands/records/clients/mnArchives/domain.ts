@@ -201,7 +201,7 @@ export interface PeopleRecordDetailResult {
 }
 
 export interface NewspaperSearchItem {
-  title?: string;
+  title?: string | undefined;
   doc_id?: string;
   publication_date?: string;
   detail?: string;
@@ -242,7 +242,7 @@ export interface PeopleQueryParams {
   readonly first?: string;
   readonly middle?: string;
   readonly motherMaiden?: string;
-  readonly county?: string;
+  readonly county?: string | undefined;
   readonly match?: string;
   readonly beginDate?: string;
   readonly endDate?: string;
@@ -250,15 +250,15 @@ export interface PeopleQueryParams {
 }
 
 export function getCacheDir(ctx: RecordCommandContext): string {
-  const specific = ctx.env.KINLOOM_MN_ARCHIVES_CACHE_DIR;
+  const specific = ctx.env['KINLOOM_MN_ARCHIVES_CACHE_DIR'];
   if (specific && specific.trim().length > 0) {
     return path.resolve(expandHomePath(specific, ctx.env));
   }
-  const shared = ctx.env.KINLOOM_CACHE_DIR;
+  const shared = ctx.env['KINLOOM_CACHE_DIR'];
   if (shared && shared.trim().length > 0) {
     return path.resolve(expandHomePath(shared, ctx.env), 'mn-archives');
   }
-  const home = ctx.env.HOME || os.homedir();
+  const home = ctx.env['HOME'] || os.homedir();
   return path.join(home, '.cache', 'kinloom', 'mn-archives');
 }
 
@@ -308,7 +308,7 @@ export function normalizeIsoDate(raw: string, endOfPeriod = false): string {
   if (!match) {
     throw new CliValidationError(`Invalid date '${raw}'; expected YYYY, YYYY-MM, or YYYY-MM-DD.`);
   }
-  const year = Number.parseInt(match[1], 10);
+  const year = Number.parseInt(match[1] ?? '', 10);
   const month = match[2] ? Number.parseInt(match[2], 10) : endOfPeriod ? 12 : 1;
   if (month < 1 || month > 12) {
     throw new CliValidationError(`Invalid month in date '${raw}'.`);
@@ -333,7 +333,7 @@ export function normalizeIsoDate(raw: string, endOfPeriod = false): string {
 
 export function dateToUtcMillis(raw: string, endOfPeriod = false): number {
   const iso = normalizeIsoDate(raw, endOfPeriod);
-  const [y, m, d] = iso.split('-').map((n) => Number.parseInt(n, 10));
+  const [y = 0, m = 1, d = 1] = iso.split('-').map((n) => Number.parseInt(n, 10));
   return Date.UTC(y, m - 1, d);
 }
 

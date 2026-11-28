@@ -7,9 +7,9 @@ export async function synthesizeWithOpenAiSpeech(options: {
   readonly chunks: readonly SynthChunk[];
   readonly endpoint: string;
   readonly model: string;
-  readonly apiKey?: string;
-  readonly storyRef?: VoiceCloneReference;
-  readonly notesRef?: VoiceCloneReference;
+  readonly apiKey?: string | undefined;
+  readonly storyRef?: VoiceCloneReference | undefined;
+  readonly notesRef?: VoiceCloneReference | undefined;
   readonly ctx: RecordCommandContext;
 }): Promise<SynthesisOutcome> {
   const pcmParts: Buffer[] = [];
@@ -20,6 +20,7 @@ export async function synthesizeWithOpenAiSpeech(options: {
 
   for (let i = 0; i < options.chunks.length; i += 1) {
     const chunk = options.chunks[i];
+    if (chunk === undefined) continue;
     const activeRef = chunk.isNotes ? options.notesRef : options.storyRef;
     let respBytes: Buffer;
     try {

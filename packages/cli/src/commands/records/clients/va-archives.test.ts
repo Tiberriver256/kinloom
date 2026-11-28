@@ -236,7 +236,7 @@ async function invokeVa(
     readonly mock: MockLva;
     readonly extraEnv?: NodeJS.ProcessEnv;
   }
-): Promise<{ exitCode: number; stdout: string; stderr: string; cacheHit?: boolean }> {
+): Promise<{ exitCode: number; stdout: string; stderr: string; cacheHit?: boolean | undefined }> {
   const stdout: string[] = [];
   const stderr: string[] = [];
   const ctx = createRecordContext({
@@ -296,13 +296,13 @@ describe('va-archives HTML caching & TTL', () => {
     expect(r1.exitCode).toBe(0);
     expect(Array.isArray(JSON.parse(r1.stdout))).toBe(true);
     expect(mock.calls).toHaveLength(1);
-    expect((JSON.parse(r1.stdout) as { viewing_status: string }[])[0].viewing_status).toBe('Scanned v1');
+    expect((JSON.parse(r1.stdout) as { viewing_status: string }[])[0]!.viewing_status).toBe('Scanned v1');
 
     mock.localitiesVersion = 2;
     const r2 = await invokeVa(['chancery', 'localities', '--json'], { cacheDir, cwd: root, mock });
     expect(r2.exitCode).toBe(0);
     expect(mock.calls).toHaveLength(1);
-    expect((JSON.parse(r2.stdout) as { viewing_status: string }[])[0].viewing_status).toBe('Scanned v1');
+    expect((JSON.parse(r2.stdout) as { viewing_status: string }[])[0]!.viewing_status).toBe('Scanned v1');
 
     const r3 = await invokeVa(['chancery', 'localities', '--refresh', '--json'], {
       cacheDir,
@@ -311,7 +311,7 @@ describe('va-archives HTML caching & TTL', () => {
     });
     expect(r3.exitCode).toBe(0);
     expect(mock.calls).toHaveLength(2);
-    expect((JSON.parse(r3.stdout) as { viewing_status: string }[])[0].viewing_status).toBe('Scanned v2');
+    expect((JSON.parse(r3.stdout) as { viewing_status: string }[])[0]!.viewing_status).toBe('Scanned v2');
 
     mock.localitiesVersion = 3;
     const r4 = await invokeVa(['--refresh', 'chancery', 'localities', '--json'], {
@@ -321,7 +321,7 @@ describe('va-archives HTML caching & TTL', () => {
     });
     expect(r4.exitCode).toBe(0);
     expect(mock.calls).toHaveLength(3);
-    expect((JSON.parse(r4.stdout) as { viewing_status: string }[])[0].viewing_status).toBe('Scanned v3');
+    expect((JSON.parse(r4.stdout) as { viewing_status: string }[])[0]!.viewing_status).toBe('Scanned v3');
 
     const r5 = await invokeVa(['chancery', 'localities', '--json'], { cacheDir, cwd: root, mock });
     expect(r5.exitCode).toBe(0);
@@ -534,7 +534,7 @@ describe('va-archives dunmore', () => {
     expect(parsed.images.map((im) => im.page)).toEqual([10, 11, 12, 13]);
     const current = parsed.images.filter((im) => im.current);
     expect(current).toHaveLength(1);
-    expect(current[0].url).toBe('https://image.lva.virginia.gov/Microfilm/DW/001/00012.tif');
+    expect(current[0]!.url).toBe('https://image.lva.virginia.gov/Microfilm/DW/001/00012.tif');
   });
 
   it('saves card page, caches drawer page, and rejects bad drawer/card values', async () => {
@@ -568,7 +568,7 @@ describe('va-archives dunmore', () => {
       ['0001/W0002', '1;rm'],
       ['0001/W0002/..', '1'],
     ]) {
-      const bad = await invokeVa(['dunmore', drawer, card], { cacheDir, cwd: root, mock: mock2 });
+      const bad = await invokeVa(['dunmore', drawer!, card!], { cacheDir, cwd: root, mock: mock2 });
       expect(bad.exitCode).not.toBe(0);
     }
     expect(mock2.calls).toHaveLength(0);
@@ -690,8 +690,8 @@ describe('va-archives chancery search, case, download, and url', () => {
       records: { cfn: string; plaintiffs: string[]; defendants: string[] }[];
     };
     expect(searchData.total).toBe(1);
-    expect(searchData.records[0].cfn).toBe('003-1842-001');
-    expect(searchData.records[0].plaintiffs).toEqual(['Doe, John', 'Doe, Jane']);
+    expect(searchData.records[0]!.cfn).toBe('003-1842-001');
+    expect(searchData.records[0]!.plaintiffs).toEqual(['Doe, John', 'Doe, Jane']);
 
     const caseRes = await invokeVa(['chancery', 'case', '003-1842-001', '--images', '--json'], {
       cacheDir,

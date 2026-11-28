@@ -38,21 +38,21 @@ function parseNamesCell(cellHtml: string): string[] {
 
 export function parseDunmoreDrawer(page: string): DunmoreDrawerResult {
   const titleMatch = /Dunmore's War\s*-\s*Page\s*(\d+)/i.exec(page);
-  const current = titleMatch ? Number.parseInt(titleMatch[1], 10) : null;
+  const current = titleMatch ? Number.parseInt(titleMatch[1] ?? '', 10) : null;
   const images: DunmoreImage[] = [];
   const linkRe = /<a href="(\/Microfilm\/[^"]+)"\s*>([\s\S]*?)<\/a>/gi;
   let match: RegExpExecArray | null;
   while ((match = linkRe.exec(page)) !== null) {
     let url: string;
     try {
-      url = normalizeLvaImageUrl(decodeHtmlEntities(match[1]));
+      url = normalizeLvaImageUrl(decodeHtmlEntities(match[1] ?? ''));
     } catch {
       continue;
     }
-    const labelText = cleanPreservingLines(match[2]);
+    const labelText = cleanPreservingLines(match[2] ?? '');
     const labelMatch = /Page\s*(\d+)/.exec(labelText);
     const isCurrent = labelMatch === null;
-    const num = labelMatch ? Number.parseInt(labelMatch[1], 10) : current;
+    const num = labelMatch ? Number.parseInt(labelMatch[1] ?? '', 10) : current;
     images.push({ page: num, url, current: isCurrent });
   }
   return { current_page: current, images };
@@ -60,11 +60,11 @@ export function parseDunmoreDrawer(page: string): DunmoreDrawerResult {
 
 export function parseRosettaDelivery(page: string): RosettaDeliveryInfo {
   const viewerMatch = /src="([^"]*ieViewer\.do[^"]*)"/i.exec(page);
-  const viewerUrl = viewerMatch ? decodeHtmlEntities(viewerMatch[1]) : null;
+  const viewerUrl = viewerMatch ? decodeHtmlEntities(viewerMatch[1] ?? '') : null;
   const dvsMatch = /dps_dvs=([0-9]+~[0-9]+)/.exec(page);
   return {
     viewer_url: viewerUrl,
-    dps_dvs: dvsMatch ? dvsMatch[1] : null,
+    dps_dvs: dvsMatch?.[1] ?? null,
   };
 }
 
@@ -74,15 +74,16 @@ export function parseRosettaViewer(page: string): RosettaViewerInfo {
   const itemRe = /<item id='(FL\d+)' title='([^']*)'/g;
   let match: RegExpExecArray | null;
   while ((match = itemRe.exec(page)) !== null) {
-    if (!seen.has(match[1])) {
-      seen.add(match[1]);
-      files.push({ fl: match[1], title: decodeHtmlEntities(match[2]) });
+    const flId = match[1] ?? '';
+    if (flId && !seen.has(flId)) {
+      seen.add(flId);
+      files.push({ fl: flId, title: decodeHtmlEntities(match[2] ?? '') });
     }
   }
   const jsonRe = /JSONObject\s*=\s*'(\{[^']*\})'/g;
   while ((match = jsonRe.exec(page)) !== null) {
     try {
-      const obj: unknown = JSON.parse(match[1]);
+      const obj: unknown = JSON.parse(match[1] ?? '');
       if (!isPlainRecord(obj)) {
         continue;
       }
@@ -100,16 +101,16 @@ export function parseRosettaViewer(page: string): RosettaViewerInfo {
     }
   }
   const initMatch = /initialSelect\s*=\s*"(FL\d+)"/.exec(page);
-  const initial = initMatch ? initMatch[1] : (files[0]?.fl ?? null);
+  const initial = initMatch?.[1] ?? files[0]?.fl ?? null;
   return { files, initial };
 }
 
 export function parseSearchPage(page: string): ChancerySearchPage {
   const totalMatch =
     /Your search returned (\d+) record\(s\)\. You are now viewing records (\d+) through (\d+)/.exec(page);
-  const total = totalMatch ? Number.parseInt(totalMatch[1], 10) : 0;
-  const first = totalMatch ? Number.parseInt(totalMatch[2], 10) : 0;
-  const last = totalMatch ? Number.parseInt(totalMatch[3], 10) : 0;
+  const total = totalMatch ? Number.parseInt(totalMatch[1] ?? '', 10) : 0;
+  const first = totalMatch ? Number.parseInt(totalMatch[2] ?? '', 10) : 0;
+  const last = totalMatch ? Number.parseInt(totalMatch[3] ?? '', 10) : 0;
 
   const pat =
     /<strong>Index Number:<\/strong>\s*([^<]+?)\s*<\/span>\s*<a href="case_detail\.asp\?CFN=([0-9-]+)"[^>]*>[\s\S]*?<strong>Locality:<\/strong>\s*([^<]+?)\s*<\/td>[\s\S]*?<td valign="top">\s*([\s\S]*?)\s*<\/td>\s*<td valign="top">\s*([\s\S]*?)\s*<\/td>/gi;
@@ -118,11 +119,11 @@ export function parseSearchPage(page: string): ChancerySearchPage {
   let match: RegExpExecArray | null;
   while ((match = pat.exec(page)) !== null) {
     records.push({
-      index_number: decodeHtmlEntities(match[1].trim()),
-      cfn: match[2],
-      locality: decodeHtmlEntities(match[3].trim()),
-      plaintiffs: parseNamesCell(match[4]),
-      defendants: parseNamesCell(match[5]),
+      index_number: decodeHtmlEntities((match[1] ?? '').trim()),
+      cfn: match[2] ?? '',
+      locality: decodeHtmlEntities((match[3] ?? '').trim()),
+      plaintiffs: parseNamesCell(match[4] ?? ''),
+      defendants: parseNamesCell(match[5] ?? ''),
       case_url: `${CHANCERY_DETAIL}?CFN=${match[2]}`,
     });
   }
@@ -137,7 +138,7 @@ export function parseCasePage(page: string): ChanceryCaseDetail {
       'i'
     );
     const m = re.exec(page);
-    return m ? cleanPreservingLines(m[1]) : '';
+    return m ? cleanPreservingLines(m[1] ?? '') : '';
   };
 
   const head =
@@ -157,14 +158,14 @@ export function parseCasePage(page: string): ChanceryCaseDetail {
     );
 
   return {
-    locality: head ? decodeHtmlEntities(head[1].trim()) : '',
-    index_number: head ? decodeHtmlEntities(head[2].trim()) : '',
-    original_case_number: head ? decodeHtmlEntities(head[3].trim()) : '',
-    plaintiffs: parties ? parseNamesCell(parties[1]) : [],
-    defendants: parties ? parseNamesCell(parties[2]) : [],
-    surnames: surnames ? parseNamesCell(surnames[1]) : [],
-    wills: willsMatch ? cleanPreservingLines(willsMatch[1]) : '',
-    plat: plat ? decodeHtmlEntities(plat[2].trim()) : '',
+    locality: head ? decodeHtmlEntities((head[1] ?? '').trim()) : '',
+    index_number: head ? decodeHtmlEntities((head[2] ?? '').trim()) : '',
+    original_case_number: head ? decodeHtmlEntities((head[3] ?? '').trim()) : '',
+    plaintiffs: parties ? parseNamesCell(parties[1] ?? '') : [],
+    defendants: parties ? parseNamesCell(parties[2] ?? '') : [],
+    surnames: surnames ? parseNamesCell(surnames[1] ?? '') : [],
+    wills: willsMatch ? cleanPreservingLines(willsMatch[1] ?? '') : '',
+    plat: plat ? decodeHtmlEntities((plat[2] ?? '').trim()) : '',
     format: section('Format'),
   };
 }
@@ -179,13 +180,13 @@ export function parseImagesPage(page: string): ChanceryImagesInfo {
     }
   }
   const totalMatch = /of\s+(\d+)\s+prev/.exec(cleanPreservingLines(page));
-  const total = totalMatch ? Number.parseInt(totalMatch[1], 10) : urls.length;
+  const total = totalMatch ? Number.parseInt(totalMatch[1] ?? '', 10) : urls.length;
   const zipMatch = /href="([^"]*download\.php\?cfn=[^"]*)"/i.exec(page);
   const origin = 'https://old.lva.virginia.gov';
   return {
     total_pages: total,
     page_pdfs: urls.map((u) => (u.startsWith('/') ? `${origin}${u}` : u)),
-    zip_url: zipMatch ? `${origin}${decodeHtmlEntities(zipMatch[1])}` : `${CHANCERY_ZIP}?cfn=`,
+    zip_url: zipMatch ? `${origin}${decodeHtmlEntities(zipMatch[1] ?? '')}` : `${CHANCERY_ZIP}?cfn=`,
   };
 }
 
@@ -196,11 +197,11 @@ export function parseLocalitiesPage(page: string): ChanceryLocalityRow[] {
   let match: RegExpExecArray | null;
   while ((match = rowRe.exec(page)) !== null) {
     rows.push({
-      locality: decodeHtmlEntities(match[1].replace(/&nbsp;/gi, ' ').trim()),
-      region: decodeHtmlEntities(match[2].replace(/&nbsp;/gi, ' ').trim()),
-      time_frame: decodeHtmlEntities(match[3].replace(/&nbsp;/gi, ' ').trim()),
-      viewing_status: decodeHtmlEntities(match[4].replace(/&nbsp;/gi, ' ').trim()),
-      notes: cleanPreservingLines(match[5]),
+      locality: decodeHtmlEntities((match[1] ?? '').replace(/&nbsp;/gi, ' ').trim()),
+      region: decodeHtmlEntities((match[2] ?? '').replace(/&nbsp;/gi, ' ').trim()),
+      time_frame: decodeHtmlEntities((match[3] ?? '').replace(/&nbsp;/gi, ' ').trim()),
+      viewing_status: decodeHtmlEntities((match[4] ?? '').replace(/&nbsp;/gi, ' ').trim()),
+      notes: cleanPreservingLines(match[5] ?? ''),
     });
   }
   return rows;
@@ -208,10 +209,10 @@ export function parseLocalitiesPage(page: string): ChanceryLocalityRow[] {
 
 export function mapPnxsRecord(doc: unknown): PrimoCatalogRecord {
   const docObj = isPlainRecord(doc) ? doc : {};
-  const pnx = isPlainRecord(docObj.pnx) ? docObj.pnx : {};
-  const disp = isPlainRecord(pnx.display) ? pnx.display : {};
-  const control = isPlainRecord(pnx.control) ? pnx.control : {};
-  const recordIds = Array.isArray(control.recordid) ? control.recordid : [];
+  const pnx = isPlainRecord(docObj['pnx']) ? docObj['pnx'] : {};
+  const disp = isPlainRecord(pnx['display']) ? pnx['display'] : {};
+  const control = isPlainRecord(pnx['control']) ? pnx['control'] : {};
+  const recordIds = Array.isArray(control['recordid']) ? control['recordid'] : [];
   const recordid = typeof recordIds[0] === 'string' ? recordIds[0] : '';
 
   const first = (key: string): string => {

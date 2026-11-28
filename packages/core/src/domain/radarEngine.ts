@@ -273,13 +273,14 @@ export function findNearestEventForPerson(
   targetTimeMin: number | null
 ): ArchiveEvent | null {
   const list = getEventsForPerson(bundle, personId);
-  if (list.length === 0) {
+  const [first] = list;
+  if (!first) {
     return null;
   }
   if (targetTimeMin === null) {
-    return list[0];
+    return first;
   }
-  let [best] = list;
+  let best = first;
   let bestDiff = Math.abs((best.time_min ?? targetTimeMin) - targetTimeMin);
   for (const ev of list) {
     if (ev.time_min === null) {

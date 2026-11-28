@@ -557,7 +557,7 @@ describe('Geo map, migration stops, and map journey state machine behavior', () 
     expect(journeyTick(state, ids).playing).toBe(false);
     state = journeyPrev(state, ids);
     expect(state.stepIndex).toBe(ids.length - 2);
-    state = journeySelectStop(state, ids[0], ids);
+    state = journeySelectStop(state, ids[0]!, ids);
     expect(state.selectedStopId).toBe(ids[0]);
     expect(journeySelectStop(state, 'nonexistent', ids)).toEqual(state);
     expect(journeyReset(state)).toEqual(MAP_JOURNEY_INITIAL);
@@ -678,7 +678,7 @@ describe('Kinship pathfinding, radar co-presence, and time snapshot behavior', (
     expect(snapshot.locatedCount).toBeGreaterThanOrEqual(2);
     expect(snapshot.macroEvents.some((e) => e.id === 'evt_1880_national')).toBe(true);
     if (snapshot.lanes.length >= 2) {
-      expect(typeof compareTimeLanes(snapshot.lanes[0], snapshot.lanes[1])).toBe('number');
+      expect(typeof compareTimeLanes(snapshot.lanes[0]!, snapshot.lanes[1]!)).toBe('number');
     }
 
     const dir = buildPlacesDirectory(bundle, placesById, peopleById, SITE_CONFIG.migrationEras);

@@ -54,7 +54,7 @@ function curlStdout(body: string | Buffer, status: number, effectiveUrl: string)
 function writeCurlHeaders(args: readonly string[], rawHeaders: string): void {
   const idx = args.indexOf('-D');
   if (idx !== -1 && idx + 1 < args.length) {
-    fs.writeFileSync(args[idx + 1], rawHeaders, 'utf8');
+    fs.writeFileSync(args[idx + 1]!, rawHeaders, 'utf8');
   }
 }
 
@@ -62,11 +62,11 @@ async function invokeMich(
   args: readonly string[],
   cacheDir: string,
   opts: {
-    readonly execFileImpl?: ExecFileFn;
-    readonly sleepFn?: (ms: number) => Promise<void>;
-    readonly cwd?: string;
+    readonly execFileImpl?: ExecFileFn | undefined;
+    readonly sleepFn?: ((ms: number) => Promise<void>) | undefined;
+    readonly cwd?: string | undefined;
   } = {}
-): Promise<{ exitCode: number; stdout: string; stderr: string; cacheHit?: boolean }> {
+): Promise<{ exitCode: number; stdout: string; stderr: string; cacheHit?: boolean | undefined }> {
   const stdout: string[] = [];
   const stderr: string[] = [];
   const ctx = createRecordContext({
@@ -427,7 +427,7 @@ describe('michiganology native client', () => {
       metadata: Record<string, string>;
     };
     expect(body.cache_hit).toBe(false);
-    expect(body.metadata.County).toBe('Kent');
+    expect(body.metadata['County']).toBe('Kent');
   });
 
   it('retries download on 429 and timeout and supports fetch alias + -o/--output', async () => {

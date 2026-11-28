@@ -60,15 +60,15 @@ async function makeTempDir(): Promise<string> {
 
 function bytesResponse(body: Uint8Array | string, status = 200, headers?: Record<string, string>): Response {
   const payload = typeof body === 'string' ? Buffer.from(body, 'utf8') : Buffer.from(body);
-  return new Response(payload, { status, headers });
+  return new Response(payload, headers !== undefined ? { status, headers } : { status });
 }
 
 interface InvokeOptions {
   readonly cacheDir: string;
   readonly fetchImpl: typeof fetch;
-  readonly env?: NodeJS.ProcessEnv;
-  readonly sleepFn?: (ms: number) => Promise<void>;
-  readonly nowMs?: () => number;
+  readonly env?: NodeJS.ProcessEnv | undefined;
+  readonly sleepFn?: ((ms: number) => Promise<void>) | undefined;
+  readonly nowMs?: (() => number) | undefined;
   readonly stdoutOverride?: (line: string) => void;
 }
 
@@ -79,7 +79,7 @@ async function invokeIa(
   readonly exitCode: number;
   readonly stdout: string;
   readonly stderr: string;
-  readonly cacheHit?: boolean;
+  readonly cacheHit?: boolean | undefined;
 }> {
   const stdoutLines: string[] = [];
   const stderrLines: string[] = [];
@@ -146,7 +146,7 @@ describe('archive-org native client: cached grep and page', () => {
     expect(idx.access_leaf_count).toBe(5);
     expect(idx.printed_to_bookreader['1']).toBe(3);
     expect(idx.printed_to_bookreader['2']).toBe(4);
-    expect(idx.printed_to_bookreader_ci.iv).toBe(2);
+    expect(idx.printed_to_bookreader_ci['iv']).toBe(2);
     expect(idx.bookreader_to_printed['3']).toBe('1');
     expect(idx.scandata_to_bookreader['4']).toBe(3);
     expect(idx.bookreader_to_scandata['3']).toBe(4);
@@ -214,7 +214,7 @@ describe('archive-org native client: cached grep and page', () => {
     expect(out1.total_matches).toBe(1);
     expect(fetchCalls).toHaveLength(3);
     expect(fetchCalls.some((u) => u.includes('hocr'))).toBe(false);
-    const hit = out1.hits[0];
+    const hit = out1.hits[0]!;
     expect(hit.leaf).toBe(3);
     expect(hit.scandata_leaf).toBe(4);
     expect(hit.printed_page).toBe('1');
@@ -237,9 +237,9 @@ describe('archive-org native client: cached grep and page', () => {
     const out2 = JSON.parse(r2.stdout) as typeof out1;
     expect(out2.cached).toBe(true);
     expect(out2.cache_hit).toBe(true);
-    expect(out2.hits[0].leaf).toBe(2);
-    expect(out2.hits[0].printed_page).toBe('iv');
-    expect(out2.hits[0].cached).toBe(true);
+    expect(out2.hits[0]!.leaf).toBe(2);
+    expect(out2.hits[0]!.printed_page).toBe('iv');
+    expect(out2.hits[0]!.cached).toBe(true);
 
     // --refresh forces fresh fetches and updates cached content.
     const r3 = await invokeIa(['grep', itemId, '--pattern', 'Clara Barton', '--refresh', '--json'], {
@@ -306,9 +306,9 @@ describe('archive-org native client: cached grep and page', () => {
       const out = JSON.parse(res.stdout) as {
         hits: { leaf: number; scandata_leaf: number; printed_page: string }[];
       };
-      expect(out.hits[0].leaf).toBe(4);
-      expect(out.hits[0].scandata_leaf).toBe(5);
-      expect(out.hits[0].printed_page).toBe('2');
+      expect(out.hits[0]!.leaf).toBe(4);
+      expect(out.hits[0]!.scandata_leaf).toBe(5);
+      expect(out.hits[0]!.printed_page).toBe('2');
       expect(seenUrls.some((u) => u.endsWith('_hocr_searchtext.txt.gz'))).toBe(true);
       expect(seenUrls.some((u) => u.endsWith('_hocr_pageindex.json.gz'))).toBe(true);
     }
@@ -482,7 +482,7 @@ describe('archive-org native client: cached grep and page', () => {
         if (!match) {
           throw new Error(`Missing leaf in URL: ${url}`);
         }
-        const leaf = Number.parseInt(match[1], 10);
+        const leaf = Number.parseInt(match[1]!, 10);
         return bytesResponse(Buffer.concat([Buffer.from([0xff, 0xd8, leaf]), Buffer.alloc(24, 0)]));
       } finally {
         inflight -= 1;
@@ -598,7 +598,7 @@ describe('archive-org native client: cached grep and page', () => {
           throw new Error(`Missing leaf in URL: ${url}`);
         }
         return bytesResponse(
-          Buffer.concat([Buffer.from([0xff, 0xd8, Number.parseInt(match[1], 10)]), Buffer.alloc(16, 0xab)])
+          Buffer.concat([Buffer.from([0xff, 0xd8, Number.parseInt(match[1]!, 10)]), Buffer.alloc(16, 0xab)])
         );
       }
       throw new Error(`Unexpected URL: ${url}`);
@@ -637,7 +637,7 @@ describe('archive-org native client: cached grep and page', () => {
     expect(seen).toHaveLength(callsAfterMiss);
     expect(
       fs
-        .readFileSync(p2.pages[0].path)
+        .readFileSync(p2.pages[0]!.path)
         .subarray(0, 2)
         .equals(Buffer.from([0xff, 0xd8]))
     ).toBe(true);
@@ -728,7 +728,7 @@ describe('archive-org native client: cached grep and page', () => {
     });
     expect(rPdf1.exitCode).toBe(0);
     expect(fetchCalls).toHaveLength(1);
-    expect(fetchCalls[0].endsWith(`/${itemId}.pdf`)).toBe(true);
+    expect(fetchCalls[0]!.endsWith(`/${itemId}.pdf`)).toBe(true);
     expect(fs.statSync(path.join(tmpdir, itemId, 'files', `${itemId}.pdf`)).isFile()).toBe(true);
     expect(fs.readFileSync(path.join(out1, `${itemId}.pdf`)).equals(pdfBytes.data)).toBe(true);
 
@@ -883,9 +883,9 @@ describe('archive-org native client: cached grep and page', () => {
     expect(fetchCalls).toHaveLength(2);
 
     // Stale cache entry older than TTL triggers fresh fetch.
-    const ftCacheFile = path.join(ftDir, ftFiles[0]);
+    const ftCacheFile = path.join(ftDir, ftFiles[0]!);
     const envelope = JSON.parse(fs.readFileSync(ftCacheFile, 'utf8')) as Record<string, unknown>;
-    envelope.cached_at = Date.now() / 1000 - 200 * 3600;
+    envelope['cached_at'] = Date.now() / 1000 - 200 * 3600;
     fs.writeFileSync(ftCacheFile, JSON.stringify(envelope), 'utf8');
 
     ftVersion.total = 11;
@@ -1060,7 +1060,7 @@ describe('archive-org native client: text and lookup', () => {
     expect(p1.identifier).toBe(itemId);
     expect(p1.cached).toBe(false);
     expect(p1.pages).toHaveLength(1);
-    const page = p1.pages[0];
+    const page = p1.pages[0]!;
     expect(page.leaf).toBe(3);
     expect(page.scandata_leaf).toBe(4);
     expect(page.printed_page).toBe('1');
@@ -1080,9 +1080,9 @@ describe('archive-org native client: text and lookup', () => {
     expect(r2.exitCode).toBe(0);
     const p2 = JSON.parse(r2.stdout) as typeof p1;
     expect(p2.cached).toBe(true);
-    expect(p2.pages[0].text).toBe('Cover Text');
-    expect(p2.pages[0].scandata_leaf).toBe(1);
-    expect(p2.pages[0].printed_page).toBeNull();
+    expect(p2.pages[0]!.text).toBe('Cover Text');
+    expect(p2.pages[0]!.scandata_leaf).toBe(1);
+    expect(p2.pages[0]!.printed_page).toBeNull();
     expect(seen).toEqual([]);
 
     // Human-readable output includes metadata and URLs.
@@ -1130,9 +1130,9 @@ describe('archive-org native client: text and lookup', () => {
       expect(pages.map((p) => p.leaf)).toEqual([2, 3, 4]);
       expect(pages.map((p) => p.printed_page)).toEqual(['iv', '1', '2']);
       expect(pages.map((p) => p.scandata_leaf)).toEqual([3, 4, 5]);
-      expect(pages[0].text).toContain('Clara Barton');
-      expect(pages[1].text).toContain('1848 mill survey');
-      expect(pages[2].text).toContain('ferry tolls');
+      expect(pages[0]!.text).toContain('Clara Barton');
+      expect(pages[1]!.text).toContain('1848 mill survey');
+      expect(pages[2]!.text).toContain('ferry tolls');
 
       const r2 = await invokeIa(['text', itemId, '--pages', '1-1', '--json'], {
         cacheDir: tmpdir,
@@ -1333,7 +1333,7 @@ describe('archive-org native client: hardening', () => {
     };
     expect(out1.cache_hit).toBe(false);
     expect(out1.total_matches).toBe(1);
-    expect(out1.hits[0].printed_page).toBe('1');
+    expect(out1.hits[0]!.printed_page).toBe('1');
     expect(counts).toEqual({ meta: 2, scandata: 2, djvu: 3 });
     expect(sleeps).toHaveLength(4);
     expect(sleeps.every((s) => s >= 0 && s <= MAX_RETRY_AFTER_SECONDS * 1000)).toBe(true);
@@ -1403,8 +1403,8 @@ describe('archive-org native client: hardening', () => {
     expect(payload.total_matches).toBe(2);
     expect(payload.cache_hit).toBe(false);
     expect(payload.errors).toHaveLength(1);
-    expect(payload.errors[0].identifier).toBe(badId);
-    expect(payload.errors[0].error).toContain('HTTP 403');
+    expect(payload.errors[0]!.identifier).toBe(badId);
+    expect(payload.errors[0]!.error).toContain('HTTP 403');
     expect(fs.existsSync(path.join(tmpdir, goodId, 'scandata.xml'))).toBe(false);
 
     // Zero-match grep exits 0 cleanly and reports cache_hit: true.
@@ -1452,7 +1452,7 @@ describe('archive-org native client: hardening', () => {
         throw new Error(`Unexpected URL: ${url}`);
       }
       return bytesResponse(
-        Buffer.concat([Buffer.from([0xff, 0xd8, Number.parseInt(match[1], 10)]), Buffer.alloc(32, 0x11)])
+        Buffer.concat([Buffer.from([0xff, 0xd8, Number.parseInt(match[1]!, 10)]), Buffer.alloc(32, 0x11)])
       );
     };
 
@@ -1811,7 +1811,7 @@ describe('archive-org native client: hardening', () => {
         hits: { printed_page: string }[];
       };
       expect(payload.total_matches).toBe(1);
-      expect(payload.hits[0].printed_page).toBe('iv');
+      expect(payload.hits[0]!.printed_page).toBe('iv');
     }
 
     // `grep` with no pattern exits 2 with a helpful hint.

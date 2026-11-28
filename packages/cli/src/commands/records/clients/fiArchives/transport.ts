@@ -58,7 +58,7 @@ export async function requestWithRetry(
     readonly allowedHosts: readonly string[];
     readonly label: string;
     readonly body?: string;
-    readonly headers?: Readonly<Record<string, string>>;
+    readonly headers?: Readonly<Record<string, string>> | undefined;
   }
 ): Promise<{
   readonly status: number;
@@ -179,12 +179,12 @@ export async function resolveParishSpec(
           p.name.split(' - ').some((seg) => seg.trim().toLowerCase() === needle)
       )
       .map((p) => p.code);
-    if (exact.length === 1) {
+    if (exact.length === 1 && exact[0] !== undefined) {
       resolved.push(exact[0]);
       continue;
     }
     const partial = parishes.filter((p) => p.name.toLowerCase().includes(needle));
-    if (partial.length === 1) {
+    if (partial.length === 1 && partial[0] !== undefined) {
       resolved.push(partial[0].code);
       continue;
     }

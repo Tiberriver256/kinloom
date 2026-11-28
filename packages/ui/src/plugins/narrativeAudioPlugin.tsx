@@ -95,18 +95,18 @@ export function readNarrativeAudioMeta(narrative: Narrative | undefined): Narrat
   if (!narrative?.extensions) {
     return null;
   }
-  const raw = narrative.extensions.narrative_audio ?? narrative.extensions.audio;
+  const raw = narrative.extensions['narrative_audio'] ?? narrative.extensions['audio'];
   if (!raw || typeof raw !== 'object' || Array.isArray(raw)) {
     return null;
   }
   const record = raw as Record<string, unknown>;
-  const file = asNonEmptyString(record.file);
+  const file = asNonEmptyString(record['file']);
   if (!file) {
     return null;
   }
-  const durationSeconds = asPositiveFiniteNumber(record.duration_seconds);
-  const notesStart = asPositiveFiniteNumber(record.editor_notes_start_seconds);
-  const label = asNonEmptyString(record.label);
+  const durationSeconds = asPositiveFiniteNumber(record['duration_seconds']);
+  const notesStart = asPositiveFiniteNumber(record['editor_notes_start_seconds']);
+  const label = asNonEmptyString(record['label']);
   return {
     file,
     duration_seconds: durationSeconds,
@@ -114,8 +114,8 @@ export function readNarrativeAudioMeta(narrative: Narrative | undefined): Narrat
       notesStart !== undefined && (durationSeconds === undefined || notesStart < durationSeconds)
         ? notesStart
         : undefined,
-    story_voice: asNonEmptyString(record.story_voice),
-    notes_voice: asNonEmptyString(record.notes_voice),
+    story_voice: asNonEmptyString(record['story_voice']),
+    notes_voice: asNonEmptyString(record['notes_voice']),
     ...(label !== undefined ? { label } : {}),
   };
 }

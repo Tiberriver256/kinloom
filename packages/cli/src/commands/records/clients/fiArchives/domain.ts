@@ -153,11 +153,11 @@ export interface ArchivesSearchCachePayload {
 }
 
 export function getCacheDir(ctx: RecordCommandContext): string {
-  const specific = ctx.env.KINLOOM_FI_ARCHIVES_CACHE_DIR;
+  const specific = ctx.env['KINLOOM_FI_ARCHIVES_CACHE_DIR'];
   if (specific && specific.trim().length > 0) {
     return path.resolve(expandHomePath(specific, ctx.env));
   }
-  const shared = ctx.env.KINLOOM_CACHE_DIR;
+  const shared = ctx.env['KINLOOM_CACHE_DIR'];
   if (shared && shared.trim().length > 0) {
     return path.resolve(expandHomePath(shared, ctx.env), 'fi-archives');
   }
@@ -236,23 +236,23 @@ export function encodeIso88591Form(formData: Readonly<Record<string, string>>): 
 }
 
 export function isParishesCachePayload(value: unknown): value is ParishesCachePayload {
-  return isPlainRecord(value) && Array.isArray(value.parishes);
+  return isPlainRecord(value) && Array.isArray(value['parishes']);
 }
 
 export function isHiskiSearchResult(value: unknown): value is HiskiSearchResult {
-  return isPlainRecord(value) && Array.isArray(value.records);
+  return isPlainRecord(value) && Array.isArray(value['records']);
 }
 
 export function isHiskiEventDetail(value: unknown): value is HiskiEventDetail {
-  return isPlainRecord(value) && isPlainRecord(value.fields);
+  return isPlainRecord(value) && isPlainRecord(value['fields']);
 }
 
 export function isArchivesSearchCachePayload(value: unknown): value is ArchivesSearchCachePayload {
-  return isPlainRecord(value) && Array.isArray(value.archives);
+  return isPlainRecord(value) && Array.isArray(value['archives']);
 }
 
 export function isDigihakemistoArchiveDetail(value: unknown): value is DigihakemistoArchiveDetail {
-  return isPlainRecord(value) && Array.isArray(value.children);
+  return isPlainRecord(value) && Array.isArray(value['children']);
 }
 
 export function validateYears(
@@ -292,13 +292,13 @@ export function parseEventRef(raw: string): readonly [string, string, string] {
         'Expected a HisKi event URL like https://hiski.genealogia.fi/hiski?en+0001+kastetut+418.'
       );
     }
-    return [match[1], match[2].toLowerCase(), match[3]];
+    return [match[1] ?? '', (match[2] ?? '').toLowerCase(), match[3] ?? ''];
   }
   const tokens = text.split(/[+/:]/);
   if (tokens.length === 3) {
-    const parishCode = tokens[0].trim();
-    const rawBook = tokens[1].trim().toLowerCase();
-    const rowId = tokens[2].trim();
+    const parishCode = (tokens[0] ?? '').trim();
+    const rawBook = (tokens[1] ?? '').trim().toLowerCase();
+    const rowId = (tokens[2] ?? '').trim();
     const bookCode = BOOK_ALIASES[rawBook] ?? '';
     if (
       PARISH_CODE_RE.test(parishCode) &&
@@ -319,8 +319,14 @@ export function parseArchiveId(raw: string): string {
     validateFiUrl(text, ALLOWED_DIGIHAKEMISTO_HOSTS);
     const parsed = new URL(text);
     const parts = parsed.pathname.split('/').filter((p) => p.length > 0);
-    if (parts.length >= 2 && parts[0] === 'aineisto' && SAFE_ARCHIVE_ID_RE.test(parts[1])) {
-      return parts[1];
+    const archivePart = parts[1];
+    if (
+      parts.length >= 2 &&
+      parts[0] === 'aineisto' &&
+      archivePart !== undefined &&
+      SAFE_ARCHIVE_ID_RE.test(archivePart)
+    ) {
+      return archivePart;
     }
     throw new CliValidationError(`Expected https://digihakemisto.net/aineisto/<id>, got '${raw}'.`);
   }
@@ -340,6 +346,7 @@ export function normalizeOptionalValueFlags(
   const out: string[] = [];
   for (let i = 0; i < argv.length; i += 1) {
     const token = argv[i];
+    if (token === undefined) continue;
     out.push(token);
     if (optionalFlags.has(token)) {
       const next = argv[i + 1];

@@ -30,7 +30,7 @@ function stripSourcesParentheticals(input: string): string {
       break;
     }
     let trimStart = openIdx;
-    while (trimStart > cursor && /\s/.test(input[trimStart - 1])) {
+    while (trimStart > cursor && /\s/.test(input.charAt(trimStart - 1))) {
       trimStart -= 1;
     }
     out += input.slice(cursor, trimStart);

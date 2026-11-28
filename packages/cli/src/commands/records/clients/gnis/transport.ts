@@ -73,8 +73,8 @@ export function readCachedSearch(
   if (!parsed) {
     return undefined;
   }
-  const cachedAt = parsed.cached_at;
-  const data = parsed.data;
+  const cachedAt = parsed['cached_at'];
+  const data = parsed['data'];
   if (typeof cachedAt !== 'number' || !Number.isFinite(cachedAt) || !isPlainRecord(data)) {
     return undefined;
   }

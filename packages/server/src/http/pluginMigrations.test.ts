@@ -202,7 +202,7 @@ describe('pluginMigrations static DDL guard, runtime SQL scope guard, and runner
     expect(() =>
       validatePluginMigrations({
         id: 'missing-ns',
-        migrations: validPlugin.migrations,
+        ...(validPlugin.migrations ? { migrations: validPlugin.migrations } : {}),
       })
     ).toThrow(/without a databaseNamespace/);
 
@@ -299,8 +299,8 @@ describe('pluginMigrations static DDL guard, runtime SQL scope guard, and runner
     expect(firstRun.applied).toHaveLength(2);
     expect(firstRun.skipped).toEqual([]);
     expect(appliedStatements).toHaveLength(2);
-    expect(firstRun.applied[0].checksum_sha256).toBe(
-      await computeMigrationChecksum(validPlugin.migrations?.[0].sql ?? '')
+    expect(firstRun.applied[0]!.checksum_sha256).toBe(
+      await computeMigrationChecksum(validPlugin.migrations?.[0]?.sql ?? '')
     );
 
     // Second run is strictly idempotent

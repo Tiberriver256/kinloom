@@ -13,8 +13,8 @@ import {
 
 function bytesToBase64(bytes: Uint8Array): string {
   let binary = '';
-  for (let i = 0; i < bytes.byteLength; i += 1) {
-    binary += String.fromCharCode(bytes[i]);
+  for (const byte of bytes) {
+    binary += String.fromCharCode(byte);
   }
   return btoa(binary);
 }
@@ -101,7 +101,7 @@ describe('GeminiPronunciationAudioGenerator', () => {
     });
 
     expect(mockFetch).toHaveBeenCalledTimes(1);
-    const [url, init] = mockFetch.mock.calls[0];
+    const [url, init] = mockFetch.mock.calls[0]!;
     expect(url).toBe(
       `https://generativelanguage.googleapis.com/v1beta/models/${DEFAULT_GEMINI_TTS_MODEL}:generateContent`
     );
@@ -116,7 +116,7 @@ describe('GeminiPronunciationAudioGenerator', () => {
         speechConfig: { voiceConfig: { prebuiltVoiceConfig: { voiceName: string } } };
       };
     };
-    expect(sentBody.contents[0].parts[0].text).toBe('Pronounce "Thomas Mercer" as TOM-us MER-ser.');
+    expect(sentBody.contents[0]!.parts[0]!.text).toBe('Pronounce "Thomas Mercer" as TOM-us MER-ser.');
     expect(sentBody.generationConfig.responseModalities).toEqual(['AUDIO']);
     expect(sentBody.generationConfig.speechConfig.voiceConfig.prebuiltVoiceConfig.voiceName).toBe(
       DEFAULT_GEMINI_TTS_VOICE
@@ -178,7 +178,7 @@ describe('GeminiPronunciationAudioGenerator', () => {
       voice: 'Kore',
     });
 
-    const [url, init] = mockFetch.mock.calls[0];
+    const [url, init] = mockFetch.mock.calls[0]!;
     expect(url).toBe(
       'https://generativelanguage.googleapis.com/v1beta/models/gemini-custom-tts:generateContent'
     );
@@ -188,7 +188,7 @@ describe('GeminiPronunciationAudioGenerator', () => {
         speechConfig: { voiceConfig: { prebuiltVoiceConfig: { voiceName: string } } };
       };
     };
-    expect(sentBody.contents[0].parts[0].text).toBe(
+    expect(sentBody.contents[0]!.parts[0]!.text).toBe(
       'Pronounce "Springfield" in American English (en-US) as /ˈsprɪŋfiːld/.'
     );
     expect(sentBody.generationConfig.speechConfig.voiceConfig.prebuiltVoiceConfig.voiceName).toBe('Kore');
@@ -302,7 +302,7 @@ describe('Chirp3HdPronunciationAudioGenerator', () => {
     });
 
     expect(mockFetch).toHaveBeenCalledTimes(1);
-    const [url, init] = mockFetch.mock.calls[0];
+    const [url, init] = mockFetch.mock.calls[0]!;
     expect(url).toBe(CLOUD_TTS_SYNTHESIZE_ENDPOINT);
     expect(init?.method).toBe('POST');
     const headers = init?.headers as Record<string, string> | undefined;
@@ -377,8 +377,8 @@ describe('Chirp3HdPronunciationAudioGenerator', () => {
     });
     expect(plainRes.bytes).toEqual(existingWav);
     expect(sentPayloads[0]?.headers['x-goog-user-project']).toBeUndefined();
-    expect(sentPayloads[0]?.body.input).toEqual({ text: 'TOM-us MER-ser' });
-    expect(sentPayloads[0]?.body.voice).toEqual({
+    expect(sentPayloads[0]?.body['input']).toEqual({ text: 'TOM-us MER-ser' });
+    expect(sentPayloads[0]?.body['voice']).toEqual({
       languageCode: 'en-GB',
       name: 'en-GB-Chirp3-HD-Kore',
     });
@@ -390,8 +390,8 @@ describe('Chirp3HdPronunciationAudioGenerator', () => {
       language: 'en_us',
       phonemeMode: 'arpabet',
     });
-    expect(sentPayloads[1]?.body.input).toEqual({ text: 'BRAM-wel' });
-    expect(sentPayloads[1]?.body.voice).toEqual({
+    expect(sentPayloads[1]?.body['input']).toEqual({ text: 'BRAM-wel' });
+    expect(sentPayloads[1]?.body['voice']).toEqual({
       languageCode: 'en-US',
       name: DEFAULT_CHIRP3_HD_VOICE,
     });
@@ -445,7 +445,7 @@ describe('Chirp3HdPronunciationAudioGenerator', () => {
     await genCustom.generate({ text: 'Alder', language: 'xx' });
     await genCustom.generate({ text: 'Mercer', phonemeMode: 'plain' });
     expect(customBodies[0]?.url).toBe('https://tts-proxy.example.test/v1/text:synthesize');
-    expect(customBodies[0]?.body.voice).toEqual({ languageCode: 'en-GB', name: 'Chirp3-HD-Puck' });
-    expect(customBodies[1]?.body.input).toEqual({ text: 'Mercer' });
+    expect(customBodies[0]?.body['voice']).toEqual({ languageCode: 'en-GB', name: 'Chirp3-HD-Puck' });
+    expect(customBodies[1]?.body['input']).toEqual({ text: 'Mercer' });
   });
 });

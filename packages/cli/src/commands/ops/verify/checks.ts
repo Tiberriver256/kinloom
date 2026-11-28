@@ -44,7 +44,9 @@ const IGNORED_SSN_YAML_KEY_RE =
 
 function sortByIdIfNeeded<T extends { readonly id: string }>(items: readonly T[]): readonly T[] {
   for (let i = 1; i < items.length; i += 1) {
-    if (fastLocaleCompare(items[i - 1].id, items[i].id) > 0) {
+    const prev = items[i - 1];
+    const curr = items[i];
+    if (prev && curr && fastLocaleCompare(prev.id, curr.id) > 0) {
       return [...items].toSorted((a, b) => fastLocaleCompare(a.id, b.id));
     }
   }
@@ -128,11 +130,12 @@ export function findDuplicateResidenceSpans(bundle: ArchiveBundle, mode: 'privat
   const seenIds = new Set<string>();
   const completedPersonIds = new Set<string>();
   let fallbackTuples: Set<string> | null = null;
-  let groupPersonId = spans[0].person_id;
+  let groupPersonId = spans[0]?.person_id ?? '';
   let groupStart = 0;
 
   for (let i = 0; i < spans.length; i += 1) {
     const span = spans[i];
+    if (span === undefined) continue;
     if (seenIds.has(span.id)) {
       duplicates.push(`${mode}:id:${span.id}`);
     } else {
@@ -154,6 +157,7 @@ export function findDuplicateResidenceSpans(bundle: ArchiveBundle, mode: 'privat
         fallbackTuples = new Set<string>();
         for (let k = 0; k < i; k += 1) {
           const prev = spans[k];
+          if (prev === undefined) continue;
           fallbackTuples.add(
             `${prev.person_id}|${prev.place_id}|${prev.time_min}|${prev.time_max}|${prev.from_event_id}|${prev.to_event_id}`
           );
@@ -173,7 +177,8 @@ export function findDuplicateResidenceSpans(bundle: ArchiveBundle, mode: 'privat
     }
 
     for (let k = groupStart; k < i; k += 1) {
-      if (sameSpanTuple(spans[k], span)) {
+      const prevSpan = spans[k];
+      if (prevSpan && sameSpanTuple(prevSpan, span)) {
         duplicates.push(`${mode}:span:${span.id}(${span.person_id}@${span.place_id})`);
         break;
       }
@@ -276,8 +281,8 @@ export function scanPublicLivingNames(input: {
   sources: readonly SourceRecord[];
   media: readonly MediaItem[];
   narratives: readonly Narrative[];
-  privacy?: Partial<PrivacyConfig>;
-  precomputedPublicNarratives?: readonly Narrative[];
+  privacy?: Partial<PrivacyConfig> | undefined;
+  precomputedPublicNarratives?: readonly Narrative[] | undefined;
   precomputedPublicMedia?: readonly MediaItem[];
 }): VerifyLivingNamesResult {
   const livingIds = new Set<string>();
@@ -286,6 +291,7 @@ export function scanPublicLivingNames(input: {
   const referenceYear = input.privacy?.referenceYear ?? getCurrentReferenceYear();
   for (let i = 0; i < input.people.length; i += 1) {
     const person = input.people[i];
+    if (person === undefined) continue;
     if (resolveEffectiveLiving(person, input.privacy, referenceYear)) {
       livingIds.add(person.id);
       livingPeople.push(person);
@@ -330,6 +336,7 @@ export function scanPublicLivingNames(input: {
       deathYearByPersonId = new Map<string, number | null>();
       for (let i = 0; i < input.people.length; i += 1) {
         const person = input.people[i];
+        if (person === undefined) continue;
         deathYearByPersonId.set(
           person.id,
           livingIds.has(person.id) ? null : extractLatestEdtfYear(person.death_edtf)
@@ -348,11 +355,12 @@ export function scanPublicLivingNames(input: {
       const sourceMaxYearById = new Map<string, number | null>();
       for (let i = 0; i < input.events.length; i += 1) {
         const ev = input.events[i];
+        if (ev === undefined) continue;
         const eventYear = extractLatestEdtfYear(ev.edtf_date);
         eventMaxYearById.set(ev.id, eventYear);
         const srcs = ev.sources;
-        for (let s = 0; s < srcs.length; s += 1) {
-          const sourceId = srcs[s].source_id;
+        for (const src of srcs) {
+          const sourceId = src.source_id;
           const prev = sourceMaxYearById.get(sourceId);
           if (prev === undefined) {
             sourceMaxYearById.set(sourceId, eventYear);
@@ -375,12 +383,13 @@ export function scanPublicLivingNames(input: {
     const peopleById = new Map<string, RawPerson>();
     for (let i = 0; i < input.people.length; i += 1) {
       const person = input.people[i];
+      if (person === undefined) continue;
       const isLiv = livingIds.has(person.id);
       peopleById.set(person.id, person.is_living === isLiv ? person : { ...person, is_living: isLiv });
     }
     const eventsById = new Map<string, RawEvent>();
-    for (let i = 0; i < input.events.length; i += 1) {
-      eventsById.set(input.events[i].id, input.events[i]);
+    for (const ev of input.events) {
+      eventsById.set(ev.id, ev);
     }
     publicMedia = filterMediaForPrivacy(input.media, peopleById, eventsById, {
       stripLivingPortraits: true,
@@ -460,8 +469,8 @@ export function scanPublicLivingNames(input: {
       continue;
     }
     let hasLivingParticipant = false;
-    for (let p = 0; p < event.participants.length; p += 1) {
-      if (livingIds.has(event.participants[p].person_id)) {
+    for (const pt of event.participants) {
+      if (livingIds.has(pt.person_id)) {
         hasLivingParticipant = true;
         break;
       }

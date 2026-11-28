@@ -140,11 +140,11 @@ export function setPeriodBasemap(map: MapLibreMap, isDark = false): void {
 
 export interface FitPaddingMeasurements {
   readonly viewportWidth: number;
-  readonly viewportHeight?: number;
-  readonly toolbarHeight?: number;
-  readonly bottomDockHeight?: number;
+  readonly viewportHeight?: number | undefined;
+  readonly toolbarHeight?: number | undefined;
+  readonly bottomDockHeight?: number | undefined;
   readonly hasSelectedStop: boolean;
-  readonly drawerBottomPx?: number;
+  readonly drawerBottomPx?: number | undefined;
 }
 
 export interface FitPadding {
@@ -201,10 +201,10 @@ export function getFitOptions(
   hasSelectedStop: boolean,
   drawerBottomPx?: number,
   measurements?: {
-    readonly viewportWidth?: number;
-    readonly viewportHeight?: number;
-    readonly toolbarHeight?: number;
-    readonly bottomDockHeight?: number;
+    readonly viewportWidth?: number | undefined;
+    readonly viewportHeight?: number | undefined;
+    readonly toolbarHeight?: number | undefined;
+    readonly bottomDockHeight?: number | undefined;
   }
 ): {
   padding: { top: number; right: number; bottom: number; left: number };
@@ -250,7 +250,7 @@ function bindStopClicks(map: MapLibreMap, onSelect: (id: string | null) => void)
       return;
     }
     const hits = map.queryRenderedFeatures(event.point, { layers: [STOP_LAYER_ID] });
-    const raw: unknown = hits[0]?.properties?.id;
+    const raw: unknown = hits[0]?.properties?.['id'];
     onSelect(typeof raw === 'string' ? raw : null);
   });
 }

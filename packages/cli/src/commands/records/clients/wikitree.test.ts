@@ -62,7 +62,7 @@ async function invokeWikiTree(
   args: readonly string[],
   cacheDir: string,
   fetchImpl: typeof fetch
-): Promise<{ exitCode: number; stdout: string; stderr: string; cacheHit?: boolean }> {
+): Promise<{ exitCode: number; stdout: string; stderr: string; cacheHit?: boolean | undefined }> {
   const stdout: string[] = [];
   const stderr: string[] = [];
   const ctx = createRecordContext({
@@ -120,13 +120,13 @@ describe('wikitree native client', () => {
     const b2 = await invokeWikiTree(['bio', 'Lincoln-1', '--json'], cacheDir, fetchImpl);
 
     expect(calls).toBe(3);
-    expect((JSON.parse(s1.stdout) as Array<{ cache_hit: boolean }>)[0].cache_hit).toBe(false);
-    expect((JSON.parse(s2.stdout) as Array<{ cache_hit: boolean }>)[0].cache_hit).toBe(true);
+    expect((JSON.parse(s1.stdout) as Array<{ cache_hit: boolean }>)[0]!.cache_hit).toBe(false);
+    expect((JSON.parse(s2.stdout) as Array<{ cache_hit: boolean }>)[0]!.cache_hit).toBe(true);
     expect(s3.stdout).toContain('[cache]');
-    expect((JSON.parse(p1.stdout) as Array<{ cache_hit: boolean }>)[0].cache_hit).toBe(false);
+    expect((JSON.parse(p1.stdout) as Array<{ cache_hit: boolean }>)[0]!.cache_hit).toBe(false);
     expect(p2.stdout).toContain('[cache]');
-    expect((JSON.parse(b1.stdout) as Array<{ cache_hit: boolean }>)[0].cache_hit).toBe(false);
-    expect((JSON.parse(b2.stdout) as Array<{ cache_hit: boolean }>)[0].cache_hit).toBe(true);
+    expect((JSON.parse(b1.stdout) as Array<{ cache_hit: boolean }>)[0]!.cache_hit).toBe(false);
+    expect((JSON.parse(b2.stdout) as Array<{ cache_hit: boolean }>)[0]!.cache_hit).toBe(true);
   });
 
   it('bypasses cache on --refresh and --cache-ttl-hours 0', async () => {
@@ -146,8 +146,8 @@ describe('wikitree native client', () => {
     );
 
     expect(calls).toBe(3);
-    expect((JSON.parse(rRef.stdout) as Array<{ cache_hit: boolean }>)[0].cache_hit).toBe(false);
-    expect((JSON.parse(rTtl.stdout) as Array<{ cache_hit: boolean }>)[0].cache_hit).toBe(false);
+    expect((JSON.parse(rRef.stdout) as Array<{ cache_hit: boolean }>)[0]!.cache_hit).toBe(false);
+    expect((JSON.parse(rTtl.stdout) as Array<{ cache_hit: boolean }>)[0]!.cache_hit).toBe(false);
   });
 
   it('never caches HTTP errors or non-zero WikiTree status errors', async () => {
@@ -210,13 +210,13 @@ describe('wikitree native client', () => {
       fetchImpl
     );
     expect(s1.exitCode).toBe(0);
-    expect((JSON.parse(s1.stdout) as Array<{ cache_hit: boolean }>)[0].cache_hit).toBe(false);
-    expect(seenParams[0].FirstName).toBe('Abraham');
-    expect(seenParams[0].LastName).toBe('Lincoln');
-    expect(seenParams[0].BirthDate).toBe('1809');
-    expect(seenParams[0].BirthLocation).toBe('Kentucky');
-    expect(seenParams[0].limit).toBe('5');
-    expect(seenParams[0].start).toBe('5');
+    expect((JSON.parse(s1.stdout) as Array<{ cache_hit: boolean }>)[0]!.cache_hit).toBe(false);
+    expect(seenParams[0]!['FirstName']!).toBe('Abraham');
+    expect(seenParams[0]!['LastName']!).toBe('Lincoln');
+    expect(seenParams[0]!['BirthDate']!).toBe('1809');
+    expect(seenParams[0]!['BirthLocation']!).toBe('Kentucky');
+    expect(seenParams[0]!['limit']!).toBe('5');
+    expect(seenParams[0]!['start']!).toBe('5');
 
     const s2 = await invokeWikiTree(
       [
@@ -239,7 +239,7 @@ describe('wikitree native client', () => {
       fetchImpl
     );
     expect(s2.exitCode).toBe(0);
-    expect((JSON.parse(s2.stdout) as Array<{ cache_hit: boolean }>)[0].cache_hit).toBe(true);
+    expect((JSON.parse(s2.stdout) as Array<{ cache_hit: boolean }>)[0]!.cache_hit).toBe(true);
     expect(seenParams).toHaveLength(1);
 
     const pGet = await invokeWikiTree(
@@ -252,10 +252,10 @@ describe('wikitree native client', () => {
     expect(pGet.exitCode).toBe(0);
     expect(pShow.exitCode).toBe(0);
     expect(pProf.exitCode).toBe(0);
-    expect((JSON.parse(pGet.stdout) as Array<{ cache_hit: boolean }>)[0].cache_hit).toBe(false);
-    expect((JSON.parse(pShow.stdout) as Array<{ cache_hit: boolean }>)[0].cache_hit).toBe(true);
-    expect((JSON.parse(pProf.stdout) as Array<{ cache_hit: boolean }>)[0].cache_hit).toBe(true);
-    expect(seenParams[1].key).toBe('Lincoln-1');
+    expect((JSON.parse(pGet.stdout) as Array<{ cache_hit: boolean }>)[0]!.cache_hit).toBe(false);
+    expect((JSON.parse(pShow.stdout) as Array<{ cache_hit: boolean }>)[0]!.cache_hit).toBe(true);
+    expect((JSON.parse(pProf.stdout) as Array<{ cache_hit: boolean }>)[0]!.cache_hit).toBe(true);
+    expect(seenParams[1]!['key']!).toBe('Lincoln-1');
     expect(seenParams).toHaveLength(2);
 
     const bad = await invokeWikiTree(['search'], cacheDir, fetchImpl);

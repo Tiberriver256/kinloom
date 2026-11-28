@@ -68,7 +68,7 @@ async function invokeKy(
   args: readonly string[],
   cacheDir: string,
   fetchImpl: typeof fetch
-): Promise<{ exitCode: number; stdout: string; stderr: string; cacheHit?: boolean }> {
+): Promise<{ exitCode: number; stdout: string; stderr: string; cacheHit?: boolean | undefined }> {
   const stdout: string[] = [];
   const stderr: string[] = [];
   const ctx = createRecordContext({
@@ -159,9 +159,9 @@ describe('ky-archives native client', () => {
     };
     expect(parsedL1.cache_hit).toBe(false);
     expect(parsedL1.totalResults).toBe(1);
-    expect(parsedL1.results[0].patent).toBe('1234.0');
-    expect(parsedL1.results[0].grantee).toBe('Lincoln, Thomas');
-    expect(parsedL1.results[0].county).toBe('Hardin');
+    expect(parsedL1.results[0]!.patent).toBe('1234.0');
+    expect(parsedL1.results[0]!.grantee).toBe('Lincoln, Thomas');
+    expect(parsedL1.results[0]!.county).toBe('Hardin');
 
     expect((JSON.parse(l2.stdout) as { cache_hit: boolean }).cache_hit).toBe(true);
     expect((JSON.parse(lRef.stdout) as { cache_hit: boolean }).cache_hit).toBe(false);

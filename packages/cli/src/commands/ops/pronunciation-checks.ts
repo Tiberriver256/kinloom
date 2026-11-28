@@ -83,24 +83,24 @@ function collectIpaInPhoneticMessages(scopeLabel: string, pron: Pronunciation): 
 }
 
 function toLooseRawPerson(rec: Readonly<Record<string, unknown>>): RawPerson {
-  const fullName = asString(rec.full_name).trim();
-  const givenNames = asString(rec.given_names).trim();
-  const surname = asString(rec.surname).trim();
-  const pronunciation = parseLoosePronunciation(rec.pronunciation);
-  const rawSex = asString(rec.sex).trim();
+  const fullName = asString(rec['full_name']).trim();
+  const givenNames = asString(rec['given_names']).trim();
+  const surname = asString(rec['surname']).trim();
+  const pronunciation = parseLoosePronunciation(rec['pronunciation']);
+  const rawSex = asString(rec['sex']).trim();
   const sex: RawPerson['sex'] = rawSex === 'M' || rawSex === 'F' || rawSex === 'U' ? rawSex : 'U';
   return {
-    id: asString(rec.id).trim(),
-    slug: asString(rec.slug).trim() || asString(rec.id).trim(),
+    id: asString(rec['id']).trim(),
+    slug: asString(rec['slug']).trim() || asString(rec['id']).trim(),
     full_name: fullName || [givenNames, surname].filter(Boolean).join(' ').trim(),
-    given_name: asString(rec.given_name).trim() || givenNames,
+    given_name: asString(rec['given_name']).trim() || givenNames,
     surname,
     alt_names: [],
     sex,
-    birth_edtf: asString(rec.birth_edtf).trim(),
-    death_edtf: asString(rec.death_edtf).trim(),
-    is_living: rec.is_living === true || rec.living === true,
-    lineage_group: asString(rec.lineage_group).trim() || 'unknown',
+    birth_edtf: asString(rec['birth_edtf']).trim(),
+    death_edtf: asString(rec['death_edtf']).trim(),
+    is_living: rec['is_living'] === true || rec['living'] === true,
+    lineage_group: asString(rec['lineage_group']).trim() || 'unknown',
     portrait_url: null,
     ...(pronunciation ? { pronunciation } : {}),
   };
@@ -120,15 +120,15 @@ function parseLoosePlaceType(value: unknown): Place['place_type'] {
 }
 
 function toLoosePlace(rec: Readonly<Record<string, unknown>>): Place {
-  const pronunciation = parseLoosePronunciation(rec.pronunciation);
+  const pronunciation = parseLoosePronunciation(rec['pronunciation']);
   return {
-    id: asString(rec.id).trim(),
-    slug: asString(rec.slug).trim() || asString(rec.id).trim(),
-    name: asString(rec.name).trim(),
-    full_name: asString(rec.full_name).trim() || asString(rec.name).trim(),
-    lat: Number(rec.lat ?? 0),
-    lng: Number(rec.lng ?? rec.lon ?? 0),
-    place_type: parseLoosePlaceType(rec.place_type),
+    id: asString(rec['id']).trim(),
+    slug: asString(rec['slug']).trim() || asString(rec['id']).trim(),
+    name: asString(rec['name']).trim(),
+    full_name: asString(rec['full_name']).trim() || asString(rec['name']).trim(),
+    lat: Number(rec['lat'] ?? 0),
+    lng: Number(rec['lng'] ?? rec['lon'] ?? 0),
+    place_type: parseLoosePlaceType(rec['place_type']),
     parent_id: null,
     ...(pronunciation ? { pronunciation } : {}),
   };
@@ -138,18 +138,18 @@ function isEffectiveLivingRecord(
   rec: Readonly<Record<string, unknown>>,
   privacy: Partial<PrivacyConfig>
 ): boolean {
-  if (rec.is_living === true || rec.living === true) {
+  if (rec['is_living'] === true || rec['living'] === true) {
     return true;
   }
-  const fullName = asString(rec.full_name).trim();
+  const fullName = asString(rec['full_name']).trim();
   if (fullName === 'Living') {
     return true;
   }
   return resolveEffectiveLiving(
     {
       is_living: false,
-      birth_edtf: asString(rec.birth_edtf).trim(),
-      death_edtf: asString(rec.death_edtf).trim(),
+      birth_edtf: asString(rec['birth_edtf']).trim(),
+      death_edtf: asString(rec['death_edtf']).trim(),
     },
     privacy,
     privacy.referenceYear ?? getCurrentReferenceYear()
@@ -163,11 +163,11 @@ export function runPronunciationAuditCheck(ctx: KinloomAuditCheckContext): Kinlo
 
   const privacy: Partial<PrivacyConfig> = ctx.siteConfig?.privacy ?? {};
   const lexicon = loadArchivePronunciationLexicon(ctx.repoDir, ctx.siteConfig?.pronunciations);
-  const personUpdates = isPlainRecord(ctx.patch.person_updates) ? ctx.patch.person_updates : null;
+  const personUpdates = isPlainRecord(ctx.patch['person_updates']) ? ctx.patch['person_updates'] : null;
 
-  const liveTarget = ctx.livePeople.find((p) => asString(p.id).trim() === ctx.personId) ?? null;
+  const liveTarget = ctx.livePeople.find((p) => asString(p['id']).trim() === ctx.personId) ?? null;
   const liveTargetHadPron = liveTarget
-    ? hasPronunciationValues(parseLoosePronunciation(liveTarget.pronunciation))
+    ? hasPronunciationValues(parseLoosePronunciation(liveTarget['pronunciation']))
     : false;
 
   let deletedLivePronunciation = false;
@@ -175,7 +175,7 @@ export function runPronunciationAuditCheck(ctx: KinloomAuditCheckContext): Kinlo
     liveTargetHadPron &&
     personUpdates &&
     Object.hasOwn(personUpdates, 'pronunciation') &&
-    !hasPronunciationValues(parseLoosePronunciation(personUpdates.pronunciation))
+    !hasPronunciationValues(parseLoosePronunciation(personUpdates['pronunciation']))
   ) {
     deletedLivePronunciation = true;
     const msg = `person_updates removes existing live pronunciation on '${ctx.personId}'`;
@@ -192,11 +192,11 @@ export function runPronunciationAuditCheck(ctx: KinloomAuditCheckContext): Kinlo
     evaluatedPeople.set(ctx.personId, { id: ctx.personId, ...personUpdates });
   }
 
-  for (const rawStaged of Array.isArray(ctx.patch.people) ? ctx.patch.people : []) {
+  for (const rawStaged of Array.isArray(ctx.patch['people']) ? ctx.patch['people'] : []) {
     if (!isPlainRecord(rawStaged)) {
       continue;
     }
-    const id = asString(rawStaged.id).trim();
+    const id = asString(rawStaged['id']).trim();
     if (!id) {
       continue;
     }
@@ -211,7 +211,7 @@ export function runPronunciationAuditCheck(ctx: KinloomAuditCheckContext): Kinlo
   const ipaInPhoneticEntries: string[] = [];
 
   for (const [id, rec] of evaluatedPeople.entries()) {
-    const explicitPron = parseLoosePronunciation(rec.pronunciation);
+    const explicitPron = parseLoosePronunciation(rec['pronunciation']);
     const isLiving = isEffectiveLivingRecord(rec, privacy);
 
     if (isLiving) {
@@ -259,7 +259,7 @@ export function runPronunciationAuditCheck(ctx: KinloomAuditCheckContext): Kinlo
   }
 
   const missingPlaces: string[] = [];
-  for (const rawPlace of Array.isArray(ctx.patch.places) ? ctx.patch.places : []) {
+  for (const rawPlace of Array.isArray(ctx.patch['places']) ? ctx.patch['places'] : []) {
     if (!isPlainRecord(rawPlace)) {
       continue;
     }

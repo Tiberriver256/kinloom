@@ -32,8 +32,8 @@ export async function requestWithRetry(
   ctx: RecordCommandContext,
   options: {
     readonly url: string;
-    readonly allowedHosts?: readonly string[];
-    readonly headers?: Readonly<Record<string, string>>;
+    readonly allowedHosts?: readonly string[] | undefined;
+    readonly headers?: Readonly<Record<string, string>> | undefined;
   }
 ): Promise<SeHttpResponse> {
   const allowedHosts = options.allowedHosts ?? ALLOWED_API_HOSTS;
@@ -97,16 +97,16 @@ export async function fetchRecordsEndpoint(
   } catch {
     throw new RecordRuntimeError(`Riksarkivet API returned non-JSON response from ${baseUrl}`);
   }
-  if (!isPlainRecord(body) || !Array.isArray(body.items)) {
+  if (!isPlainRecord(body) || !Array.isArray(body['items'])) {
     throw new RecordRuntimeError(`Unexpected Riksarkivet API payload from ${baseUrl}`);
   }
-  const items = body.items
+  const items = body['items']
     .filter((it): it is Record<string, unknown> => isPlainRecord(it))
     .map(normalizeSearchItem);
   return {
-    total: Number(body.totalHits ?? 0),
-    hits: Number(body.hits ?? items.length),
-    offset: Number(body.offset ?? params.offset ?? 0),
+    total: Number(body['totalHits'] ?? 0),
+    hits: Number(body['hits'] ?? items.length),
+    offset: Number(body['offset'] ?? params['offset'] ?? 0),
     results: items,
     verified: true,
   };

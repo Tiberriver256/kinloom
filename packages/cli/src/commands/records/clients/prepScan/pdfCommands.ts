@@ -74,7 +74,7 @@ async function getPdfPageCount(pdfPath: string, ctx: RecordCommandContext): Prom
     const { stdout } = await execFn('pdfinfo', [pdfPath], { timeout: 15_000, env: ctx.env });
     const match = PDFINFO_PAGES_RE.exec(stdout.toString('utf8'));
     if (match) {
-      const count = Number.parseInt(match[1], 10);
+      const count = Number.parseInt(match[1] ?? '', 10);
       if (count > 0) {
         return count;
       }
@@ -187,12 +187,13 @@ export async function renderOrLoadPdfPage(
           .map((name) => path.join(stageDir, name))
           .filter((full) => fs.statSync(full).isFile());
 
-        if (renderedFiles.length === 0 || fs.statSync(renderedFiles[0]).size === 0) {
+        const firstRendered = renderedFiles[0];
+        if (firstRendered === undefined || fs.statSync(firstRendered).size === 0) {
           throw new CliValidationError(
             `Page ${pageNum} is out of range or could not be rendered from ${path.basename(pdfPath)}.`
           );
         }
-        fs.renameSync(renderedFiles[0], cachePath);
+        fs.renameSync(firstRendered, cachePath);
         return { data: fs.readFileSync(cachePath), cacheHit: false };
       } finally {
         fs.rmSync(stageDir, { recursive: true, force: true });
@@ -216,7 +217,7 @@ export async function cmdPdfPages(
   const maxKb = getNumberOption(parsed, 'maxKb') ?? 280;
   const fmt = normalizePdfFormat(getStringOption(parsed, 'format') ?? 'jpg');
   const requestedPages = parsePageSpec(getStringOption(parsed, 'pages') ?? '');
-  const pdfPath = resolveUserPathFromContext(parsed.positionals[0], ctx);
+  const pdfPath = resolveUserPathFromContext(parsed.positionals[0] ?? '', ctx);
   const outDir = resolveUserPathFromContext(getStringOption(parsed, 'outDir') ?? '', ctx);
   const stripOpt = getStringOption(parsed, 'strip');
   const refresh = getBooleanOption(parsed, 'refresh');
@@ -350,7 +351,7 @@ function readCachedPdfPages(cachePath: string): string[] | null {
     if (!isPlainRecord(parsed)) {
       return null;
     }
-    const pages = parsed.pages;
+    const pages = parsed['pages'];
     if (!Array.isArray(pages) || !pages.every((p): p is string => typeof p === 'string')) {
       return null;
     }
@@ -368,7 +369,7 @@ async function extractPdfPagesText(pdfPath: string, ctx: RecordCommandContext): 
       env: ctx.env,
     });
     const pages = stdout.toString('utf8').split('\f');
-    if (pages.length > 0 && pages[pages.length - 1].trim().length === 0) {
+    if (pages.length > 0 && (pages[pages.length - 1] ?? '').trim().length === 0) {
       pages.pop();
     }
     return pages;
@@ -427,7 +428,7 @@ export async function cmdPdfGrep(
     return { exitCode: 0, bytesOut: emitStdout(ctx.io, renderSubcommandHelp('pdf-grep')) };
   }
 
-  const pdfPath = resolveUserPathFromContext(parsed.positionals[0], ctx);
+  const pdfPath = resolveUserPathFromContext(parsed.positionals[0] ?? '', ctx);
   const pattern = getStringOption(parsed, 'pattern') ?? '';
   const ignoreCase = getBooleanOption(parsed, 'ignoreCase');
   const contextLen = getNumberOption(parsed, 'context') ?? 200;
@@ -467,12 +468,14 @@ export async function cmdPdfGrep(
   for (let pIdx = 0; pIdx < pageTexts.length; pIdx += 1) {
     const pageNo = pIdx + 1;
     const text = pageTexts[pIdx];
+    if (text === undefined) continue;
     let pageHit = false;
     let offset = 0;
     const lines = text.split('\n');
     for (let lIdx = 0; lIdx < lines.length; lIdx += 1) {
       const lineNo = lIdx + 1;
       const line = lines[lIdx];
+      if (line === undefined) continue;
       regex.lastIndex = 0;
       for (;;) {
         const m = regex.exec(line);

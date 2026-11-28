@@ -124,7 +124,7 @@ export interface ValidatePatchMediaInput {
   livingIds: ReadonlySet<string>;
   eventsById: ReadonlyMap<string, RawEvent>;
   sourceIds: ReadonlySet<string>;
-  overlay?: IntegrateExecutionOverlay;
+  overlay?: IntegrateExecutionOverlay | undefined;
 }
 
 export function validatePatchMedia(input: ValidatePatchMediaInput): void {

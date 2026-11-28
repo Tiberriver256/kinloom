@@ -63,14 +63,14 @@ export async function fetchOpenSearchPage(
   if (!isPlainRecord(data)) {
     throw new RecordRuntimeError('OpenSearch returned unexpected JSON shape');
   }
-  const feed = data.feed ?? {};
+  const feed = data['feed'] ?? {};
   if (!isPlainRecord(feed)) {
     throw new RecordRuntimeError('OpenSearch returned malformed feed');
   }
   const rawTotal = feed['opensearch:totalResults'];
   const parsedTotal = Number.parseInt(String(rawTotal ?? '0'), 10);
   const total = Number.isInteger(parsedTotal) ? parsedTotal : 0;
-  const rawEntries = Array.isArray(feed.entry) ? feed.entry : feed.entry ? [feed.entry] : [];
+  const rawEntries = Array.isArray(feed['entry']) ? feed['entry'] : feed['entry'] ? [feed['entry']] : [];
   const entries = rawEntries.map((item) => mapOpenSearchEntry(item));
   return { total, page, entries };
 }

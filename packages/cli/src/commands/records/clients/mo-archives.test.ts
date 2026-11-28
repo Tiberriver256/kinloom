@@ -52,8 +52,8 @@ async function makeTempDir(): Promise<string> {
 async function invokeMo(
   args: readonly string[],
   cacheDir: string,
-  opts: { readonly fetchImpl?: typeof fetch; readonly cwd?: string } = {}
-): Promise<{ exitCode: number; stdout: string; stderr: string; cacheHit?: boolean }> {
+  opts: { readonly fetchImpl?: typeof fetch | undefined; readonly cwd?: string | undefined } = {}
+): Promise<{ exitCode: number; stdout: string; stderr: string; cacheHit?: boolean | undefined }> {
   const stdout: string[] = [];
   const stderr: string[] = [];
   const ctx = createRecordContext({

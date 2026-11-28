@@ -74,7 +74,7 @@ export type ResolvableCitationMedia = MediaItem & {
  */
 export function parseInlineCitationToken(rawToken: string): ParsedInlineCitationToken | null {
   const match = SINGLE_CITATION_TOKEN_RE.exec(rawToken);
-  if (!match) {
+  if (!match || !match[1]) {
     return null;
   }
   return {
@@ -190,7 +190,7 @@ export function isPreviewableCitationImage(media: MediaItem): boolean {
   if (mime.startsWith('video/') || mime.startsWith('audio/') || mime === 'application/pdf') {
     return false;
   }
-  if (media.person_name === 'Living' || media.extensions?.living_redacted === true) {
+  if (media.person_name === 'Living' || media.extensions?.['living_redacted'] === true) {
     return false;
   }
   const candidatePath = (media.thumb_file || media.file || '').trim();
@@ -211,7 +211,8 @@ function pickPreferredMedia(
   candidates: readonly ResolvableCitationMedia[],
   subjectPersonId?: string | null
 ): MediaItem | null {
-  if (candidates.length === 0) {
+  const [first] = candidates;
+  if (!first) {
     return null;
   }
   if (subjectPersonId) {
@@ -220,7 +221,7 @@ function pickPreferredMedia(
       return forSubject;
     }
   }
-  return candidates[0];
+  return first;
 }
 
 /**

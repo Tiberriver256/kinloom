@@ -122,6 +122,7 @@ export function collectPronounceSynthTargets(options: {
   const referenceYear = siteConfig.privacy.referenceYear ?? getCurrentReferenceYear();
   for (let i = 0; i < people.length; i += 1) {
     const person = people[i];
+    if (person === undefined) continue;
     if (
       person.is_living ||
       person.full_name.trim() === 'Living' ||

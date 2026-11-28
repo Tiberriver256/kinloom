@@ -26,14 +26,18 @@ interface PlaywrightResponseLike {
 interface ExtendedBrowserPage extends OptionalBrowserPage {
   on?: (event: string, listener: (resp: PlaywrightResponseLike) => void) => void;
   removeListener?: (event: string, listener: (resp: PlaywrightResponseLike) => void) => void;
-  waitForFunction?: (fn: string, arg?: unknown, options?: { timeout?: number }) => Promise<unknown>;
+  waitForFunction?: (
+    fn: string,
+    arg?: unknown,
+    options?: { timeout?: number | undefined }
+  ) => Promise<unknown>;
   waitForTimeout?: (timeout: number) => Promise<void>;
 }
 
 interface BrowserSessionOverrides {
-  readonly launcher?: ChromiumLauncher;
-  readonly closeTimeoutMs?: number;
-  readonly killGraceMs?: number;
+  readonly launcher?: ChromiumLauncher | undefined;
+  readonly closeTimeoutMs?: number | undefined;
+  readonly killGraceMs?: number | undefined;
 }
 
 export async function defaultBrowserSearchMany(
@@ -133,9 +137,10 @@ export async function defaultBrowserSearchMany(
         let entry: NaraSearchPayload | null = null;
         for (let i = captured.length - 1; i >= 0; i -= 1) {
           const cap = captured[i];
-          const body = isPlainRecord(cap.body) ? cap.body : cap;
-          const hitsObj = isPlainRecord(body.hits) ? body.hits : {};
-          if (Array.isArray(hitsObj.hits)) {
+          if (cap === undefined) continue;
+          const body = isPlainRecord(cap['body']) ? cap['body'] : cap;
+          const hitsObj = isPlainRecord(body['hits']) ? body['hits'] : {};
+          if (Array.isArray(hitsObj['hits'])) {
             entry = buildSearchPayload(query, searchUrl, cap);
             break;
           }
@@ -178,7 +183,7 @@ export async function defaultBrowserGetRecords(
     readonly includeObjects: boolean;
     readonly includeText: boolean;
     readonly pageSpec: string | null;
-    readonly timeoutMs?: number;
+    readonly timeoutMs?: number | undefined;
   },
   ctx: RecordCommandContext,
   sessionOverrides?: BrowserSessionOverrides
@@ -221,9 +226,9 @@ export async function defaultBrowserGetRecords(
                 if (!isPlainRecord(payload)) {
                   return;
                 }
-                const body = isPlainRecord(payload.body) ? payload.body : payload;
-                const hitsObj = isPlainRecord(body.hits) ? body.hits : {};
-                const hits = Array.isArray(hitsObj.hits) ? hitsObj.hits : [];
+                const body = isPlainRecord(payload['body']) ? payload['body'] : payload;
+                const hitsObj = isPlainRecord(body['hits']) ? body['hits'] : {};
+                const hits = Array.isArray(hitsObj['hits']) ? hitsObj['hits'] : [];
                 if (hits.length > 0) {
                   capturedRecord = extractRecord(hits[0], {
                     includeObjects: options.includeObjects,
@@ -322,10 +327,10 @@ export async function defaultBrowserGetRecords(
           if (options.includeText && contributions.length > 0) {
             const transcriptions: string[] = [];
             for (const c of contributions) {
-              if (c.contributionType === 'transcription') {
+              if (c['contributionType'] === 'transcription') {
                 const textVal =
-                  (typeof c.text === 'string' && c.text) ||
-                  (typeof c.transcription === 'string' && c.transcription) ||
+                  (typeof c['text'] === 'string' && c['text']) ||
+                  (typeof c['transcription'] === 'string' && c['transcription']) ||
                   '';
                 if (textVal) {
                   transcriptions.push(textVal);

@@ -12,7 +12,7 @@ export interface HttpRequestContext {
   readonly isSecure: boolean;
   readonly segments: readonly string[];
   readonly auth: ResolvedAuthContext;
-  readonly telemetry?: ServerRequestTelemetryTracker;
+  readonly telemetry?: ServerRequestTelemetryTracker | undefined;
 }
 
 export type HttpRouteHandler = (ctx: HttpRequestContext) => Promise<Response | null>;
@@ -57,7 +57,7 @@ export async function readJsonBody(request: Request): Promise<unknown> {
   }
 }
 
-export function parseEntityTypeParam(raw: string): EntityType {
+export function parseEntityTypeParam(raw: string | undefined): EntityType {
   const parsed = EntityTypeSchema.safeParse(raw);
   if (!parsed.success) {
     throw new KinloomHttpError(400, 'INVALID_ENTITY_TYPE', `Invalid entity type '${raw}'.`);
@@ -65,19 +65,20 @@ export function parseEntityTypeParam(raw: string): EntityType {
   return parsed.data;
 }
 
-export function decodeSegment(segment: string): string {
+export function decodeSegment(segment: string | undefined): string {
   try {
-    return decodeURIComponent(segment);
+    return decodeURIComponent(segment ?? '');
   } catch {
     throw new KinloomHttpError(400, 'VALIDATION_ERROR', 'Malformed URL path encoding.');
   }
 }
 
-export function parsePositiveInt(raw: string, fieldName: string): number {
-  if (!/^\d+$/.test(raw)) {
-    throw new KinloomHttpError(400, 'VALIDATION_ERROR', `Invalid ${fieldName}: '${raw}'.`);
+export function parsePositiveInt(raw: string | undefined, fieldName: string): number {
+  const text = raw ?? '';
+  if (!/^\d+$/.test(text)) {
+    throw new KinloomHttpError(400, 'VALIDATION_ERROR', `Invalid ${fieldName}: '${text}'.`);
   }
-  const value = Number(raw);
+  const value = Number(text);
   if (!Number.isSafeInteger(value) || value <= 0) {
     throw new KinloomHttpError(400, 'VALIDATION_ERROR', `Invalid ${fieldName}: '${raw}'.`);
   }

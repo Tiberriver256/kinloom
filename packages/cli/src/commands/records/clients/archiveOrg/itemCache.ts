@@ -87,14 +87,14 @@ async function readOrPopulateLocked<T>(
 }
 
 function isValidMetadata(data: unknown): data is ItemMetadataPayload {
-  return isPlainRecord(data) && (isTruthyNonEmpty(data.metadata) || isTruthyNonEmpty(data.files));
+  return isPlainRecord(data) && (isTruthyNonEmpty(data['metadata']) || isTruthyNonEmpty(data['files']));
 }
 
 async function loadOrFetchMetadataUnlocked(
   itemId: string,
   metaPath: string,
   ctx: RecordCommandContext,
-  options: { readonly timeout?: number; readonly refresh?: boolean } = {}
+  options: { readonly timeout?: number | undefined; readonly refresh?: boolean } = {}
 ): Promise<readonly [ItemMetadataPayload, boolean]> {
   const timeout = options.timeout ?? DEFAULT_TIMEOUT_SECONDS;
   if (!options.refresh) {
@@ -115,7 +115,11 @@ async function loadOrFetchMetadataUnlocked(
 export async function ensureItemMetadata(
   identifier: string,
   ctx: RecordCommandContext,
-  options: { readonly cacheRoot?: string; readonly timeout?: number; readonly refresh?: boolean } = {}
+  options: {
+    readonly cacheRoot?: string;
+    readonly timeout?: number | undefined;
+    readonly refresh?: boolean;
+  } = {}
 ): Promise<readonly [ItemMetadataPayload, boolean]> {
   const itemId = validateIdentifier(identifier);
   const itemDir = path.join(options.cacheRoot ?? getCacheRoot(ctx), itemId);
@@ -159,7 +163,7 @@ export async function ensureItemCache(
   options: {
     readonly needDjvu: boolean;
     readonly cacheRoot?: string;
-    readonly timeout?: number;
+    readonly timeout?: number | undefined;
     readonly refresh?: boolean;
   }
 ): Promise<ItemCacheEntry> {
@@ -207,14 +211,14 @@ export async function ensureItemCache(
 
       const stage1Tasks: Record<string, string> = {};
       if (!hasPageIndex && scandataName && (refresh || !isRegularFile(scandataPath))) {
-        stage1Tasks.scandata = itemDownloadUrl(itemId, scandataName);
+        stage1Tasks['scandata'] = itemDownloadUrl(itemId, scandataName);
       }
       if (options.needDjvu && !hasDjvu) {
         if (djvuName) {
-          stage1Tasks.djvu = itemDownloadUrl(itemId, djvuName);
+          stage1Tasks['djvu'] = itemDownloadUrl(itemId, djvuName);
         } else if (hocrTextName && hocrIdxName) {
-          stage1Tasks.hocr_text = itemDownloadUrl(itemId, hocrTextName);
-          stage1Tasks.hocr_idx = itemDownloadUrl(itemId, hocrIdxName);
+          stage1Tasks['hocr_text'] = itemDownloadUrl(itemId, hocrTextName);
+          stage1Tasks['hocr_idx'] = itemDownloadUrl(itemId, hocrIdxName);
         }
       }
 
@@ -225,7 +229,7 @@ export async function ensureItemCache(
         pageIndex = existingPageIndex;
       } else {
         const scandataBytes =
-          fetched.scandata ??
+          fetched['scandata'] ??
           (!refresh && isRegularFile(scandataPath) ? fs.readFileSync(scandataPath) : undefined);
         if (scandataBytes !== undefined) {
           try {
@@ -240,17 +244,17 @@ export async function ensureItemCache(
       }
 
       if (options.needDjvu && !hasDjvu) {
-        const djvuRaw = fetched.djvu;
+        const djvuRaw = fetched['djvu'];
         const decodedDjvu = djvuRaw?.toString('utf8');
         const hasFormFeeds = decodedDjvu?.includes('\x0c');
 
         if (!hasFormFeeds && hocrTextName && hocrIdxName) {
           const hocrTasks: Record<string, string> = {};
           if (!Object.hasOwn(fetched, 'hocr_text')) {
-            hocrTasks.hocr_text = itemDownloadUrl(itemId, hocrTextName);
+            hocrTasks['hocr_text'] = itemDownloadUrl(itemId, hocrTextName);
           }
           if (!Object.hasOwn(fetched, 'hocr_idx')) {
-            hocrTasks.hocr_idx = itemDownloadUrl(itemId, hocrIdxName);
+            hocrTasks['hocr_idx'] = itemDownloadUrl(itemId, hocrIdxName);
           }
           if (Object.keys(hocrTasks).length > 0) {
             const hocrRes = await fetchUrlsMap(hocrTasks, ctx, timeout);
@@ -273,13 +277,16 @@ export async function ensureItemCache(
             accessCount > 0 && Math.abs(segCount - accessCount) < Math.abs(segCount - leafCount)
               ? 'bookreader'
               : 'scandata';
-        } else if (fetched.hocr_text !== undefined && fetched.hocr_idx !== undefined) {
+        } else if (fetched['hocr_text'] !== undefined && fetched['hocr_idx'] !== undefined) {
           try {
-            djvuBytesOut = Buffer.from(synthesizeDjvuFromHocr(fetched.hocr_text, fetched.hocr_idx), 'utf8');
+            djvuBytesOut = Buffer.from(
+              synthesizeDjvuFromHocr(fetched['hocr_text'], fetched['hocr_idx']),
+              'utf8'
+            );
             djvuSource = 'hocr';
             segmentMode = 'scandata';
           } catch (err: unknown) {
-            fetchErrors.hocr = err instanceof Error ? err : new Error(String(err));
+            fetchErrors['hocr'] = err instanceof Error ? err : new Error(String(err));
           }
         }
 
@@ -330,7 +337,7 @@ export function reuseExistingItemArtifact(
   const djvuPath = path.join(itemDir, 'djvu.txt');
   if (djvuName && fileName === djvuName && isRegularFile(djvuPath)) {
     const pageIndex = readJsonRecordIfValid(path.join(itemDir, 'page_index.json')) ?? {};
-    const djvuSource = pageIndex.djvu_source;
+    const djvuSource = pageIndex['djvu_source'];
     if (djvuSource === 'djvu_txt') {
       return fs.readFileSync(djvuPath);
     }
@@ -366,7 +373,11 @@ export async function ensureDownloadedFile(
   fileList: readonly ItemFileEntry[],
   fileEntry: ItemFileEntry,
   ctx: RecordCommandContext,
-  options: { readonly cacheRoot?: string; readonly timeout?: number; readonly refresh?: boolean } = {}
+  options: {
+    readonly cacheRoot?: string;
+    readonly timeout?: number | undefined;
+    readonly refresh?: boolean;
+  } = {}
 ): Promise<readonly [Buffer, string, boolean]> {
   const itemId = validateIdentifier(identifier);
   const timeout = options.timeout ?? DOWNLOAD_TIMEOUT_SECONDS;
@@ -398,7 +409,11 @@ export async function ensurePageImageCache(
   suffixTag: string,
   url: string,
   ctx: RecordCommandContext,
-  options: { readonly cacheRoot?: string; readonly timeout?: number; readonly refresh?: boolean } = {}
+  options: {
+    readonly cacheRoot?: string;
+    readonly timeout?: number | undefined;
+    readonly refresh?: boolean;
+  } = {}
 ): Promise<readonly [Buffer, string, boolean]> {
   const itemId = validateIdentifier(identifier);
   const timeout = options.timeout ?? DEFAULT_TIMEOUT_SECONDS;

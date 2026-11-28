@@ -59,19 +59,19 @@ export function mergeEventSources(
   additions: readonly EventSourceRef[]
 ): EventSourceRef[] {
   const merged: EventSourceRef[] = [];
-  const idxById = new Map<string, number>();
+  const byId = new Map<string, EventSourceRef>();
 
   const upsert = (entry: EventSourceRef): void => {
     const sid = entry.source_id;
-    const existingIdx = sid ? idxById.get(sid) : undefined;
-    if (existingIdx === undefined) {
+    const prev = sid ? byId.get(sid) : undefined;
+    if (prev === undefined) {
+      const copy: EventSourceRef = { ...entry };
       if (sid) {
-        idxById.set(sid, merged.length);
+        byId.set(sid, copy);
       }
-      merged.push({ ...entry });
+      merged.push(copy);
       return;
     }
-    const prev = { ...merged[existingIdx] };
     if (entry.confidence) {
       prev.confidence = entry.confidence;
     }
@@ -87,7 +87,6 @@ export function mergeEventSources(
     if (entry.scan_title !== undefined && entry.scan_title !== '') {
       prev.scan_title = entry.scan_title;
     }
-    merged[existingIdx] = prev;
   };
 
   for (const entry of existing) {
@@ -108,8 +107,7 @@ export function resolvePersonBranch(
   }
   const index = getSiteBranchIndex(siteConfig);
   const surnameLower = person.surname.trim().toLowerCase();
-  for (let i = 0; i < index.rules.length; i += 1) {
-    const rule = index.rules[i];
+  for (const rule of index.rules) {
     if (rule.lineageGroupSet?.has(person.lineage_group)) {
       return rule.id;
     }
@@ -177,12 +175,12 @@ export function collectUncitedEntityKeys(bundle: {
   events: readonly Pick<ArchiveEvent, 'id' | 'has_primary_source'>[];
   places: readonly Pick<Place, 'id' | 'has_primary_source'>[];
   sources: readonly Pick<SourceRecord, 'id' | 'has_primary_source'>[];
-  media?: readonly Pick<MediaItem, 'id' | 'has_primary_source'>[];
-  narratives?: readonly Pick<Narrative, 'id' | 'has_primary_source'>[];
+  media?: readonly Pick<MediaItem, 'id' | 'has_primary_source'>[] | undefined;
+  narratives?: readonly Pick<Narrative, 'id' | 'has_primary_source'>[] | undefined;
 }): string[] {
   const uncited: string[] = [];
   const collections: ReadonlyArray<
-    readonly [string, readonly { id: string; has_primary_source?: boolean }[]]
+    readonly [string, readonly { id: string; has_primary_source?: boolean | undefined }[]]
   > = [
     ['person', bundle.people],
     ['event', bundle.events],
@@ -191,10 +189,8 @@ export function collectUncitedEntityKeys(bundle: {
     ['media', bundle.media ?? []],
     ['narrative', bundle.narratives ?? []],
   ];
-  for (let c = 0; c < collections.length; c += 1) {
-    const [prefix, items] = collections[c];
-    for (let i = 0; i < items.length; i += 1) {
-      const item = items[i];
+  for (const [prefix, items] of collections) {
+    for (const item of items) {
       if (item.has_primary_source === false) {
         uncited.push(`${prefix}:${item.id}`);
       }
@@ -211,8 +207,8 @@ export function applyNarrativeEnrichments(
     return;
   }
   const rawEventsById = new Map<string, RawEvent>();
-  for (let i = 0; i < rawEvents.length; i += 1) {
-    rawEventsById.set(rawEvents[i].id, rawEvents[i]);
+  for (const ev of rawEvents) {
+    rawEventsById.set(ev.id, ev);
   }
   for (const enr of enrichments) {
     if (isEnrichmentOverride(enr)) {
@@ -277,8 +273,8 @@ export function enrichHouseholdDescriptions(
     }
   }
   const peopleById = new Map<string, RawPerson>();
-  for (let i = 0; i < people.length; i += 1) {
-    peopleById.set(people[i].id, people[i]);
+  for (const person of people) {
+    peopleById.set(person.id, person);
   }
   let enriched = 0;
 

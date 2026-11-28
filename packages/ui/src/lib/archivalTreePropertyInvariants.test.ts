@@ -16,7 +16,7 @@ const FIXED_SEED = 20261127;
 function makeSyntheticPerson(idx: number, overrides: Partial<Person> = {}): Person {
   const surnames = ['Alder', 'Mercer', 'Bramwell', 'Vance', 'Hale'] as const;
   const given = `Ancestor${idx}`;
-  const surname = surnames[idx % surnames.length];
+  const surname = surnames[idx % surnames.length] ?? 'Stout';
   const birthYear = 1780 + idx * 6;
   return {
     id: `per_ui_${idx}`,
@@ -171,6 +171,7 @@ describe('UI archival tree model & diagram layout property invariants', () => {
           for (let j = i + 1; j < allBoxes.length; j += 1) {
             const a = allBoxes[i];
             const b = allBoxes[j];
+            if (!a || !b) continue;
             const overlaps = a.left < b.right && a.right > b.left && a.top < b.bottom && a.bottom > b.top;
             expect(overlaps).toBe(false);
           }
@@ -183,6 +184,7 @@ describe('UI archival tree model & diagram layout property invariants', () => {
           for (let i = 0; i < pts.length - 1; i += 1) {
             const a = pts[i];
             const b = pts[i + 1];
+            if (!a || !b) continue;
             if (a.x === b.x) {
               const minY = Math.min(a.y, b.y);
               const maxY = Math.max(a.y, b.y);
@@ -226,7 +228,7 @@ describe('UI archival tree model & diagram layout property invariants', () => {
         for (const ys of busYsByGen.values()) {
           const sorted = [...ys].sort((a, b) => a - b);
           for (let i = 1; i < sorted.length; i += 1) {
-            expect(sorted[i] - sorted[i - 1]).toBeGreaterThanOrEqual(14);
+            expect((sorted[i] ?? 0) - (sorted[i - 1] ?? 0)).toBeGreaterThanOrEqual(14);
           }
         }
 
@@ -247,7 +249,7 @@ describe('UI archival tree model & diagram layout property invariants', () => {
         for (const xs of rowXs.values()) {
           xs.sort((a, b) => a - b);
           for (let i = 1; i < xs.length; i += 1) {
-            expect(xs[i] - xs[i - 1]).toBeGreaterThanOrEqual(ARCHIVAL_NODE_W - 0.5);
+            expect((xs[i] ?? 0) - (xs[i - 1] ?? 0)).toBeGreaterThanOrEqual(ARCHIVAL_NODE_W - 0.5);
           }
         }
 

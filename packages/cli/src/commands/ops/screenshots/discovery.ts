@@ -41,19 +41,21 @@ export const BUNDLE_DISCOVERY_PROBES: readonly {
 ]);
 
 function isHeavyRoutePath(route: string): boolean {
-  const pathOnly = route.split('?')[0].toLowerCase();
+  const pathOnly = (route.split('?')[0] ?? '').toLowerCase();
   return pathOnly === '/evidence';
 }
 
 function isMapRoutePath(route: string): boolean {
-  const pathOnly = route.split('?')[0].toLowerCase();
+  const pathOnly = (route.split('?')[0] ?? '').toLowerCase();
   return pathOnly === '/map';
 }
 
 function isArchiveBundlePayload(payload: unknown): payload is Record<string, unknown> {
   return (
     isRecord(payload) &&
-    (Array.isArray(payload.people) || Array.isArray(payload.places) || Array.isArray(payload.narratives))
+    (Array.isArray(payload['people']) ||
+      Array.isArray(payload['places']) ||
+      Array.isArray(payload['narratives']))
   );
 }
 
@@ -100,10 +102,10 @@ function readArray(obj: Record<string, unknown>, key: string): readonly unknown[
 }
 
 function hasNarrativeAudioExtension(narrative: Record<string, unknown>): boolean {
-  const extensions = narrative.extensions;
+  const extensions = narrative['extensions'];
   if (!isRecord(extensions)) return false;
-  const audio = extensions.narrative_audio ?? extensions.audio;
-  return isRecord(audio) && typeof audio.file === 'string' && audio.file.trim().length > 0;
+  const audio = extensions['narrative_audio'] ?? extensions['audio'];
+  return isRecord(audio) && typeof audio['file'] === 'string' && audio['file'].trim().length > 0;
 }
 
 function deriveSearchTerm(fullName: string): string {
@@ -174,7 +176,7 @@ export function extractSamplesFromBundle(
     if (readBoolean(rawPerson, 'is_living') || fullName.toLowerCase() === 'living') {
       continue;
     }
-    const hasPronunciation = isRecord(rawPerson.pronunciation);
+    const hasPronunciation = isRecord(rawPerson['pronunciation']);
     const hasMedia = mediaPersonIds.has(id) || Boolean(readString(rawPerson, 'portrait_url'));
     const hasBiography = bioPersonIds.has(id);
     const hasNarrativeAudio = audioPersonIds.has(id);
@@ -210,14 +212,14 @@ export function extractSamplesFromBundle(
     const name = readString(rawPlace, 'name');
     if (!id || !slug || !name) continue;
     const hasCoords =
-      typeof rawPlace.lat === 'number' &&
-      Number.isFinite(rawPlace.lat) &&
-      typeof rawPlace.lng === 'number' &&
-      Number.isFinite(rawPlace.lng);
+      typeof rawPlace['lat'] === 'number' &&
+      Number.isFinite(rawPlace['lat']) &&
+      typeof rawPlace['lng'] === 'number' &&
+      Number.isFinite(rawPlace['lng']);
     const score =
       (hasCoords ? 2 : 0) +
       (readString(rawPlace, 'description') ? 3 : 0) +
-      (isRecord(rawPlace.pronunciation) ? 2 : 0);
+      (isRecord(rawPlace['pronunciation']) ? 2 : 0);
     rankedPlaces.push({ score, sample: { id, slug, name } });
   }
   rankedPlaces.sort((a, b) => b.score - a.score || a.sample.slug.localeCompare(b.sample.slug));
@@ -268,10 +270,10 @@ export async function fetchArchiveBundleForDiscovery(options: {
   readonly baseUrl: string;
   readonly samplePeople: number;
   readonly samplePlaces: number;
-  readonly authCookie?: string;
-  readonly authHeaders?: readonly AuthHeader[];
+  readonly authCookie?: string | undefined;
+  readonly authHeaders?: readonly AuthHeader[] | undefined;
   readonly timeoutMs: number;
-  readonly fetchImpl?: typeof fetch;
+  readonly fetchImpl?: typeof fetch | undefined;
 }): Promise<BundleDiscoveryResult> {
   const fetchImpl = options.fetchImpl ?? globalThis.fetch;
   const headers = buildAuthRequestHeaders({
@@ -297,7 +299,7 @@ export async function fetchArchiveBundleForDiscovery(options: {
 }
 
 export function isKnownCoreRoute(routePath: string): boolean {
-  const pathOnly = routePath.split('?')[0].toLowerCase();
+  const pathOnly = (routePath.split('?')[0] ?? '').toLowerCase();
   if (KNOWN_CORE_EXACT_ROUTES.has(pathOnly)) {
     return true;
   }

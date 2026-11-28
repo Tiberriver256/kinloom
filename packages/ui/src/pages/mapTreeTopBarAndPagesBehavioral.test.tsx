@@ -523,7 +523,7 @@ const SeedUiTrail: React.FC = () => {
     pushPivot({ slug: 'henry-alder', name: 'Henry Alder', year: 1880 });
     pushPivot({ slug: 'clara-alder', name: 'Clara Alder', year: 1895 });
   }, [pushPivot, setActiveYear]);
-  return <div id="main-content" data-phonetic={pronunciations.alder?.phonetic ?? ''} />;
+  return <div id="main-content" data-phonetic={pronunciations['alder']?.phonetic ?? ''} />;
 };
 
 describe('Map, Tree, TopBar, Context, Telemetry, NarrativeAudio, and Pages behavioral suite', () => {
@@ -574,7 +574,7 @@ describe('Map, Tree, TopBar, Context, Telemetry, NarrativeAudio, and Pages behav
     const staticLoader = createStaticArchiveLoader('/archive');
     const loadedBundle = await staticLoader.loadArchive();
     expect(loadedBundle.people.some((p) => p.id === 'per_henry')).toBe(true);
-    expect((await staticLoader.loadReadings())?.documents.src_1880).toBeTruthy();
+    expect((await staticLoader.loadReadings())?.documents['src_1880']).toBeTruthy();
     expect((await staticLoader.loadMediaChecklist?.())?.length).toBeGreaterThanOrEqual(1);
 
     let sessionAnonymous = false;

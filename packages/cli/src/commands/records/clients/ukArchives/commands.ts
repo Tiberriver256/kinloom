@@ -98,13 +98,13 @@ export async function runTnaSearch(
     ttlHours,
     refresh,
     fetch: () => getJson(ctx, DISCOVERY_SEARCH, params, ALLOWED_TNA_HOSTS, 'Discovery search'),
-    cacheable: (r) => Array.isArray(r.records) && (r.records.length > 0 || Number(r.count ?? 0) > 0),
+    cacheable: (r) => Array.isArray(r['records']) && (r['records'].length > 0 || Number(r['count'] ?? 0) > 0),
     validateCached: isPlainRecord,
     nowMs: ctx.nowMs,
     sleepFn: ctx.sleepFn,
   });
 
-  const rawRecords = Array.isArray(data.records) ? data.records : [];
+  const rawRecords = Array.isArray(data['records']) ? data['records'] : [];
   let records: DiscoveryHit[] = rawRecords
     .filter((item): item is Record<string, unknown> => isPlainRecord(item))
     .map(mapDiscoveryHit);
@@ -113,7 +113,7 @@ export async function runTnaSearch(
     records = records.filter((rec) => matchesCollection(rec, collection));
   }
   records = records.slice(0, limit);
-  const total = typeof data.count === 'number' ? data.count : records.length;
+  const total = typeof data['count'] === 'number' ? data['count'] : records.length;
 
   if (asJson) {
     return {
@@ -160,7 +160,7 @@ export async function runTnaGet(
     return { exitCode: 0, bytesOut: emitStdout(ctx.io, renderTnaGetHelp(groupName)) };
   }
 
-  const iaid = validateIaid(parsed.positionals[0]);
+  const iaid = validateIaid(parsed.positionals[0] ?? '');
   const asJson = getBooleanOption(parsed, 'asJson');
   const refresh = getBooleanOption(parsed, 'refresh');
   const ttlHours = resolveTtlHours(getNumberOption(parsed, 'cacheTtlHours'), ctx);
@@ -173,7 +173,7 @@ export async function runTnaGet(
     ttlHours,
     refresh,
     fetch: () => getJson(ctx, url, undefined, ALLOWED_TNA_HOSTS, 'Discovery detail'),
-    cacheable: (r) => Boolean(r.id || r.citableReference || r.referencePart),
+    cacheable: (r) => Boolean(r['id'] || r['citableReference'] || r['referencePart']),
     validateCached: isPlainRecord,
     nowMs: ctx.nowMs,
     sleepFn: ctx.sleepFn,
@@ -352,7 +352,7 @@ export function runUrl(argv: readonly string[], ctx: RecordCommandContext): Reco
       DISCOVERY_WEB.replace(/\/$/, ''),
       `${FREEREG_BASE}/`,
       'https://www.british-history.ac.uk/',
-      GENUKI_PARISHES.nottinghamshire
+      GENUKI_PARISHES['nottinghamshire'] ?? ''
     );
   }
   return { exitCode: 0, bytesOut: emitStdout(ctx.io, lines.join('\n')) };

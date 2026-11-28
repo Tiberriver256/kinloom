@@ -54,36 +54,43 @@ const CRC32_TABLE = buildCrc32Table();
 /**
  * Computes IEEE 802.3 CRC-32 over a byte range (used to verify PNG chunks).
  */
+function dataViewOf(bytes: Uint8Array): DataView {
+  return new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+}
+
+const CRC32_TABLE_VIEW = dataViewOf(
+  new Uint8Array(CRC32_TABLE.buffer, CRC32_TABLE.byteOffset, CRC32_TABLE.byteLength)
+);
+const IS_LITTLE_ENDIAN = new Uint8Array(new Uint16Array([1]).buffer)[0] === 1;
+
 export function computeCrc32(bytes: Uint8Array, start = 0, end = bytes.byteLength): number {
+  const view = dataViewOf(bytes);
   let crc = 0xffffffff;
   for (let i = start; i < end; i += 1) {
-    crc = CRC32_TABLE[(crc ^ bytes[i]) & 0xff] ^ (crc >>> 8);
+    crc = CRC32_TABLE_VIEW.getUint32(((crc ^ view.getUint8(i)) & 0xff) * 4, IS_LITTLE_ENDIAN) ^ (crc >>> 8);
   }
   return (crc ^ 0xffffffff) >>> 0;
 }
 
 function readUint16BE(bytes: Uint8Array, offset: number): number {
-  return (bytes[offset] << 8) | bytes[offset + 1];
+  return dataViewOf(bytes).getUint16(offset, false);
 }
 
 function readUint16LE(bytes: Uint8Array, offset: number): number {
-  return bytes[offset] | (bytes[offset + 1] << 8);
+  return dataViewOf(bytes).getUint16(offset, true);
 }
 
 function readUint24LE(bytes: Uint8Array, offset: number): number {
-  return bytes[offset] | (bytes[offset + 1] << 8) | (bytes[offset + 2] << 16);
+  const view = dataViewOf(bytes);
+  return view.getUint8(offset) | (view.getUint8(offset + 1) << 8) | (view.getUint8(offset + 2) << 16);
 }
 
 function readUint32BE(bytes: Uint8Array, offset: number): number {
-  return (
-    ((bytes[offset] << 24) | (bytes[offset + 1] << 16) | (bytes[offset + 2] << 8) | bytes[offset + 3]) >>> 0
-  );
+  return dataViewOf(bytes).getUint32(offset, false);
 }
 
 function readUint32LE(bytes: Uint8Array, offset: number): number {
-  return (
-    (bytes[offset] | (bytes[offset + 1] << 8) | (bytes[offset + 2] << 16) | (bytes[offset + 3] << 24)) >>> 0
-  );
+  return dataViewOf(bytes).getUint32(offset, true);
 }
 
 function writeUint32LE(bytes: Uint8Array, offset: number, value: number): void {
@@ -106,7 +113,13 @@ function matchesPrefixAt(bytes: Uint8Array, offset: number, prefix: readonly num
 }
 
 function readAscii4(bytes: Uint8Array, offset: number): string {
-  return String.fromCharCode(bytes[offset], bytes[offset + 1], bytes[offset + 2], bytes[offset + 3]);
+  const view = dataViewOf(bytes);
+  return String.fromCharCode(
+    view.getUint8(offset),
+    view.getUint8(offset + 1),
+    view.getUint8(offset + 2),
+    view.getUint8(offset + 3)
+  );
 }
 
 function concatChunks(chunks: readonly Uint8Array[]): Uint8Array {
@@ -201,7 +214,7 @@ function stripJpegMetadata(bytes: Uint8Array): StrippedImageResult {
       break;
     }
 
-    const marker = bytes[offset];
+    const marker = dataViewOf(bytes).getUint8(offset);
     offset += 1;
 
     // EOI (0xD9) ends the image stream.
@@ -325,7 +338,7 @@ function stripPngMetadata(bytes: Uint8Array): StrippedImageResult {
       }
     }
 
-    const isCritical = (bytes[offset + 4] & 0x20) === 0;
+    const isCritical = (dataViewOf(bytes).getUint8(offset + 4) & 0x20) === 0;
     if (isCritical || SAFE_PNG_CHUNKS.has(chunkType)) {
       kept.push(bytes.subarray(offset, offset + chunkTotal));
     } else {
@@ -391,7 +404,7 @@ function stripWebpMetadata(bytes: Uint8Array): StrippedImageResult {
     if (fourCC === 'VP8X' && payloadSize >= 10) {
       const vp8xCopy = bytes.slice(offset, chunkEnd);
       // Clear EXIF (bit 3 = 0x08) and XMP (bit 2 = 0x04) feature flags in VP8X.
-      vp8xCopy[8] = vp8xCopy[8] & ~(0x08 | 0x04);
+      vp8xCopy[8] = dataViewOf(vp8xCopy).getUint8(8) & ~(0x08 | 0x04);
       width = readUint24LE(vp8xCopy, 12) + 1;
       height = readUint24LE(vp8xCopy, 15) + 1;
       keptChunks.push(vp8xCopy);

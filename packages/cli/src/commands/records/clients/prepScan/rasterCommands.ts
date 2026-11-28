@@ -137,7 +137,7 @@ export async function cmdCrop(
     return { exitCode: 0, bytesOut: emitStdout(ctx.io, renderCropHelp()) };
   }
 
-  const src = resolveUserPathFromContext(parsed.positionals[0], ctx);
+  const src = resolveUserPathFromContext(parsed.positionals[0] ?? '', ctx);
   const outPath = resolveOutputAlias('crop', parsed.positionals[1], getStringOption(parsed, 'outOpt'), ctx);
   const quality = getNumberOption(parsed, 'quality') ?? 92;
   const maxWidth = getNumberOption(parsed, 'maxWidth') ?? 1400;
@@ -221,7 +221,7 @@ export async function cmdRotate(
     return { exitCode: 0, bytesOut: emitStdout(ctx.io, renderSubcommandHelp('rotate')) };
   }
 
-  const src = resolveUserPathFromContext(parsed.positionals[0], ctx);
+  const src = resolveUserPathFromContext(parsed.positionals[0] ?? '', ctx);
   const outPath = resolveOutputAlias('rotate', parsed.positionals[1], getStringOption(parsed, 'outOpt'), ctx);
   const angle = normalizeRotationAngle(getNumberOption(parsed, 'angle'));
   const quality = getNumberOption(parsed, 'quality') ?? 92;
@@ -274,7 +274,7 @@ export async function cmdGrid(
     return { exitCode: 0, bytesOut: emitStdout(ctx.io, renderSubcommandHelp('grid')) };
   }
 
-  const src = resolveUserPathFromContext(parsed.positionals[0], ctx);
+  const src = resolveUserPathFromContext(parsed.positionals[0] ?? '', ctx);
   const outPath = resolveOutputAlias('grid', parsed.positionals[1], getStringOption(parsed, 'outOpt'), ctx);
   const step = getNumberOption(parsed, 'step') ?? 200;
   const maxWidth = getNumberOption(parsed, 'maxWidth') ?? 1600;

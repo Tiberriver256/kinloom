@@ -50,9 +50,9 @@ function createCaptureIo(): { io: OpsIo; stdout: string[]; stderr: string[] } {
 }
 
 afterEach(async () => {
-  delete process.env.KINLOOM_TELEMETRY_FILE;
-  delete process.env.KINLOOM_TELEMETRY_PARENT;
-  delete process.env.KINLOOM_TELEMETRY_ACTIVE;
+  delete process.env['KINLOOM_TELEMETRY_FILE'];
+  delete process.env['KINLOOM_TELEMETRY_PARENT'];
+  delete process.env['KINLOOM_TELEMETRY_ACTIVE'];
   while (tempDirs.length > 0) {
     const dir = tempDirs.pop();
     if (dir) {
@@ -332,12 +332,12 @@ describe('help vs subcommand routing, native dispatch, and telemetry', () => {
     });
 
     // Parent suppression prevents writing an extra event.
-    process.env.KINLOOM_TELEMETRY_PARENT = '1';
+    process.env['KINLOOM_TELEMETRY_PARENT'] = '1';
     await runRecordCommand('ocr', ['--script-help'], {
       io: createCaptureIo().io,
       telemetryFilePath: telemetryFile,
     });
-    delete process.env.KINLOOM_TELEMETRY_PARENT;
+    delete process.env['KINLOOM_TELEMETRY_PARENT'];
 
     const rawTelemetry = await readFile(telemetryFile, 'utf8');
     expect(rawTelemetry).not.toContain(secretPath);
@@ -449,7 +449,7 @@ describe('native TypeScript OCR, alias routing, and ubiquitous-language parity',
 
     const envWithHighOmp: NodeJS.ProcessEnv = {
       ...process.env,
-      PATH: `${binDir}:${process.env.PATH ?? ''}`,
+      PATH: `${binDir}:${process.env['PATH'] ?? ''}`,
       OMP_THREAD_LIMIT: '28',
     };
 
@@ -534,7 +534,7 @@ describe('native TypeScript OCR, alias routing, and ubiquitous-language parity',
     );
     const env: NodeJS.ProcessEnv = {
       ...process.env,
-      PATH: `${binDir}:${process.env.PATH ?? ''}`,
+      PATH: `${binDir}:${process.env['PATH'] ?? ''}`,
       OMP_THREAD_LIMIT: '28',
     };
     const run = async (args: string[]) => {
@@ -625,7 +625,7 @@ describe('native TypeScript OCR, alias routing, and ubiquitous-language parity',
 
     const env: NodeJS.ProcessEnv = {
       ...process.env,
-      PATH: `${binDir}:${process.env.PATH ?? ''}`,
+      PATH: `${binDir}:${process.env['PATH'] ?? ''}`,
     };
 
     const cap = createCaptureIo();
@@ -645,15 +645,15 @@ describe('native TypeScript OCR, alias routing, and ubiquitous-language parity',
     expect([body.image_width, body.image_height]).toEqual([4000, 3000]);
     expect(body.cache_hit).toBe(false);
     expect(body.lines).toHaveLength(1);
-    expect(body.lines[0].text).toBe('Probate');
-    expect(Math.abs(body.lines[0].x0 - 400)).toBeLessThanOrEqual(2);
-    expect(Math.abs(body.lines[0].y0 - 600)).toBeLessThanOrEqual(2);
-    expect(Math.abs(body.lines[0].x1 - 1200)).toBeLessThanOrEqual(2);
-    expect(Math.abs(body.lines[0].y1 - 750)).toBeLessThanOrEqual(2);
+    expect(body.lines[0]!.text).toBe('Probate');
+    expect(Math.abs(body.lines[0]!.x0 - 400)).toBeLessThanOrEqual(2);
+    expect(Math.abs(body.lines[0]!.y0 - 600)).toBeLessThanOrEqual(2);
+    expect(Math.abs(body.lines[0]!.x1 - 1200)).toBeLessThanOrEqual(2);
+    expect(Math.abs(body.lines[0]!.y1 - 750)).toBeLessThanOrEqual(2);
 
     const seen = fs.readFileSync(seenSizesPath, 'utf8').trim();
     const [seenW, seenH] = seen.split('x').map(Number);
-    expect(Math.max(seenW, seenH)).toBeLessThanOrEqual(3500);
+    expect(Math.max(seenW!, seenH!)).toBeLessThanOrEqual(3500);
 
     const tsvCap = createCaptureIo();
     const tsvRes = await runRecordCommand('ocr', [bigPng, '--cache-dir', cacheDir, '--tsv'], {
@@ -689,7 +689,7 @@ describe('native TypeScript OCR, alias routing, and ubiquitous-language parity',
 
     const env: NodeJS.ProcessEnv = {
       ...process.env,
-      PATH: `${binDir}:${process.env.PATH ?? ''}`,
+      PATH: `${binDir}:${process.env['PATH'] ?? ''}`,
     };
 
     const cases: Array<{ args: string[]; expectText: string }> = [

@@ -77,20 +77,20 @@ function emitCensus1950(
     if (!isPlainRecord(row)) {
       continue;
     }
-    const image = row.image;
+    const image = row['image'];
     const rowParts = [
-      String(row.abbr || row.state || ''),
-      String(row.county || ''),
-      row.ed ? `ED ${String(row.ed)}` : '',
-      row.scheduleId ? `schedule ${String(row.scheduleId)}` : '',
+      String(row['abbr'] || row['state'] || ''),
+      String(row['county'] || ''),
+      row['ed'] ? `ED ${String(row['ed'])}` : '',
+      row['scheduleId'] ? `schedule ${String(row['scheduleId'])}` : '',
       typeof image === 'string' && image ? `image ${image}` : '',
     ].filter((part) => part.length > 0);
     lines.push(rowParts.join(' '));
-    const names = Array.isArray(row.names) ? row.names : [];
+    const names = Array.isArray(row['names']) ? row['names'] : [];
     for (const person of names) {
-      if (isPlainRecord(person) && person.name) {
-        const prefix = person.row ? `${String(person.row)}: ` : '';
-        lines.push(`  ${prefix}${String(person.name)}`);
+      if (isPlainRecord(person) && person['name']) {
+        const prefix = person['row'] ? `${String(person['row'])}: ` : '';
+        lines.push(`  ${prefix}${String(person['name'])}`);
       }
     }
   }
@@ -231,7 +231,7 @@ export async function runCensus1950Image(
   try {
     const storeOptions = { outPath, width, refresh, ttlHours, timeoutSec, cacheRoot };
     if (!batch) {
-      records = [await storeCensus1950Image(imagePaths[0], storeOptions, ctx)];
+      records = [await storeCensus1950Image(imagePaths[0] ?? '', storeOptions, ctx)];
     } else {
       records = await runWithConcurrency(imagePaths, CENSUS1950_IMAGE_FETCH_WORKERS, (imagePath) =>
         storeCensus1950Image(imagePath, storeOptions, ctx)
@@ -263,6 +263,7 @@ export async function runCensus1950Image(
 
   if (!batch) {
     const rec = records[0];
+    if (!rec) throw new Error('Expected a census image record');
     if (asJson) {
       const bytesOut = emitJsonStdout(ctx.io, rec);
       return { exitCode: 0, bytesOut, cacheHit: rec.cache_hit };

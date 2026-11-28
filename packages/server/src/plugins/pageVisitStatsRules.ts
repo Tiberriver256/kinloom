@@ -35,7 +35,7 @@ const SAFE_ENTITY_SLUG_PATTERN = /^[a-z0-9][a-z0-9._-]{0,127}$/i;
 
 export function formatUtcDayBucket(isoTimestamp: string): string {
   const match = /^(\d{4}-\d{2}-\d{2})/.exec(isoTimestamp.trim());
-  if (match) {
+  if (match?.[1]) {
     return match[1];
   }
   const parsed = new Date(isoTimestamp);
@@ -170,12 +170,13 @@ export function parseVisitRouteCandidate(rawPathname: string): ParsedVisitCandid
   }
 
   const segments = pathname.split('/').filter(Boolean);
-  if (segments.length !== 2) {
+  const [firstSeg, secondSeg] = segments;
+  if (segments.length !== 2 || !firstSeg || !secondSeg) {
     return null;
   }
 
-  const prefix = segments[0].toLowerCase();
-  const slug = safeDecodeSlug(segments[1]);
+  const prefix = firstSeg.toLowerCase();
+  const slug = safeDecodeSlug(secondSeg);
   if (!slug) {
     return null;
   }

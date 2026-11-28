@@ -104,6 +104,7 @@ async function searchPortalOnce(
 ): Promise<NjSearchResult> {
   const spec = DATABASES[key];
   const indexHtml = await portalGet(ctx, jar, PORTAL_INDEX);
+  if (!spec) throw new Error(`Unknown NJ database key: ${key}`);
   const openData: Record<string, string> = {
     ...hiddenFields(indexHtml),
     __EVENTTARGET: spec.target,

@@ -86,7 +86,16 @@ export function parseBox(raw: string): Box {
     nums.push(Math.round(val));
   }
   const [x0, y0, x1, y1] = nums;
-  if (x0 < 0 || y0 < 0 || x1 <= x0 || y1 <= y0) {
+  if (
+    x0 === undefined ||
+    y0 === undefined ||
+    x1 === undefined ||
+    y1 === undefined ||
+    x0 < 0 ||
+    y0 < 0 ||
+    x1 <= x0 ||
+    y1 <= y0
+  ) {
     throw new CliValidationError(`Invalid box '${raw}': require 0 <= x0 < x1 and 0 <= y0 < y1.`);
   }
   return { x0, y0, x1, y1 };
@@ -112,13 +121,15 @@ export function parsePageSpec(raw: string, maxPages = PDF_PAGE_BATCH_LIMIT): num
     }
     if (token.includes('-')) {
       const bounds = token.split('-');
-      if (bounds.length !== 2 || !bounds[0].trim() || !bounds[1].trim()) {
+      const b0 = bounds[0]?.trim() ?? '';
+      const b1 = bounds[1]?.trim() ?? '';
+      if (bounds.length !== 2 || !b0 || !b1) {
         throw new CliValidationError(
           `Invalid page range '${token}' in --pages '${raw}'. Use positive 1-based bounds like 10-12.`
         );
       }
-      const startStr = bounds[0].trim();
-      const endStr = bounds[1].trim();
+      const startStr = b0;
+      const endStr = b1;
       if (!/^[+-]?\d+$/.test(startStr) || !/^[+-]?\d+$/.test(endStr)) {
         throw new CliValidationError(
           `Invalid page range '${token}' in --pages '${raw}'. Use integer bounds like 10-12.`
@@ -188,8 +199,10 @@ export function coalesceRanges(pages: readonly number[]): Array<readonly [number
   const ranges: Array<readonly [number, number]> = [];
   let start = pages[0];
   let prev = pages[0];
+  if (start === undefined || prev === undefined) return ranges;
   for (let i = 1; i < pages.length; i += 1) {
     const p = pages[i];
+    if (p === undefined) continue;
     if (p === prev + 1) {
       prev = p;
     } else {
@@ -261,10 +274,13 @@ export function parseRgbColor(raw: string): RgbColor {
   if (trimmed.startsWith('#')) {
     const hex = trimmed.slice(1);
     if (/^[0-9a-f]{3}$/.test(hex)) {
+      const h0 = hex.charAt(0);
+      const h1 = hex.charAt(1);
+      const h2 = hex.charAt(2);
       return {
-        r: Number.parseInt(hex[0] + hex[0], 16),
-        g: Number.parseInt(hex[1] + hex[1], 16),
-        b: Number.parseInt(hex[2] + hex[2], 16),
+        r: Number.parseInt(h0 + h0, 16),
+        g: Number.parseInt(h1 + h1, 16),
+        b: Number.parseInt(h2 + h2, 16),
       };
     }
     if (/^[0-9a-f]{6}$/.test(hex)) {
@@ -279,9 +295,9 @@ export function parseRgbColor(raw: string): RgbColor {
 
   const rgbMatch = /^rgb\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)\s*\)$/.exec(trimmed);
   if (rgbMatch) {
-    const r = Number.parseInt(rgbMatch[1], 10);
-    const g = Number.parseInt(rgbMatch[2], 10);
-    const b = Number.parseInt(rgbMatch[3], 10);
+    const r = Number.parseInt(rgbMatch[1] ?? '', 10);
+    const g = Number.parseInt(rgbMatch[2] ?? '', 10);
+    const b = Number.parseInt(rgbMatch[3] ?? '', 10);
     if (r <= 255 && g <= 255 && b <= 255) {
       return { r, g, b };
     }
@@ -311,6 +327,7 @@ export function normalizePrepScanArgv(argv: readonly string[]): string[] {
   for (const token of argv) {
     if (out.length > 0 && /^-?[\d.]/.test(token)) {
       const prev = out[out.length - 1];
+      if (prev === undefined) continue;
       if (BOX_FRAGMENT_RE.test(prev)) {
         out[out.length - 1] = prev + token;
         continue;
@@ -337,11 +354,18 @@ export function expandMultiBoxArgs(argv: readonly string[], multiFlags: Readonly
       out.push(...argv.slice(i));
       break;
     }
+    if (token === undefined) {
+      i += 1;
+      continue;
+    }
     if (multiFlags.has(token) && i + 1 < argv.length) {
-      out.push(token, argv[i + 1]);
+      const nextVal = argv[i + 1];
+      if (nextVal !== undefined) out.push(token, nextVal);
       i += 2;
-      while (i < argv.length && FOUR_NUM_BOX_RE.test(argv[i].trim())) {
-        out.push(token, argv[i]);
+      while (i < argv.length) {
+        const curArg = argv[i];
+        if (curArg === undefined || !FOUR_NUM_BOX_RE.test(curArg.trim())) break;
+        out.push(token, curArg);
         i += 1;
       }
       continue;

@@ -219,9 +219,9 @@ describe('Issue #108: full-viewport invite banner offset, Tree minimap/padding, 
         fitBtn!.click();
       });
 
-      const zoom = Number(mainEl!.dataset.zoom);
-      const panX = Number(mainEl!.dataset.panX);
-      const panY = Number(mainEl!.dataset.panY);
+      const zoom = Number(mainEl!.dataset['zoom']);
+      const panX = Number(mainEl!.dataset['panX']);
+      const panY = Number(mainEl!.dataset['panY']);
       const stageEl = container.querySelector<HTMLElement>('.tree-stage');
       const stageW = Number.parseFloat(stageEl?.style.width ?? '0');
       const stageH = Number.parseFloat(stageEl?.style.height ?? '0');

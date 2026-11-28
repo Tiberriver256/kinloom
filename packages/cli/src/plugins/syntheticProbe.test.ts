@@ -483,16 +483,16 @@ describe('synthetic probe deterministic latency budgets and opt-in verify integr
       createSyntheticProbePlugin({ attachVerifyCheck: true, targetUrl: baseUrl }),
     ]);
     expect(resolved.verifyChecks).toHaveLength(1);
-    const reg = resolved.verifyChecks[0];
+    const reg = resolved.verifyChecks[0]!;
     expect(reg?.check.id).toBe(SYNTHETIC_PROBE_VERIFY_CHECK_ID);
 
     const passCheck = await runRegisteredCheck(reg.pluginId, reg.check, createVerifyCtx());
     expect(passCheck.ok).toBe(true);
     expect(passCheck.errors).toEqual([]);
-    expect(passCheck.details?.mediaRangeStatus).toBe('pass');
+    expect(passCheck.details?.['mediaRangeStatus']).toBe('pass');
 
     const missingReg = resolvePluginCommands([createSyntheticProbePlugin({ attachVerifyCheck: true })])
-      .verifyChecks[0];
+      .verifyChecks[0]!;
     const missingResult = await runRegisteredCheck(missingReg.pluginId, missingReg.check, createVerifyCtx());
     expect(missingResult.ok).toBe(false);
     expect(missingResult.errors[0]).toContain("requires a configured 'targetUrl'");
@@ -777,12 +777,12 @@ describe('synthetic probe --plugins, token fallback, and diagnostics checks', ()
 
   it('verifies all plugins, leak guard, diagnostics, and KINLOOM_TOKEN env fallback without leaking the token', async () => {
     const secretToken = 'kl_probe_env_secret_74_xyz';
-    const prevToken = process.env.KINLOOM_TOKEN;
-    const prevProbeToken = process.env.KINLOOM_PROBE_TOKEN;
-    const prevAgentToken = process.env.KINLOOM_AGENT_TOKEN;
-    delete process.env.KINLOOM_PROBE_TOKEN;
-    delete process.env.KINLOOM_AGENT_TOKEN;
-    process.env.KINLOOM_TOKEN = secretToken;
+    const prevToken = process.env['KINLOOM_TOKEN'];
+    const prevProbeToken = process.env['KINLOOM_PROBE_TOKEN'];
+    const prevAgentToken = process.env['KINLOOM_AGENT_TOKEN'];
+    delete process.env['KINLOOM_PROBE_TOKEN'];
+    delete process.env['KINLOOM_AGENT_TOKEN'];
+    process.env['KINLOOM_TOKEN'] = secretToken;
 
     try {
       const fetchImpl = createPluginArchiveFetch({ privateToken: secretToken });
@@ -825,12 +825,12 @@ describe('synthetic probe --plugins, token fallback, and diagnostics checks', ()
       expect(rendered).toContain('kinloom-recipes: PASS');
       expect(rendered).toContain('kinloom-book-publishing: PASS');
     } finally {
-      if (prevToken === undefined) delete process.env.KINLOOM_TOKEN;
-      else process.env.KINLOOM_TOKEN = prevToken;
-      if (prevProbeToken === undefined) delete process.env.KINLOOM_PROBE_TOKEN;
-      else process.env.KINLOOM_PROBE_TOKEN = prevProbeToken;
-      if (prevAgentToken === undefined) delete process.env.KINLOOM_AGENT_TOKEN;
-      else process.env.KINLOOM_AGENT_TOKEN = prevAgentToken;
+      if (prevToken === undefined) delete process.env['KINLOOM_TOKEN'];
+      else process.env['KINLOOM_TOKEN'] = prevToken;
+      if (prevProbeToken === undefined) delete process.env['KINLOOM_PROBE_TOKEN'];
+      else process.env['KINLOOM_PROBE_TOKEN'] = prevProbeToken;
+      if (prevAgentToken === undefined) delete process.env['KINLOOM_AGENT_TOKEN'];
+      else process.env['KINLOOM_AGENT_TOKEN'] = prevAgentToken;
     }
   });
 

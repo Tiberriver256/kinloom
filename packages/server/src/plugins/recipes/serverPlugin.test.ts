@@ -316,7 +316,7 @@ describe('createRecipesServerPlugin (Issue #47 read API & #44 settings)', () => 
     expect(filteredRes.status).toBe(200);
     const filteredJson = (await filteredRes.json()) as { total: number; recipes: Array<{ id: string }> };
     expect(filteredJson.total).toBe(1);
-    expect(filteredJson.recipes[0].id).toBe(r1.id);
+    expect(filteredJson.recipes[0]!.id).toBe(r1.id);
 
     // Detail endpoint by slug (and check zero email leaks)
     const detailRes = await server.fetch(
@@ -365,7 +365,7 @@ describe('createRecipesServerPlugin (Issue #47 read API & #44 settings)', () => 
     expect(byAdaRes.status).toBe(200);
     const byAdaJson = (await byAdaRes.json()) as { total: number; recipes: Array<{ id: string }> };
     expect(byAdaJson.total).toBe(1);
-    expect(byAdaJson.recipes[0].id).toBe(r1.id);
+    expect(byAdaJson.recipes[0]!.id).toBe(r1.id);
 
     // by-person endpoint for living person returns empty
     const byLivingRes = await server.fetch(
@@ -521,7 +521,7 @@ describe('createRecipesServerPlugin (Issue #47 read API & #44 settings)', () => 
       storage_adapter: 'in-memory',
       recipe_count: 1,
     });
-    expect(recipesSnap?.values.show_home_widget).toBe(true);
+    expect(recipesSnap?.values['show_home_widget']).toBe(true);
 
     // Update settings via #44 endpoint
     const updateRes = await server.fetch(

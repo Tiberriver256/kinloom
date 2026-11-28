@@ -13,10 +13,10 @@ export interface PersonalPronunciationOverrideFormProps {
   readonly overridePanelId: string;
   readonly draftPronunciation: Pronunciation | null;
   readonly previewLabel: string;
-  readonly baseUrl?: string;
+  readonly baseUrl?: string | undefined;
   readonly isBusy: boolean;
   readonly hasEditablePersonTokens: boolean;
-  readonly primaryFocusRef?: React.RefObject<HTMLElement | null>;
+  readonly primaryFocusRef?: React.RefObject<HTMLElement | null> | undefined;
   readonly audioGenStatus: 'idle' | 'loading' | 'success' | 'error';
   readonly audioGenMessage: string | null;
   readonly onUpdateField: (key: PronunciationStringFieldKey, value: string) => void;

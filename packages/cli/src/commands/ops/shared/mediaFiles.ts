@@ -57,6 +57,7 @@ export function findDuplicateNormalizedMediaFiles(
 
   for (let i = 0; i < mediaItems.length; i += 1) {
     const item = mediaItems[i];
+    if (item === undefined) continue;
     const normalized = normalizeMediaFilePath(item.file);
     if (!normalized) {
       continue;
@@ -92,11 +93,11 @@ export function findDuplicateNormalizedMediaFiles(
 export function readStagedMediaRefs(rawMedia: unknown): StagedMediaRef[] {
   const media: StagedMediaRef[] = [];
   for (const rawItem of Array.isArray(rawMedia) ? rawMedia : []) {
-    if (!isPlainRecord(rawItem) || typeof rawItem.id !== 'string' || typeof rawItem.file !== 'string') {
+    if (!isPlainRecord(rawItem) || typeof rawItem['id'] !== 'string' || typeof rawItem['file'] !== 'string') {
       continue;
     }
-    const id = rawItem.id.trim();
-    const file = rawItem.file.trim();
+    const id = rawItem['id'].trim();
+    const file = rawItem['file'].trim();
     if (!id || !file) {
       continue;
     }

@@ -440,10 +440,10 @@ describe('screenshots/browser utilities', () => {
       GTK_USE_PORTAL: '1',
       HOME: '/home/demo',
     });
-    expect(env.WAYLAND_DISPLAY).toBeUndefined();
-    expect(env.GTK_USE_PORTAL).toBeUndefined();
-    expect(env.HOME).toBe('/home/demo');
-    expect(env.XDG_CONFIG_HOME).toContain('kinloom-headless-xdg-config');
+    expect(env['WAYLAND_DISPLAY']).toBeUndefined();
+    expect(env['GTK_USE_PORTAL']).toBeUndefined();
+    expect(env['HOME']).toBe('/home/demo');
+    expect(env['XDG_CONFIG_HOME']).toContain('kinloom-headless-xdg-config');
   });
 
   it('enforces withTimeout, safeCloseHandle, and navigateAndSettlePage fallback', async () => {
@@ -618,12 +618,12 @@ describe('screenshots/browser utilities', () => {
       env: { PATH: '/usr/bin', WAYLAND_DISPLAY: 'wayland-1', HOME: '/home/demo' },
     });
     expect(systemBrowser).toBe(fakeBrowser);
-    expect(launchCalls[1]?.executablePath).toBe('/usr/lib/chromium/chromium');
-    expect(launchCalls[1]?.timeout).toBe(12_000);
-    expect(launchCalls[1]?.args).toContain('--ozone-platform=headless');
-    const launchEnv = launchCalls[1]?.env as Record<string, string> | undefined;
-    expect(launchEnv?.WAYLAND_DISPLAY).toBeUndefined();
-    expect(launchEnv?.HOME).toBe('/home/demo');
+    expect(launchCalls[1]?.['executablePath']).toBe('/usr/lib/chromium/chromium');
+    expect(launchCalls[1]?.['timeout']).toBe(12_000);
+    expect(launchCalls[1]?.['args']).toContain('--ozone-platform=headless');
+    const launchEnv = launchCalls[1]?.['env'] as Record<string, string> | undefined;
+    expect(launchEnv?.['WAYLAND_DISPLAY']).toBeUndefined();
+    expect(launchEnv?.['HOME']).toBe('/home/demo');
   });
 });
 

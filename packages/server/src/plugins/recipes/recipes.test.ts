@@ -130,8 +130,8 @@ describe('Recipes plugin migrations, schemas, privacy guard, and default-off inv
       migrations: RECIPES_PLUGIN_MIGRATIONS,
     });
     expect(validated).toHaveLength(1);
-    expect(validated[0].migration.id).toBe('0001_recipes_initial');
-    expect(validated[0].statements.length).toBeGreaterThanOrEqual(13);
+    expect(validated[0]!.migration.id).toBe('0001_recipes_initial');
+    expect(validated[0]!.statements.length).toBeGreaterThanOrEqual(13);
   });
 
   it('slugifies titles, validates schemas, derives non-reversible actor keys, and redacts emails in public comments', async () => {

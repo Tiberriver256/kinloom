@@ -179,11 +179,11 @@ export interface DownloadResult {
 }
 
 export function getCacheDir(ctx: RecordCommandContext): string {
-  const specific = ctx.env.KINLOOM_SE_ARCHIVES_CACHE_DIR;
+  const specific = ctx.env['KINLOOM_SE_ARCHIVES_CACHE_DIR'];
   if (specific && specific.trim().length > 0) {
     return path.resolve(expandHomePath(specific, ctx.env));
   }
-  const shared = ctx.env.KINLOOM_CACHE_DIR;
+  const shared = ctx.env['KINLOOM_CACHE_DIR'];
   if (shared && shared.trim().length > 0) {
     return path.resolve(expandHomePath(shared, ctx.env), 'se-archives');
   }
@@ -277,16 +277,16 @@ export function normalizeBildid(raw: string): readonly [string, string | null] {
       if (!match) {
         throw new CliValidationError(`Could not extract arkis bildid from IIIF URL: '${raw}'`);
       }
-      token = stripLeadingUnderscores(match[1]);
+      token = stripLeadingUnderscores(match[1] ?? '');
     } else if (host === 'sok.riksarkivet.se') {
       if (parsed.protocol !== 'https:') {
         throw new CliValidationError(`Refusing non-HTTPS URL: '${raw}'`);
       }
       const parts = parsed.pathname.split('/').filter((p) => p.length > 0);
-      if (parts.length < 2 || parts[0].toLowerCase() !== 'bildvisning') {
+      if (parts.length < 2 || (parts[0] ?? '').toLowerCase() !== 'bildvisning') {
         throw new CliValidationError(`Expected a sok.riksarkivet.se/bildvisning/<bildid> URL, got: '${raw}'`);
       }
-      token = stripLeadingUnderscores(parts[1]);
+      token = stripLeadingUnderscores(parts[1] ?? '');
     } else {
       throw new CliValidationError(
         `Refusing host '${host}'; allowed hosts: lbiiif.riksarkivet.se, sok.riksarkivet.se.`
@@ -306,7 +306,7 @@ export function normalizeBildid(raw: string): readonly [string, string | null] {
   const volId = m[1];
   const pageNum = m[2];
   const pageId = pageNum ? `${volId}_${pageNum}` : null;
-  return [volId, pageId];
+  return [volId ?? '', pageId];
 }
 
 export function parseArchiveId(raw: string): string {
@@ -357,7 +357,7 @@ export function parseRegisterId(raw: string): string {
     if (parts.length < 2 || parts[0] !== 'register') {
       throw new CliValidationError(`Expected https://data.riksarkivet.se/register/<id>, got: '${raw}'`);
     }
-    text = parts[1];
+    text = parts[1] ?? '';
   }
   if (!SAFE_ID_RE.test(text)) {
     throw new CliValidationError(`Invalid Riksarkivet register record ID: '${raw}'`);
@@ -434,7 +434,7 @@ export function resolveSafeOutputPath(
 
 export function buildIiifImageUrl(
   target: string,
-  options: { readonly page?: number; readonly width?: number; readonly full?: boolean } = {}
+  options: { readonly page?: number | undefined; readonly width?: number; readonly full?: boolean } = {}
 ): readonly [string, string] {
   const { page, width, full = false } = options;
   if (width !== undefined && full) {
@@ -466,7 +466,7 @@ export function buildIiifImageUrl(
     ) {
       const url = validateSeUrl(raw, ALLOWED_DOWNLOAD_HOSTS);
       const match = ARKIS_MANIFEST_RE.exec(parsed.pathname);
-      const stem = match ? stripLeadingUnderscores(match[1]) : 'riksarkivet_scan';
+      const stem = match ? stripLeadingUnderscores(match[1] ?? '') : 'riksarkivet_scan';
       return [url, stem];
     }
   }
@@ -486,17 +486,17 @@ export function buildIiifImageUrl(
 }
 
 export function isSearchEndpointResult(value: unknown): value is SearchEndpointResult {
-  return isPlainRecord(value) && Array.isArray(value.results);
+  return isPlainRecord(value) && Array.isArray(value['results']);
 }
 
 export function isRegisterDetailResult(value: unknown): value is RegisterDetailResult {
-  return isPlainRecord(value) && isPlainRecord(value.record);
+  return isPlainRecord(value) && isPlainRecord(value['record']);
 }
 
 export function isIiifCollectionResult(value: unknown): value is IiifCollectionResult {
-  return isPlainRecord(value) && Array.isArray(value.items);
+  return isPlainRecord(value) && Array.isArray(value['items']);
 }
 
 export function isIiifManifestResult(value: unknown): value is IiifManifestResult {
-  return isPlainRecord(value) && Array.isArray(value.canvases);
+  return isPlainRecord(value) && Array.isArray(value['canvases']);
 }

@@ -625,7 +625,9 @@ export const TimePage: React.FC = () => {
                             activeYear={activeYear}
                             personThumbMap={personThumbMap}
                             baseUrl={baseUrl}
-                            sourceEvent={entry.nearestEventId ? eventsById.get(entry.nearestEventId) : null}
+                            sourceEvent={
+                              (entry.nearestEventId ? eventsById.get(entry.nearestEventId) : null) ?? null
+                            }
                           />
                         ))}
                       </div>

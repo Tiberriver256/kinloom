@@ -318,9 +318,9 @@ describe('D1PronunciationLexiconStore branch coverage', () => {
 
     const store = new D1PronunciationLexiconStore(dbWithRows);
     const listed = await store.list();
-    expect(listed.Alder).toEqual({ ipa: '/al.dər/', language: 'en' });
-    expect(listed.Birch).toEqual({ phonetic: 'BURCH', note: 'Historical parish spelling' });
-    expect(listed.Mercer).toEqual({ phonetic: 'MER-ser' });
+    expect(listed['Alder']).toEqual({ ipa: '/al.dər/', language: 'en' });
+    expect(listed['Birch']).toEqual({ phonetic: 'BURCH', note: 'Historical parish spelling' });
+    expect(listed['Mercer']).toEqual({ phonetic: 'MER-ser' });
 
     // Error with nested Error cause -> missing table returns {}
     const missingTableViaCause = new D1PronunciationLexiconStore(
@@ -704,7 +704,7 @@ describe('R2MediaStore, R2IncrementalPatchBundleCache, and CloudflareAssetHandle
           size: encoded.byteLength,
           etag: 'r2-etag-2',
           uploaded: uploadedAt,
-          customMetadata: options?.customMetadata,
+          ...(options?.customMetadata !== undefined ? { customMetadata: options.customMetadata } : {}),
         };
       },
       async delete() {},

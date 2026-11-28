@@ -45,7 +45,7 @@ describe('records runtime parse helpers', () => {
 
     const zipped = zipSync({ 'hello.txt': Buffer.from('world', 'utf8') });
     const entries = unzipEntries(zipped);
-    expect(Buffer.from(entries['hello.txt']).toString('utf8')).toBe('world');
+    expect(Buffer.from(entries['hello.txt']!).toString('utf8')).toBe('world');
 
     const gz = gzipSync(Buffer.from('ocr-payload', 'utf8'));
     expect(gunzipText(gz)).toBe('ocr-payload');

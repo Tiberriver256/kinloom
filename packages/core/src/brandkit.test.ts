@@ -24,12 +24,12 @@ function parseFaviconThemeColors(svg: string): {
   light: { bgFill: string; bgStroke: string; warp: string; accent: string };
   dark: { bgFill: string; bgStroke: string; warp: string; accent: string };
 } {
-  const [lightCss, darkCss = ''] = svg.split('@media (prefers-color-scheme: dark)');
+  const [lightCss = '', darkCss = ''] = svg.split('@media (prefers-color-scheme: dark)');
   const extract = (css: string) => {
     const bgMatch = /\.kl-bg\s*\{\s*fill:\s*(#[0-9A-Fa-f]{6});\s*stroke:\s*(#[0-9A-Fa-f]{6});/.exec(css);
     const warpMatch = /\.kl-warp\s*\{\s*stroke:\s*(#[0-9A-Fa-f]{6});/.exec(css);
     const accentMatch = /\.kl-accent\s*\{\s*stroke:\s*(#[0-9A-Fa-f]{6});/.exec(css);
-    if (!bgMatch || !warpMatch || !accentMatch) {
+    if (!bgMatch?.[1] || !bgMatch[2] || !warpMatch?.[1] || !accentMatch?.[1]) {
       throw new Error(`Missing favicon CSS rules in block:\n${css}`);
     }
     return {

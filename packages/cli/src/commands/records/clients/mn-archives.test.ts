@@ -133,11 +133,11 @@ async function makeTempDir(): Promise<string> {
 async function invokeMn(
   args: readonly string[],
   opts: {
-    readonly env?: NodeJS.ProcessEnv;
-    readonly cwd?: string;
-    readonly fetchImpl?: typeof fetch;
+    readonly env?: NodeJS.ProcessEnv | undefined;
+    readonly cwd?: string | undefined;
+    readonly fetchImpl?: typeof fetch | undefined;
   } = {}
-): Promise<{ exitCode: number; stdout: string; stderr: string; cacheHit?: boolean }> {
+): Promise<{ exitCode: number; stdout: string; stderr: string; cacheHit?: boolean | undefined }> {
   const stdout: string[] = [];
   const stderr: string[] = [];
   const ctx = createRecordContext({
@@ -205,7 +205,7 @@ describe('mn-archives native client', () => {
     expect(r4.exitCode).toBe(0);
     expect(seenBodies).toHaveLength(2);
 
-    expect(seenBodies[0].filters).toEqual([
+    expect(seenBodies[0]!['filters']!).toEqual([
       { conjunction: 'and', filters: [{ field: 'familyName', term: 'Alder', op: '=' }] },
       { conjunction: 'or', filters: [{ field: 'county', term: 'Hennepin.*', op: '*' }] },
       {
@@ -229,8 +229,8 @@ describe('mn-archives native client', () => {
     expect(r1.cacheHit).toBe(false);
     expect(r2.cacheHit).toBe(true);
     expect(r3.cacheHit).toBe(true);
-    expect(p1.results[0].certificate_id).toBe('1916-MN-007499');
-    expect(p1.results[0].date).toBe('1916-07-09');
+    expect(p1.results[0]!.certificate_id).toBe('1916-MN-007499');
+    expect(p1.results[0]!.date).toBe('1916-07-09');
     expect(r3.stdout).toContain('[cache]');
     expect(
       fs.readdirSync(path.join(cacheRoot, 'mn-archives')).filter((f) => f.endsWith('.json'))
@@ -269,7 +269,7 @@ describe('mn-archives native client', () => {
         const body = JSON.parse(String(init?.body ?? '{}')) as {
           filters: { filters: unknown[] }[];
         };
-        expect(body.filters[1].filters).toEqual([
+        expect(body.filters[1]!.filters).toEqual([
           { field: 'burialLocation', term: 'Hennepin.*', op: '*' },
           { field: 'burialLocation', term: 'Fort Snelling.*', op: '*' },
         ]);
@@ -302,9 +302,10 @@ describe('mn-archives native client', () => {
 
     expect([rb.exitCode, rc.exitCode, rv.exitCode, rr.exitCode]).toEqual([0, 0, 0, 0]);
     expect(
-      (JSON.parse(rb.stdout) as { results: { mothers_maiden_name: string }[] }).results[0].mothers_maiden_name
+      (JSON.parse(rb.stdout) as { results: { mothers_maiden_name: string }[] }).results[0]!
+        .mothers_maiden_name
     ).toBe('Alder');
-    expect((JSON.parse(rc.stdout) as { results: { locality: string }[] }).results[0].locality).toBe('Prior');
+    expect((JSON.parse(rc.stdout) as { results: { locality: string }[] }).results[0]!.locality).toBe('Prior');
     expect((JSON.parse(rv.stdout) as { total: number }).total).toBe(0);
     const rec = JSON.parse(rr.stdout) as {
       summary: { certificate_id: string };
@@ -398,9 +399,9 @@ describe('mn-archives native client', () => {
     expect(sp1.total).toBe(42);
     expect(sp1.cache_hit).toBe(false);
     expect((JSON.parse(s2.stdout) as { cache_hit: boolean }).cache_hit).toBe(true);
-    expect(sp1.results[0].title).toBe('Willmar tribune.');
-    expect(sp1.results[0].publication_date).toBe('January 23, 1918');
-    expect(sp1.results[0].doc_id).toBe(docId);
+    expect(sp1.results[0]!.title).toBe('Willmar tribune.');
+    expect(sp1.results[0]!.publication_date).toBe('January 23, 1918');
+    expect(sp1.results[0]!.doc_id).toBe(docId);
 
     const mp1 = JSON.parse(m1.stdout) as {
       cache_hit: boolean;
@@ -409,7 +410,7 @@ describe('mn-archives native client', () => {
     expect(mp1.cache_hit).toBe(false);
     expect((JSON.parse(m2.stdout) as { cache_hit: boolean }).cache_hit).toBe(true);
     expect(mp1.fields['Subject-County']).toBe('Kandiyohi');
-    expect(mp1.fields.LCCN).toBe('sn89081022');
+    expect(mp1.fields['LCCN']).toBe('sn89081022');
   });
 
   it('validates host, path traversal, and image magic bytes on newspaper download', async () => {

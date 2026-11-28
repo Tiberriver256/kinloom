@@ -25,8 +25,8 @@ export interface PluginSettingsServiceDeps {
   readonly mode: 'private' | 'public';
   readonly ports: KinloomServerPorts;
   readonly plugins: readonly KinloomServerPlugin[];
-  readonly store?: PluginSettingsStore;
-  readonly onPluginError?: (pluginId: string, error: unknown) => void;
+  readonly store?: PluginSettingsStore | undefined;
+  readonly onPluginError?: ((pluginId: string, error: unknown) => void) | undefined;
 }
 
 interface CompiledConfigurablePlugin {

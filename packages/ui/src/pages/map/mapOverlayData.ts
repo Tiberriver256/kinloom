@@ -199,18 +199,23 @@ export function computeAntimeridianSafeBounds(
     }
   }
 
-  let largestGap = sortedLngs[0] + 360 - sortedLngs[sortedLngs.length - 1];
+  const firstLng = sortedLngs[0] ?? 0;
+  const lastLng = sortedLngs[sortedLngs.length - 1] ?? firstLng;
+  let largestGap = firstLng + 360 - lastLng;
   let gapStartIndex = 0;
   for (let i = 1; i < sortedLngs.length; i += 1) {
-    const gap = sortedLngs[i] - sortedLngs[i - 1];
+    const curLng = sortedLngs[i];
+    const prevLng = sortedLngs[i - 1];
+    if (curLng === undefined || prevLng === undefined) continue;
+    const gap = curLng - prevLng;
     if (gap > largestGap) {
       largestGap = gap;
       gapStartIndex = i;
     }
   }
 
-  let minLng = gapStartIndex === 0 ? sortedLngs[0] : sortedLngs[gapStartIndex];
-  let maxLng = gapStartIndex === 0 ? sortedLngs[sortedLngs.length - 1] : sortedLngs[gapStartIndex - 1] + 360;
+  let minLng = gapStartIndex === 0 ? firstLng : (sortedLngs[gapStartIndex] ?? firstLng);
+  let maxLng = gapStartIndex === 0 ? lastLng : (sortedLngs[gapStartIndex - 1] ?? lastLng) + 360;
 
   if ((minLng + maxLng) / 2 > 180) {
     minLng -= 360;

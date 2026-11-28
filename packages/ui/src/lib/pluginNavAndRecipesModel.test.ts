@@ -38,6 +38,11 @@ import {
   validateRecipeDraft,
 } from './recipesModel.js';
 
+function must<T>(val: T | undefined, label = 'value'): T {
+  if (val === undefined) throw new Error(`Expected ${label}`);
+  return val;
+}
+
 const NO_CAPS: ArchiveCapabilities = {
   canEdit: false,
   canUploadMedia: false,
@@ -211,14 +216,14 @@ describe('recipesModel pure helpers and parsers', () => {
     expect(formatTotalRecipeDuration(15, 45)).toBe('1 hr');
     expect(formatTotalRecipeDuration(20, null)).toBe('20 min');
 
-    const groups = groupRecipeIngredients(SAMPLE_RECIPES[0].ingredients);
+    const groups = groupRecipeIngredients(must(SAMPLE_RECIPES[0]).ingredients);
     expect(groups).toHaveLength(2);
-    expect(groups[0].group).toBe('Dry');
-    expect(groups[0].items).toHaveLength(2);
-    expect(groups[1].group).toBe('Wet');
+    expect(groups[0]?.group).toBe('Dry');
+    expect(groups[0]?.items).toHaveLength(2);
+    expect(groups[1]?.group).toBe('Wet');
 
-    expect(formatRecipeIngredientLine(SAMPLE_RECIPES[0].ingredients[0])).toBe('2 cups flour, sifted');
-    expect(formatRecipeIngredientLine(SAMPLE_RECIPES[0].ingredients[2])).toBe('pinch of salt');
+    expect(formatRecipeIngredientLine(must(SAMPLE_RECIPES[0]?.ingredients[0]))).toBe('2 cups flour, sifted');
+    expect(formatRecipeIngredientLine(must(SAMPLE_RECIPES[0]?.ingredients[2]))).toBe('pinch of salt');
 
     expect(buildRecipesListQueryString({})).toBe('');
     expect(
@@ -294,11 +299,11 @@ describe('recipesModel pure helpers and parsers', () => {
     expect(isRecipeDraftDirty(empty, empty)).toBe(false);
     expect(isRecipeDraftDirty({ ...empty, title: 'Scones' }, empty)).toBe(true);
 
-    const fromDetail = recipeDetailToEditorDraft(SAMPLE_RECIPES[0]);
+    const fromDetail = recipeDetailToEditorDraft(must(SAMPLE_RECIPES[0]));
     expect(fromDetail.title).toBe('Honey Biscuits');
     expect(fromDetail.prep_minutes).toBe('15');
     expect(fromDetail.ingredients).toHaveLength(3);
-    expect(recipeDetailToEditorDraft(SAMPLE_RECIPES[1]).ingredients).toHaveLength(1);
+    expect(recipeDetailToEditorDraft(must(SAMPLE_RECIPES[1])).ingredients).toHaveLength(1);
 
     // Row reordering clamps out-of-bounds moves safely
     expect(moveDraftListItem(['a', 'b', 'c'], 0, -1)).toEqual(['a', 'b', 'c']);
@@ -330,10 +335,10 @@ describe('recipesModel pure helpers and parsers', () => {
     });
     expect(invalid.ok).toBe(false);
     if (!invalid.ok) {
-      expect(invalid.fieldErrors.title).toBeDefined();
-      expect(invalid.fieldErrors.slug).toBeDefined();
-      expect(invalid.fieldErrors.prep_minutes).toBeDefined();
-      expect(invalid.fieldErrors.cook_minutes).toBeDefined();
+      expect(invalid.fieldErrors['title']).toBeDefined();
+      expect(invalid.fieldErrors['slug']).toBeDefined();
+      expect(invalid.fieldErrors['prep_minutes']).toBeDefined();
+      expect(invalid.fieldErrors['cook_minutes']).toBeDefined();
       expect(invalid.fieldErrors['ingredients.0.item']).toBeDefined();
       expect(invalid.fieldErrors['steps.0.instruction']).toBeDefined();
     }

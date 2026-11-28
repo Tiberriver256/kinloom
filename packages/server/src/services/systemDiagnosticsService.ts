@@ -44,8 +44,8 @@ export interface SystemDiagnosticsServiceDeps {
   readonly ports: KinloomServerPorts;
   readonly plugins: readonly KinloomServerPlugin[];
   readonly recentErrors: RecentErrorRingBuffer;
-  readonly diagnosticsConfig?: KinloomServerDiagnosticsConfig;
-  readonly onPluginError?: (pluginId: string, error: unknown) => void;
+  readonly diagnosticsConfig?: KinloomServerDiagnosticsConfig | undefined;
+  readonly onPluginError?: ((pluginId: string, error: unknown) => void) | undefined;
 }
 
 function readNowMs(): number {

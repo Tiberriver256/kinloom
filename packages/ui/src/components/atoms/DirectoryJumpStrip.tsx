@@ -7,10 +7,10 @@ import styles from './DirectoryJumpStrip.module.css';
 export interface DirectoryJumpStripItem {
   readonly id: string;
   readonly label: string;
-  readonly count?: number;
-  readonly ariaLabel?: string;
-  readonly title?: string;
-  readonly onSelect?: () => void;
+  readonly count?: number | undefined;
+  readonly ariaLabel?: string | undefined;
+  readonly title?: string | undefined;
+  readonly onSelect?: (() => void) | undefined;
 }
 
 export interface DirectoryJumpStripProps {

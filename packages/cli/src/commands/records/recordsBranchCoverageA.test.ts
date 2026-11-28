@@ -198,16 +198,16 @@ interface InvokeResult {
   readonly exitCode: number;
   readonly stdout: string;
   readonly stderr: string;
-  readonly cacheHit?: boolean;
+  readonly cacheHit?: boolean | undefined;
 }
 
 function makeCtx(options: {
-  readonly env?: NodeJS.ProcessEnv;
-  readonly cwd?: string;
-  readonly fetchImpl?: typeof fetch;
-  readonly execFileImpl?: ExecFileFn;
-  readonly nowMs?: () => number;
-  readonly sleepFn?: (ms: number) => Promise<void>;
+  readonly env?: NodeJS.ProcessEnv | undefined;
+  readonly cwd?: string | undefined;
+  readonly fetchImpl?: typeof fetch | undefined;
+  readonly execFileImpl?: ExecFileFn | undefined;
+  readonly nowMs?: (() => number) | undefined;
+  readonly sleepFn?: ((ms: number) => Promise<void>) | undefined;
   readonly stdout?: string[];
   readonly stderr?: string[];
 }): RecordCommandContext {
@@ -235,10 +235,10 @@ async function invokeHandler(
   handler: RecordHandler,
   args: readonly string[],
   opts: {
-    readonly env?: NodeJS.ProcessEnv;
-    readonly cwd?: string;
-    readonly fetchImpl?: typeof fetch;
-    readonly nowMs?: () => number;
+    readonly env?: NodeJS.ProcessEnv | undefined;
+    readonly cwd?: string | undefined;
+    readonly fetchImpl?: typeof fetch | undefined;
+    readonly nowMs?: (() => number) | undefined;
   } = {}
 ): Promise<InvokeResult> {
   const stdout: string[] = [];
@@ -520,8 +520,8 @@ describe('archiveOrg branch coverage', () => {
     );
     expect(totalBr).toBe(3);
     expect(hitsBr).toHaveLength(2);
-    expect(hitsBr[0].printed_page).toBe('10');
-    expect(hitsBr[0].scandata_leaf).toBe(1);
+    expect(hitsBr[0]!.printed_page).toBe('10');
+    expect(hitsBr[0]!.scandata_leaf).toBe(1);
 
     // bookreader mode with seg 1 (unmapped in b2s & b2p)
     const [hitsBrUnmapped] = grepCachedItem(
@@ -535,8 +535,8 @@ describe('archiveOrg branch coverage', () => {
         limit: 5,
       }
     );
-    expect(hitsBrUnmapped[0].scandata_leaf).toBeNull();
-    expect(hitsBrUnmapped[0].printed_page).toBeNull();
+    expect(hitsBrUnmapped[0]!.scandata_leaf).toBeNull();
+    expect(hitsBrUnmapped[0]!.printed_page).toBeNull();
 
     // zero-length regex match at end of line (exercises iterRegex.lastIndex >= line.length)
     const [zeroHits, zeroTotal] = grepCachedItem('alder_book', 'ab', bookreaderIdx, '$', false, {
@@ -555,7 +555,7 @@ describe('archiveOrg branch coverage', () => {
       contextChars: 20,
       limit: 5,
     });
-    expect(fallbackHits[0].leaf).toBe(0);
+    expect(fallbackHits[0]!.leaf).toBe(0);
     expect(segmentForLeaf(fallbackIdx, 2, null)).toBe(2);
 
     // resolvePrintedPageToLeaf: exact without b2s entry, CI without b2s entry, printed_to_scandata fallback
@@ -608,9 +608,9 @@ describe('archiveOrg branch coverage', () => {
         'utf8'
       )
     );
-    expect(dupPages.printed_to_scandata.iv).toBe(0);
-    expect(dupPages.printed_to_bookreader.iv).toBe(0);
-    expect(dupPages.printed_to_bookreader_ci.iv).toBe(0);
+    expect(dupPages.printed_to_scandata['iv']).toBe(0);
+    expect(dupPages.printed_to_bookreader['iv']).toBe(0);
+    expect(dupPages.printed_to_bookreader_ci['iv']).toBe(0);
 
     const badIdxPath = path.join(tmp, 'bad_index.json');
     fs.writeFileSync(badIdxPath, JSON.stringify({ leaf_count: 'nope' }), 'utf8');
@@ -690,7 +690,7 @@ describe('archiveOrg branch coverage', () => {
     fs.writeFileSync(path.join(reuseDir, 'djvu.txt'), '12345', 'utf8');
     const djvuFileList = [{ name: 'reuse_item_djvu.txt', format: 'DjVuTXT', size: '5' }];
     expect(
-      reuseExistingItemArtifact(reuseDir, 'reuse_item_djvu.txt', djvuFileList, djvuFileList[0])?.toString(
+      reuseExistingItemArtifact(reuseDir, 'reuse_item_djvu.txt', djvuFileList, djvuFileList[0]!)?.toString(
         'utf8'
       )
     ).toBe('12345');
@@ -794,9 +794,9 @@ describe('archiveOrg branch coverage', () => {
       }),
       { cacheRoot: cacheDir }
     );
-    expect(okData.response).toBeDefined();
+    expect(okData['response']).toBeDefined();
     const cacheFiles = fs.readdirSync(queriesDir).filter((f) => f.endsWith('.json'));
-    const targetCacheFile = path.join(queriesDir, cacheFiles[0]);
+    const targetCacheFile = path.join(queriesDir, cacheFiles[0]!);
     fs.writeFileSync(targetCacheFile, JSON.stringify({ cached_at: 'bad', data: {} }), 'utf8');
     const [, hitAfterBadTs] = await cachedQueryJson(
       'search',
@@ -1025,7 +1025,7 @@ describe('seArchives branch coverage', () => {
       'https://lbiiif.riksarkivet.se/collection/arkiv/ARC2'
     );
     expect(colMixed.count).toBe(4);
-    expect(colMixed.items[3].bildid).toBe('C0009');
+    expect(colMixed.items[3]!.bildid).toBe('C0009');
 
     // extractCanvasInfo: empty id, källhänvisning & unrelated metadata
     const emptyCanvas = extractCanvasInfo(1, {
@@ -1334,7 +1334,7 @@ describe('fiArchives branch coverage', () => {
 
     const parsed = parseHiskiResults(sparseHiskiHtml);
     expect(parsed.total_reported).toBe(4);
-    expect(parsed.records[0].parish).toBe('');
+    expect(parsed.records[0]!.parish).toBe('');
 
     const unknownDetail = parseHiskiEventDetail(
       '<HTML><BODY><H2>Anjala</H2><TABLE BORDER=4><TR></TR></TABLE></BODY></HTML>',
@@ -1373,7 +1373,7 @@ describe('fiArchives branch coverage', () => {
     expect(archDetail.notes).toEqual([]);
     expect(archDetail.access_notes).toEqual([]);
     expect(archDetail.children).toHaveLength(1);
-    expect(archDetail.children[0].astia_url).toBe('');
+    expect(archDetail.children[0]!.astia_url).toBe('');
 
     const postedBodies: string[] = [];
     const fetchImpl: typeof fetch = async (input, init) => {
@@ -1793,7 +1793,7 @@ describe('gnis branch coverage', () => {
     fs.writeFileSync(filePath, bomTxt, 'utf8');
     const rows = loadGnisRows(filePath);
     expect(rows).toHaveLength(1);
-    expect(rows[0].county_name).toBe('');
+    expect(rows[0]!['county_name']!).toBe('');
 
     const compactEmpty = compactFeature({});
     expect(compactEmpty).toEqual({
@@ -1885,9 +1885,9 @@ describe('ukArchives branch coverage', () => {
       </tbody></table>
     `);
     expect(freeregRows).toHaveLength(2);
-    expect(freeregRows[0].transcript_url).toBe('https://www.freereg.org.uk/transcripts/1');
-    expect(freeregRows[0].register).toBe('');
-    expect(freeregRows[1].transcript_url).toBe('');
+    expect(freeregRows[0]!.transcript_url).toBe('https://www.freereg.org.uk/transcripts/1');
+    expect(freeregRows[0]!.register).toBe('');
+    expect(freeregRows[1]!.transcript_url).toBe('');
 
     const fetchImpl: typeof fetch = async (input, init) => {
       const url = String(input);
@@ -1982,7 +1982,7 @@ describe('secondary archive clients branch coverage', () => {
       },
     });
     expect(sortedScans).toHaveLength(4);
-    expect(sortedScans[0].uri).toContain('ord1a');
+    expect(sortedScans[0]!.uri).toContain('ord1a');
     expect(() => parseRecordRef('bad:', undefined)).toThrow(CliValidationError);
 
     const formatted = formatA2aRecord('harbor', 'rec1', {
@@ -2414,7 +2414,7 @@ describe('secondary archive clients branch coverage', () => {
     // --- caArchives ---
     expect(extractOmekaTitle({ 'dcterms:title': [{ '@value': '' }] })).toBe('(untitled)');
     expect(
-      parseExhibitsSearchPayload('[{}]', 'https://exhibits.sos.ca.gov/api/items', null).results[0].id
+      parseExhibitsSearchPayload('[{}]', 'https://exhibits.sos.ca.gov/api/items', null).results[0]!.id
     ).toBe('');
     expect(
       parseExhibitsItemPayload(
@@ -2456,7 +2456,7 @@ describe('secondary archive clients branch coverage', () => {
     // --- michiganology ---
     expect(() => validateMichiganologyUrl('https://michiganology.org:8443/item/1')).toThrow('Refusing');
     expect(
-      parseMichSearchHtml('<div class="result-item"><a href="/item/1">   </a></div>', 'Alder').results[0]
+      parseMichSearchHtml('<div class="result-item"><a href="/item/1">   </a></div>', 'Alder').results[0]!
         .title
     ).toBe('(no title)');
     expect(
@@ -2622,7 +2622,7 @@ describe('deep archive client branch coverage pass', () => {
       'https://archive.org/advancedsearch.php?q=birch',
       makeCtx({ env, fetchImpl: async () => jsonResponse({ ok: true }) })
     );
-    expect(otherKindData.ok).toBe(true);
+    expect(otherKindData['ok']).toBe(true);
   });
 
   it('covers fiArchives empty-date records, chronam httpFetch/transport retries, and openarchieven scans/cache', async () => {
@@ -2667,7 +2667,7 @@ describe('deep archive client branch coverage pass', () => {
       ],
       { timeout: 10, refresh: true, ttlHours: 24 }
     );
-    expect(cg.data.ok).toBe(1);
+    expect(cg.data['ok']).toBe(1);
 
     // 2. ConnectTimeoutError retrying and succeeding
     let ctCalls = 0;
@@ -2687,7 +2687,7 @@ describe('deep archive client branch coverage pass', () => {
       'https://www.loc.gov/collections/chronicling-america/',
       { timeout: 30 }
     );
-    expect(ctRes.recovered).toBe(true);
+    expect(ctRes['recovered']).toBe(true);
 
     // 3. HTTP 429 failing without budget -> rate limited; non-Error thrown; non-JSON & non-record with no content-type
     await expect(
@@ -3029,7 +3029,7 @@ describe('deep archive client branch coverage pass', () => {
       execFileImpl: async (_cmd, args) => {
         const dIdx = args.indexOf('-D');
         if (dIdx !== -1 && dIdx + 1 < args.length) {
-          fs.writeFileSync(args[dIdx + 1], 'HTTP/1.1 200 OK\r\n\r\n', 'utf8');
+          fs.writeFileSync(args[dIdx + 1]!, 'HTTP/1.1 200 OK\r\n\r\n', 'utf8');
         }
         return {
           stdout: Buffer.concat([

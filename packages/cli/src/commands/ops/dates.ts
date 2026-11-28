@@ -155,9 +155,9 @@ export function parseCalendarDate(raw: string, label = 'date'): CalendarDate {
   if (!match) {
     throw new CliValidationError(`Invalid ${label} '${raw}'. Expected ISO calendar date YYYY-MM-DD.`);
   }
-  const year = Number.parseInt(match[1], 10);
-  const month = Number.parseInt(match[2], 10);
-  const day = Number.parseInt(match[3], 10);
+  const year = Number.parseInt(match[1] ?? '', 10);
+  const month = Number.parseInt(match[2] ?? '', 10);
+  const day = Number.parseInt(match[3] ?? '', 10);
   if (year < 1 || month < 1 || month > 12) {
     throw new CliValidationError(`Invalid ${label} '${raw}'. Month must be 01..12 and year must be >= 0001.`);
   }
@@ -173,7 +173,7 @@ export function parseCalendarDate(raw: string, label = 'date'): CalendarDate {
 export function getWeekdayName(date: CalendarDate): WeekdayName {
   // 1970-01-01 (epochDay 0) was Thursday (index 4 when Sunday = 0).
   const idx = (((date.epochDay + 4) % 7) + 7) % 7;
-  return WEEKDAY_NAMES[idx];
+  return WEEKDAY_NAMES[idx] ?? 'Sunday';
 }
 
 export function getIsoWeekday(date: CalendarDate): number {
@@ -320,7 +320,7 @@ export function runDatesCommand(options: DatesCommandOptions): DatesCommandResul
       let rendered: string;
       if (options.json) {
         rendered = JSON.stringify(base, null, 2);
-      } else if (ages.length === 1) {
+      } else if (ages.length === 1 && ages[0] !== undefined) {
         const entry = ages[0];
         rendered = `${base.birthFormatted} -> ${entry.atFormatted}: ${entry.label}`;
       } else {

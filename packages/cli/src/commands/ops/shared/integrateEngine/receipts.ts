@@ -33,17 +33,17 @@ export function readIntegrationReceipt(packageDir: string): IntegrationReceipt |
       return null;
     }
     if (
-      parsed.schema_version !== 1 ||
-      typeof parsed.person_id !== 'string' ||
-      typeof parsed.patch_sha256 !== 'string' ||
-      !isPlainObject(parsed.scans_sha256) ||
-      typeof parsed.integrated_at !== 'string' ||
-      !isPlainObject(parsed.integrated_entity_ids)
+      parsed['schema_version'] !== 1 ||
+      typeof parsed['person_id'] !== 'string' ||
+      typeof parsed['patch_sha256'] !== 'string' ||
+      !isPlainObject(parsed['scans_sha256']) ||
+      typeof parsed['integrated_at'] !== 'string' ||
+      !isPlainObject(parsed['integrated_entity_ids'])
     ) {
       return null;
     }
     const scans: Record<string, string> = {};
-    for (const [k, v] of Object.entries(parsed.scans_sha256)) {
+    for (const [k, v] of Object.entries(parsed['scans_sha256'])) {
       if (typeof v !== 'string') {
         return null;
       }
@@ -51,20 +51,20 @@ export function readIntegrationReceipt(packageDir: string): IntegrationReceipt |
     }
     const readIds = (field: unknown): string[] =>
       Array.isArray(field) ? field.filter((item): item is string => typeof item === 'string') : [];
-    const ids = parsed.integrated_entity_ids;
+    const ids = parsed['integrated_entity_ids'];
     return {
       schema_version: 1,
-      person_id: parsed.person_id,
-      patch_sha256: parsed.patch_sha256,
+      person_id: parsed['person_id'],
+      patch_sha256: parsed['patch_sha256'],
       scans_sha256: scans,
-      integrated_at: parsed.integrated_at,
+      integrated_at: parsed['integrated_at'],
       integrated_entity_ids: {
-        people: readIds(ids.people),
-        events: readIds(ids.events),
-        places: readIds(ids.places),
-        sources: readIds(ids.sources),
-        media: readIds(ids.media),
-        narratives: readIds(ids.narratives),
+        people: readIds(ids['people']),
+        events: readIds(ids['events']),
+        places: readIds(ids['places']),
+        sources: readIds(ids['sources']),
+        media: readIds(ids['media']),
+        narratives: readIds(ids['narratives']),
       },
     };
   } catch {
@@ -86,7 +86,11 @@ export function doesReceiptMatchPackage(
   }
   for (let i = 0; i < receiptKeys.length; i += 1) {
     const key = receiptKeys[i];
-    if (key !== currentKeys[i] || receipt.scans_sha256[key] !== fingerprints.scans_sha256[key]) {
+    if (
+      key === undefined ||
+      key !== currentKeys[i] ||
+      receipt.scans_sha256[key] !== fingerprints.scans_sha256[key]
+    ) {
       return false;
     }
   }
@@ -102,8 +106,8 @@ export function writeIntegrationReceipt(packageDir: string, receipt: Integration
 function collectIdsFromRawList(list: readonly unknown[]): string[] {
   const out = new Set<string>();
   for (const item of list) {
-    if (isPlainObject(item) && typeof item.id === 'string' && item.id.trim().length > 0) {
-      out.add(item.id.trim());
+    if (isPlainObject(item) && typeof item['id'] === 'string' && item['id'].trim().length > 0) {
+      out.add(item['id'].trim());
     }
   }
   return [...out].toSorted((a, b) => a.localeCompare(b));
@@ -118,7 +122,7 @@ export function buildIntegrationReceiptForPackage(
   const patchPath = path.join(packageDir, 'patch.json');
   const raw: unknown = JSON.parse(fs.readFileSync(patchPath, 'utf8'));
   const obj = isPlainObject(raw) ? raw : {};
-  const peopleIds = new Set<string>(collectIdsFromRawList(Array.isArray(obj.people) ? obj.people : []));
+  const peopleIds = new Set<string>(collectIdsFromRawList(Array.isArray(obj['people']) ? obj['people'] : []));
   peopleIds.add(personId);
   return {
     schema_version: 1,
@@ -128,11 +132,11 @@ export function buildIntegrationReceiptForPackage(
     integrated_at: integratedAt,
     integrated_entity_ids: {
       people: [...peopleIds].toSorted((a, b) => a.localeCompare(b)),
-      events: collectIdsFromRawList(Array.isArray(obj.events) ? obj.events : []),
-      places: collectIdsFromRawList(Array.isArray(obj.places) ? obj.places : []),
-      sources: collectIdsFromRawList(Array.isArray(obj.sources) ? obj.sources : []),
-      media: collectIdsFromRawList(Array.isArray(obj.media) ? obj.media : []),
-      narratives: collectIdsFromRawList(Array.isArray(obj.narratives) ? obj.narratives : []),
+      events: collectIdsFromRawList(Array.isArray(obj['events']) ? obj['events'] : []),
+      places: collectIdsFromRawList(Array.isArray(obj['places']) ? obj['places'] : []),
+      sources: collectIdsFromRawList(Array.isArray(obj['sources']) ? obj['sources'] : []),
+      media: collectIdsFromRawList(Array.isArray(obj['media']) ? obj['media'] : []),
+      narratives: collectIdsFromRawList(Array.isArray(obj['narratives']) ? obj['narratives'] : []),
     },
   };
 }

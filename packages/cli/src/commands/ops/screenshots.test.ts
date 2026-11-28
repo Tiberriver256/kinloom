@@ -419,7 +419,7 @@ describe('runScreenshotsCommand orchestration and redaction', () => {
 
     expect(browserClosed).toBe(true);
     expect(result.ok).toBe(false);
-    expect(seenContextOpts[0]?.extraHTTPHeaders?.Authorization).toBe(secretHeaderValue);
+    expect(seenContextOpts[0]?.extraHTTPHeaders?.['Authorization']).toBe(secretHeaderValue);
     expect(seenCookies[0]?.[0]?.name).toBe('kinloom_session');
 
     const manifestRaw = await fs.readFile(result.manifestPath, 'utf8');
@@ -677,8 +677,8 @@ function createHttpBackedBrowserFactory(): ScreenshotBrowserFactory {
           return {
             goto: async (url) => {
               const headers: Record<string, string> = { ...(ctxOpts.extraHTTPHeaders ?? {}) };
-              if (!headers.Cookie && cookies.length > 0) {
-                headers.Cookie = cookies.map((c) => `${c.name}=${c.value}`).join('; ');
+              if (!headers['Cookie'] && cookies.length > 0) {
+                headers['Cookie'] = cookies.map((c) => `${c.name}=${c.value}`).join('; ');
               }
               const res = await fetch(url, { headers });
               if (!res.ok) {
@@ -703,7 +703,7 @@ function createHttpBackedBrowserFactory(): ScreenshotBrowserFactory {
                 const re = /<a\s+[^>]*href="([^"]+)"[^>]*>([^<]*)<\/a>/g;
                 let match = re.exec(currentHtml);
                 while (match !== null) {
-                  links.push({ href: match[1], text: match[2].trim() });
+                  links.push({ href: match[1]!, text: match[2]!.trim() });
                   match = re.exec(currentHtml);
                 }
                 return links as never;
@@ -918,9 +918,9 @@ describe('kinloom screenshots CLI + hermetic HTTP archive integration', () => {
     const seenScreenshotCalls: Array<{
       readonly route: string;
       readonly theme: string;
-      readonly fullPage?: boolean;
-      readonly timeout?: number;
-      readonly animations?: string;
+      readonly fullPage?: boolean | undefined;
+      readonly timeout?: number | undefined;
+      readonly animations?: string | undefined;
     }> = [];
     const seenEmulateThemes: string[] = [];
 

@@ -86,6 +86,7 @@ export function runPronounceAuditCommand(options: PronounceAuditOptions): Pronou
   const lexiconLowerKeys = new Map<string, string>();
   for (let i = 0; i < lexiconKeys.length; i += 1) {
     const key = lexiconKeys[i];
+    if (key === undefined) continue;
     lexiconLowerKeys.set(key.trim().toLowerCase(), key);
   }
 
@@ -94,6 +95,7 @@ export function runPronounceAuditCommand(options: PronounceAuditOptions): Pronou
   const referenceYear = siteConfig.privacy.referenceYear ?? getCurrentReferenceYear();
   for (let i = 0; i < people.length; i += 1) {
     const person = people[i];
+    if (person === undefined) continue;
     if (
       person.is_living ||
       person.full_name.trim() === 'Living' ||
@@ -113,6 +115,7 @@ export function runPronounceAuditCommand(options: PronounceAuditOptions): Pronou
 
   for (let i = 0; i < deceasedPeople.length; i += 1) {
     const person = deceasedPeople[i];
+    if (person === undefined) continue;
     const resolved = resolvePersonPronunciation(person, lexicon);
     if (!resolved || !hasPronunciationValues(resolved)) {
       peopleMissing.push({
@@ -143,6 +146,7 @@ export function runPronounceAuditCommand(options: PronounceAuditOptions): Pronou
   >();
   for (let i = 0; i < deceasedPeople.length; i += 1) {
     const person = deceasedPeople[i];
+    if (person === undefined) continue;
     const surname = person.surname.trim();
     if (!surname) {
       continue;
@@ -185,6 +189,7 @@ export function runPronounceAuditCommand(options: PronounceAuditOptions): Pronou
   const missingPlaces: PronounceCoverageGapPlace[] = [];
   for (let i = 0; i < places.length; i += 1) {
     const place = places[i];
+    if (place === undefined) continue;
     const resolved = resolvePlacePronunciation(place, lexicon);
     if (resolved && (resolved.phonetic || resolved.ipa || resolved.audio_url)) {
       placesCovered += 1;
@@ -230,16 +235,19 @@ export function runPronounceAuditCommand(options: PronounceAuditOptions): Pronou
   };
 
   for (const term of [...lexiconKeys].toSorted(fastLocaleCompare)) {
-    auditEntry('lexicon', term, term, lexicon[term]);
+    const entry = lexicon[term];
+    if (entry !== undefined) auditEntry('lexicon', term, term, entry);
   }
   for (let i = 0; i < deceasedPeople.length; i += 1) {
     const person = deceasedPeople[i];
+    if (person === undefined) continue;
     if (person.pronunciation) {
       auditEntry('person', person.id, `${person.full_name} (${person.id})`, person.pronunciation);
     }
   }
   for (let i = 0; i < places.length; i += 1) {
     const place = places[i];
+    if (place === undefined) continue;
     if (place.pronunciation) {
       auditEntry('place', place.id, `${place.full_name} (${place.id})`, place.pronunciation);
     }
@@ -248,6 +256,7 @@ export function runPronounceAuditCommand(options: PronounceAuditOptions): Pronou
   const redundantPersonOverrides: PronounceRedundantPersonOverride[] = [];
   for (let i = 0; i < deceasedPeople.length; i += 1) {
     const person = deceasedPeople[i];
+    if (person === undefined) continue;
     if (!person.pronunciation) {
       continue;
     }

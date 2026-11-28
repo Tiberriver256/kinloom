@@ -197,9 +197,9 @@ export function useTreeViewportTransform(params: {
       }
       const container = containerRef.current;
       if (container) {
-        container.dataset.zoom = String(next.zoom);
-        container.dataset.panX = String(next.pan.x);
-        container.dataset.panY = String(next.pan.y);
+        container.dataset['zoom'] = String(next.zoom);
+        container.dataset['panX'] = String(next.pan.x);
+        container.dataset['panY'] = String(next.pan.y);
       }
       syncSemanticZoom(next.zoom);
       const nextPercent = Math.round(next.zoom * 100);
@@ -681,7 +681,7 @@ export function useTreeViewportTransform(params: {
       const buttons = root.querySelectorAll<HTMLElement>('[data-person-id]');
       let target: HTMLElement | null = null;
       for (const el of buttons) {
-        if (el.dataset.personId === personId) {
+        if (el.dataset['personId'] === personId) {
           target = el;
           break;
         }

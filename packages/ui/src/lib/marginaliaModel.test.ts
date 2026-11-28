@@ -68,7 +68,7 @@ describe('marginaliaModel (#70)', () => {
 
     // Block 1: paragraph -> first appearance of [1] src_census_1880 (code span ignored)
     expect(result.byBlockIndex[1]).toHaveLength(1);
-    expect(result.byBlockIndex[1][0]).toMatchObject({
+    expect(result.byBlockIndex[1]?.[0]).toMatchObject({
       kind: 'citation',
       footnoteNumber: 1,
       sourceId: 'src_census_1880',
@@ -81,7 +81,7 @@ describe('marginaliaModel (#70)', () => {
 
     // Block 2: blockquote -> src_census_1880 is deduplicated; only first appearance of [2] src_diary_1884 appears
     expect(result.byBlockIndex[2]).toHaveLength(1);
-    expect(result.byBlockIndex[2][0]).toMatchObject({
+    expect(result.byBlockIndex[2]?.[0]).toMatchObject({
       kind: 'citation',
       footnoteNumber: 2,
       sourceId: 'src_diary_1884',

@@ -149,7 +149,7 @@ export const KinshipPage: React.FC = () => {
           label: pair.label.replace(/\s*<->\s*/g, ' ↔ '),
           fromId: pA.id,
           toId: pB.id,
-          note: pair.note,
+          ...(pair.note !== undefined ? { note: pair.note } : {}),
         });
       }
     }

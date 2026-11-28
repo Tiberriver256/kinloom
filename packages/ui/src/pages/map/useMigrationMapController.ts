@@ -412,7 +412,7 @@ export function useMigrationMapController(params: UseMigrationMapControllerParam
     }
     setPeriodBasemap(map, readResolvedDarkMode());
     let targetDate = OVERVIEW_REFERENCE_YEAR;
-    if (eraYear !== null) {
+    if (eraYear !== null && eraYear !== undefined) {
       targetDate = playing ? String(Math.floor(eraYear / 10) * 10) : String(eraYear);
     }
     if (lastAppliedDateRef.current === targetDate) {

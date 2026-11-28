@@ -90,13 +90,13 @@ export async function runSearch(
     start: resolvedStart,
     fields,
   };
-  if (firstName) params.FirstName = firstName;
-  if (lastName) params.LastName = lastName;
-  if (birthDate) params.BirthDate = birthDate;
-  if (deathDate) params.DeathDate = deathDate;
-  if (birthLocation) params.BirthLocation = birthLocation;
-  if (deathLocation) params.DeathLocation = deathLocation;
-  if (dateInclude) params.dateInclude = dateInclude;
+  if (firstName) params['FirstName'] = firstName;
+  if (lastName) params['LastName'] = lastName;
+  if (birthDate) params['BirthDate'] = birthDate;
+  if (deathDate) params['DeathDate'] = deathDate;
+  if (birthLocation) params['BirthLocation'] = birthLocation;
+  if (deathLocation) params['DeathLocation'] = deathLocation;
+  if (dateInclude) params['dateInclude'] = dateInclude;
 
   const ttlHours = resolveTtl(getNumberOption(parsed, 'cacheTtlHours'), ctx);
   const { data, first, cacheHit } = await cachedApi({
@@ -107,7 +107,9 @@ export async function runSearch(
     refresh,
     ttlHours,
     cacheable: (d) =>
-      d.length > 0 && isPlainRecord(d[0]) && (Array.isArray(d[0].matches) || typeof d[0].total === 'number'),
+      d.length > 0 &&
+      isPlainRecord(d[0]) &&
+      (Array.isArray(d[0]['matches']) || typeof d[0]['total'] === 'number'),
   });
 
   if (asJson) {
@@ -139,7 +141,7 @@ export async function runPerson(
     };
   }
 
-  const key = normalizeProfileKey(parsed.positionals[0]);
+  const key = normalizeProfileKey(parsed.positionals[0] ?? '');
   let fields = getStringOption(parsed, 'fields') ?? DEFAULT_FIELDS;
   const bioFormat = getStringOption(parsed, 'bioFormat');
   const resolveRedirect = getBooleanOption(parsed, 'resolveRedirect');
@@ -152,14 +154,14 @@ export async function runPerson(
     fields,
   };
   if (bioFormat) {
-    params.bioFormat = bioFormat;
+    params['bioFormat'] = bioFormat;
     if (fields !== '*' && !fields.split(',').includes('Bio')) {
       fields = `${fields},Bio`;
-      params.fields = fields;
+      params['fields'] = fields;
     }
   }
   if (resolveRedirect) {
-    params.resolveRedirect = 1;
+    params['resolveRedirect'] = 1;
   }
 
   const ttlHours = resolveTtl(getNumberOption(parsed, 'cacheTtlHours'), ctx);
@@ -170,7 +172,7 @@ export async function runPerson(
     label: `getPerson ${key}`,
     refresh,
     ttlHours,
-    cacheable: (d) => d.length > 0 && isPlainRecord(d[0]) && Boolean(d[0].person || d[0].profile),
+    cacheable: (d) => d.length > 0 && isPlainRecord(d[0]) && Boolean(d[0]['person'] || d[0]['profile']),
   });
 
   if (asJson) {
@@ -201,7 +203,7 @@ export async function runAncestors(
     };
   }
 
-  const key = normalizeProfileKey(parsed.positionals[0]);
+  const key = normalizeProfileKey(parsed.positionals[0] ?? '');
   const depth = getNumberOption(parsed, 'depth') ?? 4;
   const fields = getStringOption(parsed, 'fields') ?? DEFAULT_FIELDS;
   const asJson = getBooleanOption(parsed, 'asJson');
@@ -221,7 +223,7 @@ export async function runAncestors(
     label: `getPeople ${key}`,
     refresh,
     ttlHours,
-    cacheable: (d) => d.length > 0 && isPlainRecord(d[0]) && isPlainRecord(d[0].people),
+    cacheable: (d) => d.length > 0 && isPlainRecord(d[0]) && isPlainRecord(d[0]['people']),
   });
 
   if (asJson) {
@@ -252,7 +254,7 @@ export async function runBio(
     };
   }
 
-  const key = normalizeProfileKey(parsed.positionals[0]);
+  const key = normalizeProfileKey(parsed.positionals[0] ?? '');
   const bioFormat = getStringOption(parsed, 'bioFormat') ?? 'wiki';
   const asJson = getBooleanOption(parsed, 'asJson');
   const refresh = getBooleanOption(parsed, 'refresh');

@@ -61,23 +61,23 @@ function tryFastValidateBatchSubmission(raw: unknown): BatchSubmission | null {
   if (!isPlainPayloadObject(raw)) {
     return null;
   }
-  const batchId = raw.batch_id;
-  const summary = raw.summary;
+  const batchId = raw['batch_id'];
+  const summary = raw['summary'];
   if (typeof batchId !== 'string' || batchId.length === 0) {
     return null;
   }
   if (typeof summary !== 'string' || summary.length < 3) {
     return null;
   }
-  const authorTypeRaw = raw.author_type ?? 'agent';
+  const authorTypeRaw = raw['author_type'] ?? 'agent';
   if (typeof authorTypeRaw !== 'string' || !VALID_AUTHOR_TYPES.has(authorTypeRaw as AuthorType)) {
     return null;
   }
-  const hasPrimaryRaw = raw.has_primary_source ?? true;
+  const hasPrimaryRaw = raw['has_primary_source'] ?? true;
   if (typeof hasPrimaryRaw !== 'boolean') {
     return null;
   }
-  const rawPatches = raw.patches;
+  const rawPatches = raw['patches'];
   if (!Array.isArray(rawPatches) || rawPatches.length === 0) {
     return null;
   }
@@ -88,9 +88,9 @@ function tryFastValidateBatchSubmission(raw: unknown): BatchSubmission | null {
     if (!isPlainPayloadObject(p)) {
       return null;
     }
-    const action = p.action;
-    const entityType = p.entity_type;
-    const entityId = p.entity_id;
+    const action = p['action'];
+    const entityType = p['entity_type'];
+    const entityId = p['entity_id'];
     if (
       typeof entityType !== 'string' ||
       !VALID_ENTITY_TYPES.has(entityType as EntityType) ||
@@ -99,11 +99,11 @@ function tryFastValidateBatchSubmission(raw: unknown): BatchSubmission | null {
     ) {
       return null;
     }
-    const patchSummary = p.summary;
+    const patchSummary = p['summary'];
     if (patchSummary !== undefined && (typeof patchSummary !== 'string' || patchSummary.length < 3)) {
       return null;
     }
-    const parentRev = p.parent_revision_id;
+    const parentRev = p['parent_revision_id'];
     if (
       parentRev !== undefined &&
       (typeof parentRev !== 'number' || !Number.isInteger(parentRev) || parentRev <= 0)
@@ -112,40 +112,40 @@ function tryFastValidateBatchSubmission(raw: unknown): BatchSubmission | null {
     }
 
     if (action === 'create') {
-      if (!isPlainPayloadObject(p.data)) {
+      if (!isPlainPayloadObject(p['data'])) {
         return null;
       }
-      if (p.has_primary_source !== undefined && typeof p.has_primary_source !== 'boolean') {
+      if (p['has_primary_source'] !== undefined && typeof p['has_primary_source'] !== 'boolean') {
         return null;
       }
       patches[i] = {
         action: 'create',
         entity_type: entityType as EntityType,
         entity_id: entityId,
-        data: p.data,
+        data: p['data'],
         ...(patchSummary !== undefined ? { summary: patchSummary } : {}),
-        ...(p.has_primary_source !== undefined ? { has_primary_source: p.has_primary_source } : {}),
+        ...(p['has_primary_source'] !== undefined ? { has_primary_source: p['has_primary_source'] } : {}),
       };
     } else if (action === 'update') {
-      if (!isPlainPayloadObject(p.data)) {
+      if (!isPlainPayloadObject(p['data'])) {
         return null;
       }
-      const merge = p.merge ?? true;
+      const merge = p['merge'] ?? true;
       if (typeof merge !== 'boolean') {
         return null;
       }
-      if (p.has_primary_source !== undefined && typeof p.has_primary_source !== 'boolean') {
+      if (p['has_primary_source'] !== undefined && typeof p['has_primary_source'] !== 'boolean') {
         return null;
       }
       patches[i] = {
         action: 'update',
         entity_type: entityType as EntityType,
         entity_id: entityId,
-        data: p.data,
+        data: p['data'],
         merge,
         ...(parentRev !== undefined ? { parent_revision_id: parentRev } : {}),
         ...(patchSummary !== undefined ? { summary: patchSummary } : {}),
-        ...(p.has_primary_source !== undefined ? { has_primary_source: p.has_primary_source } : {}),
+        ...(p['has_primary_source'] !== undefined ? { has_primary_source: p['has_primary_source'] } : {}),
       };
     } else if (action === 'delete') {
       patches[i] = {
@@ -156,7 +156,7 @@ function tryFastValidateBatchSubmission(raw: unknown): BatchSubmission | null {
         ...(patchSummary !== undefined ? { summary: patchSummary } : {}),
       };
     } else if (action === 'restore') {
-      if (p.data !== undefined && !isPlainPayloadObject(p.data)) {
+      if (p['data'] !== undefined && !isPlainPayloadObject(p['data'])) {
         return null;
       }
       patches[i] = {
@@ -164,7 +164,7 @@ function tryFastValidateBatchSubmission(raw: unknown): BatchSubmission | null {
         entity_type: entityType as EntityType,
         entity_id: entityId,
         ...(parentRev !== undefined ? { parent_revision_id: parentRev } : {}),
-        ...(p.data !== undefined ? { data: p.data } : {}),
+        ...(p['data'] !== undefined ? { data: p['data'] } : {}),
         ...(patchSummary !== undefined ? { summary: patchSummary } : {}),
       };
     } else {

@@ -109,8 +109,8 @@ export function readCachedSearch(
   if (!envelope) {
     return null;
   }
-  const cachedAt = envelope.cached_at;
-  const data = envelope.data;
+  const cachedAt = envelope['cached_at'];
+  const data = envelope['data'];
   if (typeof cachedAt !== 'number' || !Number.isFinite(cachedAt) || !isPlainRecord(data)) {
     return null;
   }
@@ -158,11 +158,11 @@ export function readCachedRecord(
   if (!envelope) {
     return null;
   }
-  const record = envelope.record;
-  if (!isPlainRecord(record) || record.error) {
+  const record = envelope['record'];
+  if (!isPlainRecord(record) || record['error']) {
     return null;
   }
-  if (requireText && !envelope.has_text) {
+  if (requireText && !envelope['has_text']) {
     return null;
   }
   const validated = NaraRecordSummarySchema.safeParse(record);

@@ -111,8 +111,8 @@ async function invokeOpenarchieven(
   cacheDir: string,
   fetchImpl: typeof fetch,
   overrides: {
-    readonly env?: NodeJS.ProcessEnv;
-    readonly cwd?: string;
+    readonly env?: NodeJS.ProcessEnv | undefined;
+    readonly cwd?: string | undefined;
     readonly onStdout?: (line: string) => void;
   } = {}
 ): Promise<{
@@ -120,7 +120,7 @@ async function invokeOpenarchieven(
   readonly bytesOut: number;
   readonly stdout: string;
   readonly stderr: string;
-  readonly cacheHit?: boolean;
+  readonly cacheHit?: boolean | undefined;
 }> {
   const stdout: string[] = [];
   const stderr: string[] = [];
@@ -323,7 +323,7 @@ describe('openarchieven cache', () => {
       queries.push(entry.query);
       expect('cache_hit' in entry.result).toBe(false);
     }
-    expect(queries.map((q) => Number(q.start)).toSorted((a, b) => a - b)).toEqual([0, 10]);
+    expect(queries.map((q) => Number(q['start'])).toSorted((a, b) => a - b)).toEqual([0, 10]);
     expect(queries.every((q) => !('page' in q))).toBe(true);
   });
 });
@@ -366,8 +366,8 @@ describe('openarchieven download', () => {
     const secondBody = JSON.parse(second.stdout) as { cache_hit: boolean };
     expect(firstBody.cache_hit).toBe(false);
     expect(secondBody.cache_hit).toBe(true);
-    expect(firstBody.files[0].url).toBe(FULL_ONE);
-    expect(firstBody.files[0].bytes).toBe(JPEG_ONE.length);
+    expect(firstBody.files[0]!.url).toBe(FULL_ONE);
+    expect(firstBody.files[0]!.bytes).toBe(JPEG_ONE.length);
     expect(fs.readFileSync(out)).toEqual(JPEG_ONE);
     expect(calls.filter((u) => u.includes('show.json'))).toHaveLength(1);
     expect(calls.filter((u) => u === FULL_ONE)).toHaveLength(1);
@@ -404,12 +404,12 @@ describe('openarchieven download', () => {
       files: Array<{ index: number; label: string; path: string }>;
     };
     expect(body.files.map((item) => item.index)).toEqual([1, 2]);
-    expect(body.files[0].label).toBe('page one');
-    expect(body.files[1].label).toBe('page two');
-    expect(path.basename(body.files[0].path)).toBe('bhi-11111111-scan-01.jpg');
-    expect(path.basename(body.files[1].path)).toBe('bhi-11111111-scan-02.jpg');
-    expect(fs.readFileSync(body.files[0].path)).toEqual(JPEG_ONE);
-    expect(fs.readFileSync(body.files[1].path)).toEqual(JPEG_TWO);
+    expect(body.files[0]!.label).toBe('page one');
+    expect(body.files[1]!.label).toBe('page two');
+    expect(path.basename(body.files[0]!.path)).toBe('bhi-11111111-scan-01.jpg');
+    expect(path.basename(body.files[1]!.path)).toBe('bhi-11111111-scan-02.jpg');
+    expect(fs.readFileSync(body.files[0]!.path)).toEqual(JPEG_ONE);
+    expect(fs.readFileSync(body.files[1]!.path)).toEqual(JPEG_TWO);
     expect(body.cache_hit).toBe(false);
   });
 
@@ -471,16 +471,16 @@ describe('openarchieven download', () => {
       cache_hit: boolean;
       scans: Array<{ url: string; index: number; label: string }>;
     };
-    expect(body.scans[0].url).toBe(FULL_ONE);
-    expect(body.scans[0].index).toBe(1);
-    expect(body.scans[0].label).toBe('page one');
+    expect(body.scans[0]!.url).toBe(FULL_ONE);
+    expect(body.scans[0]!.index).toBe(1);
+    expect(body.scans[0]!.label).toBe('page one');
     expect(body.cache_hit).toBe(false);
 
     const previewBody = JSON.parse(preview.stdout) as {
       cache_hit: boolean;
       scans: Array<{ url: string }>;
     };
-    expect(previewBody.scans[0].url).toBe(PREVIEW_ONE);
+    expect(previewBody.scans[0]!.url).toBe(PREVIEW_ONE);
     expect(previewBody.cache_hit).toBe(true);
     expect(calls.filter((u) => u.includes('scans.invalid'))).toHaveLength(0);
   });
@@ -810,7 +810,7 @@ describe('openarchieven hardening & Wave 45 fallbacks', () => {
       files: Array<{ url: string }>;
     };
     expect(d1Body.cache_hit).toBe(false);
-    expect(d1Body.files[0].url).toBe('http://files.archieven.nl/php/show_file.php?adt_id=239&file=demo.jpg');
+    expect(d1Body.files[0]!.url).toBe('http://files.archieven.nl/php/show_file.php?adt_id=239&file=demo.jpg');
     expect(fs.readFileSync(outFiles)).toEqual(JPEG_ONE);
     expect(protoAttempts).toBe(2);
 
@@ -822,7 +822,7 @@ describe('openarchieven hardening & Wave 45 fallbacks', () => {
       fetchImpl
     );
     expect(d2.exitCode).toBe(0);
-    expect((JSON.parse(d2.stdout) as { files: Array<{ url: string }> }).files[0].url).toBe(
+    expect((JSON.parse(d2.stdout) as { files: Array<{ url: string }> }).files[0]!.url).toBe(
       'https://proxy.archieven.nl/download/239/AABBCCDD'
     );
     expect(fs.readFileSync(outProxy)).toEqual(JPEG_TWO);
@@ -834,7 +834,7 @@ describe('openarchieven hardening & Wave 45 fallbacks', () => {
       fetchImpl
     );
     expect(d2Fb.exitCode).toBe(0);
-    expect((JSON.parse(d2Fb.stdout) as { files: Array<{ url: string }> }).files[0].url).toBe(
+    expect((JSON.parse(d2Fb.stdout) as { files: Array<{ url: string }> }).files[0]!.url).toBe(
       'https://proxy.archieven.nl/thumb/239/AABBCCDD'
     );
     expect(fs.readFileSync(outProxy)).toEqual(JPEG_ONE);
@@ -847,7 +847,7 @@ describe('openarchieven hardening & Wave 45 fallbacks', () => {
       fetchImpl
     );
     expect(d3.exitCode).toBe(0);
-    expect((JSON.parse(d3.stdout) as { files: Array<{ url: string }> }).files[0].url).toBe(
+    expect((JSON.parse(d3.stdout) as { files: Array<{ url: string }> }).files[0]!.url).toBe(
       'https://images.example/scan-42.jpg'
     );
     expect(fs.readFileSync(outUnk)).toEqual(JPEG_ONE);

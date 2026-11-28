@@ -95,8 +95,9 @@ export function resolveDatabase(name: string): string {
   if (key in DATABASES || key in ORDER_ONLY || key === 'monmouth') {
     return key;
   }
-  if (key in DATABASE_ALIASES) {
-    return DATABASE_ALIASES[key];
+  const aliased = DATABASE_ALIASES[key];
+  if (aliased !== undefined) {
+    return aliased;
   }
   const known = [...Object.keys(DATABASES), ...Object.keys(ORDER_ONLY), ...Object.keys(DATABASE_ALIASES)];
   const close = getCloseMatches(key, known, 3, 0.6);
@@ -157,7 +158,7 @@ export function parseGrid(pageHtml: string, tableHint: string): readonly [string
     const rowHtml = $.html(tr) ?? '';
     const cells = tr.children('td, th');
     if (cells.length === 0) {
-      return;
+      return undefined;
     }
     const texts: string[] = [];
     cells.each((_cIdx, cellEl) => {
@@ -165,18 +166,18 @@ export function parseGrid(pageHtml: string, tableHint: string): readonly [string
     });
 
     if (texts.every((t) => t === '')) {
-      return;
+      return undefined;
     }
     if (texts.length === 1 && texts[0] === 'No Records Found') {
       headers = [];
       rows.length = 0;
       return false;
     }
-    if (texts.length === 1 && /^[\d\s.]+$/.test(texts[0])) {
-      return; // single-cell pager row
+    if (texts.length === 1 && /^[\d\s.]+$/.test(texts[0] ?? '')) {
+      return undefined; // single-cell pager row
     }
     if (rowHtml.includes('Page$') && texts.filter(Boolean).every((t) => /^(?:\d+|\.{2,3})$/.test(t))) {
-      return; // multi-cell ASP.NET GridView pager row
+      return undefined; // multi-cell ASP.NET GridView pager row
     }
 
     const links: NjGridLink[] = [];
@@ -190,6 +191,7 @@ export function parseGrid(pageHtml: string, tableHint: string): readonly [string
     let popupMatch: RegExpExecArray | null = popupRe.exec(rowHtml);
     while (popupMatch !== null) {
       const pdfPath = popupMatch[1];
+      if (pdfPath === undefined) continue;
       const href = pdfPath.startsWith('http') ? pdfPath : `https://oprs.co.monmouth.nj.us${pdfPath}`;
       links.push({ text: 'census page image', href });
       popupMatch = popupRe.exec(rowHtml);
@@ -200,7 +202,7 @@ export function parseGrid(pageHtml: string, tableHint: string): readonly [string
       hasTh || (headers.length === 0 && texts.filter(Boolean).every((text) => !/\d/.test(text)));
     if (isHeader) {
       headers = texts;
-      return;
+      return undefined;
     }
     if (headers.length === 0) {
       headers = texts.map((_, idx) => `col${idx + 1}`);
@@ -208,10 +210,12 @@ export function parseGrid(pageHtml: string, tableHint: string): readonly [string
     const rowObj: Record<string, string | readonly NjGridLink[]> = {};
     const limit = Math.min(headers.length, texts.length);
     for (let i = 0; i < limit; i += 1) {
-      rowObj[headers[i]] = texts[i];
+      const hdr = headers[i];
+      if (hdr !== undefined) rowObj[hdr] = texts[i] ?? '';
     }
-    rowObj.links = links;
+    rowObj['links'] = links;
     rows.push(rowObj as NjGridRow);
+    return undefined;
   });
 
   return [headers, rows];
@@ -240,7 +244,7 @@ export function parsePortalDatabaseList(pageHtml: string): NjDatabaseEntry[] {
             cells.push(collapseWhitespace($(tdEl).text()));
           });
         found.push({
-          key: byTarget.get(targetMatch[1]) ?? '',
+          key: byTarget.get(targetMatch[1] ?? '') ?? '',
           title: cells[0] ?? '',
           count: cells[1] ?? '',
         });
@@ -296,7 +300,7 @@ export function validateCriteria(
       continue;
     }
     const short = spec.fields[option];
-    const options = selectOptions(pageHtml, short);
+    const options = short !== undefined ? selectOptions(pageHtml, short) : [];
     if (options.length > 0) {
       const matched = matchOptionValue(value, options);
       if (matched === null) {
@@ -308,14 +312,14 @@ export function validateCriteria(
       resolved[option] = matched;
     }
   }
-  if (spec.roles && resolved.role !== null && resolved.role !== undefined) {
-    const matchedRole = matchOptionValue(resolved.role, spec.roles);
+  if (spec.roles && resolved['role'] !== null && resolved['role'] !== undefined) {
+    const matchedRole = matchOptionValue(resolved['role'], spec.roles);
     if (matchedRole === null) {
       throw new CliValidationError(
-        `--role '${resolved.role}' is not valid here; valid: ${spec.roles.join(', ')}`
+        `--role '${resolved['role']}' is not valid here; valid: ${spec.roles.join(', ')}`
       );
     }
-    resolved.role = matchedRole;
+    resolved['role'] = matchedRole;
   }
   return resolved;
 }
@@ -323,8 +327,8 @@ export function validateCriteria(
 export function isNjSearchResult(value: unknown): value is NjSearchResult {
   return (
     isPlainRecord(value) &&
-    typeof value.database === 'string' &&
-    Array.isArray(value.headers) &&
-    Array.isArray(value.rows)
+    typeof value['database'] === 'string' &&
+    Array.isArray(value['headers']) &&
+    Array.isArray(value['rows'])
   );
 }
