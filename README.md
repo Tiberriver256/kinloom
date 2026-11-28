@@ -31,6 +31,14 @@ Kinloom is an open-source, self-hosted family history wiki built for relatives a
 
 Explore the live public-domain demo archive at **[tiberriver256.github.io/kinloom](https://tiberriver256.github.io/kinloom/)** (10 generations of the Lincoln, Todd, Hanks, and Harlan families with verified photographs and NARA record scans).
 
+<p align="center">
+  <a href="https://youtu.be/oLt2FCJgbac">
+    <img src="docs/assets/kinloom-launch-video.png" alt="Watch the Kinloom launch film on YouTube (0:49)" width="100%" />
+  </a>
+  <br />
+  <em><a href="https://youtu.be/oLt2FCJgbac">Watch the 49-second Kinloom launch film on YouTube</a></em>
+</p>
+
 <table>
   <tr>
     <td width="50%">
