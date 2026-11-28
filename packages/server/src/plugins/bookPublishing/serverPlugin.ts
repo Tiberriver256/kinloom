@@ -425,7 +425,13 @@ export function createBookPublishingServerPlugin(
   };
 
   const pdfRenderer: PdfRendererPort = options.pdfRenderer ?? createDeterministicPdfRenderer();
-  const artifactSigningSecret = options.artifactSigningSecret ?? randomBase64Url(32);
+  let cachedArtifactSigningSecret: string | null = options.artifactSigningSecret ?? null;
+  function getArtifactSigningSecret(): string {
+    if (cachedArtifactSigningSecret === null) {
+      cachedArtifactSigningSecret = randomBase64Url(32);
+    }
+    return cachedArtifactSigningSecret;
+  }
   const artifactTokenTtlSeconds = options.artifactTokenTtlSeconds ?? DEFAULT_ARTIFACT_TTL_SECONDS;
 
   const settingsSchema = buildBookPublishingSettingsSchema(runtimeConfig);
@@ -533,7 +539,7 @@ export function createBookPublishingServerPlugin(
 
     const payloadJson = JSON.stringify({ aid: artifactId, exp: expiresAtMs } satisfies ArtifactTokenPayload);
     const payloadB64 = base64UrlEncodeString(payloadJson);
-    const sig = await hmacSignBase64Url(artifactSigningSecret, payloadB64);
+    const sig = await hmacSignBase64Url(getArtifactSigningSecret(), payloadB64);
     return {
       token: `${payloadB64}.${sig}`,
       expiresAtIso: new Date(expiresAtMs).toISOString(),
@@ -549,7 +555,7 @@ export function createBookPublishingServerPlugin(
     if (!payloadB64 || !sig) {
       return null;
     }
-    const valid = await hmacVerifyBase64Url(artifactSigningSecret, payloadB64, sig);
+    const valid = await hmacVerifyBase64Url(getArtifactSigningSecret(), payloadB64, sig);
     if (!valid) {
       return null;
     }

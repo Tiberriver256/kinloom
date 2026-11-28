@@ -1,6 +1,9 @@
-import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { execFile } from 'node:child_process';
+import { mkdir, mkdtemp, rm, symlink, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { promisify } from 'node:util';
 import {
   type Place,
   type RawPerson,
@@ -968,4 +971,61 @@ describe('plugin auditChecks/verifyChecks and built-in pronunciation checks (#22
     expect(leakJson.checks.pronunciation.ok).toBe(false);
     expect(leakJson.checks.pronunciation.errors.length).toBeGreaterThan(0);
   });
+
+  it('loads auto-discovered extensions importing plugin factories from @kinloom/cli via the executable CLI binary without circular top-level await', async () => {
+    const execFileAsync = promisify(execFile);
+    const cliPkgDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
+    const cliBinPath = path.join(cliPkgDir, 'dist', 'cli.js');
+
+    const siteDir = await makeTempDir('kinloom-plugin-reimport-');
+    const scopeDir = path.join(siteDir, 'node_modules', '@kinloom');
+    const bookExtDir = path.join(siteDir, 'extensions', 'book-publishing');
+    const probeExtDir = path.join(siteDir, 'extensions', 'synthetic-probe');
+    await Promise.all([
+      mkdir(scopeDir, { recursive: true }),
+      mkdir(bookExtDir, { recursive: true }),
+      mkdir(probeExtDir, { recursive: true }),
+    ]);
+    await symlink(cliPkgDir, path.join(scopeDir, 'cli'), 'dir');
+
+    await writeFile(
+      path.join(bookExtDir, 'cli.mjs'),
+      `import { createBookPublishingCliPlugin } from '@kinloom/cli';
+export default createBookPublishingCliPlugin();
+`,
+      'utf8'
+    );
+    await writeFile(
+      path.join(probeExtDir, 'cli.mjs'),
+      `import { createSyntheticProbePlugin } from '@kinloom/cli';
+export default createSyntheticProbePlugin();
+`,
+      'utf8'
+    );
+
+    const [helpRun, bookHelpRun, probeHelpRun] = await Promise.all([
+      execFileAsync(process.execPath, [cliBinPath, '--help'], {
+        cwd: siteDir,
+        timeout: 20_000,
+      }),
+      execFileAsync(process.execPath, [cliBinPath, 'book', '--help'], {
+        cwd: siteDir,
+        timeout: 20_000,
+      }),
+      execFileAsync(process.execPath, [cliBinPath, 'probe', '--help'], {
+        cwd: siteDir,
+        timeout: 20_000,
+      }),
+    ]);
+    expect(helpRun.stderr).toBe('');
+    expect(helpRun.stdout).toContain('Site plugin commands:');
+    expect(helpRun.stdout).toContain('book');
+    expect(helpRun.stdout).toContain('probe');
+
+    expect(bookHelpRun.stderr).toBe('');
+    expect(bookHelpRun.stdout).toContain('kinloom book');
+
+    expect(probeHelpRun.stderr).toBe('');
+    expect(probeHelpRun.stdout).toContain('kinloom probe');
+  }, 30_000);
 });

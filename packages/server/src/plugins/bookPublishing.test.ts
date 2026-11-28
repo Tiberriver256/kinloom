@@ -12,7 +12,7 @@ import {
   type SourceRecord,
   toEntityPayload,
 } from '@kinloom/core';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { createInMemoryServerPorts } from '../adapters/inMemory.js';
 import type { FixedClock } from '../adapters/systemClock.js';
 import { createKinloomServer } from '../http/router.js';
@@ -1143,5 +1143,116 @@ describe('createBookPublishingServerPlugin off-by-default isolation, RBAC, secre
     const webhookJson = (await goodWebhookRes.json()) as { accepted: boolean; status: string };
     expect(webhookJson.accepted).toBe(true);
     expect(webhookJson.status).toBe('shipped');
+  });
+
+  it('defers fallback artifact signing secret generation until first artifact request so Workers global-scope registration avoids crypto.getRandomValues', async () => {
+    const siteConfig = makeSyntheticSiteConfig();
+    const ports = createInMemoryServerPorts(siteConfig);
+    await seedInMemoryRepo(ports);
+    await ports.repository.upsertUser({
+      email: 'admin@archive.example',
+      display_name: 'Archive Admin',
+      role: 'admin',
+      added_by: 'system',
+      added_at: '2026-11-27T10:00:00.000Z',
+      last_login_at: '2026-11-27T10:00:00.000Z',
+    });
+
+    const originalGetRandomValues = globalThis.crypto.getRandomValues.bind(globalThis.crypto);
+    const blockedSpy = vi.spyOn(globalThis.crypto, 'getRandomValues').mockImplementation(() => {
+      throw new Error('Disallowed operation called within global scope (10021)');
+    });
+
+    let bookPlugin: ReturnType<typeof createBookPublishingServerPlugin>;
+    let verifyFirstPlugin: ReturnType<typeof createBookPublishingServerPlugin>;
+    try {
+      bookPlugin = createBookPublishingServerPlugin();
+      verifyFirstPlugin = createBookPublishingServerPlugin();
+      expect(blockedSpy).not.toHaveBeenCalled();
+    } finally {
+      blockedSpy.mockRestore();
+    }
+
+    const observedLengths: number[] = [];
+    const countingSpy = vi.spyOn(globalThis.crypto, 'getRandomValues').mockImplementation((array) => {
+      observedLengths.push(array.byteLength);
+      return originalGetRandomValues(array);
+    });
+
+    try {
+      const server = createKinloomServer({
+        siteConfig,
+        ports: { ...ports, plugins: [bookPlugin] },
+        sessionSecret: SESSION_SECRET,
+      });
+      expect(observedLengths).toEqual([]);
+
+      const adminCookie = await createSessionCookie({
+        clock: ports.clock,
+        email: 'admin@archive.example',
+        role: 'admin',
+        displayName: 'Archive Admin',
+      });
+      observedLengths.length = 0;
+
+      const compileRes = await server.fetch(
+        new Request(`https://archive.example${BOOK_PUBLISHING_COMPILE_ROUTE}`, {
+          method: 'POST',
+          headers: {
+            cookie: adminCookie,
+            origin: 'https://archive.example',
+            'content-type': 'application/json',
+          },
+          body: JSON.stringify({ title: 'Alder Lazy Secret Check', edition: 'public' }),
+        })
+      );
+      expect(compileRes.status).toBe(200);
+      expect(observedLengths.filter((len) => len === 32)).toHaveLength(1);
+
+      const compileJson = (await compileRes.json()) as {
+        artifacts: { interior_pdf_url: string; cover_pdf_url: string };
+      };
+
+      const callsAfterCompile = observedLengths.length;
+
+      const interiorRes = await server.fetch(
+        new Request(`https://archive.example${compileJson.artifacts.interior_pdf_url}`)
+      );
+      expect(interiorRes.status).toBe(200);
+      expect(interiorRes.headers.get('content-type')).toBe('application/pdf');
+
+      const coverRes = await server.fetch(
+        new Request(`https://archive.example${compileJson.artifacts.cover_pdf_url}`)
+      );
+      expect(coverRes.status).toBe(200);
+      expect(coverRes.headers.get('content-type')).toBe('application/pdf');
+
+      const badRes = await server.fetch(
+        new Request(`https://archive.example${BOOK_PUBLISHING_ARTIFACTS_ROUTE}/forged.sig`)
+      );
+      expect(badRes.status).toBe(401);
+      expect(observedLengths).toHaveLength(callsAfterCompile);
+
+      const verifyFirstServer = createKinloomServer({
+        siteConfig,
+        ports: { ...ports, plugins: [verifyFirstPlugin] },
+        sessionSecret: SESSION_SECRET,
+      });
+      observedLengths.length = 0;
+
+      const firstVerifyRes = await verifyFirstServer.fetch(
+        new Request(`https://archive.example${BOOK_PUBLISHING_ARTIFACTS_ROUTE}/forged.sig`)
+      );
+      expect(firstVerifyRes.status).toBe(401);
+      expect(observedLengths).toEqual([32]);
+
+      const secondVerifyRes = await verifyFirstServer.fetch(
+        new Request(`https://archive.example${BOOK_PUBLISHING_ARTIFACTS_ROUTE}/forged.sig`)
+      );
+      expect(secondVerifyRes.status).toBe(401);
+      expect(observedLengths).toEqual([32]);
+    } finally {
+      countingSpy.mockRestore();
+    }
   });
 });

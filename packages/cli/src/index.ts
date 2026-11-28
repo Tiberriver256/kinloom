@@ -14,7 +14,7 @@ export {
   ROOT_HELP,
   type RunCliOptions,
   runCli,
-} from './cli.js';
+} from './cli/runCli.js';
 export {
   type ExportSnapshotResult,
   type ExportYamlResult,
