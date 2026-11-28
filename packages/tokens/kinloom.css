@@ -46,6 +46,7 @@
   --surface-tint-active: rgba(234, 225, 206, 0.72);
   --surface-canvas-fade: rgba(245, 239, 226, 0);
   --surface-survey-ring-fill: rgba(47, 82, 69, 0.08);
+  --tree-minimap-viewport-fill: rgba(122, 70, 18, 0.12);
   --backdrop-drawer: rgba(35, 39, 46, 0.42);
   --backdrop-modal: rgba(27, 42, 65, 0.52);
   --backdrop-lightbox: rgba(20, 29, 44, 0.78);
@@ -62,6 +63,8 @@
   --font-mono: 'IBM Plex Mono', ui-monospace, 'SFMono-Regular', Menlo, monospace;
 
   --topbar-height: 58px;
+  --auth-banner-height: 0px;
+  --shell-chrome-offset: calc(var(--topbar-height) + var(--auth-banner-height, 0px));
   --radius-sm: 2px;
   --radius-md: 4px;
   --radius-control: 4px;
@@ -129,6 +132,7 @@
     --surface-tint-active: rgba(52, 48, 43, 0.92);
     --surface-canvas-fade: rgba(23, 22, 20, 0);
     --surface-survey-ring-fill: rgba(124, 194, 166, 0.12);
+    --tree-minimap-viewport-fill: rgba(216, 156, 86, 0.14);
     --backdrop-drawer: rgba(8, 8, 7, 0.64);
     --backdrop-modal: rgba(8, 8, 7, 0.72);
     --backdrop-lightbox: rgba(6, 6, 5, 0.88);
@@ -193,6 +197,7 @@
   --surface-tint-active: rgba(52, 48, 43, 0.92);
   --surface-canvas-fade: rgba(23, 22, 20, 0);
   --surface-survey-ring-fill: rgba(124, 194, 166, 0.12);
+  --tree-minimap-viewport-fill: rgba(216, 156, 86, 0.14);
   --backdrop-drawer: rgba(8, 8, 7, 0.64);
   --backdrop-modal: rgba(8, 8, 7, 0.72);
   --backdrop-lightbox: rgba(6, 6, 5, 0.88);

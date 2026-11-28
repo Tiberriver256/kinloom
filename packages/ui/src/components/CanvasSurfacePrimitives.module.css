@@ -5,6 +5,29 @@
   background-color: var(--surface-canvas);
 }
 
+/* Non-clipping accessible heading landmark for full-viewport canvas routes (/map, /tree).
+ * Keeps natural text dimensions and overflow: visible so WCAG 1.4.12 / truncation telemetry
+ * never flags a 1px overflow-hidden box while remaining invisible to sighted users. */
+.canvas-sr-heading {
+  position: absolute;
+  top: 0;
+  left: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  width: auto;
+  height: auto;
+  font-size: 1rem;
+  font-weight: 600;
+  line-height: 1.5;
+  overflow: visible;
+  white-space: nowrap;
+  clip-path: inset(50%);
+  opacity: 0;
+  pointer-events: none;
+  user-select: none;
+}
+
 .tree-controls {
   position: absolute;
   right: 18px;

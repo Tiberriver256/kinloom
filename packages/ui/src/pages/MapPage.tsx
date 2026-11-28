@@ -198,11 +198,16 @@ export const MapPage: React.FC = () => {
     ? `${visibleStops.length} ${visibleStops.length === 1 ? 'stop' : 'stops'}`
     : `${totalMiles.toLocaleString()} mi`;
 
+  const pageHeading = siteConfig.site.familyName
+    ? `${siteConfig.site.familyName} ${KINLOOM_VOCABULARY.map.title}`
+    : KINLOOM_VOCABULARY.map.title;
+
   if (error) {
     return (
       <div className={cx(mapStyles, 'map-shell')}>
         <ExplorerTopBar />
         <main id="main-content" className={cx(layoutStyles, 'index-page')}>
+          <h1 className={cx(canvasSurfaceStyles, 'canvas-sr-heading')}>{pageHeading}</h1>
           <div className={cx(statusShellStyles, 'archive-error-box')} role="alert">
             <h2>Unable to load migration map</h2>
             <p>{error}</p>
@@ -226,6 +231,7 @@ export const MapPage: React.FC = () => {
       <div className={cx(mapStyles, 'map-shell')}>
         <ExplorerTopBar />
         <main id="main-content" className={cx(layoutStyles, 'index-page')}>
+          <h1 className={cx(canvasSurfaceStyles, 'canvas-sr-heading')}>{pageHeading}</h1>
           <output className={cx(statusShellStyles, 'archive-loading-shell')} aria-live="polite">
             <span className={cx(statusShellStyles, 'archive-loading-spinner')} aria-hidden="true" />
             <span>{KINLOOM_VOCABULARY.map.loading}</span>
@@ -242,6 +248,7 @@ export const MapPage: React.FC = () => {
         id="main-content"
         className={joinClasses(cx(canvasSurfaceStyles, 'tree-page'), cx(mapStyles, 'map-page'))}
       >
+        <h1 className={cx(canvasSurfaceStyles, 'canvas-sr-heading')}>{pageHeading}</h1>
         <div
           ref={controller.mapHostRef}
           className={'map-canvas'}

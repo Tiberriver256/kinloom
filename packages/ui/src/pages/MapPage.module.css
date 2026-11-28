@@ -3,7 +3,7 @@
 .map-shell {
   display: flex;
   flex-direction: column;
-  flex: 1 1 auto;
+  flex: 1 1 0%;
   min-height: 0;
   overflow: hidden;
   outline: none;
@@ -15,7 +15,7 @@
 }
 
 .map-shell .map-page {
-  flex: 1 1 auto;
+  flex: 1 1 0%;
   min-height: 0;
   height: auto;
 }

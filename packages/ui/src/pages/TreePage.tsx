@@ -3,7 +3,6 @@ import { buildPersonThumbMap, resolveDefaultBranchId } from '@kinloom/core';
 import type React from 'react';
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import statusShellStyles from '../components/ArchiveStatusShell.module.css';
 import { EmptyStateNotice } from '../components/Atoms.js';
 import canvasSurfaceStyles from '../components/CanvasSurfacePrimitives.module.css';
 import { ExplorerTopBar } from '../components/ExplorerTopBar.js';
@@ -31,7 +30,6 @@ import { cx, joinClasses } from '../lib/cx.js';
 import { KINSHIP_LOOM_ZOOM_THRESHOLD } from '../lib/tree/kinshipLoomModel.js';
 import { KINLOOM_VOCABULARY } from '../lib/vocabulary.js';
 import controlStyles from '../styles/Controls.module.css';
-import layoutStyles from '../styles/Layout.module.css';
 import treePageStyles from './TreePage.module.css';
 import { TreeMinimap } from './tree/TreeMinimap.js';
 import { TreeZoomControls } from './tree/TreeZoomControls.js';
@@ -69,6 +67,7 @@ export const TreePage: React.FC = () => {
   const stageRef = useRef<HTMLDivElement | null>(null);
   const toolbarRef = useRef<HTMLDivElement | null>(null);
   const controlsRef = useRef<HTMLDivElement | null>(null);
+  const minimapRef = useRef<HTMLElement | null>(null);
   const appliedFocusSlugRef = useRef<string | null>(null);
   const pendingFocusPersonIdRef = useRef<string | null>(null);
   const pendingAnimateRef = useRef<boolean>(false);
@@ -162,6 +161,7 @@ export const TreePage: React.FC = () => {
     stageRef,
     toolbarRef,
     controlsRef,
+    minimapRef,
   });
   const interactions = useTreeCanvasInteractions({
     isReady,
@@ -469,13 +469,84 @@ export const TreePage: React.FC = () => {
 
   if (loading || !bundle) {
     return (
-      <div>
+      <div className={cx(treePageStyles, `tree-shell tree-shell-${surface}`)}>
         <ExplorerTopBar />
-        <main id="main-content" className={cx(layoutStyles, 'index-page')}>
-          <output className={cx(statusShellStyles, 'archive-loading-shell')} aria-live="polite">
-            <span className={cx(statusShellStyles, 'archive-loading-spinner')} aria-hidden="true" />
-            <span>{KINLOOM_VOCABULARY.tree.loading}</span>
+        <main
+          id="main-content"
+          className={joinClasses(
+            cx(canvasSurfaceStyles, 'tree-page'),
+            cx(treePageStyles, `tree-page-${surface} tree-loading-main`)
+          )}
+          data-surface={surface}
+          aria-busy="true"
+        >
+          <h1 className={cx(canvasSurfaceStyles, 'canvas-sr-heading')}>
+            {activeBranchLabel} {KINLOOM_VOCABULARY.tree.pageTitleSuffix}
+          </h1>
+          <output className={cx(canvasSurfaceStyles, 'canvas-sr-heading')} aria-live="polite">
+            {KINLOOM_VOCABULARY.tree.loading}
           </output>
+          <div className={cx(treePageStyles, 'tree-loading-skeleton')} aria-hidden="true">
+            <div className={cx(treePageStyles, 'tree-skeleton-toolbar')}>
+              <div className={cx(treePageStyles, 'tree-skeleton-toolbar-group')}>
+                <span className={cx(treePageStyles, 'tree-skeleton-pill')} />
+                <span className={cx(treePageStyles, 'tree-skeleton-pill')} />
+              </div>
+              <span className={cx(treePageStyles, 'tree-skeleton-pill tree-skeleton-pill-wide')} />
+            </div>
+
+            <div className={cx(treePageStyles, 'tree-skeleton-stage')}>
+              <div className={cx(treePageStyles, 'tree-skeleton-tier')}>
+                {[0, 1].map((idx) => (
+                  <div key={`g1-${idx}`} className={cx(treePageStyles, 'tree-skeleton-card')}>
+                    <span className={cx(treePageStyles, 'tree-skeleton-avatar')} />
+                    <span className={cx(treePageStyles, 'tree-skeleton-lines')}>
+                      <span className={cx(treePageStyles, 'tree-skeleton-line')} />
+                      <span className={cx(treePageStyles, 'tree-skeleton-line tree-skeleton-line-short')} />
+                    </span>
+                  </div>
+                ))}
+              </div>
+              <div className={cx(treePageStyles, 'tree-skeleton-connector')} />
+              <div className={cx(treePageStyles, 'tree-skeleton-tier')}>
+                {[0, 1, 2].map((idx) => (
+                  <div key={`g2-${idx}`} className={cx(treePageStyles, 'tree-skeleton-card')}>
+                    <span className={cx(treePageStyles, 'tree-skeleton-avatar')} />
+                    <span className={cx(treePageStyles, 'tree-skeleton-lines')}>
+                      <span className={cx(treePageStyles, 'tree-skeleton-line')} />
+                      <span className={cx(treePageStyles, 'tree-skeleton-line tree-skeleton-line-short')} />
+                    </span>
+                  </div>
+                ))}
+              </div>
+              <div className={cx(treePageStyles, 'tree-skeleton-connector')} />
+              <div className={cx(treePageStyles, 'tree-skeleton-tier')}>
+                {[0, 1].map((idx) => (
+                  <div key={`g3-${idx}`} className={cx(treePageStyles, 'tree-skeleton-card')}>
+                    <span className={cx(treePageStyles, 'tree-skeleton-avatar')} />
+                    <span className={cx(treePageStyles, 'tree-skeleton-lines')}>
+                      <span className={cx(treePageStyles, 'tree-skeleton-line')} />
+                      <span className={cx(treePageStyles, 'tree-skeleton-line tree-skeleton-line-short')} />
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {surface === 'diagram' && (
+              <>
+                <div className={cx(treePageStyles, 'tree-skeleton-minimap')}>
+                  <span className={cx(treePageStyles, 'tree-skeleton-line tree-skeleton-line-short')} />
+                  <span className={cx(treePageStyles, 'tree-skeleton-minimap-body')} />
+                </div>
+                <div className={cx(treePageStyles, 'tree-skeleton-controls')}>
+                  {[0, 1, 2, 3].map((idx) => (
+                    <span key={`ctrl-${idx}`} className={cx(treePageStyles, 'tree-skeleton-control-btn')} />
+                  ))}
+                </div>
+              </>
+            )}
+          </div>
         </main>
       </div>
     );
@@ -515,7 +586,9 @@ export const TreePage: React.FC = () => {
           }
         }}
       >
-        <h1 className={'visually-hidden'}>{activeBranchLabel} Family Tree</h1>
+        <h1 className={cx(canvasSurfaceStyles, 'canvas-sr-heading')}>
+          {activeBranchLabel} {KINLOOM_VOCABULARY.tree.pageTitleSuffix}
+        </h1>
 
         <TreeToolbar
           shellRef={toolbarRef}
@@ -684,6 +757,7 @@ export const TreePage: React.FC = () => {
 
             {diagramLayout.nodes.length > 0 && (
               <TreeMinimap
+                minimapRef={minimapRef}
                 layout={diagramLayout}
                 spotlight={spotlight}
                 selectedPersonId={selectedPerson?.id ?? null}
