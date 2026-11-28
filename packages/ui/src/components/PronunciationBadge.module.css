@@ -567,4 +567,12 @@
   .pronunciation-details-panel:global(.is-open) {
     display: flex;
   }
+
+  .pronunciation-play-btn,
+  .pronunciation-badge:global(.is-compact) .pronunciation-play-btn {
+    width: var(--control-height-touch);
+    height: var(--control-height-touch);
+    min-width: var(--control-height-touch);
+    min-height: var(--control-height-touch);
+  }
 }

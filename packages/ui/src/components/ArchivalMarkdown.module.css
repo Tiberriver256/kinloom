@@ -292,3 +292,12 @@
   background: var(--surface-linen);
   border-color: var(--surface-header);
 }
+
+@media (pointer: coarse), (max-width: 768px) {
+  .archival-footnote-ref {
+    min-width: var(--control-height-touch);
+    min-height: var(--control-height-touch);
+    padding: 10px 8px;
+    margin: -12px 0;
+  }
+}

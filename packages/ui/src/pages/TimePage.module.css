@@ -412,6 +412,13 @@
     font-size: 1.42rem;
   }
 
+  .time-lane-place a {
+    display: inline-flex;
+    align-items: center;
+    min-height: var(--control-height-touch);
+    padding: 6px 0;
+  }
+
   .time-lane-header {
     margin-bottom: 10px;
   }

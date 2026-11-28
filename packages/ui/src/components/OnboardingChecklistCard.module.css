@@ -406,8 +406,9 @@
   }
 
   .onboarding-strip-btn {
-    min-block-size: 42px;
-    padding: 4px 10px;
+    min-block-size: var(--control-height-touch);
+    min-inline-size: var(--control-height-touch);
+    padding: 6px 10px;
   }
 
   .onboarding-ctrl-btn,

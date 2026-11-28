@@ -499,19 +499,14 @@
   color: var(--text-secondary);
 }
 
-/* 1-line deterministic story hook: full text stays in DOM, visual-only ellipsis truncation */
+/* Deterministic story hook: grows cleanly under WCAG 1.4.12 text-spacing overrides */
 .person-card-hook {
   margin: 5px 0 0;
   font-family: var(--font-serif);
   font-style: italic;
   font-size: 0.9rem;
-  line-height: 1.4;
+  line-height: 1.45;
   color: var(--text-primary);
-  display: -webkit-box;
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 1;
-  line-clamp: 1;
-  overflow: hidden;
   overflow-wrap: break-word;
 }
 
@@ -831,6 +826,9 @@
 
   .index-about-toggle {
     display: inline-flex;
+    align-items: center;
+    min-height: var(--control-height-touch);
+    padding: 6px 4px;
     font-size: 0.76rem;
   }
 
@@ -1062,5 +1060,14 @@
   .person-card {
     padding: 16px 2px;
     gap: 14px;
+  }
+}
+
+@media (max-width: 768px) {
+  .index-era-snapshot-link {
+    display: inline-flex;
+    align-items: center;
+    min-height: var(--control-height-touch);
+    padding: 6px 4px;
   }
 }

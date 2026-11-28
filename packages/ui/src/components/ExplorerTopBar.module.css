@@ -404,20 +404,75 @@
   }
 
   .nav-links {
+    --nav-fade-size: 2rem;
     order: 3;
     flex-basis: 100%;
     flex-wrap: nowrap;
     gap: 6px 10px;
     margin-top: 2px;
-    padding: 0;
+    padding: 0 4px 0 0;
     border-top: 1px solid var(--border-decorative);
     overflow-x: auto;
     scrollbar-width: none;
+    scroll-padding-inline: var(--nav-fade-size);
     -webkit-overflow-scrolling: touch;
   }
 
   .nav-links::-webkit-scrollbar {
     display: none;
+  }
+
+  @supports (animation-timeline: scroll()) {
+    .nav-links {
+      mask:
+        linear-gradient(black, black) no-clip subtract,
+        linear-gradient(to right, black, transparent) 0 0 / var(--nav-fade-start) 100% no-repeat no-clip,
+        linear-gradient(to right, transparent, black) 100% 0 / var(--nav-fade-end) 100% no-repeat no-clip;
+    }
+
+    .nav-links:not([data-overflowing="false"]) {
+      animation-name: nav-fade-start, nav-fade-end;
+      animation-duration: auto, auto;
+      animation-timing-function: linear, linear;
+      animation-fill-mode: both, both;
+      animation-timeline: scroll(self inline);
+      animation-range:
+        0 var(--nav-fade-size),
+        calc(100% - var(--nav-fade-size)) 100%;
+    }
+  }
+
+  @supports not (animation-timeline: scroll()) {
+    .nav-links:global(.is-scrollable-end) {
+      mask-image: linear-gradient(to right, black calc(100% - var(--nav-fade-size)), transparent 100%);
+      -webkit-mask-image: linear-gradient(
+        to right,
+        black calc(100% - var(--nav-fade-size)),
+        transparent 100%
+      );
+    }
+
+    .nav-links:global(.is-scrollable-start) {
+      mask-image: linear-gradient(to right, transparent 0, black var(--nav-fade-size));
+      -webkit-mask-image: linear-gradient(to right, transparent 0, black var(--nav-fade-size));
+    }
+
+    .nav-links:global(.is-scrollable-start):global(.is-scrollable-end) {
+      mask-image: linear-gradient(
+        to right,
+        transparent 0,
+        black var(--nav-fade-size),
+        black calc(100% - var(--nav-fade-size)),
+        transparent 100%
+      );
+      -webkit-mask-image: linear-gradient(
+        to right,
+        transparent 0,
+        black var(--nav-fade-size),
+        black calc(100% - var(--nav-fade-size)),
+        transparent 100%
+      );
+    }
   }
 
   .nav-pill {
@@ -628,5 +683,29 @@
     padding-top: calc(6px + env(safe-area-inset-top, 0px));
     padding-left: calc(12px + env(safe-area-inset-left, 0px));
     padding-right: calc(12px + env(safe-area-inset-right, 0px));
+  }
+}
+
+@property --nav-fade-start {
+  syntax: "<length>";
+  inherits: false;
+  initial-value: 0px;
+}
+
+@property --nav-fade-end {
+  syntax: "<length>";
+  inherits: false;
+  initial-value: 0px;
+}
+
+@keyframes nav-fade-start {
+  to {
+    --nav-fade-start: var(--nav-fade-size);
+  }
+}
+
+@keyframes nav-fade-end {
+  from {
+    --nav-fade-end: var(--nav-fade-size);
   }
 }

@@ -3,6 +3,8 @@ import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useArchiveData } from '../context/ArchiveDataContext.js';
 import { useArchiveUi } from '../context/ArchiveUiContext.js';
 import { useOptionalOnboarding } from '../context/OnboardingContext.js';
+import { scrollBehaviorForMotion } from '../hooks/keyboardNav.js';
+import { useHorizontalScrollFade } from '../hooks/useHorizontalScrollFade.js';
 import { useThemePreference } from '../hooks/useThemePreference.js';
 import { cx, joinClasses } from '../lib/cx.js';
 import { isPluginNavRouteActive, selectVisiblePluginNavRoutes } from '../lib/pluginNav.js';
@@ -95,6 +97,7 @@ export const ExplorerTopBar: React.FC = () => {
   const [chapterPickerOpen, setChapterPickerOpen] = useState(false);
   const [signInOpen, setSignInOpen] = useState(false);
   const headerRef = useRef<HTMLElement | null>(null);
+  const navLinksRef = useRef<HTMLElement | null>(null);
   const accountMenuRef = useRef<HTMLDivElement | null>(null);
   const accountTriggerRef = useRef<HTMLButtonElement | null>(null);
   const accountDropdownRef = useRef<HTMLElement | null>(null);
@@ -152,13 +155,24 @@ export const ExplorerTopBar: React.FC = () => {
     (location.pathname === '/kinship' ||
       navPluginRoutes.some((route) => isPluginNavRouteActive(route, location.pathname)));
 
-  // biome-ignore lint/correctness/useExhaustiveDependencies: close menus when route pathname changes
+  const navOverflowKey = `primary:${navPluginRoutes.map((route) => route.path).join('|')}`;
+  useHorizontalScrollFade(navLinksRef, navOverflowKey);
+
+  // biome-ignore lint/correctness/useExhaustiveDependencies: close menus and center active mobile nav item on route change
   useEffect(() => {
     setAccountOpen(false);
     setGuideOpen(false);
     setMoreOpen(false);
     setChapterPickerOpen(false);
-  }, [location.pathname]);
+    const activeLink = navLinksRef.current?.querySelector<HTMLElement>('[aria-current="page"]');
+    if (activeLink && typeof activeLink.scrollIntoView === 'function') {
+      activeLink.scrollIntoView({
+        behavior: scrollBehaviorForMotion(),
+        block: 'nearest',
+        inline: 'center',
+      });
+    }
+  }, [location.pathname, navOverflowKey]);
 
   useEffect(() => {
     if (!moreOpen) {
@@ -324,7 +338,7 @@ export const ExplorerTopBar: React.FC = () => {
             {siteConfig.site.title}
           </Link>
 
-          <nav className={cx(topBarStyles, 'nav-links')} aria-label="Primary">
+          <nav ref={navLinksRef} className={cx(topBarStyles, 'nav-links')} aria-label="Primary">
             <Link
               to="/"
               className={cx(topBarStyles, `nav-pill ${isPeopleActive ? 'active' : ''}`)}
