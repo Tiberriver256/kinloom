@@ -475,13 +475,13 @@ describe('MapLibre and token dark-mode parity', () => {
     expect(painted).toContainEqual(['paper', 'background-color', '#2A2723']);
     expect(painted).toContainEqual([PAPER_LAND_LAYER_ID, 'fill-color', '#2A2723']);
     expect(painted).toContainEqual(['water_areas_ne', 'fill-color', '#17222D']);
-    expect(painted).toContainEqual(['migration-route', 'line-color', '#D89C56']);
+    expect(painted).toContainEqual(['migration-route', 'line-color', '#F6D191']);
     expect(painted).toContainEqual(['migration-route-latest', 'line-color', '#F39287']);
-    expect(painted).toContainEqual(['migration-labels', 'text-color', '#EDE6D9']);
+    expect(painted).toContainEqual(['migration-labels', 'text-color', '#E4DDD0']);
     expect(painted).toContainEqual(['migration-labels', 'text-halo-color', '#171614']);
 
     applyMapThemeToLayers(fakeMap, false);
-    expect(painted).toContainEqual(['migration-route', 'line-color', '#7A4612']);
+    expect(painted).toContainEqual(['migration-route', 'line-color', '#562E07']);
     expect(painted).toContainEqual(['migration-labels', 'text-halo-width', 1.4]);
 
     // Defensive no-op when map stub lacks setPaintProperty or style layers
@@ -640,9 +640,11 @@ describe('MapLibre and token dark-mode parity', () => {
     const stdout = execFileSync(process.execPath, [scriptPath], { encoding: 'utf8' });
     const lightPasses = stdout.match(/^PASS \[light\]/gm) ?? [];
     const darkPasses = stdout.match(/^PASS \[dark\]/gm) ?? [];
-    expect(lightPasses).toHaveLength(28);
-    expect(darkPasses).toHaveLength(28);
-    expect(stdout).toContain('All 56 Kinloom contrast checks (28 light + 28 dark)');
+    const apcaPasses = stdout.match(/^PASS \[apca-(?:light|dark)\]/gm) ?? [];
+    expect(lightPasses).toHaveLength(34);
+    expect(darkPasses).toHaveLength(34);
+    expect(apcaPasses).toHaveLength(19);
+    expect(stdout).toContain('All 68 Kinloom WCAG contrast checks (34 light + 34 dark), 19 APCA checks');
     expect(stdout).not.toContain('FAIL');
   });
 });

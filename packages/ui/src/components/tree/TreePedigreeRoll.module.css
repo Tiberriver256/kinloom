@@ -256,10 +256,10 @@
 }
 
 .tree-roll-card:global(.is-selected) {
-  background: var(--surface-header);
-  border-color: var(--accent-primary);
+  background: var(--surface-action-primary);
+  border-color: var(--border-action-primary);
   border-style: solid;
-  color: var(--text-inverse);
+  color: var(--text-on-action-primary);
   box-shadow: var(--shadow-active);
 }
 
@@ -331,7 +331,7 @@
 
 .tree-roll-card:global(.is-selected) .tree-roll-card-dates,
 .tree-roll-card:global(.is-selected) .tree-roll-card-spouse {
-  color: var(--surface-linen);
+  color: var(--text-on-action-primary-muted);
 }
 
 .tree-roll-attachments {
@@ -412,9 +412,9 @@
 }
 
 .tree-early-chip:global(.is-selected) {
-  background: var(--surface-header);
-  color: var(--text-inverse);
-  border-color: var(--accent-primary);
+  background: var(--surface-action-primary);
+  color: var(--text-on-action-primary);
+  border-color: var(--border-action-primary);
 }
 
 .tree-early-chip-name {
@@ -430,7 +430,7 @@
 }
 
 .tree-early-chip:global(.is-selected) .tree-early-chip-years {
-  color: var(--surface-linen);
+  color: var(--text-on-action-primary-muted);
 }
 
 .tree-roll-siblings-block {

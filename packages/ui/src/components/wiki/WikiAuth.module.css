@@ -233,7 +233,7 @@
 
 .wiki-auth-banner-sep {
   flex-shrink: 0;
-  color: var(--border-control);
+  color: var(--surface-header);
 }
 
 .wiki-auth-banner-link {

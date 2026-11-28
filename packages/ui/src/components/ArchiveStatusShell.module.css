@@ -147,15 +147,15 @@
 }
 
 .archive-recovery-btn:global(.primary) {
-  background: var(--surface-header);
-  border-color: var(--surface-header);
-  color: var(--text-inverse);
+  background: var(--surface-action-primary);
+  border-color: var(--border-action-primary);
+  color: var(--text-on-action-primary);
 }
 
 .archive-recovery-btn:global(.primary):hover {
-  background: var(--radar-copresence);
-  border-color: var(--radar-copresence);
-  color: var(--text-inverse);
+  background: var(--surface-action-primary-hover);
+  border-color: var(--accent-primary);
+  color: var(--text-on-action-primary);
 }
 
 .archive-recovery-details {

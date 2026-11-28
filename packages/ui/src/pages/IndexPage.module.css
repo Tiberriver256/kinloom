@@ -92,10 +92,10 @@
   flex-shrink: 0;
   min-height: var(--control-height-md);
   padding: 6px 14px;
-  border: var(--border-width-thin) solid var(--accent-primary);
+  border: var(--border-width-thin) solid var(--border-action-primary);
   border-radius: var(--radius-control);
-  background: var(--accent-primary);
-  color: var(--text-inverse);
+  background: var(--surface-action-primary);
+  color: var(--text-on-action-primary);
   font-family: var(--font-ui);
   font-size: 0.82rem;
   font-weight: 600;
@@ -109,9 +109,9 @@
 }
 
 .index-add-person-btn:hover {
-  background: var(--surface-header);
-  border-color: var(--surface-header);
-  color: var(--text-inverse);
+  background: var(--surface-action-primary-hover);
+  border-color: var(--accent-primary);
+  color: var(--text-on-action-primary);
 }
 
 .index-frontispiece-links {
@@ -291,10 +291,10 @@
 }
 
 .index-filter-bar .index-media-filter-btn:global(.active) {
-  background: var(--surface-header);
-  border-color: var(--surface-header);
-  border-bottom: 1px solid var(--surface-header);
-  color: var(--text-inverse);
+  background: var(--surface-action-primary);
+  border-color: var(--border-action-primary);
+  border-bottom: var(--border-width-thin) solid var(--border-action-primary);
+  color: var(--text-on-action-primary);
   font-weight: 600;
 }
 
