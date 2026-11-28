@@ -203,7 +203,7 @@ Options:
   {
     name: 'dates',
     category: 'ops',
-    summary: 'Compute exact Gregorian weekdays, date diffs, and ages',
+    summary: 'Compute Gregorian weekdays, diffs, ages, and Julian/Swedish calendar conversions',
     help: DATES_HELP,
   },
   {

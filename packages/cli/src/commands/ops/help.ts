@@ -211,7 +211,7 @@ Options:
 
 export const DATES_HELP = `Usage: kinloom dates <subcommand> [arguments] [options]
 
-Deterministic UTC Gregorian calendar arithmetic (leap-year safe across 1600-2100+).
+Deterministic UTC Gregorian, historical Julian (OS), and Swedish (1700-1753) calendar arithmetic.
 
 Subcommands:
   weekday <YYYY-MM-DD> [--json]
@@ -224,10 +224,17 @@ Subcommands:
       Compute completed age in years, remaining days, and total days at one or more dates
       (also accepts positional event date(s) when --at is omitted)
 
+  convert <YYYY-MM-DD> --from julian|swedish|gregorian --to gregorian|julian|swedish [--region gb|se-fi|nl] [--json]
+      Convert historical dates across Julian (OS), Swedish (1700-1753, including 1712-02-30), and
+      Gregorian (NS) calendars using exact Julian Day Number (JDN) arithmetic
+
 Options:
-  --at <YYYY-MM-DD>  Target event date for \`age\` (repeatable)
-  --json             Emit structured JSON output
-  -h, --help         Show this help message`;
+  --at <YYYY-MM-DD>                  Target event date for \`age\` (repeatable)
+  --from <julian|swedish|gregorian>  Source calendar system for \`convert\`
+  --to <gregorian|julian|swedish>    Target calendar system for \`convert\`
+  --region <gb|se-fi|nl>             Optional regional transition context for \`convert\`
+  --json                             Emit structured JSON output
+  -h, --help                         Show this help message`;
 
 export const PRONOUNCE_HELP = `Usage: kinloom pronounce <subcommand> [arguments] [options]
 
