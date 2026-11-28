@@ -46,6 +46,7 @@ export function inspectImageBuffer(buf: Buffer): InspectedImageHeader {
         break;
       }
       const marker = buf[offset];
+      if (marker === undefined) continue;
       offset += 1;
       if (marker === 0xd9 || marker === 0xda) {
         break;
@@ -78,8 +79,8 @@ export function inspectImageBuffer(buf: Buffer): InspectedImageHeader {
   if (buf.subarray(0, 4).toString('ascii') === 'RIFF' && buf.subarray(8, 12).toString('ascii') === 'WEBP') {
     const chunk = buf.subarray(12, 16).toString('ascii');
     if (chunk === 'VP8X' && buf.length >= 30) {
-      const width = 1 + (buf[24] | (buf[25] << 8) | (buf[26] << 16));
-      const height = 1 + (buf[27] | (buf[28] << 8) | (buf[29] << 16));
+      const width = 1 + ((buf[24] ?? 0) | ((buf[25] ?? 0) << 8) | ((buf[26] ?? 0) << 16));
+      const height = 1 + ((buf[27] ?? 0) | ((buf[28] ?? 0) << 8) | ((buf[29] ?? 0) << 16));
       return { valid: true, format: 'webp', width, height, error: null };
     }
     if (chunk === 'VP8 ' && buf.length >= 30) {

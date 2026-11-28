@@ -20,9 +20,9 @@ import { CliValidationError } from '../errors.js';
 export interface SubmitBatchCommandOptions {
   filePath: string;
   siteUrl: string;
-  token?: string;
+  token?: string | undefined;
   dryRun?: boolean;
-  fetchImpl?: typeof fetch;
+  fetchImpl?: typeof fetch | undefined;
 }
 
 export interface SubmitBatchCommandResult {
@@ -73,6 +73,7 @@ export function validateBatchSubmission(raw: unknown): BatchSubmission {
 
   for (let index = 0; index < batch.patches.length; index += 1) {
     const patch = batch.patches[index];
+    if (patch === undefined) continue;
     const patchPrefix = `patches[${index}] (${patch.action} ${patch.entity_type}/${patch.entity_id})`;
 
     switch (patch.action) {

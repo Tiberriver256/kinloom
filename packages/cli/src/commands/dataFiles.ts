@@ -59,7 +59,7 @@ export interface LocalArchiveData {
 }
 
 export interface LoadLocalArchiveRepoOptions {
-  dataDirOverride?: string;
+  dataDirOverride?: string | undefined;
   requireConfig?: boolean;
   requirePeopleFile?: boolean;
   includeEnrichments?: boolean;
@@ -196,10 +196,10 @@ export function loadLocalArchiveRepoSync(
   const dataEntries = fs.readdirSync(dataDir, { withFileTypes: true });
   const dataEntryNames = new Set<string>();
   const regularFileNames = new Set<string>();
-  for (let i = 0; i < dataEntries.length; i += 1) {
-    dataEntryNames.add(dataEntries[i].name);
-    if (!dataEntries[i].isDirectory()) {
-      regularFileNames.add(dataEntries[i].name);
+  for (const entry of dataEntries) {
+    dataEntryNames.add(entry.name);
+    if (!entry.isDirectory()) {
+      regularFileNames.add(entry.name);
     }
   }
   if (options.requirePeopleFile && !regularFileNames.has('people.yaml')) {
@@ -228,6 +228,7 @@ export function loadLocalArchiveRepoSync(
     const yamlNames: string[] = [];
     for (let i = 0; i < dataEntries.length; i += 1) {
       const entry = dataEntries[i];
+      if (entry === undefined) continue;
       if (entry.isFile() && (entry.name.endsWith('.yaml') || entry.name.endsWith('.yml'))) {
         yamlNames.push(entry.name);
       }
@@ -336,7 +337,7 @@ export function snapshotToCompileInput(params: {
   siteConfig: KinloomSiteConfig;
   mode: BuildMode;
   generatedAt?: string;
-  version?: string;
+  version?: string | undefined;
   includeEmptyNarratives?: boolean;
 }): CompileArchiveInput {
   const data = snapshotToArchiveData(params.snapshot);

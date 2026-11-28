@@ -26,7 +26,7 @@ export interface TelemetryEventInput {
   subcmd: string;
   person_id?: string | null;
   duration_ms?: number;
-  cache_hit?: boolean | null;
+  cache_hit?: boolean | null | undefined;
   exit_code?: number;
   bytes_out?: number;
 }
@@ -37,13 +37,13 @@ export interface RecordTelemetryOptions {
 }
 
 export interface MeasureCommandMeta<TResult> {
-  cmd?: string;
+  cmd?: string | undefined;
   subcmd: string;
-  personId?: string | null;
-  filePath?: string;
-  force?: boolean;
+  personId?: string | null | undefined;
+  filePath?: string | undefined;
+  force?: boolean | undefined;
   extractResultMeta?: (result: TResult) => {
-    personId?: string | null;
+    personId?: string | null | undefined;
     cacheHit?: boolean | undefined | null;
     exitCode?: number;
     bytesOut?: number;
@@ -61,10 +61,10 @@ export interface TelemetrySummaryRow {
 }
 
 export interface TelemetryReportOptions {
-  filePath?: string;
-  sinceHours?: number;
+  filePath?: string | undefined;
+  sinceHours?: number | undefined;
   json?: boolean;
-  nowMs?: number;
+  nowMs?: number | undefined;
 }
 
 export interface TelemetryReportResult {
@@ -184,9 +184,12 @@ function parseTelemetryLine(line: string): TelemetryEvent | null {
         ? Math.max(0, obj['duration_ms'])
         : 0;
     const cacheHit = typeof obj['cache_hit'] === 'boolean' ? obj['cache_hit'] : null;
-    const exitCode = typeof obj['exit_code'] === 'number' && Number.isInteger(obj['exit_code']) ? obj['exit_code'] : 0;
+    const exitCode =
+      typeof obj['exit_code'] === 'number' && Number.isInteger(obj['exit_code']) ? obj['exit_code'] : 0;
     const bytesOut =
-      typeof obj['bytes_out'] === 'number' && Number.isFinite(obj['bytes_out']) ? Math.max(0, obj['bytes_out']) : 0;
+      typeof obj['bytes_out'] === 'number' && Number.isFinite(obj['bytes_out'])
+        ? Math.max(0, obj['bytes_out'])
+        : 0;
     return {
       ts,
       cmd,
@@ -210,7 +213,7 @@ export function computePercentile(sortedAscending: readonly number[], percentile
     sortedAscending.length - 1,
     Math.max(0, Math.ceil((percentile / 100) * sortedAscending.length) - 1)
   );
-  return Math.round(sortedAscending[idx]);
+  return Math.round(sortedAscending[idx] ?? 0);
 }
 
 function roundOneDecimal(value: number): number {
@@ -279,11 +282,13 @@ export function formatTelemetryTable(
   ]);
 
   const widths = headers.map((header, idx) =>
-    Math.max(header.length, ...formattedRows.map((cells) => cells[idx].length))
+    Math.max(header.length, ...formattedRows.map((cells) => (cells[idx] ?? '').length))
   );
 
   const formatRow = (cells: readonly string[]): string =>
-    cells.map((cell, idx) => (idx === 0 ? cell.padEnd(widths[idx]) : cell.padStart(widths[idx]))).join('  ');
+    cells
+      .map((cell, idx) => (idx === 0 ? cell.padEnd(widths[idx] ?? 0) : cell.padStart(widths[idx] ?? 0)))
+      .join('  ');
 
   const lines: string[] = [
     headerNote,

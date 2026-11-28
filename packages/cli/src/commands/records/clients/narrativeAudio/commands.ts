@@ -60,7 +60,7 @@ export function runList(argv: readonly string[], ctx: RecordCommandContext): Rec
     return { exitCode: 0, bytesOut: emitStdout(ctx.io, renderListHelp()) };
   }
 
-  const yamlPath = requireExistingFile(parsed.positionals[0], 'narratives YAML', ctx);
+  const yamlPath = requireExistingFile(parsed.positionals[0] ?? '', 'narratives YAML', ctx);
   const kind = getStringOption(parsed, 'kind') ?? 'biography';
   const rows = loadNarratives(yamlPath)
     .filter((n) => !kind || n.kind === kind)
@@ -84,7 +84,7 @@ export function runExtract(argv: readonly string[], ctx: RecordCommandContext): 
     return { exitCode: 0, bytesOut: emitStdout(ctx.io, renderExtractHelp()) };
   }
 
-  const yamlPath = requireExistingFile(parsed.positionals[0], 'narratives YAML', ctx);
+  const yamlPath = requireExistingFile(parsed.positionals[0] ?? '', 'narratives YAML', ctx);
   const narrativeId = parsed.positionals[1];
   const found = loadNarratives(yamlPath).find((n) => n.id === narrativeId);
   if (!found) {
@@ -100,7 +100,7 @@ export function runCheck(argv: readonly string[], ctx: RecordCommandContext): Re
     return { exitCode: 0, bytesOut: emitStdout(ctx.io, renderCheckHelp()) };
   }
 
-  const scriptArg = parsed.positionals[0];
+  const scriptArg = parsed.positionals[0] ?? '';
   const scriptPath = requireExistingFile(scriptArg, 'script file', ctx);
   const namesArg = getStringOption(parsed, 'names');
   const namesMap = namesArg ? readNamesJson(requireExistingFile(namesArg, 'names file', ctx)) : undefined;
@@ -128,7 +128,7 @@ export async function runSynth(
     return { exitCode: 0, bytesOut: emitStdout(ctx.io, renderSynthHelp()) };
   }
 
-  const scriptPath = requireExistingFile(parsed.positionals[0], 'script file', ctx);
+  const scriptPath = requireExistingFile(parsed.positionals[0] ?? '', 'script file', ctx);
   const namesArg = getStringOption(parsed, 'names');
   const namesMap = namesArg ? readNamesJson(requireExistingFile(namesArg, 'names file', ctx)) : {};
 
@@ -282,7 +282,7 @@ export async function runTranscribe(
     return { exitCode: 0, bytesOut: emitStdout(ctx.io, renderTranscribeHelp()) };
   }
 
-  const audioPath = requireExistingFile(parsed.positionals[0], 'audio file', ctx);
+  const audioPath = requireExistingFile(parsed.positionals[0] ?? '', 'audio file', ctx);
   const model = getStringOption(parsed, 'model') ?? DEFAULT_TEXT_MODEL;
   const keyFile = getStringOption(parsed, 'keyFile');
   const outArg = getStringOption(parsed, 'out');

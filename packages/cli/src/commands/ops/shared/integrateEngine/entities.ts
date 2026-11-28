@@ -103,6 +103,7 @@ export function mergePlacesPatch(
   );
   for (let i = 0; i < placesMerge.items.length; i += 1) {
     const pl = placesMerge.items[i];
+    if (pl === undefined) continue;
     assertMergedPlaceCoordinates(pl, `merged place '${pl.id}'`);
   }
   return { items: placesMerge.items, counts: placesMerge.counts };

@@ -280,7 +280,7 @@ export async function runEvent(
       ),
     };
   }
-  const [parishCode, bookCode, rowId] = parseEventRef(parsed.positionals[0]);
+  const [parishCode, bookCode, rowId] = parseEventRef(parsed.positionals[0] ?? '');
   const refresh = getBooleanOption(parsed, 'refresh');
   const ttlHours = resolveTtlHours(getNumberOption(parsed, 'cacheTtlHours'), ctx);
 
@@ -412,7 +412,7 @@ export async function runArchiveInspect(
   if (limit < 1 || limit > 500) {
     throw new CliValidationError('--limit must be between 1 and 500.');
   }
-  const archiveId = parseArchiveId(parsed.positionals[0]);
+  const archiveId = parseArchiveId(parsed.positionals[0] ?? '');
   const refresh = getBooleanOption(parsed, 'refresh');
   const ttlHours = resolveTtlHours(getNumberOption(parsed, 'cacheTtlHours'), ctx);
   const digitizedOnly = getBooleanOption(parsed, 'digitized');

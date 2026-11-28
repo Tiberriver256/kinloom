@@ -58,6 +58,7 @@ export function runPrivacyAndStyleScan(
   const livingIds = new Set<string>();
   for (let i = 0; i < livingPeople.length; i += 1) {
     const person = livingPeople[i];
+    if (person === undefined) continue;
     if (typeof person['id'] === 'string' && person['id']) {
       livingIds.add(person['id']);
     }
@@ -68,6 +69,7 @@ export function runPrivacyAndStyleScan(
   if (livingPeople.length > 0) {
     for (let i = 0; i < allPeople.length; i += 1) {
       const person = allPeople[i];
+      if (person === undefined) continue;
       if (typeof person['id'] === 'string' && person['id']) {
         deathYearByPersonId.set(person['id'], extractLatestEdtfYear(person['death_edtf']));
       }
@@ -79,7 +81,8 @@ export function runPrivacyAndStyleScan(
   const targetPerson =
     dateContext?.targetPerson ??
     (patchPersonId ? (allPeople.find((person) => person['id'] === patchPersonId) ?? null) : null);
-  const targetId = typeof targetPerson?.['id'] === 'string' && targetPerson['id'] ? targetPerson['id'] : patchPersonId;
+  const targetId =
+    typeof targetPerson?.['id'] === 'string' && targetPerson['id'] ? targetPerson['id'] : patchPersonId;
   const targetDeathYear = extractLatestEdtfYear(
     updates['death_edtf'] ?? updates['death_date'] ?? targetPerson?.['death_edtf']
   );
@@ -130,6 +133,7 @@ export function runPrivacyAndStyleScan(
         liveEventsById = new Map<string, LooseRecord>();
         for (let i = 0; i < liveEvents.length; i += 1) {
           const ev = liveEvents[i];
+          if (ev === undefined) continue;
           if (typeof ev['id'] === 'string' && ev['id']) {
             liveEventsById.set(ev['id'], ev);
           }
@@ -198,6 +202,7 @@ export function runPrivacyAndStyleScan(
 
     for (let i = 0; i < liveEvents.length; i += 1) {
       const ev = liveEvents[i];
+      if (ev === undefined) continue;
       const evId = typeof ev['id'] === 'string' ? ev['id'] : '';
       if (evId && (removedEventIds.has(evId) || patchEventsById.has(evId))) {
         continue;
@@ -298,7 +303,8 @@ export function runPrivacyAndStyleScan(
     if (key === 'sources' && Array.isArray(value)) {
       for (let i = 0; i < value.length; i += 1) {
         const rawSource = value[i];
-        const sourceId = isPlainRecord(rawSource) && typeof rawSource['id'] === 'string' ? rawSource['id'] : '';
+        const sourceId =
+          isPlainRecord(rawSource) && typeof rawSource['id'] === 'string' ? rawSource['id'] : '';
         const sourceMaxYear = sourceId ? (sourceMaxYearById.get(sourceId) ?? null) : null;
         collectStringsWithPath(rawSource, `patch.sources[${i}]`, sourceMaxYear, patchStrings);
       }
@@ -311,13 +317,14 @@ export function runPrivacyAndStyleScan(
         if (isPlainRecord(rawNarrative) && livingPeople.length > 0) {
           const narEventIds = stringListField(rawNarrative['event_ids']);
           const scopedEventMaxYearById = new Map<string, number | null>();
-          for (let e = 0; e < narEventIds.length; e += 1) {
-            const evId = narEventIds[e];
+          for (const evId of narEventIds) {
             scopedEventMaxYearById.set(evId, getEventMaxYear(evId));
           }
           narrativeMaxYear = resolveNarrativeMaxYear({
             subjectPersonId:
-              typeof rawNarrative['subject_person_id'] === 'string' ? rawNarrative['subject_person_id'] : null,
+              typeof rawNarrative['subject_person_id'] === 'string'
+                ? rawNarrative['subject_person_id']
+                : null,
             personIds: stringListField(rawNarrative['person_ids']),
             eventIds: narEventIds,
             livingIds,

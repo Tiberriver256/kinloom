@@ -193,9 +193,7 @@ export async function runSyncCommand(options: SyncCommandOptions = {}): Promise<
       }
       if (verifyLive) {
         const expectedRevision =
-          batchesSubmitted.length > 0
-            ? batchesSubmitted[batchesSubmitted.length - 1].head_revision_id
-            : remoteSnap.headRevisionId;
+          batchesSubmitted[batchesSubmitted.length - 1]?.head_revision_id ?? remoteSnap.headRevisionId;
         liveVerification = await verifyLiveEndpoints({
           ctx,
           writeToken: minted.write_batch.rawToken,

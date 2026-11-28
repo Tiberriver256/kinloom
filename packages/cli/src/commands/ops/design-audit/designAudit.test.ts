@@ -258,12 +258,12 @@ describe('design-audit deterministic probes, capture matrix & SARIF 2.1.0', () =
 
     // Add a VLM finding on the same target to verify deterministic supersession & SARIF baseline ratchet
     const vlmDuplicate: DesignAuditFinding = {
-      ...findings[0],
+      ...findings[0]!,
       provenance: 'vlm-reference-anchored',
       message: 'VLM duplicate should be superseded',
     };
     const vlmUnique: DesignAuditFinding = {
-      ...findings[0],
+      ...findings[0]!,
       ruleId: 'DA-04-VLM-SQUINT',
       metricId: '04',
       pillar: 'II',
@@ -271,8 +271,8 @@ describe('design-audit deterministic probes, capture matrix & SARIF 2.1.0', () =
       severity: 'warning',
       message: 'Squint hierarchy note',
     };
-    expect(dedupeFindings([vlmDuplicate, findings[0]]).length).toBe(1);
-    expect(dedupeFindings([vlmDuplicate, findings[0]])[0].provenance).toBe('deterministic');
+    expect(dedupeFindings([vlmDuplicate, findings[0]!]).length).toBe(1);
+    expect(dedupeFindings([vlmDuplicate, findings[0]!])[0]!.provenance).toBe('deterministic');
 
     fs.writeFileSync(path.join(tmp, 'track-b-findings.json'), JSON.stringify([vlmUnique]), 'utf8');
     const firstSarif = emitSarifAndDossier({ bundleDir: tmp });

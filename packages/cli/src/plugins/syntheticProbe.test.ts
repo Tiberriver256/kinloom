@@ -483,7 +483,7 @@ describe('synthetic probe deterministic latency budgets and opt-in verify integr
       createSyntheticProbePlugin({ attachVerifyCheck: true, targetUrl: baseUrl }),
     ]);
     expect(resolved.verifyChecks).toHaveLength(1);
-    const reg = resolved.verifyChecks[0];
+    const reg = resolved.verifyChecks[0]!;
     expect(reg?.check.id).toBe(SYNTHETIC_PROBE_VERIFY_CHECK_ID);
 
     const passCheck = await runRegisteredCheck(reg.pluginId, reg.check, createVerifyCtx());
@@ -492,7 +492,7 @@ describe('synthetic probe deterministic latency budgets and opt-in verify integr
     expect(passCheck.details?.['mediaRangeStatus']).toBe('pass');
 
     const missingReg = resolvePluginCommands([createSyntheticProbePlugin({ attachVerifyCheck: true })])
-      .verifyChecks[0];
+      .verifyChecks[0]!;
     const missingResult = await runRegisteredCheck(missingReg.pluginId, missingReg.check, createVerifyCtx());
     expect(missingResult.ok).toBe(false);
     expect(missingResult.errors[0]).toContain("requires a configured 'targetUrl'");

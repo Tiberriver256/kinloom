@@ -181,7 +181,7 @@ export async function runGet(
     };
   }
 
-  const identifier = validateIdentifier(parsed.positionals[0]);
+  const identifier = validateIdentifier(parsed.positionals[0] ?? '');
   const timeout = validatePositiveTimeout(getNumberOption(parsed, 'timeout') ?? DEFAULT_TIMEOUT_SECONDS);
   const refresh = getBooleanOption(parsed, 'refresh');
   const asJson = getBooleanOption(parsed, 'asJson');
@@ -258,7 +258,7 @@ export async function runDownload(
     };
   }
 
-  const identifier = validateIdentifier(parsed.positionals[0]);
+  const identifier = validateIdentifier(parsed.positionals[0] ?? '');
   const requestedFiles = parsed.positionals.slice(1);
   const outArg = getStringOption(parsed, 'out') ?? '.';
   const listOnly = getBooleanOption(parsed, 'listOnly');
@@ -441,7 +441,7 @@ export async function runLookup(
     };
   }
 
-  const identifier = validateIdentifier(parsed.positionals[0]);
+  const identifier = validateIdentifier(parsed.positionals[0] ?? '');
   const printedPage = getStringOption(parsed, 'printedPage');
   const leafFlagRaw = getStringOption(parsed, 'leaf');
   const leafArg = leafFlagRaw !== undefined ? parseLeafInt(leafFlagRaw) : undefined;

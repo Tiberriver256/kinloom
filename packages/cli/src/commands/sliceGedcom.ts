@@ -8,13 +8,13 @@ export interface SliceGedcomCommandOptions {
   inputPath: string;
   outDir: string;
   root: string;
-  surnames?: readonly string[];
+  surnames?: readonly string[] | undefined;
   includeUpstreamSpouses?: boolean;
   includeAncestorSiblings?: boolean;
   includeDescendantSpouses?: boolean;
   normalizeMaidenNames?: boolean;
-  branchId?: string;
-  referenceYear?: number;
+  branchId?: string | undefined;
+  referenceYear?: number | undefined;
 }
 
 export interface SliceGedcomCommandResult {

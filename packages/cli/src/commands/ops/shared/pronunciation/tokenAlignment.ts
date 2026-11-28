@@ -95,10 +95,10 @@ export function normalizeIpaComparable(value?: string | null): string {
 function trimCharsOrSpace(value: string, chars: string): string {
   let start = 0;
   let end = value.length;
-  while (start < end && (chars.includes(value[start]) || /\s/.test(value[start]))) {
+  while (start < end && (chars.includes(value.charAt(start)) || /\s/.test(value.charAt(start)))) {
     start += 1;
   }
-  while (end > start && (chars.includes(value[end - 1]) || /\s/.test(value[end - 1]))) {
+  while (end > start && (chars.includes(value.charAt(end - 1)) || /\s/.test(value.charAt(end - 1)))) {
     end -= 1;
   }
   return value.slice(start, end);
@@ -234,7 +234,7 @@ function stripDelimitedKnownPieceFromStart(
     }
 
     if (allowHyphen && expectedWords.length === 1) {
-      const firstWord = remainingWords[0];
+      const firstWord = remainingWords[0] ?? '';
       const hyphenIdx = firstWord.indexOf('-');
       if (hyphenIdx > 0) {
         const leftPart = firstWord.slice(0, hyphenIdx);
@@ -296,7 +296,7 @@ function stripDelimitedKnownPieceFromEnd(
     }
 
     if (allowHyphen && expectedWords.length === 1) {
-      const lastWord = remainingWords[remainingWords.length - 1];
+      const lastWord = remainingWords[remainingWords.length - 1] ?? '';
       const hyphenIdx = lastWord.lastIndexOf('-');
       if (hyphenIdx > 0 && hyphenIdx < lastWord.length - 1) {
         const rightPart = lastWord.slice(hyphenIdx + 1);
@@ -378,6 +378,7 @@ export function extractAlignedTokenSegment(args: {
 
   for (let i = 0; i < beforeTokens.length; i += 1) {
     const tok = beforeTokens[i];
+    if (tok === undefined) continue;
     const nextTok = i + 1 < beforeTokens.length ? beforeTokens[i + 1] : missingToken;
     if (tok.kind === 'token') {
       const piece =
@@ -391,7 +392,7 @@ export function extractAlignedTokenSegment(args: {
         remaining,
         piece,
         mode,
-        Boolean(nextTok.joinWithHyphen),
+        Boolean(nextTok?.joinWithHyphen),
         false,
         false
       );
@@ -410,6 +411,7 @@ export function extractAlignedTokenSegment(args: {
 
   for (let i = afterTokens.length - 1; i >= 0; i -= 1) {
     const tok = afterTokens[i];
+    if (tok === undefined) continue;
     if (tok.kind === 'token') {
       const piece =
         mode === 'phonetic'
@@ -462,6 +464,7 @@ export function matchesComposedTokenSequence(args: {
 
   for (let i = 0; i < tokens.length; i += 1) {
     const tok = tokens[i];
+    if (tok === undefined) continue;
     const hasFollowingRequiredToken = tokens.slice(i + 1).some((t) => t.kind === 'token');
     const nextTok = tokens[i + 1];
 

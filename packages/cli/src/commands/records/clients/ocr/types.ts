@@ -129,10 +129,10 @@ export interface ParsedTsvLayout {
 export interface OcrLayoutRecord extends ParsedTsvLayout {
   readonly sha256: string;
   readonly psm: number;
-  readonly cached?: boolean;
-  readonly cache_hit?: boolean;
-  readonly cache_path?: string;
-  readonly find?: string;
+  readonly cached?: boolean | undefined;
+  readonly cache_hit?: boolean | undefined;
+  readonly cache_path?: string | undefined;
+  readonly find?: string | undefined;
 }
 
 export interface OcrTextRecord {
@@ -144,10 +144,10 @@ export interface OcrTextRecord {
   readonly text: string;
   readonly source_hint: string;
   readonly meta: Record<string, unknown>;
-  readonly cached?: boolean;
-  readonly cache_hit?: boolean;
-  readonly cache_path?: string;
-  readonly lookup_ms?: number;
+  readonly cached?: boolean | undefined;
+  readonly cache_hit?: boolean | undefined;
+  readonly cache_path?: string | undefined;
+  readonly lookup_ms?: number | undefined;
 }
 
 export interface ParsedOcrOptions {
@@ -157,32 +157,32 @@ export interface ParsedOcrOptions {
   readonly provider: CursiveProvider;
   readonly psm: number;
   readonly effort: CursiveEffort;
-  readonly cacheDir?: string;
-  readonly timeout?: number;
+  readonly cacheDir?: string | undefined;
+  readonly timeout?: number | undefined;
   readonly workers: number;
   readonly maxDim: number;
-  readonly prompt?: string;
+  readonly prompt?: string | undefined;
   readonly force: boolean;
   readonly json: boolean;
   readonly boxes: boolean;
   readonly tsv: boolean;
-  readonly find?: string;
+  readonly find?: string | undefined;
 }
 
 export interface ParsedBatchOptions {
   readonly helpRequested: boolean;
   readonly inputs: readonly string[];
-  readonly grep?: string;
+  readonly grep?: string | undefined;
   readonly ignoreCase: boolean;
   readonly concurrency: number;
-  readonly timeout?: number;
+  readonly timeout?: number | undefined;
   readonly mode: OcrMode;
   readonly provider: CursiveProvider;
   readonly psm: number;
   readonly effort: CursiveEffort;
-  readonly prompt?: string;
+  readonly prompt?: string | undefined;
   readonly maxDim: number;
-  readonly cacheDir?: string;
+  readonly cacheDir?: string | undefined;
   readonly force: boolean;
   readonly json: boolean;
 }

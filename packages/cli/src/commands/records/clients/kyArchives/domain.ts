@@ -175,7 +175,7 @@ export function extractAspState(htmlText: string): Record<string, string> {
 export function parseLandResults(pageHtml: string): KyLandPayload {
   const text = cleanHtmlText(pageHtml);
   const totalMatch = /(\d+) Results found/.exec(text);
-  const total = totalMatch ? Number.parseInt(totalMatch[1], 10) : 0;
+  const total = totalMatch ? Number.parseInt(totalMatch[1] ?? '', 10) : 0;
   const body = totalMatch ? text.slice(totalMatch.index + totalMatch[0].length) : text;
   const entries = body.split(/\d+\) Patent #/);
   const fieldRe =
@@ -188,16 +188,16 @@ export function parseLandResults(pageHtml: string): KyLandPayload {
       continue;
     }
     results.push({
-      patent: match[1].trim(),
-      grantee: match[2].trim(),
-      grant_book_page: match[3].trim(),
-      acreage: match[4].trim(),
-      county: match[5].trim(),
-      watercourse: match[6].trim(),
-      survey_name: match[7].trim(),
-      survey_date: match[8].trim(),
-      grant_date: match[9].trim(),
-      grant_note: match[10].trim(),
+      patent: (match[1] ?? '').trim(),
+      grantee: (match[2] ?? '').trim(),
+      grant_book_page: (match[3] ?? '').trim(),
+      acreage: (match[4] ?? '').trim(),
+      county: (match[5] ?? '').trim(),
+      watercourse: (match[6] ?? '').trim(),
+      survey_name: (match[7] ?? '').trim(),
+      survey_date: (match[8] ?? '').trim(),
+      grant_date: (match[9] ?? '').trim(),
+      grant_note: (match[10] ?? '').trim(),
     });
   }
 

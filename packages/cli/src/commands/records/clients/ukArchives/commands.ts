@@ -160,7 +160,7 @@ export async function runTnaGet(
     return { exitCode: 0, bytesOut: emitStdout(ctx.io, renderTnaGetHelp(groupName)) };
   }
 
-  const iaid = validateIaid(parsed.positionals[0]);
+  const iaid = validateIaid(parsed.positionals[0] ?? '');
   const asJson = getBooleanOption(parsed, 'asJson');
   const refresh = getBooleanOption(parsed, 'refresh');
   const ttlHours = resolveTtlHours(getNumberOption(parsed, 'cacheTtlHours'), ctx);
@@ -352,7 +352,7 @@ export function runUrl(argv: readonly string[], ctx: RecordCommandContext): Reco
       DISCOVERY_WEB.replace(/\/$/, ''),
       `${FREEREG_BASE}/`,
       'https://www.british-history.ac.uk/',
-      GENUKI_PARISHES['nottinghamshire']
+      GENUKI_PARISHES['nottinghamshire'] ?? ''
     );
   }
   return { exitCode: 0, bytesOut: emitStdout(ctx.io, lines.join('\n')) };

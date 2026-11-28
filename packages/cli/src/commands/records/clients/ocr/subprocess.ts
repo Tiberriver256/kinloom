@@ -94,11 +94,11 @@ export async function runSubprocessWithTimeout(params: {
   readonly bin: string;
   readonly args: readonly string[];
   readonly env: NodeJS.ProcessEnv;
-  readonly cwd?: string;
+  readonly cwd?: string | undefined;
   readonly timeoutSeconds: number;
   readonly fileForError: string;
   readonly timeoutLabel: string;
-  readonly execFileImpl?: ExecFileFn;
+  readonly execFileImpl?: ExecFileFn | undefined;
 }): Promise<SubprocessOutput> {
   const { bin, args, env, cwd, timeoutSeconds, fileForError, timeoutLabel, execFileImpl } = params;
   const timeoutMs = Math.max(10, Math.round(timeoutSeconds * 1000));
@@ -127,7 +127,12 @@ export async function runSubprocessWithTimeout(params: {
       }
       if (isPlainRecord(err)) {
         const signal = typeof err['signal'] === 'string' ? err['signal'] : undefined;
-        if (err['killed'] === true || signal === 'SIGKILL' || signal === 'SIGTERM' || err['code'] === 'ETIMEDOUT') {
+        if (
+          err['killed'] === true ||
+          signal === 'SIGKILL' ||
+          signal === 'SIGTERM' ||
+          err['code'] === 'ETIMEDOUT'
+        ) {
           throw makeSubprocessTimeoutError(timeoutLabel, timeoutSeconds, fileForError);
         }
         if (typeof err['code'] === 'number') {

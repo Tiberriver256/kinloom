@@ -114,7 +114,8 @@ export function upsertById<T extends { id: string }>(
   }
   const idxById = new Map<string, number>();
   for (let i = 0; i < result.length; i += 1) {
-    idxById.set(result[i].id, i);
+    const item = result[i];
+    if (item !== undefined) idxById.set(item.id, i);
   }
   let added = 0;
   let updated = 0;
@@ -132,6 +133,7 @@ export function upsertById<T extends { id: string }>(
       continue;
     }
     const prev = result[existingIdx];
+    if (prev === undefined) continue;
     const merged = mergeExisting ? parseItem(mergeExisting(prev, incoming)) : incoming;
     if (canonicalJsonStringify(prev) === canonicalJsonStringify(merged)) {
       unchanged += 1;

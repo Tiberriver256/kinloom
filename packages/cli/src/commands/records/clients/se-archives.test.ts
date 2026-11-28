@@ -209,7 +209,7 @@ async function invokeSe(
   args: readonly string[],
   cacheRoot: string,
   fetchImpl?: typeof fetch
-): Promise<{ exitCode: number; stdout: string; stderr: string; cacheHit?: boolean }> {
+): Promise<{ exitCode: number; stdout: string; stderr: string; cacheHit?: boolean | undefined }> {
   const stdout: string[] = [];
   const stderr: string[] = [];
   const ctx = createRecordContext({
@@ -263,11 +263,11 @@ describe('se-archives native client', () => {
 
     expect([r1.exitCode, r2.exitCode, r3.exitCode, r4.exitCode]).toEqual([0, 0, 0, 0]);
     expect(seenParams).toHaveLength(2);
-    expect(seenParams[0]['transcribed_text']).toBe('Anders Andersson');
-    expect(seenParams[0]['only_digitised_materials']).toBe('true');
-    expect(seenParams[0]['facet']).toBe('ObjectType:Record;Type:Volume');
-    expect(seenParams[0]['year_min']).toBe('1840');
-    expect(seenParams[0]['year_max']).toBe('1896');
+    expect(seenParams[0]!['transcribed_text']!).toBe('Anders Andersson');
+    expect(seenParams[0]!['only_digitised_materials']!).toBe('true');
+    expect(seenParams[0]!['facet']!).toBe('ObjectType:Record;Type:Volume');
+    expect(seenParams[0]!['year_min']!).toBe('1840');
+    expect(seenParams[0]!['year_max']!).toBe('1896');
 
     const p1 = JSON.parse(r1.stdout) as {
       cache_hit: boolean;
@@ -283,11 +283,11 @@ describe('se-archives native client', () => {
     expect(p1.cache_hit).toBe(false);
     expect(p2.cache_hit).toBe(true);
     expect(p4.cache_hit).toBe(false);
-    expect(p1.results[0].reference_code).toBe('SE/ULA/10392/A I a/9');
-    expect(p1.results[0].self_url).toBe('https://data.riksarkivet.se/archive/Tij9jjX9rH6cxG02H087k3');
-    expect(p1.results[1].snippets?.[0].pages).toEqual(['A0030423_00003']);
-    expect(p1.results[1].snippets?.[0].text).toBe('Anders Andersson i Garphyttan');
-    expect(p1.results[1].iiif_manifests).toEqual(['https://lbiiif.riksarkivet.se/arkis!A0030423/manifest']);
+    expect(p1.results[0]!.reference_code).toBe('SE/ULA/10392/A I a/9');
+    expect(p1.results[0]!.self_url).toBe('https://data.riksarkivet.se/archive/Tij9jjX9rH6cxG02H087k3');
+    expect(p1.results[1]!.snippets?.[0]?.pages).toEqual(['A0030423_00003']);
+    expect(p1.results[1]!.snippets?.[0]?.text).toBe('Anders Andersson i Garphyttan');
+    expect(p1.results[1]!.iiif_manifests).toEqual(['https://lbiiif.riksarkivet.se/arkis!A0030423/manifest']);
     expect(r3.stdout).toContain('[cache]');
     expect(
       fs.readdirSync(path.join(cacheRoot, 'se-archives')).filter((f) => f.endsWith('.json'))
@@ -340,16 +340,16 @@ describe('se-archives native client', () => {
     const birthsJson = JSON.parse(rb.stdout) as {
       results: { child_name: string; iiif_manifests: string[] }[];
     };
-    expect(birthsJson.results[0].child_name).toBe('Erik Johan');
-    expect(birthsJson.results[0].iiif_manifests).toEqual([
+    expect(birthsJson.results[0]!.child_name).toBe('Erik Johan');
+    expect(birthsJson.results[0]!.iiif_manifests).toEqual([
       'https://lbiiif.riksarkivet.se/arkis!00124895/manifest',
     ]);
-    expect((JSON.parse(rmRes.stdout) as { results: { groom: string }[] }).results[0].groom).toBe(
+    expect((JSON.parse(rmRes.stdout) as { results: { groom: string }[] }).results[0]!.groom).toBe(
       'Johansson, Erik'
     );
-    expect((JSON.parse(rd.stdout) as { results: { property_name: string }[] }).results[0].property_name).toBe(
-      'Bäcks'
-    );
+    expect(
+      (JSON.parse(rd.stdout) as { results: { property_name: string }[] }).results[0]!.property_name
+    ).toBe('Bäcks');
     expect((JSON.parse(rr.stdout) as { record: { volume: string } }).record.volume).toBe('C I:17');
     expect(seenPaths).toHaveLength(4);
   });
@@ -386,7 +386,7 @@ describe('se-archives native client', () => {
       items: { bildid: string }[];
     };
     expect(coll.reference_code).toBe('SE/ULA/11632/A I aa');
-    expect(coll.items[0].bildid).toBe('80002567');
+    expect(coll.items[0]!.bildid).toBe('80002567');
 
     const man = JSON.parse(rmRes.stdout) as {
       bildid: string;
@@ -395,8 +395,8 @@ describe('se-archives native client', () => {
     };
     expect(man.bildid).toBe('00124895');
     expect(man.canvas_count).toBe(1);
-    expect(man.canvases[0].page_id).toBe('00124895_00001');
-    expect(man.canvases[0].full_image_url).toBe(
+    expect(man.canvases[0]!.page_id).toBe('00124895_00001');
+    expect(man.canvases[0]!.full_image_url).toBe(
       'https://lbiiif.riksarkivet.se/arkis!00124895_00001/full/max/0/default.jpg'
     );
 

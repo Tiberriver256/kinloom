@@ -97,7 +97,7 @@ async function runInProcessIntegrateDryRun(params: {
   repoDir: string;
   personId: string;
   packageDir: string;
-  preloadedRepo?: LoadedLocalArchiveRepo;
+  preloadedRepo?: LoadedLocalArchiveRepo | undefined;
   preparsedPatch?: Record<string, unknown>;
 }): Promise<DryRunCheckResult> {
   const t0 = performance.now();
@@ -253,6 +253,7 @@ export async function runAuditCommand(options: AuditCommandOptions): Promise<Aud
 
   for (let i = 0; i < parsedPeople.length; i += 1) {
     const person = parsedPeople[i];
+    if (person === undefined) continue;
     const id = typeof person['id'] === 'string' ? person['id'] : '';
     if (id) {
       seenAuditPersonIds.add(id);
@@ -299,6 +300,7 @@ export async function runAuditCommand(options: AuditCommandOptions): Promise<Aud
   const existingPersonEvents: LooseRecord[] = [];
   for (let i = 0; i < allLiveEvents.length; i += 1) {
     const ev = allLiveEvents[i];
+    if (ev === undefined) continue;
     const pts = ev['participants'];
     if (!Array.isArray(pts)) {
       continue;

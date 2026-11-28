@@ -216,7 +216,7 @@ export function renderExecutiveDossier(
 
 export function emitSarifAndDossier(options: {
   readonly bundleDir: string;
-  readonly baselinePath?: string;
+  readonly baselinePath?: string | undefined;
 }): DesignAuditSarifSummary {
   const bundleDir = path.resolve(options.bundleDir);
   const manifest = readJsonIfExists<{ readonly runId?: string }>(path.join(bundleDir, 'manifest.json'), {

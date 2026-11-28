@@ -35,7 +35,7 @@ export const runFindagraveCommand: RecordHandler = async (args, ctx): Promise<Re
       return { exitCode: 0, bytesOut: emitStdout(ctx.io, renderRootHelp()) };
     }
 
-    const [rawSubcmd, ...rest] = args;
+    const [rawSubcmd = '', ...rest] = args;
     const subcmd = resolveSubcommandAlias(rawSubcmd, SUBCOMMAND_ALIASES);
 
     switch (subcmd) {

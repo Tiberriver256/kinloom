@@ -8,7 +8,7 @@ import type {
 
 export interface PluginProbeTransport {
   readonly baseUrl: URL;
-  readonly token?: string;
+  readonly token?: string | undefined;
   readonly timeoutMs: number;
   readonly fetchImpl: typeof fetch;
   readonly clock: SyntheticProbeClock;
@@ -242,7 +242,9 @@ async function checkPageVisitStats(
   const violations: string[] = [];
   const parsed = parseJsonSafe(res.bodyText);
   const validShape =
-    isObjectRecord(parsed) && parsed['enabled'] === true && typeof parsed['public_badges_enabled'] === 'boolean';
+    isObjectRecord(parsed) &&
+    parsed['enabled'] === true &&
+    typeof parsed['public_badges_enabled'] === 'boolean';
   if (!validShape) {
     violations.push(`${pluginId}: /api/observability/config returned invalid JSON schema.`);
   }
@@ -651,7 +653,8 @@ async function checkAdminDiagnostics(
       const id = typeof entry['id'] === 'string' ? entry['id'] : 'unknown';
       const status = typeof entry['status'] === 'string' ? entry['status'] : '';
       if (status === 'degraded' || status === 'error') {
-        const detail = typeof entry['detail'] === 'string' && entry['detail'].trim() ? `: ${entry['detail']}` : '';
+        const detail =
+          typeof entry['detail'] === 'string' && entry['detail'].trim() ? `: ${entry['detail']}` : '';
         violations.push(`Admin diagnostics reported plugin '${id}' in '${status}' state${detail}.`);
       }
     }

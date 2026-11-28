@@ -208,7 +208,7 @@ function isValidQueryPayload(kind: string, data: Record<string, unknown>): boole
 }
 
 export interface HttpGetJsonOptions {
-  readonly timeout?: number;
+  readonly timeout?: number | undefined;
   readonly retryTransientJson?: boolean;
   readonly retryOnTimeout?: boolean;
 }
@@ -297,7 +297,7 @@ export async function cachedQueryJson(
     readonly cacheRoot?: string;
     readonly ttlHours?: number;
     readonly refresh?: boolean;
-    readonly timeout?: number;
+    readonly timeout?: number | undefined;
   } = {}
 ): Promise<readonly [Record<string, unknown>, boolean]> {
   const root = options.cacheRoot ?? getCacheRoot(ctx);
@@ -354,7 +354,9 @@ export async function cachedQueryJson(
           data = candidate;
           break;
         }
-        const responseHeader = isPlainRecord(candidate['responseHeader']) ? candidate['responseHeader'] : undefined;
+        const responseHeader = isPlainRecord(candidate['responseHeader'])
+          ? candidate['responseHeader']
+          : undefined;
         const errMsg = candidate['error'] ?? responseHeader?.['status'];
         lastError = new RecordRuntimeError(
           `Internet Archive ${kind} API returned an error response (${String(errMsg)}) from ${url}`

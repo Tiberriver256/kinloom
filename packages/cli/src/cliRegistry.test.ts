@@ -34,7 +34,7 @@ function extractListedRootHelpCommands(helpText: string): string[] {
     }
     const match = /^\s{2}([a-z][a-z0-9-]*)\s{2,}/.exec(line);
     if (match) {
-      names.push(match[1]);
+      names.push(match[1]!);
     }
   }
   return names;

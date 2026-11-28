@@ -24,7 +24,7 @@ export async function requestWithRetry(
     readonly allowedHosts: readonly string[];
     readonly label: string;
     readonly body?: string;
-    readonly headers?: Readonly<Record<string, string>>;
+    readonly headers?: Readonly<Record<string, string>> | undefined;
     readonly cookieJar?: CookieJar;
   }
 ): Promise<{ readonly status: number; readonly url: string; readonly bytes: Buffer }> {

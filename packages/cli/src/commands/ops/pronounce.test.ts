@@ -392,7 +392,7 @@ describe('kinloom pronounce lookup', () => {
     ]);
     expect(ranked.map((s) => s.tier)).toEqual(['native_speaker', 'community', 'automated']);
 
-    const autoOnly = evaluatePronounceCorroboration([ranked[2]]);
+    const autoOnly = evaluatePronounceCorroboration([ranked[2]!]);
     expect(autoOnly.highestTier).toBe('automated');
     expect(autoOnly.native_speaker_verified).toBe(false);
     expect(autoOnly.verification_note).toContain('automated');
@@ -900,9 +900,9 @@ describe('kinloom pronounce audit', () => {
 
     // 3. Living pronunciation leak fails loudly (even without --strict) and never leaks living name/ID
     const leakedPeople = [
-      basePeople[0],
+      basePeople[0]!,
       {
-        ...basePeople[1],
+        ...basePeople[1]!,
         pronunciation: { phonetic: 'LEAKED-GUIDE', language: 'en-US' },
       },
     ];

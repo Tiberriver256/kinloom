@@ -21,6 +21,7 @@ export function verifyMediaFilesOnDisk(repoDir: string, mediaItems: readonly Med
 
   for (let i = 0; i < mediaItems.length; i += 1) {
     const item = mediaItems[i];
+    if (item === undefined) continue;
     const fileUrl = item.file.trim();
     if (fileUrl.startsWith('http://') || fileUrl.startsWith('https://') || /^https?:\/\//i.test(fileUrl)) {
       continue;

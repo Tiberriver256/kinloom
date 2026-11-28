@@ -295,12 +295,12 @@ export function normalizeState(state: string): string {
 export function buildSearchParams(
   query: string,
   options: {
-    readonly dates?: string;
+    readonly dates?: string | undefined;
     readonly level: string;
     readonly limit: number;
     readonly page: number;
-    readonly state?: string;
-    readonly lccn?: string;
+    readonly state?: string | undefined;
+    readonly lccn?: string | undefined;
   }
 ): [string, string][] {
   const params: [string, string][] = [
@@ -382,7 +382,7 @@ export function iiifJpegFromInfo(infoUrl: string, imageWidth: number | undefined
 
 export function resolvePageAssets(
   data: Record<string, unknown>,
-  options: { readonly imageWidth?: number } = {}
+  options: { readonly imageWidth?: number | undefined } = {}
 ): PageAssets {
   const rawResources =
     Array.isArray(data['resources']) && data['resources'].length > 0 ? data['resources'][0] : undefined;

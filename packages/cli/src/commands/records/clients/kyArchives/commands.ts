@@ -104,7 +104,7 @@ export async function runCdm(
     ttlHours,
     refresh,
     schema: CACHE_SCHEMA,
-    fetch: () => fetchCdm(ctx, query, alias, field, limit),
+    fetch: () => fetchCdm(ctx, query ?? '', alias, field, limit),
     cacheable: (r) => r.verified,
     validateCached: isCdmSearchPayload,
     nowMs: ctx.nowMs,
@@ -158,9 +158,11 @@ export async function runCdmItem(
     ttlHours,
     refresh,
     schema: CACHE_SCHEMA,
-    fetch: () => fetchCdmItem(ctx, alias, itemId),
+    fetch: () => fetchCdmItem(ctx, alias ?? '', itemId ?? ''),
     cacheable: (r) =>
-      (Array.isArray(r['fields']) && r['fields'].length > 0) || Boolean(r['title']) || Boolean(r['contentType']),
+      (Array.isArray(r['fields']) && r['fields'].length > 0) ||
+      Boolean(r['title']) ||
+      Boolean(r['contentType']),
     validateCached: isPlainRecord,
     nowMs: ctx.nowMs,
     sleepFn: ctx.sleepFn,
@@ -218,7 +220,8 @@ export async function runCollections(
   });
 
   const cards = Array.isArray(data['cards']) ? data['cards'] : [];
-  const totalCollections = typeof data['totalCollections'] === 'number' ? data['totalCollections'] : cards.length;
+  const totalCollections =
+    typeof data['totalCollections'] === 'number' ? data['totalCollections'] : cards.length;
 
   if (asJson) {
     return {
@@ -250,7 +253,7 @@ export function runCdmUrl(rest: readonly string[], ctx: RecordCommandContext): R
   const query = parsed.positionals[0];
   return {
     exitCode: 0,
-    bytesOut: emitStdout(ctx.io, buildCdmWebUrl(query)),
+    bytesOut: emitStdout(ctx.io, buildCdmWebUrl(query ?? '')),
   };
 }
 
@@ -276,7 +279,7 @@ export async function runLand(
     ttlHours,
     refresh,
     schema: CACHE_SCHEMA,
-    fetch: () => fetchLand(ctx, term, by, limit),
+    fetch: () => fetchLand(ctx, term ?? '', by, limit),
     cacheable: (r) => r.verified,
     validateCached: isKyLandPayload,
     nowMs: ctx.nowMs,
@@ -307,7 +310,7 @@ export async function runLandPatent(
     ttlHours,
     refresh,
     schema: CACHE_SCHEMA,
-    fetch: () => fetchLandPatent(ctx, number, book, page),
+    fetch: () => fetchLandPatent(ctx, number ?? '', book, page),
     cacheable: (r) => r.verified,
     validateCached: isKyLandPayload,
     nowMs: ctx.nowMs,
@@ -337,7 +340,7 @@ export async function runPreservica(
     ttlHours,
     refresh,
     schema: CACHE_SCHEMA,
-    fetch: () => fetchPreservica(ctx, query, limit),
+    fetch: () => fetchPreservica(ctx, query ?? '', limit),
     cacheable: (r) => r.verified,
     validateCached: isKyPreservicaPayload,
     nowMs: ctx.nowMs,
@@ -376,5 +379,5 @@ export function runUrls(rest: readonly string[], ctx: RecordCommandContext): Rec
     return { exitCode: 0, bytesOut: emitStdout(ctx.io, renderUrlsHelp()) };
   }
   const query = parsed.positionals[0];
-  return { exitCode: 0, bytesOut: emitStdout(ctx.io, buildKyUrlsLines(query).join('\n')) };
+  return { exitCode: 0, bytesOut: emitStdout(ctx.io, buildKyUrlsLines(query ?? '').join('\n')) };
 }

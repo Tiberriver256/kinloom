@@ -52,21 +52,21 @@ export interface SyntheticProbePluginOptions {
   /** Default archive base URL used when `--url` is omitted or during opt-in verify checks. */
   readonly targetUrl?: string;
   /** Optional explicit media path (e.g. `/media/portrait.jpg`) for the 206 byte-range probe. */
-  readonly mediaPath?: string;
+  readonly mediaPath?: string | undefined;
   /** Number of leading bytes requested in the Range probe (default: 1024, i.e. bytes=0-1023). */
   readonly mediaRangeBytes?: number;
   /** Optional bearer token for private archive probes. Never included in probe output. */
-  readonly token?: string;
+  readonly token?: string | undefined;
   /** Budget threshold overrides. */
   readonly budgets?: Partial<SyntheticProbeBudgets>;
   /** Optional timeout in milliseconds per HTTP request (default: 15000). */
-  readonly timeoutMs?: number;
+  readonly timeoutMs?: number | undefined;
   /** Run live plugin health verification checks by default. */
   readonly checkPlugins?: boolean;
   /** Server plugin IDs required to be active when plugin health checks run. */
   readonly expectPlugins?: readonly string[];
   /** Optional fetch implementation for deterministic tests. */
-  readonly fetchImpl?: typeof fetch;
+  readonly fetchImpl?: typeof fetch | undefined;
   /** Optional clock for deterministic latency and timestamp measurement. */
   readonly clock?: SyntheticProbeClock;
 }
@@ -186,14 +186,14 @@ export interface SyntheticProbeReport {
 
 export interface RunSyntheticProbeInput {
   readonly targetUrl: string;
-  readonly mediaPath?: string;
-  readonly mediaPathSource?: Extract<MediaRangeSource, 'flag' | 'option'>;
-  readonly mediaRangeBytes?: number;
-  readonly token?: string;
-  readonly budgets?: Partial<SyntheticProbeBudgets>;
-  readonly timeoutMs?: number;
-  readonly checkPlugins?: boolean;
-  readonly expectPlugins?: readonly string[];
-  readonly fetchImpl?: typeof fetch;
-  readonly clock?: SyntheticProbeClock;
+  readonly mediaPath?: string | undefined;
+  readonly mediaPathSource?: Extract<MediaRangeSource, 'flag' | 'option'> | undefined;
+  readonly mediaRangeBytes?: number | undefined;
+  readonly token?: string | undefined;
+  readonly budgets?: Partial<SyntheticProbeBudgets> | undefined;
+  readonly timeoutMs?: number | undefined;
+  readonly checkPlugins?: boolean | undefined;
+  readonly expectPlugins?: readonly string[] | undefined;
+  readonly fetchImpl?: typeof fetch | undefined;
+  readonly clock?: SyntheticProbeClock | undefined;
 }

@@ -1107,8 +1107,8 @@ describe('commands/seed.ts full entity types, chunked submission, snapshot diffi
       'seed-oakville-p2',
       'seed-oakville-p3',
     ]);
-    expect(postedBatches[0].summary).toContain('(part 1/3)');
-    expect(postedBatches[2].patches).toHaveLength(2);
+    expect(postedBatches[0]!.summary).toContain('(part 1/3)');
+    expect(postedBatches[2]!.patches).toHaveLength(2);
   });
 });
 

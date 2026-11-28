@@ -146,20 +146,21 @@ export async function executeIntegrateSingle(
   const kinshipMerge = mergeKinshipPatch(loaded.kinship, patch.kinship, patch.remove_kinship);
 
   const placeIds = new Set<string>();
-  for (let i = 0; i < placesMerge.items.length; i += 1) {
-    placeIds.add(placesMerge.items[i].id);
+  for (const item of placesMerge.items) {
+    placeIds.add(item.id);
   }
   const sourceIds = new Set<string>();
-  for (let i = 0; i < sourcesMerge.items.length; i += 1) {
-    sourceIds.add(sourcesMerge.items[i].id);
+  for (const item of sourcesMerge.items) {
+    sourceIds.add(item.id);
   }
   const mediaIds = new Set<string>();
-  for (let i = 0; i < mediaMerge.items.length; i += 1) {
-    mediaIds.add(mediaMerge.items[i].id);
+  for (const item of mediaMerge.items) {
+    mediaIds.add(item.id);
   }
   const eventsById = new Map<string, (typeof eventsMerge.items)[number]>();
   for (let i = 0; i < eventsMerge.items.length; i += 1) {
     const ev = eventsMerge.items[i];
+    if (ev === undefined) continue;
     eventsById.set(ev.id, ev);
   }
 

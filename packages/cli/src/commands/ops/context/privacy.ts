@@ -122,7 +122,7 @@ export function selectPeopleBlocksForContext(
       return true;
     }
     const deathMatch = /^\s+death_edtf:\s*(.*)$/m.exec(block);
-    const deathVal = deathMatch ? deathMatch[1].trim().replaceAll(/^["']|["']$/g, '') : '';
+    const deathVal = deathMatch ? (deathMatch[1] ?? '').trim().replaceAll(/^["']|["']$/g, '') : '';
     return deathVal.length === 0 || deathVal === 'null' || deathVal === '~';
   });
 }

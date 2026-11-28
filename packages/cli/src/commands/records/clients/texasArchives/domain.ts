@@ -81,9 +81,9 @@ export function parseIsoDate(raw: string, flagName: string): string {
   if (!match) {
     throw new CliValidationError(`Invalid ${flagName} '${raw}': expected YYYY-MM-DD.`);
   }
-  const year = Number.parseInt(match[1], 10);
-  const month = Number.parseInt(match[2], 10);
-  const day = Number.parseInt(match[3], 10);
+  const year = Number.parseInt(match[1] ?? '', 10);
+  const month = Number.parseInt(match[2] ?? '', 10);
+  const day = Number.parseInt(match[3] ?? '', 10);
   const dt = new Date(Date.UTC(year, month - 1, day));
   if (dt.getUTCFullYear() !== year || dt.getUTCMonth() !== month - 1 || dt.getUTCDate() !== day) {
     throw new CliValidationError(`Invalid ${flagName} '${raw}': not a real calendar date.`);

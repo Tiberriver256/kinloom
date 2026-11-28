@@ -110,19 +110,19 @@ interface InvokeResult {
   readonly exitCode: number;
   readonly stdout: string;
   readonly stderr: string;
-  readonly cacheHit?: boolean;
+  readonly cacheHit?: boolean | undefined;
 }
 
 async function invokeHandler(
   handler: RecordHandler,
   args: readonly string[],
   opts: {
-    readonly env?: NodeJS.ProcessEnv;
-    readonly cwd?: string;
-    readonly fetchImpl?: typeof fetch;
-    readonly execFileImpl?: ExecFileFn;
-    readonly nowMs?: () => number;
-    readonly sleepFn?: (ms: number) => Promise<void>;
+    readonly env?: NodeJS.ProcessEnv | undefined;
+    readonly cwd?: string | undefined;
+    readonly fetchImpl?: typeof fetch | undefined;
+    readonly execFileImpl?: ExecFileFn | undefined;
+    readonly nowMs?: (() => number) | undefined;
+    readonly sleepFn?: ((ms: number) => Promise<void>) | undefined;
   } = {}
 ): Promise<InvokeResult> {
   const stdout: string[] = [];
@@ -160,7 +160,7 @@ function makeCurlStdout(body: string | Buffer, status: number, effectiveUrl: str
 function writeCurlHeaders(args: readonly string[], rawHeaders: string): void {
   const idx = args.indexOf('-D');
   if (idx !== -1 && idx + 1 < args.length) {
-    fs.writeFileSync(args[idx + 1], rawHeaders, 'utf8');
+    fs.writeFileSync(args[idx + 1]!, rawHeaders, 'utf8');
   }
 }
 
@@ -879,8 +879,8 @@ describe('mn-archives behavioral coverage', () => {
         </td>
       </tr></table>`);
     expect(parsedNews).toHaveLength(1);
-    expect(parsedNews[0].detail).toBe('Riverbend weekly edition');
-    expect(parsedNews[0].thumb_url).toBe(
+    expect(parsedNews[0]!.detail).toBe('Riverbend weekly edition');
+    expect(parsedNews[0]!.thumb_url).toBe(
       'https://newspapers.mnhs.org/servlet/PsObjThumb?tnName=oak%2Fissue01'
     );
 
@@ -1090,7 +1090,7 @@ describe('nj-archives behavioral coverage', () => {
       fetchImpl: async () => new Response(PORTAL_LIST_HTML, { status: 200 }),
     });
     expect(dbJson.exitCode).toBe(0);
-    expect((JSON.parse(dbJson.stdout) as { key: string }[])[0].key).toBe('land');
+    expect((JSON.parse(dbJson.stdout) as { key: string }[])[0]!.key).toBe('land');
 
     // sequenceSimilarity & parseGrid edge cases
     expect(sequenceSimilarity('', '')).toBe(1);
@@ -1116,7 +1116,7 @@ describe('nj-archives behavioral coverage', () => {
     );
     expect(synthHeaders).toEqual(['col1', 'col2']);
     expect(synthRows).toHaveLength(1);
-    expect(synthRows[0]['col1']).toBe('Carter, Samuel');
+    expect(synthRows[0]!['col1']!).toBe('Carter, Samuel');
 
     // validateCriteria: bad select option, bad role, valid role
     const landFormHtml = `<select name="ctl00$ContentPlaceHolder1$ddlCounty">
@@ -1125,13 +1125,13 @@ describe('nj-archives behavioral coverage', () => {
     </select>`;
     expect(matchOptionValue('Riverbend', ['Oakville'])).toBeNull();
     expect(() =>
-      validateCriteria({ surname: 'Carter', county: 'Riverbend' }, NJ_DATABASES['land'], landFormHtml)
+      validateCriteria({ surname: 'Carter', county: 'Riverbend' }, NJ_DATABASES['land']!, landFormHtml)
     ).toThrow('is not a valid choice for Early Land Records');
     expect(() =>
-      validateCriteria({ surname: 'Carter', role: 'Witness' }, NJ_DATABASES['land'], landFormHtml)
+      validateCriteria({ surname: 'Carter', role: 'Witness' }, NJ_DATABASES['land']!, landFormHtml)
     ).toThrow("--role 'Witness' is not valid here");
     expect(
-      validateCriteria({ surname: 'Carter', role: 'grantor' }, NJ_DATABASES['land'], landFormHtml)['role']
+      validateCriteria({ surname: 'Carter', role: 'grantor' }, NJ_DATABASES['land']!, landFormHtml)['role']
     ).toBe('Grantor');
   });
 
@@ -2212,7 +2212,7 @@ describe('ky-archives, uk-archives, gnis, and persi behavioral coverage', () => 
     });
     expect(retryRes.exitCode).toBe(0);
     expect(attempts).toBe(2);
-    expect((JSON.parse(retryRes.stdout) as { title: string }[])[0].title).toBe('Carter Family Bible');
+    expect((JSON.parse(retryRes.stdout) as { title: string }[])[0]!.title).toBe('Carter Family Bible');
 
     for (const helpArgs of [
       ['surname', '--help'],

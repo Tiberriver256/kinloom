@@ -227,7 +227,9 @@ afterEach(async () => {
 
 const VALID_JPEG = Buffer.concat([JPEG_MAGIC, Buffer.from([0xe0, 0x00, 0x10, 0x4a, 0x46, 0x49, 0x46])]);
 
-function makeCapturedContext(overrides: Partial<RecordCommandContext> = {}): {
+function makeCapturedContext(
+  overrides: { [K in keyof RecordCommandContext]?: RecordCommandContext[K] | undefined } = {}
+): {
   ctx: RecordCommandContext;
   stdout: string[];
   stderr: string[];
@@ -413,9 +415,9 @@ describe('ops/context/graph.ts branch coverage', () => {
       },
     };
     const evRes = collectPersonEventsAndReferences(rawEvents, targetPerson, privacyState);
-    expect(evRes.events[0]['edtf_date']).toBe('1995');
-    expect(evRes.events[0]['place_id']).toBeNull();
-    expect(evRes.events[1]['edtf_date']).toBe('');
+    expect(evRes.events[0]!['edtf_date']!).toBe('1995');
+    expect(evRes.events[0]!['place_id']!).toBeNull();
+    expect(evRes.events[1]!['edtf_date']!).toBe('');
     expect(evRes.referencedSourceIds.has('src_valid')).toBe(true);
     expect(evRes.referencedSourceIds.has('src_ext_str')).toBe(true);
     expect(evRes.referencedSourceIds.has('src_ext_obj')).toBe(true);
@@ -443,7 +445,7 @@ describe('ops/context/graph.ts branch coverage', () => {
       privacyState,
     });
     expect(narRes).toHaveLength(2);
-    expect(narRes[1]['person_ids']).toEqual(['per_clara_alder', REDACTED_RELATIVE_LABEL]);
+    expect(narRes[1]!['person_ids']!).toEqual(['per_clara_alder', REDACTED_RELATIVE_LABEL]);
 
     const refs = collectReferencedPlacesAndSources({
       placeBlocks: ['- id: plc_b\n  name: Birch', '- id: plc_a\n  name: Alder'],
@@ -600,9 +602,9 @@ describe('ops/context/ancestry.ts branch coverage', () => {
       expect(res.ancestry.personDbId).toBe('101001');
       expect(res.ancestry.fullName).toBe('Clara Card Alder');
       expect(res.ancestry.facts.map((f) => f.type)).toEqual(['Residence', 'Fact']);
-      expect(res.ancestry.facts[0].targetPerson?.lifeRange).toBeNull();
-      expect(res.ancestry.sources[0].title).toBe('');
-      expect(res.ancestry.sources[0].recordImageId).toBe('555');
+      expect(res.ancestry.facts[0]!.targetPerson?.lifeRange).toBeNull();
+      expect(res.ancestry.sources[0]!.title).toBe('');
+      expect(res.ancestry.sources[0]!.recordImageId).toBe('555');
       expect(res.ancestry.recordImages.length).toBe(2);
       expect(
         res.ancestry.recordImages.some((i) => i.recordImageId === null && i.bytes === VALID_JPEG.length)
@@ -762,7 +764,7 @@ describe('ops/pronounce (lookupProviders, mediaWiki, lookup, deduplicate, audit,
       audioByFilename: forvoAudio,
       sources: forvoSources,
     });
-    expect(forvoSources[0].label).toContain('2 native speaker recordings');
+    expect(forvoSources[0]!.label).toContain('2 native speaker recordings');
     expect(forvoAudio.has('forvo-alder-1.ogg')).toBe(true);
     expect(forvoAudio.has('forvo-alder-1.ogg')).toBe(true);
 
@@ -786,7 +788,7 @@ describe('ops/pronounce (lookupProviders, mediaWiki, lookup, deduplicate, audit,
       audioByFilename: new Map(),
       sources: forvoSourcesSingle,
     });
-    expect(forvoSourcesSingle[0].label).toBe('Forvo (1 native speaker recording)');
+    expect(forvoSourcesSingle[0]!.label).toBe('Forvo (1 native speaker recording)');
 
     const forvoSourcesEmpty: PronounceSourceHit[] = [];
     await queryForvoPronunciations({
@@ -799,7 +801,7 @@ describe('ops/pronounce (lookupProviders, mediaWiki, lookup, deduplicate, audit,
       audioByFilename: new Map(),
       sources: forvoSourcesEmpty,
     });
-    expect(forvoSourcesEmpty[0].status).toBe('no_match');
+    expect(forvoSourcesEmpty[0]!.status).toBe('no_match');
   });
 
   it('covers rankPronounceSources tie-breakers and runPronounceLookupCommand validation/cache/format branches', async () => {
@@ -1799,7 +1801,7 @@ describe('ops reports and treeHygiene (verify/report, sync/report, integrateBatc
     expect(diffed.some((w) => w.message === 'dup no events')).toBe(true);
     expect(diffed.some((w) => w.message === 'dup new')).toBe(true);
     expect(diffed.some((w) => w.category === 'parent_child_chronology')).toBe(false);
-    expect(formatAuditHygieneWarningMessage(pre[3])).toContain('parent-child chronology anomaly');
+    expect(formatAuditHygieneWarningMessage(pre[3]!)).toContain('parent-child chronology anomaly');
 
     expect(hasAdoptivePersonTag(undefined)).toBe(false);
     expect(hasAdoptivePersonTag(makePerson({ id: 'p1', extensions: { adoptive_link: true } }))).toBe(true);
@@ -1843,7 +1845,11 @@ interface FakeBrowserPage extends OptionalBrowserPage {
 
 function makeFakeBrowser(options: {
   readonly onGoto: (url: string, page: FakeBrowserPage) => Promise<void> | void;
-  readonly waitForFunctionImpl?: (fn: string, arg?: unknown, opts?: { timeout?: number }) => Promise<unknown>;
+  readonly waitForFunctionImpl?: (
+    fn: string,
+    arg?: unknown,
+    opts?: { timeout?: number | undefined }
+  ) => Promise<unknown>;
   readonly omitWaitForTimeout?: boolean;
   readonly evaluateResult?: unknown;
 }): OptionalBrowser {
@@ -1937,9 +1943,9 @@ describe('records/clients/nara (browserFallback, queryAndRecords, censusCommands
       { launcher: async () => browser1 }
     );
     expect(res1).toHaveLength(2);
-    expect(res1[0].query).toBe('Alder');
-    expect(res1[0].results).toEqual([]);
-    expect(res1[1].query).toBeUndefined();
+    expect(res1[0]!.query).toBe('Alder');
+    expect(res1[0]!.results).toEqual([]);
+    expect(res1[1]!.query).toBeUndefined();
 
     // Search: waitForFunction throws when remainingMs <= 0 -> rethrown
     const browserTimeout = makeFakeBrowser({
@@ -2015,7 +2021,7 @@ describe('records/clients/nara (browserFallback, queryAndRecords, censusCommands
       ctx,
       { launcher: async () => browserGet }
     );
-    expect(recs[0].transcriptions).toEqual(['Line one of Harbor Ledger.']);
+    expect(recs[0]!.transcriptions).toEqual(['Line one of Harbor Ledger.']);
 
     // GetRecords: waitForFunction fails after deadline exhausted -> rethrows
     const browserGetTimeout = makeFakeBrowser({
@@ -2059,7 +2065,7 @@ describe('records/clients/nara (browserFallback, queryAndRecords, censusCommands
       ctx,
       { launcher: async () => browserGetEmptyTrans }
     );
-    expect(recs2[0].transcriptions).toBeUndefined();
+    expect(recs2[0]!.transcriptions).toBeUndefined();
   });
 
   it('covers queryAndRecords extractRecord, buildSearchPayload, projectRecord, and formatRecordText edge cases', () => {
@@ -2193,7 +2199,7 @@ describe('records/clients/nara (browserFallback, queryAndRecords, censusCommands
     await runCensus1950Image([imgPath], imgCtx);
     expect(imgOut[1]).toContain('Cached:');
     await runCensus1950Image([imgPath, '--json'], imgCtx);
-    expect(JSON.parse(imgOut[2]).cache_hit).toBe(true);
+    expect(JSON.parse(imgOut[2]!).cache_hit).toBe(true);
 
     // catalogCommands: runUrl without query, runSearch without query & empty browser slot, runGet defaults, runDownload errors & default dir
     const { ctx: catCtx, stdout: catOut } = makeCapturedContext({
@@ -2352,7 +2358,7 @@ describe('records/clients/nara (browserFallback, queryAndRecords, censusCommands
       emptyApiCtx,
       {}
     );
-    expect(nfRecs[0].error).toBe('Not found');
+    expect(nfRecs[0]!.error).toBe('Not found');
   });
 });
 
@@ -2834,7 +2840,7 @@ describe('records/clients/narrativeAudio (synthesis, commands) branch coverage',
           { status: 200 }
         ),
       execFileImpl: async (_cmd, args) => {
-        const outMp3 = args[args.length - 1];
+        const outMp3 = args[args.length - 1]!;
         await writeFile(outMp3, Buffer.from('mp3-bytes'));
         return { stdout: Buffer.alloc(0), stderr: Buffer.alloc(0) };
       },
@@ -2916,8 +2922,8 @@ describe('records/clients/ocr (imageAndTsv, subprocess, pipeline) branch coverag
     // parseTesseractTsv with minimal header missing optional columns & short row using raw[c] ?? ''
     const parsed = parseTesseractTsv(['level\ttext\tleft', '5\tAlder'].join('\n'));
     expect(parsed.lines).toHaveLength(1);
-    expect(parsed.lines[0].text).toBe('Alder');
-    expect(parsed.lines[0].conf).toBe(-1);
+    expect(parsed.lines[0]!.text).toBe('Alder');
+    expect(parsed.lines[0]!.conf).toBe(-1);
   });
 
   it('covers subprocess resolveExecutable, createDefaultExecFile, and runSubprocessWithTimeout paths', async () => {
@@ -3023,7 +3029,7 @@ describe('records/clients/ocr (imageAndTsv, subprocess, pipeline) branch coverag
         if (joined.includes('--version')) {
           return { stdout: Buffer.from('tesseract 5.3.0\n'), stderr: Buffer.alloc(0) };
         }
-        if (args[0].includes('folio2')) {
+        if (args[0]!.includes('folio2')) {
           throw 'non-error-ocr-crash';
         }
         return { stdout: Buffer.from('Clara Alder\nCedar Harbor\n'), stderr: Buffer.alloc(0) };
@@ -3094,7 +3100,7 @@ describe('ops Wave 2: integrateEngine (people, kinship, execute), stagedOverlaps
       '/tmp/data',
       privacy
     );
-    expect(merged.mergedPeople[0].birth_edtf).toBe('');
+    expect(merged.mergedPeople[0]!.birth_edtf).toBe('');
     expect(merged.personUpdated).toBe(true);
 
     // Privacy refusal for living person missing id -> 'unknown'
@@ -3159,7 +3165,7 @@ describe('ops Wave 2: integrateEngine (people, kinship, execute), stagedOverlaps
 
     // mergeKinshipPatch preserves existing family_xref when incoming omits it, and rejects asymmetric removal
     const keptXref = mergeKinshipPatch(existing, [{ from: 'per_a', to: 'per_b', relation: 'parent' }], []);
-    expect(keptXref.items[0].family_xref).toBe('F1');
+    expect(keptXref.items[0]!.family_xref).toBe('F1');
 
     expect(() =>
       mergeKinshipPatch(
@@ -3287,13 +3293,13 @@ describe('ops Wave 2: integrateEngine (people, kinship, execute), stagedOverlaps
       ],
       stagedPeople: [
         {
-          ...pkg1.stagedPeople[1],
+          ...pkg1.stagedPeople[1]!,
           id: 'per_other',
           person_id: 'per_b',
           slug: 'clara-alder',
         },
         {
-          ...pkg1.stagedPeople[1],
+          ...pkg1.stagedPeople[1]!,
           id: 'per_shared',
           person_id: 'per_b',
           full_name: 'Clara Mercer',
@@ -3309,9 +3315,9 @@ describe('ops Wave 2: integrateEngine (people, kinship, execute), stagedOverlaps
     expect(collectMediaFileCollisions([pkg1, pkg2])).toHaveLength(1);
     expect(collectSharedMediaIds([pkg1, pkg2])).toEqual([]);
     expect(collectSharedSourceIds([pkg1, pkg2])).toHaveLength(1);
-    expect(collectSharedEvents([pkg1, pkg2])[0].fieldDiffs).toContain('edtf_date');
-    expect(collectSharedPeople([pkg1, pkg2])[0].fieldDiffs).toContain('full_name');
-    expect(collectPersonSlugCollisions([pkg1, pkg2])[0].personIdsConflict).toBe(true);
+    expect(collectSharedEvents([pkg1, pkg2])[0]!.fieldDiffs).toContain('edtf_date');
+    expect(collectSharedPeople([pkg1, pkg2])[0]!.fieldDiffs).toContain('full_name');
+    expect(collectPersonSlugCollisions([pkg1, pkg2])[0]!.personIdsConflict).toBe(true);
     expect(collectKinshipAddRemoveConflicts([pkg1, pkg2])).toHaveLength(2);
   });
 

@@ -15,6 +15,7 @@ export function auditBundlePrivacy(bundle: ArchiveBundle, mode: BuildMode): stri
   const livingIds = new Set<string>();
   for (let i = 0; i < bundle.people.length; i += 1) {
     const p = bundle.people[i];
+    if (p === undefined) continue;
     if (p.is_living) {
       livingPeople.push(p);
       livingIds.add(p.id);
@@ -27,6 +28,7 @@ export function auditBundlePrivacy(bundle: ArchiveBundle, mode: BuildMode): stri
 
   for (let i = 0; i < livingPeople.length; i += 1) {
     const person = livingPeople[i];
+    if (person === undefined) continue;
     const birthEdtf = person.birth_edtf.trim();
     if (mode === 'public') {
       if (person.full_name !== 'Living') {
@@ -55,9 +57,10 @@ export function auditBundlePrivacy(bundle: ArchiveBundle, mode: BuildMode): stri
   const livingEventIds = new Set<string>();
   for (let i = 0; i < bundle.events.length; i += 1) {
     const ev = bundle.events[i];
+    if (ev === undefined) continue;
     let hasLiving = false;
-    for (let p = 0; p < ev.participants.length; p += 1) {
-      if (livingIds.has(ev.participants[p].person_id)) {
+    for (const pt of ev.participants) {
+      if (livingIds.has(pt.person_id)) {
         hasLiving = true;
         break;
       }
@@ -80,6 +83,7 @@ export function auditBundlePrivacy(bundle: ArchiveBundle, mode: BuildMode): stri
 
   for (let i = 0; i < bundle.residence_spans.length; i += 1) {
     const span = bundle.residence_spans[i];
+    if (span === undefined) continue;
     if (livingIds.has(span.person_id)) {
       leaks.push(`${mode}:residence_span:${span.id}`);
     }
@@ -88,12 +92,13 @@ export function auditBundlePrivacy(bundle: ArchiveBundle, mode: BuildMode): stri
   const mediaList = bundle.media ?? [];
   for (let i = 0; i < mediaList.length; i += 1) {
     const item = mediaList[i];
+    if (item === undefined) continue;
     let linkedLiving =
       Boolean(item.person_id && livingIds.has(item.person_id)) ||
       Boolean(item.event_id && livingEventIds.has(item.event_id));
     if (!linkedLiving && item.person_ids) {
-      for (let p = 0; p < item.person_ids.length; p += 1) {
-        if (livingIds.has(item.person_ids[p])) {
+      for (const pid of item.person_ids) {
+        if (livingIds.has(pid)) {
           linkedLiving = true;
           break;
         }
@@ -107,11 +112,12 @@ export function auditBundlePrivacy(bundle: ArchiveBundle, mode: BuildMode): stri
   const narList = bundle.narratives ?? [];
   for (let i = 0; i < narList.length; i += 1) {
     const nar = narList[i];
+    if (nar === undefined) continue;
     if (nar.subject_person_id && livingIds.has(nar.subject_person_id)) {
       leaks.push(`${mode}:narrative:${nar.id}:subject_person_id`);
     }
-    for (let p = 0; p < nar.person_ids.length; p += 1) {
-      if (livingIds.has(nar.person_ids[p])) {
+    for (const pid of nar.person_ids) {
+      if (livingIds.has(pid)) {
         leaks.push(`${mode}:narrative:${nar.id}`);
         break;
       }

@@ -33,7 +33,7 @@ export const ALL_SOURCES = ['oac', 'calisphere', 'portal', 'exhibits', 'cdnc', '
 export type CaSource = (typeof ALL_SOURCES)[number];
 
 export interface CaSearchResultItem {
-  readonly id?: string;
+  readonly id?: string | undefined;
   readonly title: string;
   readonly url: string;
   readonly kind?: string;
@@ -51,8 +51,8 @@ export interface CaSourceEntry {
 
 export interface CaArchivesOverrides {
   readonly launcher?: ChromiumLauncher;
-  readonly closeTimeoutMs?: number;
-  readonly killGraceMs?: number;
+  readonly closeTimeoutMs?: number | undefined;
+  readonly killGraceMs?: number | undefined;
 }
 
 export interface CaSourceOutput extends CaSourceEntry {
@@ -134,7 +134,7 @@ export function buildUrl(source: CaSource, query: string, limit = 10): string {
 
 export function parsePortalSearchHtml(html: string, url: string, limit = 10): CaSourceEntry {
   const totalMatch = /Search Results \d+ to \d+ of (\d+)/.exec(html);
-  const total = totalMatch ? Number.parseInt(totalMatch[1], 10) : null;
+  const total = totalMatch ? Number.parseInt(totalMatch[1] ?? '', 10) : null;
 
   const $ = loadHtml(html);
   const seenIds = new Set<string>();
@@ -148,7 +148,7 @@ export function parsePortalSearchHtml(html: string, url: string, limit = 10): Ca
     }
     const itemId = match[1];
     const title = collapseWhitespace($(el).text());
-    if (!title || seenIds.has(itemId)) {
+    if (!title || itemId === undefined || seenIds.has(itemId)) {
       return;
     }
     seenIds.add(itemId);
@@ -169,7 +169,7 @@ export function parsePortalSearchHtml(html: string, url: string, limit = 10): Ca
 
 export function parsePortalItemHtml(html: string, portalId: string, url: string): CaPortalItem {
   const titleMatch = /<title>([^<]+)<\/title>/i.exec(html);
-  const rawTitle = titleMatch ? titleMatch[1].trim() : '(no title)';
+  const rawTitle = titleMatch ? (titleMatch[1] ?? '').trim() : '(no title)';
   const title = rawTitle.replace(' | California Archives Search', '');
   return {
     source: 'portal',

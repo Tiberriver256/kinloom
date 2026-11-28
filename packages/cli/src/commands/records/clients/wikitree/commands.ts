@@ -107,7 +107,9 @@ export async function runSearch(
     refresh,
     ttlHours,
     cacheable: (d) =>
-      d.length > 0 && isPlainRecord(d[0]) && (Array.isArray(d[0]['matches']) || typeof d[0]['total'] === 'number'),
+      d.length > 0 &&
+      isPlainRecord(d[0]) &&
+      (Array.isArray(d[0]['matches']) || typeof d[0]['total'] === 'number'),
   });
 
   if (asJson) {
@@ -139,7 +141,7 @@ export async function runPerson(
     };
   }
 
-  const key = normalizeProfileKey(parsed.positionals[0]);
+  const key = normalizeProfileKey(parsed.positionals[0] ?? '');
   let fields = getStringOption(parsed, 'fields') ?? DEFAULT_FIELDS;
   const bioFormat = getStringOption(parsed, 'bioFormat');
   const resolveRedirect = getBooleanOption(parsed, 'resolveRedirect');
@@ -201,7 +203,7 @@ export async function runAncestors(
     };
   }
 
-  const key = normalizeProfileKey(parsed.positionals[0]);
+  const key = normalizeProfileKey(parsed.positionals[0] ?? '');
   const depth = getNumberOption(parsed, 'depth') ?? 4;
   const fields = getStringOption(parsed, 'fields') ?? DEFAULT_FIELDS;
   const asJson = getBooleanOption(parsed, 'asJson');
@@ -252,7 +254,7 @@ export async function runBio(
     };
   }
 
-  const key = normalizeProfileKey(parsed.positionals[0]);
+  const key = normalizeProfileKey(parsed.positionals[0] ?? '');
   const bioFormat = getStringOption(parsed, 'bioFormat') ?? 'wiki';
   const asJson = getBooleanOption(parsed, 'asJson');
   const refresh = getBooleanOption(parsed, 'refresh');

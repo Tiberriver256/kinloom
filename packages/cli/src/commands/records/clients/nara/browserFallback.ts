@@ -26,14 +26,18 @@ interface PlaywrightResponseLike {
 interface ExtendedBrowserPage extends OptionalBrowserPage {
   on?: (event: string, listener: (resp: PlaywrightResponseLike) => void) => void;
   removeListener?: (event: string, listener: (resp: PlaywrightResponseLike) => void) => void;
-  waitForFunction?: (fn: string, arg?: unknown, options?: { timeout?: number }) => Promise<unknown>;
+  waitForFunction?: (
+    fn: string,
+    arg?: unknown,
+    options?: { timeout?: number | undefined }
+  ) => Promise<unknown>;
   waitForTimeout?: (timeout: number) => Promise<void>;
 }
 
 interface BrowserSessionOverrides {
-  readonly launcher?: ChromiumLauncher;
-  readonly closeTimeoutMs?: number;
-  readonly killGraceMs?: number;
+  readonly launcher?: ChromiumLauncher | undefined;
+  readonly closeTimeoutMs?: number | undefined;
+  readonly killGraceMs?: number | undefined;
 }
 
 export async function defaultBrowserSearchMany(
@@ -133,6 +137,7 @@ export async function defaultBrowserSearchMany(
         let entry: NaraSearchPayload | null = null;
         for (let i = captured.length - 1; i >= 0; i -= 1) {
           const cap = captured[i];
+          if (cap === undefined) continue;
           const body = isPlainRecord(cap['body']) ? cap['body'] : cap;
           const hitsObj = isPlainRecord(body['hits']) ? body['hits'] : {};
           if (Array.isArray(hitsObj['hits'])) {
@@ -178,7 +183,7 @@ export async function defaultBrowserGetRecords(
     readonly includeObjects: boolean;
     readonly includeText: boolean;
     readonly pageSpec: string | null;
-    readonly timeoutMs?: number;
+    readonly timeoutMs?: number | undefined;
   },
   ctx: RecordCommandContext,
   sessionOverrides?: BrowserSessionOverrides

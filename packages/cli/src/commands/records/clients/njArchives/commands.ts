@@ -119,8 +119,9 @@ export async function runSearch(
       'Monmouth 1875 census is its own command: `nj-archives monmouth --surname <name>`.'
     );
   }
-  if (database in ORDER_ONLY) {
-    const [title, page] = ORDER_ONLY[database];
+  const orderEntry = ORDER_ONLY[database];
+  if (orderEntry) {
+    const [title, page] = orderEntry;
     throw new CliValidationError(
       `${title} has no online search; it is a records-request (order) form. Open it in a browser: ${PORTAL_BASE}${page}`
     );
@@ -252,11 +253,12 @@ export function runUrl(rest: readonly string[], ctx: RecordCommandContext): Reco
   if (database in DATABASES) {
     return {
       exitCode: 0,
-      bytesOut: emitStdout(ctx.io, `${PORTAL_BASE}${DATABASES[database].page}`),
+      bytesOut: emitStdout(ctx.io, `${PORTAL_BASE}${DATABASES[database]?.page ?? ''}`),
     };
   }
-  if (database in ORDER_ONLY) {
-    const [title, page] = ORDER_ONLY[database];
+  const orderOnlyEntry = ORDER_ONLY[database];
+  if (orderOnlyEntry) {
+    const [title, page] = orderOnlyEntry;
     return {
       exitCode: 0,
       bytesOut: emitStdout(

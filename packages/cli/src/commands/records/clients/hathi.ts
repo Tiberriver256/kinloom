@@ -287,8 +287,8 @@ async function runBib(argv: readonly string[], ctx: RecordCommandContext): Promi
   if (ids.length > 0) {
     specs = ids.map((spec) => parseHathiId(spec));
   } else if (parsed.positionals.length === 2) {
-    const idType = parsed.positionals[0].trim().toLowerCase();
-    const value = parsed.positionals[1].trim();
+    const idType = (parsed.positionals[0] ?? '').trim().toLowerCase();
+    const value = (parsed.positionals[1] ?? '').trim();
     if (!isValidIdType(idType) || !value) {
       throw new CliValidationError(`Invalid id type '${idType}'. Choose from: ${VALID_ID_TYPES.join(', ')}`);
     }
@@ -350,7 +350,7 @@ function runUrl(argv: readonly string[], ctx: RecordCommandContext): RecordComma
   }
   const query = parsed.positionals[0];
   const searchType = getStringOption(parsed, 'searchType') ?? 'all';
-  const params = `lookfor=${encodeURIComponent(query)}&type=${encodeURIComponent(searchType)}&inst=`;
+  const params = `lookfor=${encodeURIComponent(query ?? '')}&type=${encodeURIComponent(searchType)}&inst=`;
   const bytesOut = emitStdout(ctx.io, `${CATALOG_SEARCH_BASE}?${params}`);
   return { exitCode: 0, bytesOut };
 }

@@ -86,7 +86,11 @@ export function doesReceiptMatchPackage(
   }
   for (let i = 0; i < receiptKeys.length; i += 1) {
     const key = receiptKeys[i];
-    if (key !== currentKeys[i] || receipt.scans_sha256[key] !== fingerprints.scans_sha256[key]) {
+    if (
+      key === undefined ||
+      key !== currentKeys[i] ||
+      receipt.scans_sha256[key] !== fingerprints.scans_sha256[key]
+    ) {
       return false;
     }
   }

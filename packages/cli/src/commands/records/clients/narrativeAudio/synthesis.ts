@@ -231,6 +231,7 @@ export async function synthesizeWithChirp(options: {
 
   for (let i = 0; i < options.chunks.length; i += 1) {
     const chunk = options.chunks[i];
+    if (chunk === undefined) continue;
     const resolvedVoice = resolveChirpVoice(chunk.voice, options.languageCode);
     const inputObj: Record<string, unknown> = { text: chunk.text };
     if (Object.keys(options.namesMap).length > 0) {
@@ -298,6 +299,7 @@ export async function synthesizeWithGemini(options: {
 
   for (let i = 0; i < options.chunks.length; i += 1) {
     const chunk = options.chunks[i];
+    if (chunk === undefined) continue;
     const resp = await postJsonWithRetries({
       url: `${GEMINI_API_BASE}/${encodeURIComponent(options.model)}:generateContent`,
       headers: { 'x-goog-api-key': key },
@@ -319,7 +321,8 @@ export async function synthesizeWithGemini(options: {
     const content = firstCand && isPlainRecord(firstCand['content']) ? firstCand['content'] : undefined;
     const parts = content && Array.isArray(content['parts']) ? content['parts'] : [];
     const firstPart = isPlainRecord(parts[0]) ? parts[0] : undefined;
-    const inlineData = firstPart && isPlainRecord(firstPart['inlineData']) ? firstPart['inlineData'] : undefined;
+    const inlineData =
+      firstPart && isPlainRecord(firstPart['inlineData']) ? firstPart['inlineData'] : undefined;
     if (!inlineData || typeof inlineData['data'] !== 'string') {
       throw new RecordRuntimeError(`${options.model}: response missing inline audio data`);
     }
@@ -335,7 +338,7 @@ export async function synthesizeWithGemini(options: {
       const mimeType = typeof inlineData['mimeType'] === 'string' ? inlineData['mimeType'] : '';
       const rateMatch = /rate=(\d+)/.exec(mimeType);
       if (rateMatch) {
-        rate = Number.parseInt(rateMatch[1], 10);
+        rate = Number.parseInt(rateMatch[1] ?? '', 10);
       }
     }
 

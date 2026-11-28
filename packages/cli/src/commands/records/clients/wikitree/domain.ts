@@ -16,7 +16,7 @@ export interface WrappedWikiTreeData {
 export function normalizeProfileKey(raw: string): string {
   const cleaned = raw.trim();
   const match = WIKITREE_URL_RE.exec(cleaned);
-  return match ? match[1] : cleaned;
+  return match?.[1] ?? cleaned;
 }
 
 export function resolveSearchName(

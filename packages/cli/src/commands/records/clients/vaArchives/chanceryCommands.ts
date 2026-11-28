@@ -184,8 +184,9 @@ export async function runChanceryCase(
     getNumberOption(parsed, 'cacheTtlHours')
   );
 
+  const cfnStr = cfn ?? '';
   const detailHtml = await fetchText(state, CHANCERY_DETAIL, {
-    params: { CFN: cfn },
+    params: { CFN: cfnStr },
     allowedHosts: ['old.lva.virginia.gov'],
   });
   const detail: ChanceryCaseDetail = {
@@ -195,7 +196,7 @@ export async function runChanceryCase(
   };
   if (includeImages) {
     const imgsHtml = await fetchText(state, CHANCERY_IMAGES, {
-      params: { CFN: cfn },
+      params: { CFN: cfnStr },
       allowedHosts: ['old.lva.virginia.gov'],
     });
     detail.images = parseImagesPage(imgsHtml);
@@ -237,7 +238,7 @@ export async function runChanceryDownload(
     return { exitCode: 0, bytesOut: emitStdout(ctx.io, renderChanceryDownloadHelp()) };
   }
 
-  const cfn = parsed.positionals[0];
+  const cfn = parsed.positionals[0] ?? '';
   if (!/^[0-9]+(?:-[0-9]+)*$/.test(cfn)) {
     throw new CliValidationError(
       `Invalid CFN (expected locality-year-number digits): ${JSON.stringify(cfn)}`

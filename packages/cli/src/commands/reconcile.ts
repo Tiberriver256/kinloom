@@ -15,9 +15,9 @@ import { snapshotToCompileInput } from './dataFiles.js';
 export interface ReconcileCommandOptions {
   siteUrl: string;
   configPath: string;
-  token?: string;
-  mode?: BuildMode;
-  fetchImpl?: typeof fetch;
+  token?: string | undefined;
+  mode?: BuildMode | undefined;
+  fetchImpl?: typeof fetch | undefined;
 }
 
 export interface ReconcileCommandResult {

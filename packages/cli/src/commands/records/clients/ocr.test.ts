@@ -37,8 +37,8 @@ async function makeTempDir(prefix = 'kinloom-ocr-test-'): Promise<string> {
 
 async function invokeOcr(
   args: readonly string[],
-  overrides: Partial<RecordCommandContext> = {}
-): Promise<{ exitCode: number; stdout: string; stderr: string; cacheHit?: boolean }> {
+  overrides: { [K in keyof RecordCommandContext]?: RecordCommandContext[K] | undefined } = {}
+): Promise<{ exitCode: number; stdout: string; stderr: string; cacheHit?: boolean | undefined }> {
   const stdout: string[] = [];
   const stderr: string[] = [];
   const ctx = createRecordContext({
@@ -189,8 +189,8 @@ describe('ocr native client', () => {
 
     expect(res.exitCode, res.stderr).toBe(0);
     expect(observedEnvs).toHaveLength(1);
-    expect(observedEnvs[0]['OMP_THREAD_LIMIT']).toBe('1');
-    expect(observedEnvs[0]['OMP_NUM_THREADS']).toBe('1');
+    expect(observedEnvs[0]!['OMP_THREAD_LIMIT']!).toBe('1');
+    expect(observedEnvs[0]!['OMP_NUM_THREADS']!).toBe('1');
     const parsed = JSON.parse(res.stdout) as {
       text: string;
       meta: { omp_thread_limit: number; timeout_s: number };
@@ -433,8 +433,8 @@ describe('ocr native client', () => {
     };
     expect(parsedFind1.count).toBe(2);
     expect(parsedFind1.cache_hits).toBe(0);
-    expect(parsedFind1.files[0].lines.map((l) => l.text)).toEqual(['Lincoln']);
-    expect(parsedFind1.files[1].lines).toEqual([]);
+    expect(parsedFind1.files[0]!.lines.map((l) => l.text)).toEqual(['Lincoln']);
+    expect(parsedFind1.files[1]!.lines).toEqual([]);
     expect(fs.readFileSync(callLog, 'utf8').trim().split('\n')).toHaveLength(4);
 
     const find2 = await invokeOcr([img1, img2, '--cache-dir', cacheDir, '--find', 'springfield'], {
@@ -446,8 +446,8 @@ describe('ocr native client', () => {
       files: Array<{ lines: Array<{ text: string }> }>;
     };
     expect(parsedFind2.cache_hits).toBe(2);
-    expect(parsedFind2.files[0].lines).toEqual([]);
-    expect(parsedFind2.files[1].lines.map((l) => l.text)).toEqual(['Springfield']);
+    expect(parsedFind2.files[0]!.lines).toEqual([]);
+    expect(parsedFind2.files[1]!.lines.map((l) => l.text)).toEqual(['Springfield']);
     expect(fs.readFileSync(callLog, 'utf8').trim().split('\n')).toHaveLength(4);
 
     // Missing file fails cleanly with exit 2 before invoking tesseract.
@@ -464,7 +464,7 @@ describe('ocr native client', () => {
     const cacheDir = path.join(tmp, 'cache');
     const imgs = [1, 2, 3, 4].map((n) => path.join(tmp, `sheet-${n}.png`));
     for (let i = 0; i < imgs.length; i += 1) {
-      await writeFile(imgs[i], await createSyntheticPng(24, 24, { r: 200 + i * 10, g: 200, b: 200 }));
+      await writeFile(imgs[i]!, await createSyntheticPng(24, 24, { r: 200 + i * 10, g: 200, b: 200 }));
     }
 
     let inFlight = 0;
@@ -474,7 +474,7 @@ describe('ocr native client', () => {
       totalCalls += 1;
       inFlight += 1;
       maxInFlight = Math.max(maxInFlight, inFlight);
-      const base = path.basename(args[0]);
+      const base = path.basename(args[0]!);
       const delayMs =
         base === 'sheet-1.png' ? 90 : base === 'sheet-2.png' ? 65 : base === 'sheet-3.png' ? 40 : 15;
       await new Promise((resolve) => setTimeout(resolve, delayMs));
@@ -517,7 +517,7 @@ describe('ocr native client', () => {
     expect(warm.cacheHit).toBe(true);
     expect(totalCalls).toBe(4);
 
-    const refreshed = await invokeOcr([imgs[0], '--cache-dir', cacheDir, '--refresh', '--json'], {
+    const refreshed = await invokeOcr([imgs[0]!, '--cache-dir', cacheDir, '--refresh', '--json'], {
       execFileImpl: mockExec,
     });
     expect(refreshed.exitCode).toBe(0);
@@ -534,7 +534,7 @@ describe('ocr native client', () => {
 
     const seenSizes: Array<readonly [number, number]> = [];
     const mockExec: ExecFileFn = async (_bin, args) => {
-      const targetPath = args[0];
+      const targetPath = args[0]!;
       const dims = readImageDimensions(fs.readFileSync(targetPath));
       if (!dims) {
         throw new Error(`Could not read dimensions of ${targetPath}`);
@@ -569,14 +569,14 @@ describe('ocr native client', () => {
     expect([body.image_width, body.image_height]).toEqual([4000, 3000]);
     expect(body.cache_hit).toBe(false);
     expect(body.lines).toHaveLength(1);
-    expect(body.lines[0].text).toBe('Probate');
-    expect(Math.abs(body.lines[0].x0 - 400)).toBeLessThanOrEqual(2);
-    expect(Math.abs(body.lines[0].y0 - 600)).toBeLessThanOrEqual(2);
-    expect(Math.abs(body.lines[0].x1 - 1200)).toBeLessThanOrEqual(2);
-    expect(Math.abs(body.lines[0].y1 - 750)).toBeLessThanOrEqual(2);
+    expect(body.lines[0]!.text).toBe('Probate');
+    expect(Math.abs(body.lines[0]!.x0 - 400)).toBeLessThanOrEqual(2);
+    expect(Math.abs(body.lines[0]!.y0 - 600)).toBeLessThanOrEqual(2);
+    expect(Math.abs(body.lines[0]!.x1 - 1200)).toBeLessThanOrEqual(2);
+    expect(Math.abs(body.lines[0]!.y1 - 750)).toBeLessThanOrEqual(2);
 
     expect(seenSizes).toHaveLength(1);
-    expect(Math.max(seenSizes[0][0], seenSizes[0][1])).toBeLessThanOrEqual(3500);
+    expect(Math.max(seenSizes[0]![0]!, seenSizes[0]![1]!)).toBeLessThanOrEqual(3500);
 
     // Cached --tsv exposes rescaled 4000x3000 page box and hits cache.
     const tsvRes = await invokeOcr([bigPng, '--cache-dir', cacheDir, '--tsv'], {
@@ -706,8 +706,8 @@ describe('ocr native client', () => {
     );
     expect(cliRes.exitCode, cliRes.stderr).toBe(0);
     expect(cliCalls).toHaveLength(1);
-    expect(cliCalls[0].file).toBe('mock-vision-cli');
-    expect(cliCalls[0].args).toContain('--print-timeout');
+    expect(cliCalls[0]!.file).toBe('mock-vision-cli');
+    expect(cliCalls[0]!.args).toContain('--print-timeout');
     const cliJson = JSON.parse(cliRes.stdout) as { text: string; engine: string };
     expect(cliJson.text).toBe('Clarissa Vance, age 38, seamstress');
     expect(cliJson.engine).toContain('mock-vision-cli:');
@@ -722,7 +722,7 @@ describe('ocr native client', () => {
     const pageNames = ['page-01.png', 'page-02.png', 'page-03.png', 'page-04.png'];
     for (let i = 0; i < pageNames.length; i += 1) {
       await writeFile(
-        path.join(scanDir, pageNames[i]),
+        path.join(scanDir, pageNames[i]!),
         await createSyntheticPng(32, 32, { r: 180 + i * 15, g: 200, b: 220 })
       );
     }
@@ -740,7 +740,7 @@ describe('ocr native client', () => {
       expect(options?.env?.['OMP_THREAD_LIMIT']).toBe('1');
       inFlight += 1;
       maxInFlight = Math.max(maxInFlight, inFlight);
-      const base = path.basename(args[0]);
+      const base = path.basename(args[0]!);
       try {
         if (base === 'page-02.png') {
           // Simulate hung page that exceeds 0.05s timeout.

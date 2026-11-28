@@ -342,7 +342,9 @@ export function runUncitedSentenceCheck(patch: LooseRecord): CitationsCheckResul
     flush();
 
     for (let pIdx = 0; pIdx < proseParagraphs.length; pIdx += 1) {
-      const sentences = splitParagraphIntoSentences(proseParagraphs[pIdx]);
+      const para = proseParagraphs[pIdx];
+      if (para === undefined) continue;
+      const sentences = splitParagraphIntoSentences(para);
       for (const sentence of sentences) {
         if (sentence.split(/\s+/).length < 4) {
           continue;

@@ -118,10 +118,10 @@ export async function cachedFetch(
   cachePath: string,
   options: {
     readonly method?: 'GET' | 'POST';
-    readonly params?: Readonly<Record<string, string>>;
-    readonly data?: Readonly<Record<string, string>>;
+    readonly params?: Readonly<Record<string, string>> | undefined;
+    readonly data?: Readonly<Record<string, string>> | undefined;
     readonly ttlHours: number | null;
-    readonly allowedHosts?: readonly string[];
+    readonly allowedHosts?: readonly string[] | undefined;
   }
 ): Promise<{ readonly path: string; readonly meta: CachedMeta; readonly cacheHit: boolean }> {
   if (!state.refresh) {
@@ -190,9 +190,9 @@ export async function fetchText(
   url: string,
   options: {
     readonly method?: 'GET' | 'POST';
-    readonly params?: Readonly<Record<string, string>>;
-    readonly data?: Readonly<Record<string, string>>;
-    readonly allowedHosts?: readonly string[];
+    readonly params?: Readonly<Record<string, string>> | undefined;
+    readonly data?: Readonly<Record<string, string>> | undefined;
+    readonly allowedHosts?: readonly string[] | undefined;
   } = {}
 ): Promise<string> {
   const method = options.method ?? 'GET';

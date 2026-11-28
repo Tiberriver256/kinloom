@@ -63,14 +63,14 @@ export interface BookPublishingCliPluginOptions {
   /** Optional environment variable map override (defaults to process.env). */
   readonly env?: Readonly<Record<string, string | undefined>>;
   /** Optional deterministic ISO timestamp for reproducible builds. */
-  readonly nowIso?: () => string;
+  readonly nowIso?: (() => string) | undefined;
 }
 
 function resolveCliPublisher(params: {
   readonly providerName: string;
   readonly environment: BookPublisherEnvironment;
   readonly pluginOptions: BookPublishingCliPluginOptions;
-  readonly fetchImpl?: typeof fetch;
+  readonly fetchImpl?: typeof fetch | undefined;
 }): BookPublisherProvider {
   if (params.pluginOptions.publisherProvider) {
     return params.pluginOptions.publisherProvider;
@@ -80,7 +80,9 @@ function resolveCliPublisher(params: {
     throw new CliValidationError(`Invalid --provider '${params.providerName}'. Expected 'mock' or 'lulu'.`);
   }
   if (parsed.data === 'mock') {
-    return createMockBookPublisherAdapter({ nowIso: params.pluginOptions.nowIso });
+    return createMockBookPublisherAdapter(
+      params.pluginOptions.nowIso !== undefined ? { nowIso: params.pluginOptions.nowIso } : {}
+    );
   }
   const env = params.pluginOptions.env ?? process.env;
   const clientId = env['KINLOOM_LULU_CLIENT_ID']?.trim() || env['KINLOOM_LULU_CLIENT_KEY']?.trim() || '';

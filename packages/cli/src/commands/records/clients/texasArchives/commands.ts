@@ -127,7 +127,7 @@ export async function runPortalItem(
     return { exitCode: 0, bytesOut: emitStdout(ctx.io, renderPortalItemHelp()) };
   }
 
-  const ark = normalizeArk(parsed.positionals[0]);
+  const ark = normalizeArk(parsed.positionals[0] ?? '');
   const asJson = getBooleanOption(parsed, 'asJson');
   const refresh = getBooleanOption(parsed, 'refresh');
   const ttlHours = resolveTexasArchivesTtl(getNumberOption(parsed, 'cacheTtlHours'), ctx);
@@ -181,10 +181,11 @@ export async function runTda(
   const ttlHours = resolveTexasArchivesTtl(getNumberOption(parsed, 'cacheTtlHours'), ctx);
   const cacheDir = getTexasArchivesCacheDir(ctx);
 
-  const { value: data, cacheHit } = await cachedTdaRss(ctx, cacheDir, query, ttlHours, refresh);
+  const queryStr = query ?? '';
+  const { value: data, cacheHit } = await cachedTdaRss(ctx, cacheDir, queryStr, ttlHours, refresh);
 
   const results = data.results.slice(0, limit);
-  const quoted = encodeUrlPathPreservingSlashes(query);
+  const quoted = encodeUrlPathPreservingSlashes(queryStr);
   const payload = {
     search_url: `${TDA_BASE}/?s=${quoted}`,
     feed_url: `${TDA_BASE}/search/${quoted}/feed/rss2/`,

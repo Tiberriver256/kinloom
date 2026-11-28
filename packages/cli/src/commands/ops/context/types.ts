@@ -5,7 +5,7 @@ export const REDACTED_RELATIVE_LABEL = '[Living relative redacted]';
 export interface ContextCommandOptions {
   repoDir?: string;
   personId: string;
-  ancestryDir?: string;
+  ancestryDir?: string | undefined;
   includeFamily?: boolean;
   full?: boolean;
   json?: boolean;

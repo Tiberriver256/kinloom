@@ -256,7 +256,7 @@ describe('OpenAI-compatible speech client and ffmpeg normalizer', () => {
 
     const mockExec: AudioExecFileFn = async (file, args) => {
       recordedCalls.push({ file, args });
-      const target = args[args.length - 1];
+      const target = args[args.length - 1]!;
       fs.writeFileSync(target, Buffer.from('NORMALIZED-AUDIO'));
       return { stdout: Buffer.alloc(0), stderr: Buffer.alloc(0) };
     };

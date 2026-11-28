@@ -199,7 +199,9 @@ export function formatMemorialsLines(
           continue;
         }
         const target = isPlainRecord(rel['memorial']) ? rel['memorial'] : {};
-        lines.push(`    ${String(rel['type'] ?? '')}: ${primaryName(target)} (${String(target['id'] ?? '')})`);
+        lines.push(
+          `    ${String(rel['type'] ?? '')}: ${primaryName(target)} (${String(target['id'] ?? '')})`
+        );
       }
     }
     if (options.photos) {
@@ -228,7 +230,9 @@ export function formatCemeteriesText(total: unknown, cemeteries: readonly JsonRe
   for (const cem of cemeteries) {
     const names = Array.isArray(cem['names']) ? cem['names'] : [];
     const shown =
-      names.length > 0 && isPlainRecord(names[0]) && typeof names[0]['name'] === 'string' ? names[0]['name'] : '';
+      names.length > 0 && isPlainRecord(names[0]) && typeof names[0]['name'] === 'string'
+        ? names[0]['name']
+        : '';
     let extra = '';
     if (names.length > 1) {
       const altNames = names
@@ -258,7 +262,9 @@ export function formatPlacesText(result: JsonRecord): string {
     }
     const names = Array.isArray(loc['names']) ? loc['names'] : [];
     const shown =
-      names.length > 0 && isPlainRecord(names[0]) && typeof names[0]['name'] === 'string' ? names[0]['name'] : '';
+      names.length > 0 && isPlainRecord(names[0]) && typeof names[0]['name'] === 'string'
+        ? names[0]['name']
+        : '';
     const kind = String(loc['__typename'] ?? '');
     const count = loc['memorialCount'];
     const suffix = count !== null && count !== undefined ? ` | ${String(count)} memorials` : '';

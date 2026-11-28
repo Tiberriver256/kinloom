@@ -45,7 +45,8 @@ export function normalizePeopleHit(recordType: string, raw: Record<string, unkno
   const fullName = nameParts.join(' ');
   const dateField = RECORD_TYPE_SPECS[recordType]?.dateField ?? null;
   const primaryDate = dateField ? trimIsoDate(raw[dateField]) : '';
-  const countyRaw = raw['county'] ?? raw['burialLocation'] ?? raw['residencePriorToService'] ?? raw['residence'] ?? '';
+  const countyRaw =
+    raw['county'] ?? raw['burialLocation'] ?? raw['residencePriorToService'] ?? raw['residence'] ?? '';
   const county = String(countyRaw ?? '').trim();
   const recordUrl = recordId
     ? `${MNHS_PEOPLE_RECORD_URL}?uuid=${encodeURIComponent(recordId)}&recordType=${encodeURIComponent(recordType)}`
@@ -100,7 +101,7 @@ function extractDocIdFromHref(href: string): string {
 
 export function parseNewspapersSearchHtml(html: string): readonly [number | null, NewspaperSearchItem[]] {
   const countMatch = /\bpsRecCnt\s*=\s*(\d+)\b/.exec(html);
-  const total = countMatch ? Number.parseInt(countMatch[1], 10) : null;
+  const total = countMatch ? Number.parseInt(countMatch[1] ?? '', 10) : null;
   const $ = loadHtml(html);
   const items: NewspaperSearchItem[] = [];
 
@@ -127,7 +128,7 @@ export function parseNewspapersSearchHtml(html: string): readonly [number | null
       const text = collapseWhitespace($(divEl).text());
       const pubMatch = /^Publication Date:\s*(.+)$/i.exec(text);
       if (pubMatch) {
-        item.publication_date = pubMatch[1].trim();
+        item.publication_date = (pubMatch[1] ?? '').trim();
       } else if (text && !item.detail) {
         item.detail = text;
       }

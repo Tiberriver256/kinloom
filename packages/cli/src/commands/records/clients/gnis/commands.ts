@@ -55,7 +55,7 @@ export async function runDownload(
       ),
     };
   }
-  const state = parsed.positionals[0].toUpperCase();
+  const state = (parsed.positionals[0] ?? '').toUpperCase();
   const force = getBooleanOption(parsed, 'force');
   if (!GNIS_STATE_CODES.has(state)) {
     throw new RecordRuntimeError(`Unknown state/territory code: ${state}`);
@@ -124,7 +124,7 @@ export async function runSearch(
   }
 
   const canonicalParams: GnisQueryParams = {
-    name,
+    name: name ?? '',
     state: historical ? null : normalizedState,
     exact,
     feature_class: featureClass ?? null,

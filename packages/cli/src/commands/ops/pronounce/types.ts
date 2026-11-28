@@ -48,12 +48,12 @@ export interface PronounceAudioHit {
   filename: string;
   commons_file: string;
   url: string;
-  language?: string;
+  language?: string | undefined;
   source_url: string;
-  provider?: PronounceProviderId;
-  tier?: PronounceSourceTier;
-  speaker?: string;
-  country?: string;
+  provider?: PronounceProviderId | undefined;
+  tier?: PronounceSourceTier | undefined;
+  speaker?: string | undefined;
+  country?: string | undefined;
 }
 
 export interface PronounceSourceHit {
@@ -65,9 +65,9 @@ export interface PronounceSourceHit {
   url: string;
   label: string;
   ipa: string[];
-  phonetic?: string[];
+  phonetic?: string[] | undefined;
   audio_files: string[];
-  note?: string;
+  note?: string | undefined;
 }
 
 export interface PronounceLookupResult {
@@ -93,14 +93,14 @@ export interface PronounceLookupResult {
 
 export interface PronounceLookupOptions {
   term: string;
-  lang?: string;
-  region?: string;
-  json?: boolean;
-  refresh?: boolean;
-  cacheDir?: string;
-  timeoutMs?: number;
-  forvoApiKey?: string;
-  fetchImpl?: typeof fetch;
-  sleepFn?: (ms: number) => Promise<void>;
-  nowIso?: () => string;
+  lang?: string | undefined;
+  region?: string | undefined;
+  json?: boolean | undefined;
+  refresh?: boolean | undefined;
+  cacheDir?: string | undefined;
+  timeoutMs?: number | undefined;
+  forvoApiKey?: string | undefined;
+  fetchImpl?: typeof fetch | undefined;
+  sleepFn?: ((ms: number) => Promise<void>) | undefined;
+  nowIso?: (() => string) | undefined;
 }

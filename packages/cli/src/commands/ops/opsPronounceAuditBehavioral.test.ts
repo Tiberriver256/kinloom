@@ -786,8 +786,8 @@ describe('pronounce mediaWiki parsing and lookupCache retry/persistence', () => 
     ]);
     const enTargets = buildWikiTargets('en');
     expect(enTargets.map((t) => t.host)).toEqual(['en.wiktionary.org', 'en.wikipedia.org']);
-    expect(formatWikiSourceLabel(nlTargets[0], 'nl')).toBe('Wiktionary (Dutch IPA)');
-    expect(formatWikiSourceLabel(enTargets[1], 'zz')).toBe('Wikipedia (zz IPA)');
+    expect(formatWikiSourceLabel(nlTargets[0]!, 'nl')).toBe('Wiktionary (Dutch IPA)');
+    expect(formatWikiSourceLabel(enTargets[1]!, 'zz')).toBe('Wikipedia (zz IPA)');
   });
 
   it('handles lookupCache persistence, corrupt cache recovery, env dir, sleep, and fetch retries', async () => {

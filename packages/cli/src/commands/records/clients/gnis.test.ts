@@ -90,7 +90,7 @@ async function invokeGnis(
   args: readonly string[],
   env: NodeJS.ProcessEnv,
   fetchImpl: typeof fetch
-): Promise<{ exitCode: number; stdout: string; stderr: string; cacheHit?: boolean }> {
+): Promise<{ exitCode: number; stdout: string; stderr: string; cacheHit?: boolean | undefined }> {
   const stdout: string[] = [];
   const stderr: string[] = [];
   const ctx = createRecordContext({
@@ -141,14 +141,14 @@ describe('gnis native client', () => {
     expect(fs.existsSync(path.join(cacheRoot, 'CA.txt'))).toBe(true);
     const queryFiles = fs.readdirSync(path.join(cacheRoot, '_queries')).filter((f) => f.endsWith('.json'));
     expect(queryFiles).toHaveLength(1);
-    expect(path.basename(queryFiles[0], '.json')).toHaveLength(64);
+    expect(path.basename(queryFiles[0]!, '.json')).toHaveLength(64);
     const p1 = JSON.parse(r1.stdout) as {
       matches: number;
       results: { feature_id: string }[];
       cache_hit: boolean;
     };
     expect(p1.matches).toBe(1);
-    expect(p1.results[0].feature_id).toBe('277544');
+    expect(p1.results[0]!.feature_id).toBe('277544');
     expect(p1.cache_hit).toBe(false);
     expect(r1.cacheHit).toBe(false);
 
@@ -177,7 +177,7 @@ describe('gnis native client', () => {
     expect(downloadUrls).toHaveLength(1);
     expect(stateTableReads).toBe(2);
     const p4 = JSON.parse(r4.stdout) as { results: { feature_id: string }[] };
-    expect(p4.results[0].feature_id).toBe('277516');
+    expect(p4.results[0]!.feature_id).toBe('277516');
   });
 
   it('supports --refresh, --cache-ttl-hours 0, and rejects negative TTL with exit 2', async () => {
@@ -195,7 +195,7 @@ describe('gnis native client', () => {
     const r1 = await invokeGnis(['search', 'Merced', '--state', 'CA', '--json'], env, fetchImpl);
     expect(r1.exitCode).toBe(0);
     expect(downloadUrls).toHaveLength(1);
-    expect((JSON.parse(r1.stdout) as { results: { map_name: string }[] }).results[0].map_name).toBe(
+    expect((JSON.parse(r1.stdout) as { results: { map_name: string }[] }).results[0]!.map_name).toBe(
       'Merced v1'
     );
 
@@ -204,7 +204,7 @@ describe('gnis native client', () => {
     const r2 = await invokeGnis(['search', 'Merced', '--state', 'CA', '--refresh', '--json'], env, fetchImpl);
     expect(r2.exitCode).toBe(0);
     expect(downloadUrls).toHaveLength(2);
-    expect((JSON.parse(r2.stdout) as { results: { map_name: string }[] }).results[0].map_name).toBe(
+    expect((JSON.parse(r2.stdout) as { results: { map_name: string }[] }).results[0]!.map_name).toBe(
       'Merced v2'
     );
 
@@ -226,7 +226,7 @@ describe('gnis native client', () => {
     expect(r3.exitCode).toBe(0);
     expect(downloadUrls).toHaveLength(2);
     expect(tableReads).toBe(1);
-    expect((JSON.parse(r3.stdout) as { results: { map_name: string }[] }).results[0].map_name).toBe(
+    expect((JSON.parse(r3.stdout) as { results: { map_name: string }[] }).results[0]!.map_name).toBe(
       'Merced v2'
     );
 

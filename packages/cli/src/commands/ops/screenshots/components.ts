@@ -45,7 +45,7 @@ export function buildComponentCaptureTargets(
     label: string,
     route: string,
     recipeId: ComponentCaptureTarget['recipeId'],
-    extra?: { readonly viewportFilter?: readonly string[]; readonly fullPage?: boolean }
+    extra?: { readonly viewportFilter?: readonly string[]; readonly fullPage?: boolean | undefined }
   ): ComponentCaptureTarget => ({
     category: 'component',
     id: `component:${slug}:${state}`,

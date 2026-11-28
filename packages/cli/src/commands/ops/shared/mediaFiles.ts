@@ -57,6 +57,7 @@ export function findDuplicateNormalizedMediaFiles(
 
   for (let i = 0; i < mediaItems.length; i += 1) {
     const item = mediaItems[i];
+    if (item === undefined) continue;
     const normalized = normalizeMediaFilePath(item.file);
     if (!normalized) {
       continue;

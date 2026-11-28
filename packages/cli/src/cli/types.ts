@@ -8,19 +8,19 @@ export { type CliIo, DEFAULT_IO } from '../io.js';
 
 export interface RunCliOptions {
   io?: CliIo;
-  fetchImpl?: typeof fetch;
-  cwd?: string;
+  fetchImpl?: typeof fetch | undefined;
+  cwd?: string | undefined;
   plugins?: readonly KinloomCliPlugin[];
   screenshotBrowserFactory?: ScreenshotBrowserFactory;
 }
 
 export interface CliDispatchContext {
   io: CliIo;
-  rawIo?: CliIo;
+  rawIo?: CliIo | undefined;
   cwd: string;
-  fetchImpl?: typeof fetch;
-  plugins?: readonly KinloomCliPlugin[];
-  screenshotBrowserFactory?: ScreenshotBrowserFactory;
+  fetchImpl?: typeof fetch | undefined;
+  plugins?: readonly KinloomCliPlugin[] | undefined;
+  screenshotBrowserFactory?: ScreenshotBrowserFactory | undefined;
 }
 
 export function requireStringFlag(value: string | undefined, flagName: string): string {

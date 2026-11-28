@@ -38,7 +38,7 @@ export async function runCli(argv: readonly string[], options?: RunCliOptions): 
       return rootHelpExit;
     }
 
-    const [command, ...rest] = argv;
+    const [command = '', ...rest] = argv;
 
     // Dispatch record, archive-search, guide, and scan/OCR commands before generic --help parsing
     // so subcommand --help (e.g. `kinloom ia grep --help`) and `--script-help` pass through intact.

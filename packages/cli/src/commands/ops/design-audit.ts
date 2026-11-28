@@ -32,11 +32,11 @@ export { DESIGN_AUDIT_HELP } from './help.js';
 
 export interface DesignAuditInitOptions {
   readonly outPath: string;
-  readonly baseUrl?: string;
-  readonly archetype?: DesignAuditArchetypeId;
-  readonly routes?: readonly string[];
-  readonly repoRoot?: string;
-  readonly force?: boolean;
+  readonly baseUrl?: string | undefined;
+  readonly archetype?: DesignAuditArchetypeId | undefined;
+  readonly routes?: readonly string[] | undefined;
+  readonly repoRoot?: string | undefined;
+  readonly force?: boolean | undefined;
 }
 
 export interface DesignAuditInitResult {
@@ -47,22 +47,22 @@ export interface DesignAuditInitResult {
 }
 
 export interface DesignAuditRunOptions {
-  readonly url?: string;
-  readonly planPath?: string;
-  readonly outDir?: string;
-  readonly repoRoot?: string;
-  readonly archetype?: DesignAuditArchetypeId;
-  readonly routes?: readonly string[];
-  readonly themes?: readonly DesignAuditTheme[];
-  readonly states?: readonly DesignAuditUiState[];
-  readonly tokenPaths?: readonly string[];
-  readonly cssPaths?: readonly string[];
-  readonly baselinePath?: string;
-  readonly staticOnly?: boolean;
-  readonly failOnError?: boolean;
-  readonly json?: boolean;
-  readonly browserFactory?: DesignAuditBrowserFactory;
-  readonly loadingDelayMs?: number;
+  readonly url?: string | undefined;
+  readonly planPath?: string | undefined;
+  readonly outDir?: string | undefined;
+  readonly repoRoot?: string | undefined;
+  readonly archetype?: DesignAuditArchetypeId | undefined;
+  readonly routes?: readonly string[] | undefined;
+  readonly themes?: readonly DesignAuditTheme[] | undefined;
+  readonly states?: readonly DesignAuditUiState[] | undefined;
+  readonly tokenPaths?: readonly string[] | undefined;
+  readonly cssPaths?: readonly string[] | undefined;
+  readonly baselinePath?: string | undefined;
+  readonly staticOnly?: boolean | undefined;
+  readonly failOnError?: boolean | undefined;
+  readonly json?: boolean | undefined;
+  readonly browserFactory?: DesignAuditBrowserFactory | undefined;
+  readonly loadingDelayMs?: number | undefined;
 }
 
 export interface DesignAuditRunResult {

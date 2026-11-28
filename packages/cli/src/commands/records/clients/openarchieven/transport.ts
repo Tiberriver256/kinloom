@@ -514,7 +514,9 @@ export async function downloadScanCandidates(
 }> {
   let lastError: string | undefined;
   for (let idx = 0; idx < candidates.length; idx += 1) {
-    const [candidateUrl, fallbackOn5xx] = candidates[idx];
+    const candidate = candidates[idx];
+    if (!candidate) continue;
+    const [candidateUrl, fallbackOn5xx] = candidate;
     const hasNext = idx + 1 < candidates.length;
     try {
       const { body, ext, cacheHit } = await cachedScanBytesChecked(ctx, cacheDir, candidateUrl, options);

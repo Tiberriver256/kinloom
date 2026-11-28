@@ -19,12 +19,16 @@ export interface OptionalBrowserProcess {
 export interface OptionalBrowserPage {
   goto(
     url: string,
-    options?: { waitUntil?: 'load' | 'domcontentloaded' | 'networkidle'; timeout?: number }
+    options?: { waitUntil?: 'load' | 'domcontentloaded' | 'networkidle'; timeout?: number | undefined }
   ): Promise<unknown>;
   content(): Promise<string>;
   evaluate<T>(fn: string | (() => T)): Promise<T>;
   close(): Promise<void>;
-  waitForFunction?(pageFunction: string, arg?: unknown, options?: { timeout?: number }): Promise<unknown>;
+  waitForFunction?(
+    pageFunction: string,
+    arg?: unknown,
+    options?: { timeout?: number | undefined }
+  ): Promise<unknown>;
   waitForTimeout?(timeout: number): Promise<void>;
   setDefaultTimeout?(timeout: number): void;
   setDefaultNavigationTimeout?(timeout: number): void;
@@ -48,10 +52,10 @@ export interface PlaywrightCoreModule {
     executablePath?(): string;
     launch(options?: {
       headless?: boolean;
-      executablePath?: string;
+      executablePath?: string | undefined;
       args?: string[];
-      timeout?: number;
-      env?: Record<string, string>;
+      timeout?: number | undefined;
+      env?: Record<string, string> | undefined;
     }): Promise<OptionalBrowser>;
   };
 }
@@ -77,18 +81,18 @@ export class BrowserTimeoutError extends RecordRuntimeError {
 
 export type ChromiumLauncher = (options: {
   readonly env: NodeJS.ProcessEnv;
-  readonly overrideEnvVar?: string;
+  readonly overrideEnvVar?: string | undefined;
   readonly launchTimeoutMs?: number;
 }) => Promise<OptionalBrowser>;
 
 export interface LaunchOptionalChromiumOptions {
   readonly env: NodeJS.ProcessEnv;
-  readonly overrideEnvVar?: string;
+  readonly overrideEnvVar?: string | undefined;
   readonly launchTimeoutMs?: number;
-  readonly closeTimeoutMs?: number;
-  readonly killGraceMs?: number;
+  readonly closeTimeoutMs?: number | undefined;
+  readonly killGraceMs?: number | undefined;
   readonly loadPlaywright?: () => Promise<PlaywrightCoreModule>;
-  readonly isExecutable?: (filePath: string) => boolean;
+  readonly isExecutable?: ((filePath: string) => boolean) | undefined;
 }
 
 export interface BrowserSession {
@@ -189,9 +193,9 @@ export function findSystemChromium(
 
 export function resolveChromiumExecutable(options: {
   readonly env: NodeJS.ProcessEnv;
-  readonly overrideEnvVar?: string;
-  readonly playwrightExecutablePath?: string;
-  readonly isExecutable?: (filePath: string) => boolean;
+  readonly overrideEnvVar?: string | undefined;
+  readonly playwrightExecutablePath?: string | undefined;
+  readonly isExecutable?: ((filePath: string) => boolean) | undefined;
 }): BrowserExecutableResolution {
   const isExecutable = options.isExecutable ?? isExecutableFile;
 
@@ -319,13 +323,13 @@ export async function forceTerminateBrowserProcess(
 
 export async function safeCloseBrowser(
   handles: {
-    readonly page?: OptionalBrowserPage;
-    readonly context?: OptionalBrowserContext;
-    readonly browser?: OptionalBrowser;
+    readonly page?: OptionalBrowserPage | undefined;
+    readonly context?: OptionalBrowserContext | undefined;
+    readonly browser?: OptionalBrowser | undefined;
   },
   options: {
-    readonly closeTimeoutMs?: number;
-    readonly killGraceMs?: number;
+    readonly closeTimeoutMs?: number | undefined;
+    readonly killGraceMs?: number | undefined;
   } = {}
 ): Promise<void> {
   const closeTimeoutMs = Math.max(1, options.closeTimeoutMs ?? DEFAULT_BROWSER_CLOSE_TIMEOUT_MS);
@@ -410,8 +414,8 @@ export async function launchOptionalChromium(
     headless: boolean;
     timeout: number;
     args: string[];
-    executablePath?: string;
-    env?: Record<string, string>;
+    executablePath?: string | undefined;
+    env?: Record<string, string> | undefined;
   } = {
     headless: true,
     timeout: launchTimeoutMs,

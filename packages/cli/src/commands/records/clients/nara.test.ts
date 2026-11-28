@@ -121,7 +121,7 @@ interface InvokeResult {
   readonly exitCode: number;
   readonly stdout: string;
   readonly stderr: string;
-  readonly cacheHit?: boolean;
+  readonly cacheHit?: boolean | undefined;
   readonly bytesOut: number;
 }
 
@@ -129,11 +129,11 @@ async function invokeNara(
   args: readonly string[],
   options: {
     readonly cacheDir: string;
-    readonly cwd?: string;
-    readonly fetchImpl?: typeof fetch;
-    readonly env?: NodeJS.ProcessEnv;
-    readonly sleepFn?: (ms: number) => Promise<void>;
-    readonly nowMs?: () => number;
+    readonly cwd?: string | undefined;
+    readonly fetchImpl?: typeof fetch | undefined;
+    readonly env?: NodeJS.ProcessEnv | undefined;
+    readonly sleepFn?: ((ms: number) => Promise<void>) | undefined;
+    readonly nowMs?: (() => number) | undefined;
     readonly handler?: RecordHandler;
     readonly overrides?: NaraBrowserOverrides;
   }
@@ -309,7 +309,7 @@ describe('NARA WAF and parallelism', () => {
     };
     expect(payload.query).toBe('"Merced" AND "24-7" AND "1940"');
     expect(payload.total).toBe(1);
-    expect(payload.results[0].naId).toBe('123456');
+    expect(payload.results[0]!.naId).toBe('123456');
   });
 
   it('search falls back to browser only for failed queries preserving order', async () => {
@@ -363,10 +363,10 @@ describe('NARA WAF and parallelism', () => {
     expect(res.exitCode).toBe(0);
     expect(browserCalls).toHaveLength(1);
     expect(browserCalls[0]).toHaveLength(1);
-    expect(browserCalls[0][0][0]).toBe('AlwaysWaf');
+    expect(browserCalls[0]![0]![0]!).toBe('AlwaysWaf');
     const payloads = JSON.parse(res.stdout) as { query: string; results: { naId: string }[] }[];
     expect(payloads.map((p) => p.query)).toEqual(['Harriet Tubman', 'AlwaysWaf', 'Clara Barton']);
-    expect(payloads.map((p) => p.results[0].naId)).toEqual(['111', '222', '333']);
+    expect(payloads.map((p) => p.results[0]!.naId)).toEqual(['111', '222', '333']);
   });
 
   it('search and get parallelize API requests and preserve order', async () => {
@@ -491,7 +491,7 @@ describe('NARA disk caching and path safety', () => {
     expect(res4.exitCode).toBe(0);
     expect(apiCalls).toHaveLength(2);
     const p4 = JSON.parse(res4.stdout) as { extractedText: { page: number }[] };
-    expect(p4.extractedText[0].page).toBe(2);
+    expect(p4.extractedText[0]!.page).toBe(2);
 
     // --refresh bypasses disk cache and updates stored metadata.
     version = 2;
@@ -551,7 +551,7 @@ describe('NARA disk caching and path safety', () => {
     expect(r2.exitCode).toBe(0);
     expect(metaCalls).toHaveLength(1);
     expect(objCalls).toHaveLength(4);
-    expect(objCalls[3].endsWith('sheet_004.jpg')).toBe(true);
+    expect(objCalls[3]!.endsWith('sheet_004.jpg')).toBe(true);
     expect(fs.readFileSync(path.join(out2, '002_sheet_002.jpg'), 'utf8')).toBe('BYTES-sheet_002.jpg-v1');
     expect(fs.readFileSync(path.join(out2, '004_sheet_004.jpg'), 'utf8')).toBe('BYTES-sheet_004.jpg-v1');
 
@@ -613,7 +613,7 @@ describe('NARA disk caching and path safety', () => {
     expect(apiCalls).toHaveLength(1);
     const queryFiles = listFiles(path.join(cacheDir, '_queries'), '.json');
     expect(queryFiles).toHaveLength(1);
-    expect(path.basename(queryFiles[0], '.json')).toHaveLength(64);
+    expect(path.basename(queryFiles[0]!, '.json')).toHaveLength(64);
 
     // Second identical call -> ZERO HTTP requests and cache_hit: true.
     const r2 = await invokeNara(
@@ -639,7 +639,7 @@ describe('NARA disk caching and path safety', () => {
     expect(apiCalls).toHaveLength(2);
     const p3 = JSON.parse(r3.stdout) as { cache_hit: boolean; results: { naId: string }[] };
     expect(p3.cache_hit).toBe(false);
-    expect(p3.results[0].naId).toBe('1002');
+    expect(p3.results[0]!.naId).toBe('1002');
 
     // --cache-ttl-hours 0 bypasses query cache.
     const r4 = await invokeNara(
@@ -661,7 +661,7 @@ describe('NARA disk caching and path safety', () => {
     expect(apiCalls).toHaveLength(3);
     const p4 = JSON.parse(r4.stdout) as { cache_hit: boolean; results: { naId: string }[] };
     expect(p4.cache_hit).toBe(false);
-    expect(p4.results[0].naId).toBe('1003');
+    expect(p4.results[0]!.naId).toBe('1003');
   });
 
   it('validates NAIDs, sanitizes object filenames, and blocks path traversal', async () => {
@@ -729,16 +729,16 @@ describe('1950 Census search cache', () => {
       results: { scheduleId: string; names: { name: string }[] }[];
     };
     expect(firstBody.cache_hit).toBe(false);
-    expect(firstBody.results[0].names[0].name).toBe('Lincoln Smith');
-    expect(firstBody.results[0].scheduleId).toBe('1001');
+    expect(firstBody.results[0]!.names[0]!.name).toBe('Lincoln Smith');
+    expect(firstBody.results[0]!.scheduleId).toBe('1001');
     expect(urls).toHaveLength(1);
     expect(urls[0]).toContain('state=IL');
     expect(urls[0]).toContain('name=Lincoln');
     expect(urls[0]).toContain('size=25');
-    expect(urls[0].startsWith('https://1950census.archives.gov/api/search?')).toBe(true);
+    expect(urls[0]!.startsWith('https://1950census.archives.gov/api/search?')).toBe(true);
     const cachedFiles = listFiles(path.join(cacheDir, 'census1950'), '.json');
     expect(cachedFiles).toHaveLength(1);
-    expect(path.basename(cachedFiles[0], '.json')).toHaveLength(64);
+    expect(path.basename(cachedFiles[0]!, '.json')).toHaveLength(64);
 
     const second = await invokeNara(args, { cacheDir, fetchImpl });
     expect(second.exitCode).toBe(0);
@@ -757,7 +757,7 @@ describe('1950 Census search cache', () => {
       results: { scheduleId: string }[];
     };
     expect(refreshedBody.cache_hit).toBe(false);
-    expect(refreshedBody.results[0].scheduleId).toBe('1001');
+    expect(refreshedBody.results[0]!.scheduleId).toBe('1001');
     expect(urls).toHaveLength(2);
 
     const expired = await invokeNara([...args, '--cache-ttl-hours', '0'], { cacheDir, fetchImpl });
@@ -796,7 +796,7 @@ describe('1950 Census search cache', () => {
     expect(urls[0]).toContain('page=1');
     const pageOneFiles = listFiles(path.join(cacheDir, 'census1950'), '.json');
     expect(pageOneFiles).toHaveLength(1);
-    const pageOneName = path.basename(pageOneFiles[0]);
+    const pageOneName = path.basename(pageOneFiles[0]!);
 
     const explicit = await invokeNara([...base, '--page', '1'], { cacheDir, fetchImpl });
     expect(explicit.exitCode).toBe(0);
@@ -807,7 +807,7 @@ describe('1950 Census search cache', () => {
     ]);
 
     payload.page = 2;
-    payload.results[0].scheduleId = '2002';
+    payload.results[0]!.scheduleId = '2002';
     const second = await invokeNara([...base, '--page', '2'], { cacheDir, fetchImpl });
     expect(second.exitCode).toBe(0);
     const body = JSON.parse(second.stdout) as {
@@ -815,7 +815,7 @@ describe('1950 Census search cache', () => {
       results: { scheduleId: string }[];
     };
     expect(body.cache_hit).toBe(false);
-    expect(body.results[0].scheduleId).toBe('2002');
+    expect(body.results[0]!.scheduleId).toBe('2002');
     expect(urls).toHaveLength(2);
     expect(urls[1]).toContain('page=2');
     expect(urls[1]).not.toContain('page=1');
@@ -832,7 +832,7 @@ describe('1950 Census search cache', () => {
   it('text line includes image path and JSON stays the API row', async () => {
     const cacheDir = await makeTempDir();
     const { urls, payload, fetchImpl } = makeCensusFixture();
-    payload.results[0].image = LINCOLN_ED_IMAGE;
+    payload.results[0]!.image = LINCOLN_ED_IMAGE;
 
     const text = await invokeNara(['census1950', '--state', 'IL', '--name', 'Lincoln'], {
       cacheDir,
@@ -920,7 +920,7 @@ describe('1950 Census IIIF images', () => {
     expect(fs.readFileSync(dest).equals(JPEG_FULL)).toBe(true);
     expect(urls).toHaveLength(1);
     expect(cachedJpegs(cacheDir)).toHaveLength(1);
-    expect(fs.readFileSync(cachedJpegs(cacheDir)[0]).equals(JPEG_FULL)).toBe(true);
+    expect(fs.readFileSync(cachedJpegs(cacheDir)[0]!).equals(JPEG_FULL)).toBe(true);
 
     const second = await invokeNara(args, { cacheDir, fetchImpl });
     expect(second.exitCode).toBe(0);
@@ -1021,7 +1021,7 @@ describe('1950 Census IIIF images', () => {
     expect(body.cache_hit).toBe(false);
     expect(body.bytes).toBe(JPEG_REFRESHED.length);
     expect(fs.readFileSync(pagePath).equals(JPEG_REFRESHED)).toBe(true);
-    expect(fs.readFileSync(cachedJpegs(cacheDir)[0]).equals(JPEG_REFRESHED)).toBe(true);
+    expect(fs.readFileSync(cachedJpegs(cacheDir)[0]!).equals(JPEG_REFRESHED)).toBe(true);
     expect(urls).toHaveLength(2);
     expect(cachedJpegs(cacheDir)).toHaveLength(1);
 
@@ -1124,7 +1124,7 @@ describe('1950 Census IIIF images', () => {
 
     const cached = cachedJpegs(cacheDir);
     expect(cached).toHaveLength(1);
-    expect(fs.readFileSync(cached[0]).equals(JPEG_FULL)).toBe(true);
+    expect(fs.readFileSync(cached[0]!).equals(JPEG_FULL)).toBe(true);
     for (const p of listFilesRecursive(cacheDir)) {
       if (!p.endsWith('.lock')) {
         const bytes = fs.readFileSync(p);
@@ -1359,8 +1359,8 @@ describe('1950 Census IIIF images', () => {
     expect(body.cache_hit).toBe(false);
     expect(body.files.map((item) => item.image)).toEqual([slow, fast]);
     expect(body.files.map((item) => item.cache_hit)).toEqual([false, false]);
-    expect(body.files[0].bytes).toBe(slowBytes.length);
-    expect(body.files[1].bytes).toBe(fastBytes.length);
+    expect(body.files[0]!.bytes).toBe(slowBytes.length);
+    expect(body.files[1]!.bytes).toBe(fastBytes.length);
     expect(fs.readFileSync(path.join(outDir, slowName)).equals(slowBytes)).toBe(true);
     expect(fs.readFileSync(path.join(outDir, fastName)).equals(fastBytes)).toBe(true);
     expect(order[0]).toContain('0003');
@@ -1579,7 +1579,7 @@ describe('NARA download hardening and telemetry', () => {
     expect(p1.metadata_cache_hit).toBe(false);
     expect(p1.content_type).toBe('image/jpeg');
     expect(p1.count).toBe(1);
-    expect(p1.files[0].cache_hit).toBe(false);
+    expect(p1.files[0]!.cache_hit).toBe(false);
 
     const r2 = await invokeNara(
       ['download', '595367', '--pages', '1', '--out', out2, '--api-key', 'k', '--json'],
@@ -1593,7 +1593,7 @@ describe('NARA download hardening and telemetry', () => {
     };
     expect(p2.cache_hit).toBe(true);
     expect(p2.metadata_cache_hit).toBe(true);
-    expect(p2.files[0].cache_hit).toBe(true);
+    expect(p2.files[0]!.cache_hit).toBe(true);
     expect(metaCalls).toHaveLength(1);
     expect(objCalls).toHaveLength(1);
   });
@@ -1667,7 +1667,7 @@ describe('NARA download hardening and telemetry', () => {
       let attempts = 0;
       const sleeps: number[] = [];
       const fetchImpl: typeof fetch = async () => {
-        const step = c.steps[attempts];
+        const step = c.steps[attempts]!;
         attempts += 1;
         return step();
       };

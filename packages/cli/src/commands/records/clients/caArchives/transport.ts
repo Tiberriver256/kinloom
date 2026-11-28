@@ -96,7 +96,7 @@ export async function browserSearch(
   limit = 10,
   timeoutMs = DEFAULT_SEARCH_TIMEOUT_SEC * 1000,
   launcher: ChromiumLauncher = launchOptionalChromium,
-  sessionOptions?: { readonly closeTimeoutMs?: number; readonly killGraceMs?: number }
+  sessionOptions?: { readonly closeTimeoutMs?: number | undefined; readonly killGraceMs?: number | undefined }
 ): Promise<Partial<Record<'oac' | 'calisphere', CaSourceEntry>>> {
   const out: Partial<Record<'oac' | 'calisphere', CaSourceEntry>> = {};
   const totalTimeoutMs = Math.max(1, Math.floor(timeoutMs));
@@ -122,6 +122,7 @@ export async function browserSearch(
           const src = sources[idx];
           const url = src === 'oac' ? oacUrl(query) : calisphereUrl(query);
           const remainingCount = sources.length - idx;
+          if (!src) continue;
           const remainingTotal = session.remainingMs();
           if (remainingTotal <= 0) {
             out[src] = makeTimedOutEntry(
@@ -231,7 +232,7 @@ export async function browserSearch(
 
             if (src === 'oac') {
               const totalMatch = /of (\d+) entries/.exec(typeof text === 'string' ? text : '');
-              const total = totalMatch ? Number.parseInt(totalMatch[1], 10) : null;
+              const total = totalMatch ? Number.parseInt(totalMatch[1] ?? '', 10) : null;
               out.oac = {
                 source: 'oac',
                 url,
@@ -240,7 +241,7 @@ export async function browserSearch(
               };
             } else {
               const totalMatch = /(\d+) items? found/.exec(typeof text === 'string' ? text : '');
-              const total = totalMatch ? Number.parseInt(totalMatch[1], 10) : null;
+              const total = totalMatch ? Number.parseInt(totalMatch[1] ?? '', 10) : null;
               out.calisphere = {
                 source: 'calisphere',
                 url,

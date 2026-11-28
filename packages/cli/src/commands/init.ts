@@ -9,7 +9,7 @@ export interface InitCommandOptions {
   targetDir: string;
   family: string;
   title: string;
-  accent?: string;
+  accent?: string | undefined;
   force?: boolean;
 }
 

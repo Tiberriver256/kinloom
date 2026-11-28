@@ -170,7 +170,7 @@ export async function runCursiveGeminiOcr(params: {
   readonly rawBytes: Buffer;
   readonly effort: CursiveEffort;
   readonly timeoutSeconds: number;
-  readonly customPrompt?: string;
+  readonly customPrompt?: string | undefined;
   readonly apiKey: string;
   readonly ctx: RecordCommandContext;
 }): Promise<{ readonly text: string; readonly meta: Record<string, unknown>; readonly engine: string }> {
@@ -260,7 +260,7 @@ export async function runCursiveCliOcr(params: {
   readonly effort: CursiveEffort;
   readonly timeoutSeconds: number;
   readonly cacheDir: string;
-  readonly customPrompt?: string;
+  readonly customPrompt?: string | undefined;
   readonly cliName: string;
   readonly cliBin: string;
   readonly ctx: RecordCommandContext;
@@ -356,7 +356,7 @@ export async function runCursiveOcr(params: {
   readonly provider: CursiveProvider;
   readonly timeoutSeconds: number;
   readonly cacheDir: string;
-  readonly customPrompt?: string;
+  readonly customPrompt?: string | undefined;
   readonly ctx: RecordCommandContext;
 }): Promise<{ readonly text: string; readonly meta: Record<string, unknown>; readonly engine: string }> {
   const { provider, ctx } = params;

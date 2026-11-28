@@ -142,7 +142,7 @@ export function scanTargetAndUnknownYearEvents(
       for (const uid of needEventYearIds) {
         if (block.includes(uid)) {
           const dateMatch = /^\s+edtf_date:\s*(.*)$/m.exec(block);
-          const dateVal = dateMatch ? dateMatch[1].trim().replaceAll(/^["']|["']$/g, '') : '';
+          const dateVal = dateMatch ? (dateMatch[1] ?? '').trim().replaceAll(/^["']|["']$/g, '') : '';
           const list = unknownYearEventsByPerson.get(uid);
           if (list) {
             list.push({ edtf_date: dateVal });
@@ -276,7 +276,9 @@ export function collectPersonEventsAndReferences(
         return pt;
       });
       const yr = edtfYear(
-        typeof clone['edtf_date'] === 'string' || typeof clone['edtf_date'] === 'number' ? clone['edtf_date'] : null
+        typeof clone['edtf_date'] === 'string' || typeof clone['edtf_date'] === 'number'
+          ? clone['edtf_date']
+          : null
       );
       clone['edtf_date'] = yr !== null ? String(yr) : '';
       clone['place_id'] = null;

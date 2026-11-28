@@ -645,15 +645,15 @@ describe('native TypeScript OCR, alias routing, and ubiquitous-language parity',
     expect([body.image_width, body.image_height]).toEqual([4000, 3000]);
     expect(body.cache_hit).toBe(false);
     expect(body.lines).toHaveLength(1);
-    expect(body.lines[0].text).toBe('Probate');
-    expect(Math.abs(body.lines[0].x0 - 400)).toBeLessThanOrEqual(2);
-    expect(Math.abs(body.lines[0].y0 - 600)).toBeLessThanOrEqual(2);
-    expect(Math.abs(body.lines[0].x1 - 1200)).toBeLessThanOrEqual(2);
-    expect(Math.abs(body.lines[0].y1 - 750)).toBeLessThanOrEqual(2);
+    expect(body.lines[0]!.text).toBe('Probate');
+    expect(Math.abs(body.lines[0]!.x0 - 400)).toBeLessThanOrEqual(2);
+    expect(Math.abs(body.lines[0]!.y0 - 600)).toBeLessThanOrEqual(2);
+    expect(Math.abs(body.lines[0]!.x1 - 1200)).toBeLessThanOrEqual(2);
+    expect(Math.abs(body.lines[0]!.y1 - 750)).toBeLessThanOrEqual(2);
 
     const seen = fs.readFileSync(seenSizesPath, 'utf8').trim();
     const [seenW, seenH] = seen.split('x').map(Number);
-    expect(Math.max(seenW, seenH)).toBeLessThanOrEqual(3500);
+    expect(Math.max(seenW!, seenH!)).toBeLessThanOrEqual(3500);
 
     const tsvCap = createCaptureIo();
     const tsvRes = await runRecordCommand('ocr', [bigPng, '--cache-dir', cacheDir, '--tsv'], {

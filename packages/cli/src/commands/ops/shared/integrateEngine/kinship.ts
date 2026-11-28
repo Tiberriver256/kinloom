@@ -191,7 +191,8 @@ function upsertKinship(
   const keyOf = (edge: KinshipEdge): string => `${edge.from}|${edge.to}|${edge.relation}`;
   const idxByKey = new Map<string, number>();
   for (let i = 0; i < result.length; i += 1) {
-    idxByKey.set(keyOf(result[i]), i);
+    const item = result[i];
+    if (item !== undefined) idxByKey.set(keyOf(item), i);
   }
   let added = 0;
   let updated = 0;
@@ -207,6 +208,7 @@ function upsertKinship(
       continue;
     }
     const prev = result[existingIdx];
+    if (prev === undefined) continue;
     const merged = KinshipEdgeSchema.parse({
       ...prev,
       ...incoming,

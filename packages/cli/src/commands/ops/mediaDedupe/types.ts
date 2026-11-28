@@ -13,7 +13,7 @@ import type {
 export interface MediaDedupeCommandOptions {
   repoDir?: string;
   apply?: boolean;
-  preferIds?: readonly string[];
+  preferIds?: readonly string[] | undefined;
   json?: boolean;
   /** Optional write hook for rollback testing; defaults to atomic temp-file rename. */
   writeFileImpl?: (filePath: string, content: string) => void;

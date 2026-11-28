@@ -154,7 +154,8 @@ export async function synthesizeTargetWithGemini(params: {
     const content = firstCand && isPlainRecord(firstCand['content']) ? firstCand['content'] : undefined;
     const parts = content && Array.isArray(content['parts']) ? content['parts'] : [];
     const firstPart = isPlainRecord(parts[0]) ? parts[0] : undefined;
-    const inlineData = firstPart && isPlainRecord(firstPart['inlineData']) ? firstPart['inlineData'] : undefined;
+    const inlineData =
+      firstPart && isPlainRecord(firstPart['inlineData']) ? firstPart['inlineData'] : undefined;
     if (!inlineData || typeof inlineData['data'] !== 'string') {
       throw new Error(`gemini-tts response missing inline audio data for '${params.target.text}'`);
     }
@@ -165,7 +166,7 @@ export async function synthesizeTargetWithGemini(params: {
     }
     const mimeType = typeof inlineData['mimeType'] === 'string' ? inlineData['mimeType'] : '';
     const rateMatch = /rate=(\d+)/.exec(mimeType);
-    const rate = rateMatch ? Number.parseInt(rateMatch[1], 10) : 24000;
+    const rate = rateMatch ? Number.parseInt(rateMatch[1] ?? '', 10) : 24000;
     return wrapPcmAsWav(decoded, rate);
   }
 

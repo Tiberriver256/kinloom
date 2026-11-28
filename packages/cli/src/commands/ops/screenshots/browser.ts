@@ -15,10 +15,10 @@ export interface PlaywrightLaunchModule {
     executablePath?(): string;
     launch(options?: {
       readonly headless?: boolean;
-      readonly executablePath?: string;
+      readonly executablePath?: string | undefined;
       readonly args?: readonly string[];
-      readonly timeout?: number;
-      readonly env?: Record<string, string>;
+      readonly timeout?: number | undefined;
+      readonly env?: Record<string, string> | undefined;
     }): Promise<ScreenshotBrowserHandle>;
   };
 }
@@ -68,9 +68,9 @@ export function isExecutableBinary(filePath: string): boolean {
 
 export function resolveScreenshotChromiumPath(options: {
   readonly env: NodeJS.ProcessEnv;
-  readonly playwrightExecutablePath?: string;
-  readonly isExecutable?: (filePath: string) => boolean;
-}): { readonly executablePath?: string; readonly isSystemBinary: boolean } {
+  readonly playwrightExecutablePath?: string | undefined;
+  readonly isExecutable?: ((filePath: string) => boolean) | undefined;
+}): { readonly executablePath?: string | undefined; readonly isSystemBinary: boolean } {
   const checkExec = options.isExecutable ?? isExecutableBinary;
   const envOverride = options.env['KINLOOM_CHROMIUM_PATH']?.trim();
   if (envOverride && checkExec(envOverride)) {
@@ -168,7 +168,7 @@ export async function loadPlaywrightModule(
 
 export function createPlaywrightBrowserFactory(deps?: {
   readonly loadModule?: () => Promise<PlaywrightLaunchModule>;
-  readonly isExecutable?: (filePath: string) => boolean;
+  readonly isExecutable?: ((filePath: string) => boolean) | undefined;
 }): ScreenshotBrowserFactory {
   const loadModule = deps?.loadModule ?? loadPlaywrightModule;
   const isExecutable = deps?.isExecutable;
@@ -240,7 +240,7 @@ export async function navigateAndSettlePage(options: {
   readonly waitMs: number;
   readonly isMap?: boolean;
   readonly navigationTimeoutMs?: number;
-  readonly mapSettleTimeoutMs?: number;
+  readonly mapSettleTimeoutMs?: number | undefined;
 }): Promise<void> {
   const { page, url, theme, timeoutMs, waitMs, isMap, navigationTimeoutMs, mapSettleTimeoutMs } = options;
   page.setDefaultTimeout?.(timeoutMs);

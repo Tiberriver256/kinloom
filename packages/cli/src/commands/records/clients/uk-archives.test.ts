@@ -78,7 +78,7 @@ async function invokeUk(
   args: readonly string[],
   cacheDir: string,
   fetchImpl: typeof fetch
-): Promise<{ exitCode: number; stdout: string; stderr: string; cacheHit?: boolean }> {
+): Promise<{ exitCode: number; stdout: string; stderr: string; cacheHit?: boolean | undefined }> {
   const stdout: string[] = [];
   const stderr: string[] = [];
   const ctx = createRecordContext({
@@ -192,7 +192,7 @@ describe('uk-archives native client', () => {
     };
     expect(d2.cache_hit).toBe(true);
     expect(d2.returned).toBe(1);
-    expect(d2.records[0].persons).toBe('Samuel LINCOLN');
+    expect(d2.records[0]!.persons).toBe('Samuel LINCOLN');
     expect(r3.stdout).toContain('[cache]');
   });
 
@@ -254,7 +254,7 @@ describe('uk-archives native client', () => {
     };
     expect(limited.cache_hit).toBe(true);
     expect(limited.returned).toBe(1);
-    expect(limited.records[0].persons).toBe('Samuel LINCOLN');
+    expect(limited.records[0]!.persons).toBe('Samuel LINCOLN');
 
     const placed = JSON.parse(rPlace.stdout) as {
       cache_hit: boolean;
@@ -263,12 +263,12 @@ describe('uk-archives native client', () => {
     };
     expect(placed.cache_hit).toBe(true);
     expect(placed.returned).toBe(1);
-    expect(placed.records[0].persons).toBe('Edward LINCOLN');
+    expect(placed.records[0]!.persons).toBe('Edward LINCOLN');
 
     expect(rBad.exitCode).toBe(2);
     const cacheFiles = fs.readdirSync(cacheDir).filter((f) => f.endsWith('.json'));
     expect(cacheFiles).toHaveLength(1);
-    const stored = JSON.parse(fs.readFileSync(path.join(cacheDir, cacheFiles[0]), 'utf8')) as {
+    const stored = JSON.parse(fs.readFileSync(path.join(cacheDir, cacheFiles[0]!), 'utf8')) as {
       query: Record<string, unknown>;
       result: Record<string, unknown>;
     };
@@ -420,9 +420,9 @@ describe('uk-archives native client', () => {
     expect(g1.exitCode).toBe(0);
     expect(g2.exitCode).toBe(0);
     expect(seenUrls).toHaveLength(2);
-    expect(seenUrls[0].searchParams.get('sps.dateFrom')).toBe('1550-01-01');
-    expect(seenUrls[0].searchParams.get('sps.dateTo')).toBe('1620-12-31');
-    expect(seenUrls[0].searchParams.get('sps.departments')).toBe('PROB');
+    expect(seenUrls[0]!.searchParams.get('sps.dateFrom')).toBe('1550-01-01');
+    expect(seenUrls[0]!.searchParams.get('sps.dateTo')).toBe('1620-12-31');
+    expect(seenUrls[0]!.searchParams.get('sps.departments')).toBe('PROB');
 
     const body1 = JSON.parse(s1.stdout) as {
       cache_hit: boolean;
@@ -433,8 +433,8 @@ describe('uk-archives native client', () => {
     expect(body1.cache_hit).toBe(false);
     expect(body2.cache_hit).toBe(true);
     expect(body1.returned).toBe(1);
-    expect(body1.records[0].reference).toBe('PROB 11/44/39');
-    expect(body1.records[0].iaid).toBe('D980036');
+    expect(body1.records[0]!.reference).toBe('PROB 11/44/39');
+    expect(body1.records[0]!.iaid).toBe('D980036');
 
     const det1 = JSON.parse(g1.stdout) as {
       cache_hit: boolean;

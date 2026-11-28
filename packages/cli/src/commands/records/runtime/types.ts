@@ -61,7 +61,9 @@ export function defaultSleep(ms: number): Promise<void> {
   });
 }
 
-export function createRecordContext(overrides: Partial<RecordCommandContext> = {}): RecordCommandContext {
+export function createRecordContext(
+  overrides: { [K in keyof RecordCommandContext]?: RecordCommandContext[K] | undefined } = {}
+): RecordCommandContext {
   return {
     io: overrides.io ?? DEFAULT_RECORD_IO,
     env: overrides.env ?? process.env,

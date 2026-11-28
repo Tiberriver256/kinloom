@@ -41,19 +41,21 @@ export const BUNDLE_DISCOVERY_PROBES: readonly {
 ]);
 
 function isHeavyRoutePath(route: string): boolean {
-  const pathOnly = route.split('?')[0].toLowerCase();
+  const pathOnly = (route.split('?')[0] ?? '').toLowerCase();
   return pathOnly === '/evidence';
 }
 
 function isMapRoutePath(route: string): boolean {
-  const pathOnly = route.split('?')[0].toLowerCase();
+  const pathOnly = (route.split('?')[0] ?? '').toLowerCase();
   return pathOnly === '/map';
 }
 
 function isArchiveBundlePayload(payload: unknown): payload is Record<string, unknown> {
   return (
     isRecord(payload) &&
-    (Array.isArray(payload['people']) || Array.isArray(payload['places']) || Array.isArray(payload['narratives']))
+    (Array.isArray(payload['people']) ||
+      Array.isArray(payload['places']) ||
+      Array.isArray(payload['narratives']))
   );
 }
 
@@ -268,10 +270,10 @@ export async function fetchArchiveBundleForDiscovery(options: {
   readonly baseUrl: string;
   readonly samplePeople: number;
   readonly samplePlaces: number;
-  readonly authCookie?: string;
-  readonly authHeaders?: readonly AuthHeader[];
+  readonly authCookie?: string | undefined;
+  readonly authHeaders?: readonly AuthHeader[] | undefined;
   readonly timeoutMs: number;
-  readonly fetchImpl?: typeof fetch;
+  readonly fetchImpl?: typeof fetch | undefined;
 }): Promise<BundleDiscoveryResult> {
   const fetchImpl = options.fetchImpl ?? globalThis.fetch;
   const headers = buildAuthRequestHeaders({
@@ -297,7 +299,7 @@ export async function fetchArchiveBundleForDiscovery(options: {
 }
 
 export function isKnownCoreRoute(routePath: string): boolean {
-  const pathOnly = routePath.split('?')[0].toLowerCase();
+  const pathOnly = (routePath.split('?')[0] ?? '').toLowerCase();
   if (KNOWN_CORE_EXACT_ROUTES.has(pathOnly)) {
     return true;
   }

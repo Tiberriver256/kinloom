@@ -32,8 +32,8 @@ export async function requestWithRetry(
   ctx: RecordCommandContext,
   options: {
     readonly url: string;
-    readonly allowedHosts?: readonly string[];
-    readonly headers?: Readonly<Record<string, string>>;
+    readonly allowedHosts?: readonly string[] | undefined;
+    readonly headers?: Readonly<Record<string, string>> | undefined;
   }
 ): Promise<SeHttpResponse> {
   const allowedHosts = options.allowedHosts ?? ALLOWED_API_HOSTS;

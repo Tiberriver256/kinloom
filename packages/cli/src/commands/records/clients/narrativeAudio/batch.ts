@@ -274,8 +274,8 @@ export async function runBatch(
       string,
       {
         readonly publicUrl: string;
-        readonly durationSeconds?: number;
-        readonly editorNotesStartSeconds?: number;
+        readonly durationSeconds?: number | undefined;
+        readonly editorNotesStartSeconds?: number | undefined;
         readonly storyVoice: string;
         readonly notesVoice: string;
       }
@@ -400,7 +400,7 @@ export async function runBatch(
     {
       readonly publicUrl: string;
       readonly durationSeconds: number;
-      readonly editorNotesStartSeconds?: number;
+      readonly editorNotesStartSeconds?: number | undefined;
       readonly storyVoice: string;
       readonly notesVoice: string;
     }

@@ -12,7 +12,7 @@ export const runWikitreeCommand: RecordHandler = async (args, ctx): Promise<Reco
     if (args.length === 0 || args[0] === '--help' || args[0] === '-h') {
       return { exitCode: 0, bytesOut: emitStdout(ctx.io, renderRootHelp()) };
     }
-    const subcmd = resolveSubcommandAlias(args[0], SUBCOMMAND_ALIASES);
+    const subcmd = resolveSubcommandAlias(args[0] ?? '', SUBCOMMAND_ALIASES);
     const rest = args.slice(1);
     switch (subcmd) {
       case 'search':

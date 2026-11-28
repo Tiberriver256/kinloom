@@ -96,7 +96,9 @@ function isKinloomCheck(value: unknown): value is { id: string; name: string; ru
   }
   const candidate = value as Record<string, unknown>;
   return (
-    isNonEmptyString(candidate['id']) && isNonEmptyString(candidate['name']) && typeof candidate['run'] === 'function'
+    isNonEmptyString(candidate['id']) &&
+    isNonEmptyString(candidate['name']) &&
+    typeof candidate['run'] === 'function'
   );
 }
 
@@ -114,7 +116,10 @@ function isKinloomCliPlugin(value: unknown): value is KinloomCliPlugin {
   if (!hasCommands && !hasAuditChecks && !hasVerifyChecks) {
     return false;
   }
-  if (hasCommands && (!Array.isArray(candidate['commands']) || !candidate['commands'].every(isKinloomCliCommand))) {
+  if (
+    hasCommands &&
+    (!Array.isArray(candidate['commands']) || !candidate['commands'].every(isKinloomCliCommand))
+  ) {
     return false;
   }
   if (

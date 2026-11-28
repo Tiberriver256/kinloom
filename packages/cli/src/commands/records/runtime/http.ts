@@ -275,18 +275,18 @@ export function defaultExecFile(
 }
 
 export interface CurlFetchOptions {
-  readonly headers?: Readonly<Record<string, string>>;
+  readonly headers?: Readonly<Record<string, string>> | undefined;
   readonly userAgent?: string;
-  readonly timeoutMs?: number;
+  readonly timeoutMs?: number | undefined;
   readonly connectTimeoutSec?: number;
   readonly maxAttempts?: number;
   readonly baseBackoffMs?: number;
   readonly maxRetryAfterMs?: number;
   readonly retryStatuses?: ReadonlySet<number>;
   readonly urlPolicy?: UrlSecurityPolicy;
-  readonly execFileImpl?: ExecFileFn;
+  readonly execFileImpl?: ExecFileFn | undefined;
   readonly sleepFn: (ms: number) => Promise<void>;
-  readonly nowMs?: () => number;
+  readonly nowMs?: (() => number) | undefined;
   readonly throwOnHttpError?: boolean;
   readonly rejectHtml?: boolean;
 }

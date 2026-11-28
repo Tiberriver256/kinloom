@@ -320,6 +320,7 @@ function upsertPatchPeople(
   const slugToId = new Map<string, string>();
   for (let i = 0; i < items.length; i += 1) {
     const person = items[i];
+    if (person === undefined) continue;
     idxById.set(person.id, i);
     slugToId.set(person.slug, person.id);
   }
@@ -340,7 +341,11 @@ function upsertPatchPeople(
         `PRIVACY REFUSAL: ${label} ('${String(raw['id'] ?? 'unknown')}') cannot insert or mark a person as living.`
       );
     }
-    if (typeof raw['id'] !== 'string' || !SAFE_PERSON_ID_RE.test(raw['id']) || raw['id'] !== raw['id'].trim()) {
+    if (
+      typeof raw['id'] !== 'string' ||
+      !SAFE_PERSON_ID_RE.test(raw['id']) ||
+      raw['id'] !== raw['id'].trim()
+    ) {
       throw new CliValidationError(
         `${label} has invalid id '${String(raw['id'])}'. Only ASCII letters, digits, _, and - are allowed.`
       );
@@ -376,6 +381,7 @@ function upsertPatchPeople(
     }
 
     const existing = items[existingIdx];
+    if (!existing) continue;
     if (
       existing.is_living ||
       resolveEffectiveLiving(
@@ -433,6 +439,7 @@ export function applyPeoplePatch(
     );
   }
   const targetPerson = mergedPeople[targetIdx];
+  if (!targetPerson) throw new Error(`Target person '${personId}' not found after merge.`);
   if (targetPerson.is_living) {
     throw new Error(
       `PRIVACY REFUSAL: Target person '${personId}' resolves as living. Living people cannot be researched or patched.`
@@ -472,6 +479,7 @@ export function applyPeoplePatch(
   const livingIds = new Set<string>();
   for (let i = 0; i < mergedPeople.length; i += 1) {
     const p = mergedPeople[i];
+    if (p === undefined) continue;
     peopleById.set(p.id, p);
     if (p.is_living || resolveEffectiveLiving(p, privacyConfig, referenceYear)) {
       livingIds.add(p.id);

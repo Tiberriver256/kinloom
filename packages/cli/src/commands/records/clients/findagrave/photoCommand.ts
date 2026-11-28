@@ -51,7 +51,7 @@ export async function runPhoto(
   }
   const outDir = path.isAbsolute(rawOut) ? rawOut : path.resolve(ctx.cwd, rawOut);
 
-  const cleanId = validateEntityId(parsed.positionals[0], 'memorial id');
+  const cleanId = validateEntityId(parsed.positionals[0] ?? '', 'memorial id');
   const stemPrefix = sanitizePrefix(getStringOption(parsed, 'prefix'));
   const photoType = getStringOption(parsed, 'photoType');
   const allTypes = getBooleanOption(parsed, 'allTypes');
@@ -73,9 +73,10 @@ export async function runPhoto(
   }
 
   const memorial = memorials[0];
+  if (!memorial) throw new Error(`No memorial found for ${cleanId}`);
   const photosObj = isPlainRecord(memorial['photos']) ? memorial['photos'] : {};
-  let photoList = (Array.isArray(photosObj['photos']) ? photosObj['photos'] : []).filter((p): p is JsonRecord =>
-    isPlainRecord(p)
+  let photoList = (Array.isArray(photosObj['photos']) ? photosObj['photos'] : []).filter(
+    (p): p is JsonRecord => isPlainRecord(p)
   );
   if (photoType && !allTypes) {
     photoList = photoList.filter((p) => p['type'] === photoType);

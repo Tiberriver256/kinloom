@@ -11,7 +11,7 @@ const MIGRATION_FILE_RE = /^(\d+)_.*\.sql$/i;
 
 function parseWranglerTomlD1Binding(raw: string): {
   dbName: string;
-  migrationsDirHint?: string;
+  migrationsDirHint?: string | undefined;
 } {
   let inD1Section = false;
   let dbName = '';
@@ -169,7 +169,7 @@ export function discoverMigrations(migrationsDir: string): DiscoveredMigration[]
     if (!match) {
       continue;
     }
-    const number = Number.parseInt(match[1], 10);
+    const number = Number.parseInt(match[1] ?? '', 10);
     const filePath = path.join(migrationsDir, fileName);
     let sql: string;
     const fd = fs.openSync(filePath, 'r');

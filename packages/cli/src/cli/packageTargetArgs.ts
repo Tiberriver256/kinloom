@@ -73,9 +73,9 @@ export interface PackageTargetFlagsInput {
 
 export interface ResolvedPackageTargetFlags {
   positionalIds: string[];
-  personFlag?: string;
+  personFlag?: string | undefined;
   effectiveRepoDir: string;
-  packageDir?: string;
+  packageDir?: string | undefined;
 }
 
 export function parsePackageTargetFlags(
@@ -131,16 +131,19 @@ export function parsePackageTargetFlags(
 }
 
 export function resolveSinglePackageTarget(target: ResolvedPackageTargetFlags): {
-  personId?: string;
-  packageDir?: string;
+  personId?: string | undefined;
+  packageDir?: string | undefined;
 } {
   let resolvedPersonId: string | undefined = target.personFlag ?? target.positionalIds[0];
   let packageDir = target.packageDir;
-  if (!target.personFlag && !packageDir && target.positionalIds.length === 1) {
-    const fromPositionalPath = resolvePositionalIntegratePackage(
-      target.positionalIds[0],
-      target.effectiveRepoDir
-    );
+  const singlePositionalId = target.positionalIds[0];
+  if (
+    !target.personFlag &&
+    !packageDir &&
+    target.positionalIds.length === 1 &&
+    singlePositionalId !== undefined
+  ) {
+    const fromPositionalPath = resolvePositionalIntegratePackage(singlePositionalId, target.effectiveRepoDir);
     if (fromPositionalPath) {
       packageDir = fromPositionalPath.packageDir;
       resolvedPersonId = fromPositionalPath.personId;

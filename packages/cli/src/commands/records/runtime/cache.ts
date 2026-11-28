@@ -5,7 +5,7 @@ import path from 'node:path';
 import { CliValidationError } from '../../../errors.js';
 
 export interface ResolveCacheDirOptions {
-  readonly flagValue?: string;
+  readonly flagValue?: string | undefined;
   readonly env: NodeJS.ProcessEnv;
   readonly envVars: readonly string[];
   readonly defaultSubdir: string;
@@ -102,12 +102,12 @@ export interface CachedJsonCallOptions<T> {
   readonly payload: unknown;
   readonly ttlHours: number;
   readonly refresh: boolean;
-  readonly schema?: number;
+  readonly schema?: number | undefined;
   readonly fetch: () => Promise<T>;
-  readonly cacheable?: (value: T) => boolean;
+  readonly cacheable?: ((value: T) => boolean) | undefined;
   readonly validateCached: (value: unknown) => value is T;
-  readonly nowMs?: () => number;
-  readonly sleepFn?: (ms: number) => Promise<void>;
+  readonly nowMs?: (() => number) | undefined;
+  readonly sleepFn?: ((ms: number) => Promise<void>) | undefined;
 }
 
 export function readSchemaCacheEntry<T>(
@@ -260,10 +260,10 @@ export function readBinaryCache(
 }
 
 export interface AdvisoryLockOptions {
-  readonly timeoutMs?: number;
+  readonly timeoutMs?: number | undefined;
   readonly staleAfterMs?: number;
-  readonly sleepFn?: (ms: number) => Promise<void>;
-  readonly nowMs?: () => number;
+  readonly sleepFn?: ((ms: number) => Promise<void>) | undefined;
+  readonly nowMs?: (() => number) | undefined;
 }
 
 function isProcessAlive(pid: number): boolean {

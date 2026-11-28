@@ -47,6 +47,7 @@ export async function fetchPeopleSearch(
   limit: number
 ): Promise<PeopleSearchResult> {
   const spec = RECORD_TYPE_SPECS[recordType];
+  if (!spec) throw new Error(`Unknown MN record type: ${recordType}`);
   const url = `${MNHS_PEOPLE_API}${spec.searchPath}?pageNum=${page}&pageSize=${limit}`;
   validateMnUrl(url, ALLOWED_HOSTS);
   const response = await httpRequest(url, {
@@ -110,6 +111,7 @@ export async function fetchPeopleRecord(
     throw new CliValidationError(`Invalid MNHS record UUID: '${recordId}'`);
   }
   const spec = RECORD_TYPE_SPECS[recordType];
+  if (!spec) throw new Error(`Unknown MN record type: ${recordType}`);
   const url = `${MNHS_PEOPLE_API}${spec.detailPath}?id=${encodeURIComponent(cleanId)}`;
   validateMnUrl(url, ALLOWED_HOSTS);
   const response = await httpRequest(url, {

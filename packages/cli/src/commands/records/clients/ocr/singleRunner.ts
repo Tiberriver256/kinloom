@@ -78,7 +78,7 @@ export async function runLayoutData(params: {
   readonly timeoutSeconds: number;
   readonly force: boolean;
   readonly tsvOnly: boolean;
-  readonly find?: string;
+  readonly find?: string | undefined;
   readonly ctx: RecordCommandContext;
 }): Promise<{ readonly data: string | OcrLayoutRecord; readonly cached: boolean }> {
   const {
@@ -234,8 +234,8 @@ export async function runOcrData(params: {
   readonly psm: number;
   readonly maxDim: number;
   readonly effort: CursiveEffort;
-  readonly customPrompt?: string;
-  readonly timeout?: number;
+  readonly customPrompt?: string | undefined;
+  readonly timeout?: number | undefined;
   readonly force: boolean;
   readonly ctx: RecordCommandContext;
 }): Promise<{ readonly record: OcrTextRecord; readonly cached: boolean }> {

@@ -10,12 +10,12 @@ export interface UploadMediaCommandOptions {
   metadataInput: string;
   summary: string;
   siteUrl: string;
-  token?: string;
-  mimeType?: string;
+  token?: string | undefined;
+  mimeType?: string | undefined;
   allowAudioVideo?: boolean;
-  maxUploadBytes?: number;
+  maxUploadBytes?: number | undefined;
   dryRun?: boolean;
-  fetchImpl?: typeof fetch;
+  fetchImpl?: typeof fetch | undefined;
 }
 
 export interface UploadMediaCommandResult {
@@ -175,7 +175,7 @@ export async function runUploadMediaCommand(
     mimeType,
     sizeBytes: fileBytes.byteLength,
     targetHasLiving: false,
-    maxUploadBytes: options.maxUploadBytes,
+    ...(options.maxUploadBytes !== undefined ? { maxUploadBytes: options.maxUploadBytes } : {}),
     allowAudioVideo,
   });
 

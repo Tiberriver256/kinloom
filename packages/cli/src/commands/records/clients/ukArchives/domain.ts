@@ -186,7 +186,7 @@ export function collectionDepartment(collection: string | undefined): string | n
     return null;
   }
   const match = COLLECTION_DEPT_RE.exec(collection.trim().toUpperCase());
-  return match ? match[1] : null;
+  return match?.[1] ?? null;
 }
 
 export function buildDiscoveryQuery(
@@ -295,7 +295,7 @@ export function mapDiscoveryDetail(raw: Record<string, unknown>): DiscoveryDetai
 
 export function extractFreeregToken(html: string): string {
   const match = /name="authenticity_token"\s+value="([^"]+)"/i.exec(html);
-  if (match) {
+  if (match?.[1] !== undefined) {
     return match[1];
   }
   const $ = loadHtml(html);

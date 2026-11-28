@@ -53,7 +53,7 @@ async function invokeCa(
   fetchImpl: typeof fetch,
   extraEnv: NodeJS.ProcessEnv = {},
   overrides?: CaArchivesOverrides
-): Promise<{ exitCode: number; stdout: string; stderr: string; cacheHit?: boolean }> {
+): Promise<{ exitCode: number; stdout: string; stderr: string; cacheHit?: boolean | undefined }> {
   const stdout: string[] = [];
   const stderr: string[] = [];
   const ctx = createRecordContext({

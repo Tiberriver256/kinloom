@@ -125,7 +125,9 @@ async function makeTempDir(prefix = 'kinloom-c5-'): Promise<string> {
   return dir;
 }
 
-function makeCtx(overrides: Partial<RecordCommandContext> = {}): {
+function makeCtx(
+  overrides: { [K in keyof RecordCommandContext]?: RecordCommandContext[K] | undefined } = {}
+): {
   readonly ctx: RecordCommandContext;
   readonly stdout: string[];
   readonly stderr: string[];
@@ -1159,9 +1161,9 @@ describe('archive-org behavioral coverage', () => {
       limit: 5,
     });
     expect(flatTotal).toBe(1);
-    expect(flatHits[0].leaf).toBeNull();
-    expect(flatHits[0].snippet.startsWith('...')).toBe(true);
-    expect(flatHits[0].snippet.endsWith('...')).toBe(true);
+    expect(flatHits[0]!.leaf).toBeNull();
+    expect(flatHits[0]!.snippet.startsWith('...')).toBe(true);
+    expect(flatHits[0]!.snippet.endsWith('...')).toBe(true);
 
     // Zero-length regex terminates cleanly
     const [, zeroTotal] = grepCachedItem('item1', 'abc', flatIdx, '^', false, {

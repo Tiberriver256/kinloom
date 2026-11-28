@@ -150,7 +150,7 @@ describe('unified kinloom CLI dispatch', () => {
       rows: Array<{ subcmd: string; count: number }>;
     };
     expect(parsed.totalEvents).toBe(1);
-    expect(parsed.rows[0].subcmd).toBe('context');
+    expect(parsed.rows[0]!.subcmd).toBe('context');
   });
 
   it('dispatches verify against a synthetic archive repo and records telemetry', async () => {

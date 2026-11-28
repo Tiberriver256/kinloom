@@ -53,6 +53,7 @@ function indexTreeData(input: {
   const peopleById = new Map<string, RawPerson>();
   for (let i = 0; i < input.people.length; i += 1) {
     const person = input.people[i];
+    if (person === undefined) continue;
     peopleById.set(person.id, person);
   }
   const placeholderWarnings: TreeHygieneWarning[] = [];
@@ -69,6 +70,7 @@ function indexTreeData(input: {
     }
     for (let i = 0; i < list.length; i += 1) {
       const rec = list[i];
+      if (rec === undefined) continue;
       if (rec.parentId === parentId) {
         if (trimmedXref) {
           if (rec.firstXref === null) {
@@ -89,6 +91,7 @@ function indexTreeData(input: {
 
   for (let i = 0; i < input.kinship.length; i += 1) {
     const edge = input.kinship[i];
+    if (edge === undefined) continue;
     if (edge.relation === 'parent') {
       addParentLink(edge.to, edge.from, edge.family_xref);
     } else if (edge.relation === 'child') {
@@ -105,14 +108,19 @@ function indexTreeData(input: {
 
   for (let i = 0; i < input.events.length; i += 1) {
     const event = input.events[i];
+    if (event === undefined) continue;
     const pts = event.participants;
 
     if (isAdoptionEvent(event)) {
       const ids = [...new Set(pts.map((p) => p.person_id))];
       for (let a = 0; a < ids.length; a += 1) {
-        childWithAdoptionEvent.add(ids[a]);
+        const idA = ids[a];
+        if (idA === undefined) continue;
+        childWithAdoptionEvent.add(idA);
         for (let b = a + 1; b < ids.length; b += 1) {
-          adoptionEventPairs.add(`${ids[a]}|${ids[b]}`);
+          const idB = ids[b];
+          if (idB === undefined) continue;
+          adoptionEventPairs.add(`${idA}|${idB}`);
           adoptionEventPairs.add(`${ids[b]}|${ids[a]}`);
         }
       }
@@ -135,6 +143,7 @@ function indexTreeData(input: {
 
     if (pts.length === 1) {
       const participant = pts[0];
+      if (!participant) continue;
       if (isBirthEventForParticipant(event, participant.role)) {
         let list = birthEventsByPerson.get(participant.person_id);
         if (!list) {
@@ -156,6 +165,7 @@ function indexTreeData(input: {
       let deathAdded: Set<string> | null = null;
       for (let p = 0; p < pts.length; p += 1) {
         const participant = pts[p];
+        if (participant === undefined) continue;
         if (isBirthEventForParticipant(event, participant.role)) {
           if (!birthAdded) birthAdded = new Set<string>();
           if (!birthAdded.has(participant.person_id)) {
@@ -202,6 +212,7 @@ function indexTreeData(input: {
   const deathRangeByPerson = new Map<string, { raw: string; range: ParsedEdtfRange }>();
   for (let i = 0; i < input.people.length; i += 1) {
     const person = input.people[i];
+    if (person === undefined) continue;
     const birthRaw =
       person.birth_edtf.trim() || birthEventsByPerson.get(person.id)?.[0]?.edtf_date.trim() || '';
     const birthRange = parseEdtfRange(birthRaw);
@@ -245,8 +256,8 @@ function hasRecordAdoptiveXref(rec: ParentLinkRecord): boolean {
     return true;
   }
   if (rec.extraXrefs) {
-    for (let i = 0; i < rec.extraXrefs.length; i += 1) {
-      if (ADOPTIVE_XREF_RE.test(rec.extraXrefs[i])) {
+    for (const xref of rec.extraXrefs) {
+      if (ADOPTIVE_XREF_RE.test(xref)) {
         return true;
       }
     }
@@ -268,10 +279,11 @@ function collectParentWarnings(data: IndexedTreeData, warnings: TreeHygieneWarni
 
   for (const [childId, parentList] of parentsByChild) {
     if (parentList.length === 2) {
-      if (fastLocaleCompare(parentList[0].parentId, parentList[1].parentId) > 0) {
-        const tmp = parentList[0];
-        parentList[0] = parentList[1];
-        parentList[1] = tmp;
+      const p0 = parentList[0];
+      const p1 = parentList[1];
+      if (p0 && p1 && fastLocaleCompare(p0.parentId, p1.parentId) > 0) {
+        parentList[0] = p1;
+        parentList[1] = p0;
       }
     } else if (parentList.length > 2) {
       parentList.sort((a, b) => fastLocaleCompare(a.parentId, b.parentId));
@@ -288,6 +300,7 @@ function collectParentWarnings(data: IndexedTreeData, warnings: TreeHygieneWarni
     const parentLen = parentList.length;
     for (let i = 0; i < parentLen; i += 1) {
       const rec = parentList[i];
+      if (rec === undefined) continue;
       const parent = peopleById.get(rec.parentId);
       const isAdoptive =
         hasRecordAdoptiveXref(rec) ||
@@ -312,6 +325,7 @@ function collectParentWarnings(data: IndexedTreeData, warnings: TreeHygieneWarni
       const nonAdoptive: Array<{ parentId: string; sex: 'F' | 'M' | 'U'; xrefs: string[] }> = [];
       for (let i = 0; i < parentLen; i += 1) {
         const rec = parentList[i];
+        if (rec === undefined) continue;
         const parent = peopleById.get(rec.parentId);
         const isAdoptive =
           hasRecordAdoptiveXref(rec) ||
@@ -365,6 +379,7 @@ function collectParentWarnings(data: IndexedTreeData, warnings: TreeHygieneWarni
 
     for (let i = 0; i < parentLen; i += 1) {
       const rec = parentList[i];
+      if (rec === undefined) continue;
       const parentId = rec.parentId;
       const parent = peopleById.get(parentId);
       const isAdoptive =
@@ -416,13 +431,13 @@ function collectMarriageChronologyWarnings(data: IndexedTreeData, warnings: Tree
   for (const { spouses, events: coupleMarriages } of marriageEventsByCouple.values()) {
     for (let i = 0; i < coupleMarriages.length; i += 1) {
       const event = coupleMarriages[i];
+      if (event === undefined) continue;
       const marriageRaw = event.edtf_date.trim();
       const marriageRange = parseEdtfRange(marriageRaw);
       if (!marriageRange) {
         continue;
       }
-      for (let s = 0; s < spouses.length; s += 1) {
-        const spouseId = spouses[s];
+      for (const spouseId of spouses) {
         const spouseBirth = birthRangeByPerson.get(spouseId);
         if (!spouseBirth) {
           continue;
@@ -520,8 +535,8 @@ export function analyzeTreeHygiene(input: {
     duplicate_vital_event: 0,
     placeholder_event: 0,
   };
-  for (let i = 0; i < warnings.length; i += 1) {
-    counts[warnings[i].category] += 1;
+  for (const w of warnings) {
+    counts[w.category] += 1;
   }
 
   return { warnings, counts };

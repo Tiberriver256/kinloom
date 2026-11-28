@@ -234,7 +234,7 @@ export function parseIiifCollectionBody(body: unknown, cleanId: string, url: str
         } else if (itemType === 'Manifest') {
           const match = ARKIS_MANIFEST_RE.exec(parsedPath);
           if (match) {
-            bildid = stripLeadingUnderscores(match[1]);
+            bildid = stripLeadingUnderscores(match[1] ?? '');
           }
         }
       } catch {
@@ -270,7 +270,7 @@ export function extractCanvasInfo(index: number, canvas: Record<string, unknown>
     try {
       const match = ARKIS_MANIFEST_RE.exec(new URL(canvasId).pathname);
       if (match) {
-        pageId = stripLeadingUnderscores(match[1]);
+        pageId = stripLeadingUnderscores(match[1] ?? '');
       }
     } catch {
       // Ignore invalid canvas URL.

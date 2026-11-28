@@ -143,20 +143,20 @@ export async function deskewImage(image: LoadedRgbImage): Promise<LoadedRgbImage
         const rx = Math.round((x - cx) * cos + (y - cy) * sin + cx);
         const ry = Math.round(-(x - cx) * sin + (y - cy) * cos + cy);
         if (rx >= 0 && rx < probeW && ry >= 0 && ry < probeH) {
-          rowSums[y] += 255 - gray[ry * probeW + rx];
+          rowSums[y] = (rowSums[y] ?? 0) + (255 - (gray[ry * probeW + rx] ?? 0));
         }
       }
     }
     let mean = 0;
     let count = 0;
     for (let y = 0; y < probeH; y += 2) {
-      mean += rowSums[y];
+      mean += rowSums[y] ?? 0;
       count += 1;
     }
     mean /= Math.max(1, count);
     let variance = 0;
     for (let y = 0; y < probeH; y += 2) {
-      const diff = rowSums[y] - mean;
+      const diff = (rowSums[y] ?? 0) - mean;
       variance += diff * diff;
     }
     return variance;
@@ -196,7 +196,9 @@ export async function paintBlackBoxesInclusive(
   const overlays: OverlayOptions[] = [];
   const painted: number[][] = [];
   for (let i = 0; i < boxes.length; i += 1) {
-    const clamped = clampBox(boxes[i], image.width, image.height, `${label} #${i + 1}`, outsideHint);
+    const box = boxes[i];
+    if (!box) continue;
+    const clamped = clampBox(box, image.width, image.height, `${label} #${i + 1}`, outsideHint);
     const rw = Math.min(image.width, clamped.x1 + 1) - clamped.x0;
     const rh = Math.min(image.height, clamped.y1 + 1) - clamped.y0;
     overlays.push({

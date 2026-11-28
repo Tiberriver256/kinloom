@@ -94,7 +94,7 @@ async function loadOrFetchMetadataUnlocked(
   itemId: string,
   metaPath: string,
   ctx: RecordCommandContext,
-  options: { readonly timeout?: number; readonly refresh?: boolean } = {}
+  options: { readonly timeout?: number | undefined; readonly refresh?: boolean } = {}
 ): Promise<readonly [ItemMetadataPayload, boolean]> {
   const timeout = options.timeout ?? DEFAULT_TIMEOUT_SECONDS;
   if (!options.refresh) {
@@ -115,7 +115,11 @@ async function loadOrFetchMetadataUnlocked(
 export async function ensureItemMetadata(
   identifier: string,
   ctx: RecordCommandContext,
-  options: { readonly cacheRoot?: string; readonly timeout?: number; readonly refresh?: boolean } = {}
+  options: {
+    readonly cacheRoot?: string;
+    readonly timeout?: number | undefined;
+    readonly refresh?: boolean;
+  } = {}
 ): Promise<readonly [ItemMetadataPayload, boolean]> {
   const itemId = validateIdentifier(identifier);
   const itemDir = path.join(options.cacheRoot ?? getCacheRoot(ctx), itemId);
@@ -159,7 +163,7 @@ export async function ensureItemCache(
   options: {
     readonly needDjvu: boolean;
     readonly cacheRoot?: string;
-    readonly timeout?: number;
+    readonly timeout?: number | undefined;
     readonly refresh?: boolean;
   }
 ): Promise<ItemCacheEntry> {
@@ -275,7 +279,10 @@ export async function ensureItemCache(
               : 'scandata';
         } else if (fetched['hocr_text'] !== undefined && fetched['hocr_idx'] !== undefined) {
           try {
-            djvuBytesOut = Buffer.from(synthesizeDjvuFromHocr(fetched['hocr_text'], fetched['hocr_idx']), 'utf8');
+            djvuBytesOut = Buffer.from(
+              synthesizeDjvuFromHocr(fetched['hocr_text'], fetched['hocr_idx']),
+              'utf8'
+            );
             djvuSource = 'hocr';
             segmentMode = 'scandata';
           } catch (err: unknown) {
@@ -366,7 +373,11 @@ export async function ensureDownloadedFile(
   fileList: readonly ItemFileEntry[],
   fileEntry: ItemFileEntry,
   ctx: RecordCommandContext,
-  options: { readonly cacheRoot?: string; readonly timeout?: number; readonly refresh?: boolean } = {}
+  options: {
+    readonly cacheRoot?: string;
+    readonly timeout?: number | undefined;
+    readonly refresh?: boolean;
+  } = {}
 ): Promise<readonly [Buffer, string, boolean]> {
   const itemId = validateIdentifier(identifier);
   const timeout = options.timeout ?? DOWNLOAD_TIMEOUT_SECONDS;
@@ -398,7 +409,11 @@ export async function ensurePageImageCache(
   suffixTag: string,
   url: string,
   ctx: RecordCommandContext,
-  options: { readonly cacheRoot?: string; readonly timeout?: number; readonly refresh?: boolean } = {}
+  options: {
+    readonly cacheRoot?: string;
+    readonly timeout?: number | undefined;
+    readonly refresh?: boolean;
+  } = {}
 ): Promise<readonly [Buffer, string, boolean]> {
   const itemId = validateIdentifier(identifier);
   const timeout = options.timeout ?? DEFAULT_TIMEOUT_SECONDS;

@@ -77,16 +77,16 @@ interface InvokeResult {
   readonly stdout: string;
   readonly stderr: string;
   readonly bytesOut: number;
-  readonly cacheHit?: boolean;
+  readonly cacheHit?: boolean | undefined;
 }
 
 async function invokeFindagrave(
   args: readonly string[],
   options: {
     readonly cacheRoot: string;
-    readonly cwd?: string;
+    readonly cwd?: string | undefined;
     readonly fetchImpl: typeof fetch;
-    readonly sleepFn?: (ms: number) => Promise<void>;
+    readonly sleepFn?: ((ms: number) => Promise<void>) | undefined;
     readonly envExtra?: Record<string, string>;
   }
 ): Promise<InvokeResult> {
@@ -140,10 +140,10 @@ describe('findagrave native client', () => {
         cemetery_lng: number;
         cemetery: { lat: number; lng: number };
       }>;
-      expect(payload[0].cemetery_lat).toBe(39.8246994);
-      expect(payload[0].cemetery_lng).toBe(-89.6592026);
-      expect(payload[0].cemetery.lat).toBe(39.8246994);
-      expect(payload[0].cemetery.lng).toBe(-89.6592026);
+      expect(payload[0]!.cemetery_lat).toBe(39.8246994);
+      expect(payload[0]!.cemetery_lng).toBe(-89.6592026);
+      expect(payload[0]!.cemetery.lat).toBe(39.8246994);
+      expect(payload[0]!.cemetery.lng).toBe(-89.6592026);
     }
   });
 
@@ -174,8 +174,8 @@ describe('findagrave native client', () => {
     const payload = JSON.parse(res.stdout) as {
       cemeteries: Array<{ lat: number; lng: number }>;
     };
-    expect(payload.cemeteries[0].lat).toBe(39.8246994);
-    expect(payload.cemeteries[0].lng).toBe(-89.6592026);
+    expect(payload.cemeteries[0]!.lat).toBe(39.8246994);
+    expect(payload.cemeteries[0]!.lng).toBe(-89.6592026);
   });
 
   it('3. memorial cache zero HTTP, partial batch, and --refresh', async () => {
@@ -209,7 +209,7 @@ describe('findagrave native client', () => {
     expect(r2.exitCode, r2.stderr).toBe(0);
     expect(gqlCalls).toHaveLength(1);
     const p2 = JSON.parse(r2.stdout) as Array<{ name: Array<{ first: string }> }>;
-    expect(p2[0].name[0].first).toBe('Abraham v1');
+    expect(p2[0]!.name[0]!.first).toBe('Abraham v1');
 
     // Batch of [627, 628] fetches ONLY 628 and preserves order.
     const r3 = await invokeFindagrave(['get', '627', '628', '--json'], { cacheRoot, fetchImpl });
@@ -228,7 +228,7 @@ describe('findagrave native client', () => {
     expect(r4.exitCode, r4.stderr).toBe(0);
     expect(gqlCalls).toHaveLength(3);
     const p4 = JSON.parse(r4.stdout) as Array<{ name: Array<{ first: string }> }>;
-    expect(p4[0].name[0].first).toBe('Abraham v2');
+    expect(p4[0]!.name[0]!.first).toBe('Abraham v2');
   });
 
   it('4. cemetery cache zero HTTP and --refresh', async () => {
@@ -269,7 +269,7 @@ describe('findagrave native client', () => {
       cemeteries: Array<{ names: Array<{ name: string }> }>;
     };
     expect(p2.cache_hit).toBe(true);
-    expect(p2.cemeteries[0].names[0].name).toBe('Oak Ridge Cemetery v1');
+    expect(p2.cemeteries[0]!.names[0]!.name).toBe('Oak Ridge Cemetery v1');
 
     // --refresh fetches fresh cemetery JSON.
     rev = 2;
@@ -282,7 +282,7 @@ describe('findagrave native client', () => {
     const p3 = JSON.parse(r3.stdout) as {
       cemeteries: Array<{ names: Array<{ name: string }> }>;
     };
-    expect(p3.cemeteries[0].names[0].name).toBe('Oak Ridge Cemetery v2');
+    expect(p3.cemeteries[0]!.names[0]!.name).toBe('Oak Ridge Cemetery v2');
   });
 
   it('5. photo caches files across dirs and prefixes with zero HTTP', async () => {
@@ -431,7 +431,7 @@ describe('findagrave native client', () => {
       files: Array<{ cache_hit: boolean }>;
     };
     expect(secondBody.cache_hit).toBe(true);
-    expect(secondBody.files[0].cache_hit).toBe(true);
+    expect(secondBody.files[0]!.cache_hit).toBe(true);
     expect(gqlCalls).toHaveLength(1);
     expect(httpCalls).toHaveLength(1);
 
@@ -608,7 +608,7 @@ describe('findagrave native client', () => {
     );
     expect(r1.exitCode, r1.stderr).toBe(0);
     expect((JSON.parse(r1.stdout) as { cache_hit: boolean }).cache_hit).toBe(false);
-    const sent = seenVars[seenVars.length - 1]['s'] as Record<string, unknown>;
+    const sent = seenVars[seenVars.length - 1]!['s']! as Record<string, unknown>;
     expect(sent['firstName']).toBe('Abraham');
     expect(sent['lastName']).toBe('Lincoln');
     expect(sent['size']).toBe(5);
@@ -656,12 +656,12 @@ describe('findagrave native client', () => {
     expect(g1.exitCode, g1.stderr).toBe(0);
     const g1List = JSON.parse(g1.stdout) as Array<{ cache_hit: boolean }>;
     expect(Array.isArray(g1List)).toBe(true);
-    expect(g1List[0].cache_hit).toBe(false);
+    expect(g1List[0]!.cache_hit).toBe(false);
 
     const g2 = await invokeFindagrave(['memorial', '627', '--json'], { cacheRoot, fetchImpl });
     expect(g2.exitCode, g2.stderr).toBe(0);
     const g2List = JSON.parse(g2.stdout) as Array<{ cache_hit: boolean }>;
-    expect(g2List[0].cache_hit).toBe(true);
+    expect(g2List[0]!.cache_hit).toBe(true);
 
     // cemetery accepts full cemetery URL; place accepts positional name.
     const c1 = await invokeFindagrave(
@@ -873,7 +873,7 @@ describe('findagrave native client', () => {
     );
     expect(rSearch.exitCode, rSearch.stderr).toBe(0);
     expect((JSON.parse(rSearch.stdout) as { cache_hit: boolean }).cache_hit).toBe(false);
-    const sent = seenVars[seenVars.length - 1]['s'] as Record<string, unknown>;
+    const sent = seenVars[seenVars.length - 1]!['s']! as Record<string, unknown>;
     expect(sent['firstName']).toBe('Abraham');
     expect(sent['lastName']).toBe('Lincoln');
     expect(sent['birthYear']).toBe(1809);
@@ -906,8 +906,8 @@ describe('findagrave native client', () => {
     const s2 = await invokeFindagrave(['get', '627', '--json'], { cacheRoot, fetchImpl });
     expect(s1.exitCode, s1.stderr).toBe(0);
     expect(s2.exitCode, s2.stderr).toBe(0);
-    expect((JSON.parse(s1.stdout) as Array<{ cache_hit: boolean }>)[0].cache_hit).toBe(false);
-    expect((JSON.parse(s2.stdout) as Array<{ cache_hit: boolean }>)[0].cache_hit).toBe(true);
+    expect((JSON.parse(s1.stdout) as Array<{ cache_hit: boolean }>)[0]!.cache_hit).toBe(false);
+    expect((JSON.parse(s2.stdout) as Array<{ cache_hit: boolean }>)[0]!.cache_hit).toBe(true);
     expect(seenVars).toHaveLength(2);
 
     // url accepts --given/--surname/--born/--died.

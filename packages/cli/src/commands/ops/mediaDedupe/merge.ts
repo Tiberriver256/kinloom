@@ -119,7 +119,9 @@ export function mergeDuplicateMediaGroup(
   }
 
   const ordered = [...items].toSorted((a, b) => compareMediaCandidates(a, b, refCounts, preferSet));
-  const canonical = structuredClone(ordered[0]);
+  const firstOrdered = ordered[0];
+  if (!firstOrdered) throw new Error('Expected at least one media item in group');
+  const canonical = structuredClone(firstOrdered);
   const retired = ordered.slice(1);
   const retiredIds = retired.map((item) => item.id).toSorted((a, b) => a.localeCompare(b));
   const warnings: string[] = [];
@@ -208,7 +210,10 @@ export function mergeDuplicateMediaGroup(
     const prevAdditional = Array.isArray(mergedExtensions['additional_source_ids'])
       ? mergedExtensions['additional_source_ids'].filter((s): s is string => typeof s === 'string')
       : [];
-    mergedExtensions['additional_source_ids'] = uniqueNonEmptyStrings([...prevAdditional, ...additionalSources]);
+    mergedExtensions['additional_source_ids'] = uniqueNonEmptyStrings([
+      ...prevAdditional,
+      ...additionalSources,
+    ]);
     warnings.push(
       `Conflicting source_id on '${normalizedFile}': kept canonical '${canonical.source_id}' on ${canonical.id}; recorded additional [${additionalSources.join(', ')}] in extensions.additional_source_ids.`
     );
@@ -226,7 +231,10 @@ export function mergeDuplicateMediaGroup(
     const prevAdditional = Array.isArray(mergedExtensions['additional_event_ids'])
       ? mergedExtensions['additional_event_ids'].filter((s): s is string => typeof s === 'string')
       : [];
-    mergedExtensions['additional_event_ids'] = uniqueNonEmptyStrings([...prevAdditional, ...additionalEvents]);
+    mergedExtensions['additional_event_ids'] = uniqueNonEmptyStrings([
+      ...prevAdditional,
+      ...additionalEvents,
+    ]);
     warnings.push(
       `Conflicting event_id on '${normalizedFile}': kept canonical '${canonical.event_id}' on ${canonical.id}; recorded additional [${additionalEvents.join(', ')}] in extensions.additional_event_ids.`
     );
@@ -246,9 +254,10 @@ export function mergeDuplicateMediaGroup(
   const prevMergedFrom = Array.isArray(mergedExtensions['merged_from_media_ids'])
     ? mergedExtensions['merged_from_media_ids'].filter((id): id is string => typeof id === 'string')
     : [];
-  mergedExtensions['merged_from_media_ids'] = uniqueNonEmptyStrings([...prevMergedFrom, ...retiredIds]).toSorted(
-    (a, b) => a.localeCompare(b)
-  );
+  mergedExtensions['merged_from_media_ids'] = uniqueNonEmptyStrings([
+    ...prevMergedFrom,
+    ...retiredIds,
+  ]).toSorted((a, b) => a.localeCompare(b));
   canonical.extensions = mergedExtensions;
 
   const validated = MediaItemSchema.parse(canonical);

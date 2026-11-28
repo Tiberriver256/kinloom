@@ -131,12 +131,12 @@ export function parsePersiArticles(page: string): PersiArticle[] {
     if (cells.length < 3) {
       continue;
     }
-    if (cells[0].toLowerCase().startsWith('article title')) {
+    if ((cells[0] ?? '').toLowerCase().startsWith('article title')) {
       continue;
     }
     const freeLinks = links.flat().filter((link) => link.startsWith('http'));
     articles.push({
-      title: cells[0],
+      title: cells[0] ?? '',
       periodical: cells[1] ?? '',
       year: cells[2] ?? '',
       publisher: cells[3] ?? '',
@@ -150,13 +150,13 @@ export function parsePersiCategories(page: string): PersiCategory[] {
   const categories: PersiCategory[] = [];
   for (const row of parsePersiTableRows(page)) {
     const { cells } = row;
-    if (cells.length === 2 && /^\d+$/.test(cells[1].replace(/,/g, ''))) {
-      if (cells[0].toLowerCase().startsWith('category')) {
+    if (cells.length === 2 && /^\d+$/.test((cells[1] ?? '').replace(/,/g, ''))) {
+      if ((cells[0] ?? '').toLowerCase().startsWith('category')) {
         continue;
       }
       categories.push({
-        category: cells[0],
-        articles: Number.parseInt(cells[1].replace(/,/g, ''), 10),
+        category: cells[0] ?? '',
+        articles: Number.parseInt((cells[1] ?? '').replace(/,/g, ''), 10),
       });
     }
   }

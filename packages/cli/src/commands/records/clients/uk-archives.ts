@@ -28,7 +28,7 @@ export const runUkArchivesCommand: RecordHandler = async (args, ctx): Promise<Re
         if (rest.length === 0 || rest[0] === '--help' || rest[0] === '-h') {
           return { exitCode: 0, bytesOut: emitStdout(ctx.io, renderTnaHelp(group)) };
         }
-        const subcmd = resolveSubcommandAlias(rest[0], TNA_SUBCOMMAND_ALIASES);
+        const subcmd = resolveSubcommandAlias(rest[0] ?? '', TNA_SUBCOMMAND_ALIASES);
         const subArgs = rest.slice(1);
         switch (subcmd) {
           case 'search':

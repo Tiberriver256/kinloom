@@ -705,7 +705,7 @@ function createHttpBackedBrowserFactory(): ScreenshotBrowserFactory {
                 const re = /<a\s+[^>]*href="([^"]+)"[^>]*>([^<]*)<\/a>/g;
                 let match = re.exec(currentHtml);
                 while (match !== null) {
-                  links.push({ href: match[1], text: match[2].trim() });
+                  links.push({ href: match[1]!, text: match[2]!.trim() });
                   match = re.exec(currentHtml);
                 }
                 return links as never;
@@ -920,9 +920,9 @@ describe('kinloom screenshots CLI + hermetic HTTP archive integration', () => {
     const seenScreenshotCalls: Array<{
       readonly route: string;
       readonly theme: string;
-      readonly fullPage?: boolean;
-      readonly timeout?: number;
-      readonly animations?: string;
+      readonly fullPage?: boolean | undefined;
+      readonly timeout?: number | undefined;
+      readonly animations?: string | undefined;
     }> = [];
     const seenEmulateThemes: string[] = [];
 

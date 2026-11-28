@@ -83,7 +83,7 @@ function makeSyntheticWav(pcm: Buffer, sampleRate = 24000, channels = 1): Buffer
 
 async function invokeNarrativeAudio(
   args: readonly string[],
-  overrides: Partial<RecordCommandContext> = {}
+  overrides: { [K in keyof RecordCommandContext]?: RecordCommandContext[K] | undefined } = {}
 ): Promise<{ exitCode: number; stdout: string; stderr: string }> {
   const stdout: string[] = [];
   const stderr: string[] = [];
@@ -400,10 +400,10 @@ describe('narrative-audio CLI subcommands', () => {
       }
       if (file === 'ffmpeg') {
         const inputIdx = args.indexOf('-i');
-        const pcmPath = args[inputIdx + 1];
+        const pcmPath = args[inputIdx + 1]!;
         const pcmBytes = fs.statSync(pcmPath).size;
         execCalls.push({ file, args, pcmBytes });
-        fs.writeFileSync(args[args.length - 1], Buffer.from('ID3-mock-mp3'));
+        fs.writeFileSync(args[args.length - 1]!, Buffer.from('ID3-mock-mp3'));
         return { stdout: Buffer.alloc(0), stderr: Buffer.alloc(0) };
       }
       throw new Error(`Unexpected executable: ${file}`);
@@ -421,16 +421,16 @@ describe('narrative-audio CLI subcommands', () => {
     expect(res.exitCode, res.stderr).toBe(0);
     expect(attemptCount).toBe(3); // 1 transient 503 + 2 successful chunks
     expect(sentRequests).toHaveLength(2);
-    expect(sentRequests[0].url).toContain('texttospeech.googleapis.com');
-    expect(sentRequests[0].headers['authorization']).toBe('Bearer adc-token-123');
-    expect(sentRequests[0].headers['x-goog-user-project']).toBe('synthetic-gcp-project');
+    expect(sentRequests[0]!.url).toContain('texttospeech.googleapis.com');
+    expect(sentRequests[0]!.headers['authorization']).toBe('Bearer adc-token-123');
+    expect(sentRequests[0]!.headers['x-goog-user-project']).toBe('synthetic-gcp-project');
 
-    const firstBody = sentRequests[0].body as {
+    const firstBody = sentRequests[0]!.body as {
       input: { customPronunciations?: { pronunciations: Array<{ phrase: string }> } };
       voice: { name: string };
     };
     expect(firstBody.voice.name).toBe('en-US-Chirp3-HD-Charon');
-    expect(firstBody.input.customPronunciations?.pronunciations[0].phrase).toBe('Alden Mercer');
+    expect(firstBody.input.customPronunciations?.pronunciations[0]?.phrase).toBe('Alden Mercer');
 
     const ffmpegCall = execCalls.find((c) => c.file === 'ffmpeg');
     expect(ffmpegCall).toBeDefined();
@@ -498,7 +498,7 @@ describe('narrative-audio CLI subcommands', () => {
 
     const mockExec: ExecFileFn = async (file, args) => {
       expect(file).toBe('ffmpeg');
-      fs.writeFileSync(args[args.length - 1], Buffer.from('ID3-gemini-mp3'));
+      fs.writeFileSync(args[args.length - 1]!, Buffer.from('ID3-gemini-mp3'));
       return { stdout: Buffer.alloc(0), stderr: Buffer.alloc(0) };
     };
 

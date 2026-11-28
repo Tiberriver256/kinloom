@@ -32,7 +32,7 @@ export interface NjGridRow {
 
 export interface NjSearchResult {
   readonly database: string;
-  readonly title?: string;
+  readonly title?: string | undefined;
   readonly headers: readonly string[];
   readonly rows: readonly NjGridRow[];
   readonly capped_500?: boolean;
@@ -51,7 +51,7 @@ export interface NjSearchCriteria {
   readonly given?: string | null;
   readonly spouse_surname?: string | null;
   readonly spouse_given?: string | null;
-  readonly county?: string | null;
+  readonly county?: string | null | undefined;
   readonly location?: string | null;
   readonly from_year?: string | null;
   readonly to_year?: string | null;

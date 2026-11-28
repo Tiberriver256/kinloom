@@ -217,6 +217,7 @@ export function runAuditHygieneRegressionCheck(input: {
   const postPeopleMap = new Map<string, RawPerson>();
   for (let i = 0; i < prePeople.length; i += 1) {
     const person = prePeople[i];
+    if (person === undefined) continue;
     postPeopleMap.set(person.id, person);
   }
   for (const rawPerson of Array.isArray(input.patch['people']) ? input.patch['people'] : []) {
@@ -248,6 +249,7 @@ export function runAuditHygieneRegressionCheck(input: {
   const postEventsMap = new Map<string, RawEvent>();
   for (let i = 0; i < preEvents.length; i += 1) {
     const event = preEvents[i];
+    if (event === undefined) continue;
     postEventsMap.set(event.id, event);
   }
   for (const rawEv of Array.isArray(input.patch['events']) ? input.patch['events'] : []) {
@@ -330,6 +332,7 @@ export function runAuditHygieneRegressionCheck(input: {
     const postKinshipMap = new Map<string, KinshipEdge>();
     for (let i = 0; i < kinshipAfterRemovals.length; i += 1) {
       const edge = kinshipAfterRemovals[i];
+      if (edge === undefined) continue;
       postKinshipMap.set(`${edge.from}|${edge.to}|${edge.relation}`, edge);
     }
     for (const edge of stagedKinshipEdges) {

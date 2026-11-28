@@ -65,19 +65,21 @@ export async function runGrep(
   let posArgs = parsed.positionals.filter((tok) => tok.length > 0);
 
   if (rawPatterns.length === 0) {
-    if (rawItems.length > 0 && posArgs.length === 1) {
-      rawPatterns = [posArgs[0]];
+    const p0 = posArgs[0];
+    const p1 = posArgs[1];
+    if (rawItems.length > 0 && posArgs.length === 1 && p0 !== undefined) {
+      rawPatterns = [p0];
       posArgs = [];
-    } else if (rawItems.length === 0 && posArgs.length === 2) {
-      const firstIsId = looksLikeIdentifierToken(posArgs[0]);
-      const secondIsId = looksLikeIdentifierToken(posArgs[1]);
+    } else if (rawItems.length === 0 && posArgs.length === 2 && p0 !== undefined && p1 !== undefined) {
+      const firstIsId = looksLikeIdentifierToken(p0);
+      const secondIsId = looksLikeIdentifierToken(p1);
       if (firstIsId && !secondIsId) {
-        rawItems = [posArgs[0]];
-        rawPatterns = [posArgs[1]];
+        rawItems = [p0];
+        rawPatterns = [p1];
         posArgs = [];
       } else if (secondIsId && !firstIsId) {
-        rawPatterns = [posArgs[0]];
-        rawItems = [posArgs[1]];
+        rawPatterns = [p0];
+        rawItems = [p1];
         posArgs = [];
       }
     }
@@ -102,7 +104,7 @@ export async function runGrep(
 
   try {
     // Validate regex syntax up front before any network calls.
-    void new RegExp(pattern, ignoreCase ? 'gi' : 'g');
+    void new RegExp(pattern ?? '', ignoreCase ? 'gi' : 'g');
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : String(err);
     throw new CliValidationError(`Invalid regex pattern '${pattern}': ${msg}`);
@@ -122,7 +124,7 @@ export async function runGrep(
   const cacheEntries: ItemCacheEntry[] = [];
   const itemErrors: { readonly identifier: string; readonly error: string }[] = [];
 
-  if (identifiers.length === 1) {
+  if (identifiers.length === 1 && identifiers[0] !== undefined) {
     const entry = await ensureItemCache(identifiers[0], ctx, {
       needDjvu: true,
       cacheRoot,
@@ -169,10 +171,17 @@ export async function runGrep(
     allCached = allCached && wasCached;
     const pageIndex = readPageIndex(entry.pageIndexPath) ?? emptyPageIndex();
     const djvuText = fs.readFileSync(entry.djvuPath).toString('utf8');
-    const [hits, itemTotal] = grepCachedItem(entry.identifier, djvuText, pageIndex, pattern, ignoreCase, {
-      contextChars,
-      limit: remaining,
-    });
+    const [hits, itemTotal] = grepCachedItem(
+      entry.identifier,
+      djvuText,
+      pageIndex,
+      pattern ?? '',
+      ignoreCase,
+      {
+        contextChars,
+        limit: remaining,
+      }
+    );
     for (const h of hits) {
       h.cached = wasCached;
     }

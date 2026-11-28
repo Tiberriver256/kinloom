@@ -124,8 +124,8 @@ export async function getJson(
   ctx: RecordCommandContext,
   url: string,
   options: {
-    readonly params?: readonly (readonly [string, string])[];
-    readonly timeout?: number;
+    readonly params?: readonly (readonly [string, string])[] | undefined;
+    readonly timeout?: number | undefined;
   } = {}
 ): Promise<Record<string, unknown>> {
   const timeout = options.timeout ?? DEFAULT_TIMEOUT;

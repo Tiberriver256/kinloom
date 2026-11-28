@@ -109,7 +109,7 @@ export async function fetchLand(
     ...extractAspState(advHtml),
     __EVENTTARGET: '',
     __EVENTARGUMENT: '',
-    ctl00$ContentPlaceHolder1$DdlAdvSearchBy: LAND_BY[by],
+    ctl00$ContentPlaceHolder1$DdlAdvSearchBy: LAND_BY[by] ?? '',
     ctl00$ContentPlaceHolder1$TxtAdvSearchFor: term,
     ctl00$ContentPlaceHolder1$ddlMatch: 'All',
     ctl00$ContentPlaceHolder1$ddlShow: limit,

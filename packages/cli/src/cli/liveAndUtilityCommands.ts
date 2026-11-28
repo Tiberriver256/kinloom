@@ -53,6 +53,7 @@ function parseSyncArgs(argv: readonly string[]): ParsedSyncArgs {
 
   for (let i = 0; i < argv.length; i += 1) {
     const arg = argv[i];
+    if (arg === undefined) continue;
     if (arg === '--sync-missing-media') {
       parsed.syncMissingMedia = true;
       continue;
@@ -109,13 +110,15 @@ function parseSyncArgs(argv: readonly string[]): ParsedSyncArgs {
     }
     if (arg === '--concurrency' || arg.startsWith('--concurrency=')) {
       const [val, nextIdx] = readFlagValue(arg, i, '--concurrency');
-      parsed.concurrency = parseOptionalPositiveInt(val, '--concurrency');
+      const concurrency = parseOptionalPositiveInt(val, '--concurrency');
+      if (concurrency !== undefined) parsed.concurrency = concurrency;
       i = nextIdx;
       continue;
     }
     if (arg === '--chunk-size' || arg.startsWith('--chunk-size=')) {
       const [val, nextIdx] = readFlagValue(arg, i, '--chunk-size');
-      parsed.chunkSize = parseOptionalPositiveInt(val, '--chunk-size');
+      const chunkSize = parseOptionalPositiveInt(val, '--chunk-size');
+      if (chunkSize !== undefined) parsed.chunkSize = chunkSize;
       i = nextIdx;
       continue;
     }
@@ -138,9 +141,9 @@ function parseSyncArgs(argv: readonly string[]): ParsedSyncArgs {
         parsed.uploadMediaPaths.push(...items);
       } else {
         let consumed = 0;
-        while (i + 1 < argv.length && !argv[i + 1].startsWith('-')) {
+        while (i + 1 < argv.length && !(argv[i + 1] ?? '').startsWith('-')) {
           i += 1;
-          for (const item of argv[i]
+          for (const item of (argv[i] ?? '')
             .split(',')
             .map((part) => part.trim())
             .filter(Boolean)) {
@@ -281,7 +284,7 @@ export async function runDates(rest: readonly string[], ctx: CliDispatchContext)
         }
         return runDatesCommand({
           subcommand: 'weekday',
-          date: positionals[0],
+          date: positionals[0] ?? '',
           json: values.json,
         });
       }
@@ -296,8 +299,8 @@ export async function runDates(rest: readonly string[], ctx: CliDispatchContext)
         }
         return runDatesCommand({
           subcommand: 'diff',
-          startDate: positionals[0],
-          endDate: positionals[1],
+          startDate: positionals[0] ?? '',
+          endDate: positionals[1] ?? '',
           json: values.json,
         });
       }
@@ -310,7 +313,7 @@ export async function runDates(rest: readonly string[], ctx: CliDispatchContext)
       const atDates = [...(values.at ?? []), ...positionalAts];
       return runDatesCommand({
         subcommand: 'age',
-        birthDate,
+        birthDate: birthDate ?? '',
         atDates,
         json: values.json,
       });

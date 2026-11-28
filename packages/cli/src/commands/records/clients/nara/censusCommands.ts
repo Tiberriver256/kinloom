@@ -231,7 +231,7 @@ export async function runCensus1950Image(
   try {
     const storeOptions = { outPath, width, refresh, ttlHours, timeoutSec, cacheRoot };
     if (!batch) {
-      records = [await storeCensus1950Image(imagePaths[0], storeOptions, ctx)];
+      records = [await storeCensus1950Image(imagePaths[0] ?? '', storeOptions, ctx)];
     } else {
       records = await runWithConcurrency(imagePaths, CENSUS1950_IMAGE_FETCH_WORKERS, (imagePath) =>
         storeCensus1950Image(imagePath, storeOptions, ctx)
@@ -263,6 +263,7 @@ export async function runCensus1950Image(
 
   if (!batch) {
     const rec = records[0];
+    if (!rec) throw new Error('Expected a census image record');
     if (asJson) {
       const bytesOut = emitJsonStdout(ctx.io, rec);
       return { exitCode: 0, bytesOut, cacheHit: rec.cache_hit };

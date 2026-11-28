@@ -83,7 +83,7 @@ export interface MigrateCommandOptions {
   readonly dryRun?: boolean;
   readonly json?: boolean;
   readonly migrationsDir?: string;
-  readonly pluginMigrationsDir?: string;
+  readonly pluginMigrationsDir?: string | undefined;
   readonly wranglerBin?: string;
   readonly execWrangler?: WranglerExecutor;
 }

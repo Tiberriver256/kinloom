@@ -71,12 +71,12 @@ export async function runVerifyCommand(options: VerifyCommandOptions = {}): Prom
 
   // 1. Validate narrative inline citations against known source and media IDs.
   const sourceIds = new Set<string>();
-  for (let i = 0; i < sources.length; i += 1) {
-    sourceIds.add(sources[i].id);
+  for (const src of sources) {
+    sourceIds.add(src.id);
   }
   const mediaIds = new Set<string>();
-  for (let i = 0; i < media.length; i += 1) {
-    mediaIds.add(media[i].id);
+  for (const item of media) {
+    mediaIds.add(item.id);
   }
   const citationErrors = validateNarrativeCitations(narratives, sourceIds, mediaIds);
   const citations: VerifyCitationsResult = {

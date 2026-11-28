@@ -3,20 +3,30 @@ import { LANG_DISPLAY_NAMES, normalizeLangCode } from './types.js';
 const IPA_NON_VALUE_TOKENS = new Set(['pron', 'lang', 'local', 'also', 'ipa', '-', 'or', 'and', 'locally']);
 
 export interface MediaWikiQueryResponse {
-  query?: {
-    pages?: Array<{
-      title?: string;
-      missing?: boolean;
-      revisions?: Array<{
-        slots?: {
-          main?: {
-            content?: string;
-          };
-        };
-        content?: string;
-      }>;
-    }>;
-  };
+  query?:
+    | {
+        pages?:
+          | Array<{
+              title?: string | undefined;
+              missing?: boolean | undefined;
+              revisions?:
+                | Array<{
+                    slots?:
+                      | {
+                          main?:
+                            | {
+                                content?: string | undefined;
+                              }
+                            | undefined;
+                        }
+                      | undefined;
+                    content?: string | undefined;
+                  }>
+                | undefined;
+            }>
+          | undefined;
+      }
+    | undefined;
 }
 
 export interface WikiTargetSpec {
@@ -251,7 +261,7 @@ export function extractMediaWikiPronunciations(
     }
 
     if (lowerName === 'ipa') {
-      if (positional.length >= 2 && /^[a-z]{2,3}(?:-[a-z]{2,4})?$/i.test(positional[0])) {
+      if (positional.length >= 2 && /^[a-z]{2,3}(?:-[a-z]{2,4})?$/i.test(positional[0] ?? '')) {
         const tplLang = normalizeLangCode(positional[0]);
         if (!targetLang || !tplLang || tplLang === targetLang) {
           for (const val of positional.slice(1)) {
@@ -315,18 +325,18 @@ export function extractMediaWikiPronunciations(
     if (lowerName === 'pron' && positional.length >= 1) {
       const tplLang = positional[1] ? normalizeLangCode(positional[1]) : wikiLang;
       if (!targetLang || !tplLang || tplLang === targetLang) {
-        addIpa(positional[0]);
+        if (positional[0] !== undefined) addIpa(positional[0]);
       }
       continue;
     }
 
     if (lowerName === 'audio') {
-      if (positional.length >= 2 && /^[a-z]{2,3}(?:-[a-z]{2,4})?$/i.test(positional[0])) {
+      if (positional.length >= 2 && /^[a-z]{2,3}(?:-[a-z]{2,4})?$/i.test(positional[0] ?? '')) {
         const tplLang = normalizeLangCode(positional[0]);
-        if (!targetLang || !tplLang || tplLang === targetLang) {
+        if ((!targetLang || !tplLang || tplLang === targetLang) && positional[1] !== undefined) {
           addAudio(positional[1], tplLang ?? undefined);
         }
-      } else if (positional.length >= 1) {
+      } else if (positional.length >= 1 && positional[0] !== undefined) {
         if (!targetLang || wikiLang === targetLang) {
           addAudio(positional[0], wikiLang);
         }
@@ -338,7 +348,7 @@ export function extractMediaWikiPronunciations(
     if (langAudioMatch && positional.length >= 1) {
       const tplLang = normalizeLangCode(langAudioMatch[1] ?? langAudioMatch[2]);
       if (!targetLang || !tplLang || tplLang === targetLang) {
-        addAudio(positional[0], tplLang ?? undefined);
+        if (positional[0] !== undefined) addAudio(positional[0], tplLang ?? undefined);
       }
     }
   }

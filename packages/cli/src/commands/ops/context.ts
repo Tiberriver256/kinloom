@@ -70,7 +70,8 @@ export async function runContextCommand(options: ContextCommandOptions): Promise
     throw new CliValidationError(`Archive data/people.yaml not found under ${repoDir}.`);
   }
 
-  const rawAncestryDir = options.ancestryDir?.trim() || process.env['KINLOOM_ANCESTRY_FACTS_DIR']?.trim() || '';
+  const rawAncestryDir =
+    options.ancestryDir?.trim() || process.env['KINLOOM_ANCESTRY_FACTS_DIR']?.trim() || '';
   const ancestryDir = rawAncestryDir ? path.resolve(rawAncestryDir) : null;
   const includeFamily = options.includeFamily === true || options.full === true;
 
@@ -178,7 +179,9 @@ export async function runContextCommand(options: ContextCommandOptions): Promise
   );
 
   const ownMediaIds = new Set(
-    personMedia.map((item) => (typeof item['id'] === 'string' ? item['id'] : '')).filter((id) => id.length > 0)
+    personMedia
+      .map((item) => (typeof item['id'] === 'string' ? item['id'] : ''))
+      .filter((id) => id.length > 0)
   );
   const relativeArchiveMedia = collectRelativeArchiveMedia({
     includeFamily,

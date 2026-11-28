@@ -57,7 +57,7 @@ async function invokePersi(
   args: readonly string[],
   cacheDir: string,
   fetchImpl: typeof fetch
-): Promise<{ exitCode: number; stdout: string; stderr: string; cacheHit?: boolean }> {
+): Promise<{ exitCode: number; stdout: string; stderr: string; cacheHit?: boolean | undefined }> {
   const stdout: string[] = [];
   const stderr: string[] = [];
   const ctx = createRecordContext({

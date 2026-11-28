@@ -77,8 +77,8 @@ export async function runAuditBatchCommand(options: {
   personIds: readonly string[];
   json?: boolean;
   pendingOnly?: boolean;
-  skippedAlreadyIntegrated?: readonly string[];
-  skippedDrifted?: readonly string[];
+  skippedAlreadyIntegrated?: readonly string[] | undefined;
+  skippedDrifted?: readonly string[] | undefined;
   plugins?: readonly KinloomCliPlugin[];
 }): Promise<AuditBatchResult> {
   const started = performance.now();

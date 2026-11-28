@@ -185,7 +185,7 @@ export async function runGrantTif(
 
   let url: string;
   try {
-    url = normalizeLvaImageUrl(parsed.positionals[0]);
+    url = normalizeLvaImageUrl(parsed.positionals[0] ?? '');
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : String(err);
     throw new CliValidationError(message);
@@ -238,7 +238,7 @@ export async function runDunmore(
     return { exitCode: 0, bytesOut: emitStdout(ctx.io, renderDunmoreHelp()) };
   }
 
-  const [drawer, card] = parsed.positionals;
+  const [drawer = '', card = ''] = parsed.positionals;
   if (!/^\d{1,5}\/W\d{1,6}$/.test(drawer)) {
     throw new CliValidationError(`Invalid drawer (expected e.g. 0001/W0001): ${JSON.stringify(drawer)}`);
   }
@@ -284,7 +284,7 @@ export async function runDunmore(
     selected: chosen,
   };
 
-  if (outPath) {
+  if (outPath && chosen) {
     const cachedPath = await fetchFile(state, chosen.url, [LVA_IMAGE_HOST]);
     const mode = await saveImage(cachedPath, outPath);
     result['out'] = outPath;
@@ -322,7 +322,7 @@ export async function runDownloadRosetta(
     return { exitCode: 0, bytesOut: emitStdout(ctx.io, renderRosettaHelp()) };
   }
 
-  const ie = validateIeId(parsed.positionals[0]);
+  const ie = validateIeId(parsed.positionals[0] ?? '');
   const rawFl = getStringOption(parsed, 'flId');
   const flId = rawFl !== undefined ? validateFlId(rawFl) : undefined;
   const fileIndex = getNumberOption(parsed, 'fileIndex');
@@ -365,9 +365,9 @@ export async function runDownloadRosetta(
     if (fileIndex < 1 || fileIndex > files.length) {
       throw new CliValidationError(`--file must be 1..${files.length}`);
     }
-    fl = files[fileIndex - 1].fl;
+    fl = files[fileIndex - 1]?.fl ?? '';
   } else {
-    fl = info.initial ?? files[0].fl;
+    fl = info.initial ?? files[0]?.fl ?? '';
   }
 
   const expectedBinPath = path.join(state.cacheRoot, 'rosetta', ie, `${fl}.bin`);

@@ -60,6 +60,7 @@ export function normalizeCommaSplitArgs(argv: readonly string[], commaFlags: Rea
   let i = 0;
   while (i < argv.length) {
     const token = argv[i];
+    if (token === undefined) continue;
     if (token === '--') {
       out.push(...argv.slice(i));
       break;
@@ -75,8 +76,8 @@ export function normalizeCommaSplitArgs(argv: readonly string[], commaFlags: Rea
     if (eqIdx !== -1) {
       let combined = token.slice(eqIdx + 1);
       i += 1;
-      while (i < argv.length && combined.endsWith(',') && !argv[i].startsWith('-')) {
-        combined += argv[i];
+      while (i < argv.length && combined.endsWith(',') && !(argv[i] ?? '').startsWith('-')) {
+        combined += argv[i] ?? '';
         i += 1;
       }
       out.push(`${flagHead}=${combined}`);
@@ -86,10 +87,10 @@ export function normalizeCommaSplitArgs(argv: readonly string[], commaFlags: Rea
     out.push(token);
     i += 1;
     if (i < argv.length) {
-      let combined = argv[i];
+      let combined = argv[i] ?? '';
       i += 1;
-      while (i < argv.length && combined.endsWith(',') && !argv[i].startsWith('-')) {
-        combined += argv[i];
+      while (i < argv.length && combined.endsWith(',') && !(argv[i] ?? '').startsWith('-')) {
+        combined += argv[i] ?? '';
         i += 1;
       }
       out.push(combined);
@@ -158,7 +159,7 @@ export function parseCommandArgs(rawArgv: readonly string[], spec: CommandParseS
     for (const flag of option.flags) {
       byFlag.set(flag, { option, negated: false });
       if (flag.length === 2 && flag.startsWith('-') && !flag.startsWith('--')) {
-        byShort.set(flag[1], option);
+        byShort.set(flag.charAt(1), option);
       }
       if (option.kind === 'boolean' && option.negatable) {
         const neg = normalizeNegatedFlag(flag);
@@ -186,6 +187,7 @@ export function parseCommandArgs(rawArgv: readonly string[], spec: CommandParseS
 
   for (let i = 0; i < argv.length; i += 1) {
     const token = argv[i];
+    if (token === undefined) continue;
     if (afterDoubleDash) {
       positionals.push(token);
       continue;
@@ -233,7 +235,7 @@ export function parseCommandArgs(rawArgv: readonly string[], spec: CommandParseS
         i += 1;
       }
 
-      const coerced = coerceOptionValue(option, rawValue, flagName);
+      const coerced = coerceOptionValue(option, rawValue ?? '', flagName);
       if (option.multiple) {
         const list = Array.isArray(values[option.key]) ? (values[option.key] as unknown[]) : [];
         list.push(coerced);
@@ -247,7 +249,7 @@ export function parseCommandArgs(rawArgv: readonly string[], spec: CommandParseS
 
     if (token.startsWith('-') && token.length > 1) {
       // Allow negative numbers as positional arguments when not matching a short flag.
-      if (/^-\d+(\.\d+)?$/.test(token) && !byShort.has(token[1])) {
+      if (/^-\d+(\.\d+)?$/.test(token) && !byShort.has(token.charAt(1))) {
         positionals.push(token);
         continue;
       }
@@ -286,7 +288,7 @@ export function parseCommandArgs(rawArgv: readonly string[], spec: CommandParseS
             positionals,
           };
         }
-        const option = byShort.get(ch);
+        const option = ch !== undefined ? byShort.get(ch) : undefined;
         if (!option) {
           throw new CliValidationError(`Unknown option '-${ch}'.`);
         }
@@ -306,7 +308,7 @@ export function parseCommandArgs(rawArgv: readonly string[], spec: CommandParseS
           if (i + 1 >= argv.length) {
             throw new CliValidationError(`Option '${flagName}' requires a value.`);
           }
-          rawValue = argv[i + 1];
+          rawValue = argv[i + 1] ?? '';
           i += 1;
         }
         const coerced = coerceOptionValue(option, rawValue, flagName);

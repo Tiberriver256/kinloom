@@ -174,7 +174,8 @@ export async function runSearch(
       : places !== undefined && places !== null
         ? String(places)
         : '';
-    const url = typeof rawDoc['url'] === 'string' && rawDoc['url'] ? rawDoc['url'] : `${WEB_BASE}/${code}:${ident}`;
+    const url =
+      typeof rawDoc['url'] === 'string' && rawDoc['url'] ? rawDoc['url'] : `${WEB_BASE}/${code}:${ident}`;
     lines.push(`- ${code}:${ident} | ${person} (${role}) | ${stype} | ${dateStr} | ${placeStr}`);
     lines.push(`  ${url}`);
   }
@@ -198,7 +199,7 @@ export async function runShow(
   const refresh = getBooleanOption(parsed, 'refresh');
   const cliTtl = getNumberOption(parsed, 'cacheTtlHours');
 
-  const [code, ident] = parseRecordRef(archive, identifier);
+  const [code, ident] = parseRecordRef(archive ?? '', identifier);
   const ttlHours = resolveTtlHours(cliTtl, ctx);
   const cacheDir = getCacheDir(ctx);
 
@@ -336,7 +337,8 @@ export async function runDownload(
   const refresh = getBooleanOption(parsed, 'refresh');
   const cliTtl = getNumberOption(parsed, 'cacheTtlHours');
 
-  if (identifier && !dest && isCompleteRecordRef(archive)) {
+  const archiveStr = archive ?? '';
+  if (identifier && !dest && isCompleteRecordRef(archiveStr)) {
     dest = identifier;
     identifier = undefined;
   }
@@ -347,8 +349,8 @@ export async function runDownload(
   };
   const cacheDir = getCacheDir(ctx);
 
-  if (!identifier && isDirectScanUrl(archive)) {
-    return runDirectScanDownload(ctx, cacheDir, archive, {
+  if (!identifier && isDirectScanUrl(archiveStr)) {
+    return runDirectScanDownload(ctx, cacheDir, archiveStr, {
       dest,
       listOnly,
       preview,
@@ -357,7 +359,7 @@ export async function runDownload(
     });
   }
 
-  const [code, ident] = parseRecordRef(archive, identifier);
+  const [code, ident] = parseRecordRef(archiveStr, identifier);
   const { data, cacheHit: showHit } = await loadShow(ctx, cacheDir, code, ident, lang, cachePolicy);
   const scans = extractScansFromShow(data);
 

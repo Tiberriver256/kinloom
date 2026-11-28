@@ -93,10 +93,10 @@ function parseProbeCommandArgs(
   pluginOptions: SyntheticProbePluginOptions
 ): {
   readonly targetUrl: string;
-  readonly mediaPath?: string;
-  readonly mediaPathSource?: 'flag' | 'option';
+  readonly mediaPath?: string | undefined;
+  readonly mediaPathSource?: 'flag' | 'option' | undefined;
   readonly mediaRangeBytes: number;
-  readonly token?: string;
+  readonly token?: string | undefined;
   readonly timeoutMs: number;
   readonly budgets: SyntheticProbeBudgets;
   readonly checkPlugins: boolean;

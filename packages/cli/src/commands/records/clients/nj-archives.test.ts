@@ -72,7 +72,7 @@ async function invokeNj(
   args: readonly string[],
   cacheDir: string,
   fetchImpl?: typeof fetch
-): Promise<{ exitCode: number; stdout: string; stderr: string; cacheHit?: boolean }> {
+): Promise<{ exitCode: number; stdout: string; stderr: string; cacheHit?: boolean | undefined }> {
   const stdout: string[] = [];
   const stderr: string[] = [];
   const ctx = createRecordContext({
@@ -126,10 +126,10 @@ describe('nj-archives pagination, retries, and grid parsing', () => {
     );
 
     expect(postedEvents.map((ev) => ev[0])).toEqual(['search']);
-    expect(postedEvents[0][1]).toContain('ddlCountyList=Hunterdon');
+    expect(postedEvents[0]![1]!).toContain('ddlCountyList=Hunterdon');
     expect(result.pages_read).toBe(1);
     expect(result.rows).toHaveLength(1);
-    expect(result.rows[0]['Name']).toBe('Lincoln, A.');
+    expect(result.rows[0]!['Name']!).toBe('Lincoln, A.');
   });
 
   it('retries once on transient 500 and recovers', async () => {
@@ -171,7 +171,7 @@ describe('nj-archives pagination, retries, and grid parsing', () => {
     const [headers, rows] = parseGrid(htmlWithPager, 'GridView1');
     expect(headers).toEqual(['Name', 'Year']);
     expect(rows).toHaveLength(1);
-    expect(rows[0]['Name']).toBe('Smith, John');
+    expect(rows[0]!['Name']!).toBe('Smith, John');
     expect(hasPageLink(htmlWithPager, 2)).toBe(true);
     expect(hasPageLink(htmlWithPager, 4)).toBe(false);
   });
@@ -209,7 +209,7 @@ describe('nj-archives cache, aliases, monmouth, and url', () => {
     const p2 = JSON.parse(second.stdout) as { cache_hit: boolean; rows: { Name: string }[] };
     expect(p2.cache_hit).toBe(true);
     expect(second.cacheHit).toBe(true);
-    expect(p2.rows[0].Name).toBe('Smith, John');
+    expect(p2.rows[0]!.Name).toBe('Smith, John');
     expect(textHit.stdout).toContain('[cache]');
   });
 
@@ -312,8 +312,8 @@ describe('nj-archives cache, aliases, monmouth, and url', () => {
       cache_hit: boolean;
     };
     expect(mp1.cache_hit).toBe(false);
-    expect(mp1.rows[0].Name).toBe('Alder, Samuel');
-    expect(mp1.rows[0].links).toContainEqual({
+    expect(mp1.rows[0]!.Name).toBe('Alder, Samuel');
+    expect(mp1.rows[0]!.links).toContainEqual({
       text: 'census page image',
       href: 'https://oprs.co.monmouth.nj.us/oprs/Archives/pages/p12.pdf',
     });

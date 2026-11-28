@@ -14,6 +14,7 @@ function extractOcrTelemetryMode(args: readonly string[]): string | undefined {
   let mode: string | undefined;
   for (let i = 0; i < args.length; i += 1) {
     const arg = args[i];
+    if (arg === undefined) continue;
     if (arg === '--mode') {
       const next = args[i + 1];
       if (isSafeSubcmdToken(next)) {
@@ -53,13 +54,13 @@ export function buildTelemetrySubcmd(
 }
 
 export interface RunRecordCommandOptions {
-  io?: OpsIo;
-  fetchImpl?: typeof fetch;
-  execFileImpl?: ExecFileFn;
-  sleepFn?: (ms: number) => Promise<void>;
-  nowMs?: () => number;
-  env?: NodeJS.ProcessEnv;
-  cwd?: string;
+  io?: OpsIo | undefined;
+  fetchImpl?: typeof fetch | undefined;
+  execFileImpl?: ExecFileFn | undefined;
+  sleepFn?: ((ms: number) => Promise<void>) | undefined;
+  nowMs?: (() => number) | undefined;
+  env?: NodeJS.ProcessEnv | undefined;
+  cwd?: string | undefined;
   telemetryFilePath?: string;
   forceTelemetry?: boolean;
 }

@@ -172,7 +172,7 @@ export function filenameFromContentDisposition(headerValue: string | null, fallb
   }
   const starMatch = /filename\*\s*=\s*UTF-8''([^\r\n;]+)/i.exec(headerValue);
   if (starMatch) {
-    const raw = starMatch[1].trim().replace(/^"|"$/g, '');
+    const raw = (starMatch[1] ?? '').trim().replace(/^"|"$/g, '');
     try {
       return sanitizeServerFilename(decodeURIComponent(raw), fallback);
     } catch {
@@ -181,7 +181,7 @@ export function filenameFromContentDisposition(headerValue: string | null, fallb
   }
   const plainMatch = /filename\s*=\s*"?([^"\r\n;]+)"?/i.exec(headerValue);
   if (plainMatch) {
-    return sanitizeServerFilename(plainMatch[1].trim(), fallback);
+    return sanitizeServerFilename((plainMatch[1] ?? '').trim(), fallback);
   }
   return fallback;
 }
@@ -192,7 +192,7 @@ export function resolveItemRef(urlOrId: string): readonly [string, string] {
     const validated = validateMichiganologyUrl(raw);
     const idMatch = /((?:IO|SO)_[A-Za-z0-9-]+)/.exec(validated);
     if (idMatch) {
-      return [idMatch[1], validated];
+      return [idMatch[1] ?? '', validated];
     }
     const pathname = new URL(validated).pathname.replace(/\/+$/, '');
     const tail = pathname.split('/').at(-1) ?? '';
@@ -215,7 +215,7 @@ export function encodeQueryPlus(query: string): string {
 
 export function parseSearchHtml(page: string, query: string): MichiganologySearchResult {
   const totalMatch = /([\d,]+)\s+total results/.exec(page);
-  const total = totalMatch ? Number.parseInt(totalMatch[1].replace(/,/g, ''), 10) : null;
+  const total = totalMatch ? Number.parseInt((totalMatch[1] ?? '').replace(/,/g, ''), 10) : null;
   const $ = loadHtml(page);
   const results: MichiganologySearchItem[] = [];
 

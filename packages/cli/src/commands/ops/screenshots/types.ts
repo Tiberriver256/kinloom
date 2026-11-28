@@ -41,8 +41,8 @@ export interface PageCaptureTarget {
   readonly slug: string;
   readonly label: string;
   readonly route: string;
-  readonly isMap?: boolean;
-  readonly isHeavyPage?: boolean;
+  readonly isMap?: boolean | undefined;
+  readonly isHeavyPage?: boolean | undefined;
 }
 
 export interface ComponentCaptureTarget {
@@ -54,7 +54,7 @@ export interface ComponentCaptureTarget {
   readonly route: string;
   readonly recipeId: ComponentRecipeId;
   readonly viewportFilter?: readonly string[];
-  readonly fullPage?: boolean;
+  readonly fullPage?: boolean | undefined;
 }
 
 export interface PluginCaptureTarget {
@@ -191,12 +191,12 @@ export interface ScreenshotLocatorHandle {
   nth(index: number): ScreenshotLocatorHandle;
   isVisible(): Promise<boolean>;
   isDisabled?(): Promise<boolean>;
-  click(options?: { timeout?: number }): Promise<void>;
-  fill(value: string, options?: { timeout?: number }): Promise<void>;
+  click(options?: { timeout?: number | undefined }): Promise<void>;
+  fill(value: string, options?: { timeout?: number | undefined }): Promise<void>;
   screenshot(options: {
     path: string;
-    timeout?: number;
-    animations?: 'disabled' | 'allow';
+    timeout?: number | undefined;
+    animations?: 'disabled' | 'allow' | undefined;
   }): Promise<unknown>;
   boundingBox(): Promise<{ width: number; height: number } | null>;
   textContent(): Promise<string | null>;
@@ -205,21 +205,24 @@ export interface ScreenshotLocatorHandle {
 export interface ScreenshotPageHandle {
   goto(
     url: string,
-    options?: { waitUntil?: 'load' | 'domcontentloaded' | 'commit'; timeout?: number }
+    options?: { waitUntil?: 'load' | 'domcontentloaded' | 'commit'; timeout?: number | undefined }
   ): Promise<unknown>;
   emulateMedia?(options: { readonly colorScheme?: ScreenshotTheme | 'no-preference' | null }): Promise<void>;
   screenshot(options: {
     path: string;
-    fullPage?: boolean;
-    timeout?: number;
-    animations?: 'disabled' | 'allow';
+    fullPage?: boolean | undefined;
+    timeout?: number | undefined;
+    animations?: 'disabled' | 'allow' | undefined;
   }): Promise<unknown>;
   locator(selector: string): ScreenshotLocatorHandle;
   evaluate<T>(pageFunction: string): Promise<T>;
   waitForTimeout(ms: number): Promise<void>;
   waitForSelector(
     selector: string,
-    options?: { state?: 'attached' | 'detached' | 'visible' | 'hidden'; timeout?: number }
+    options?: {
+      state?: 'attached' | 'detached' | 'visible' | 'hidden' | undefined;
+      timeout?: number | undefined;
+    }
   ): Promise<unknown>;
   keyboard: {
     press(key: string): Promise<void>;
@@ -244,7 +247,7 @@ export interface ScreenshotCookieSpec {
 export interface ScreenshotContextOptions {
   readonly viewport: { readonly width: number; readonly height: number };
   readonly colorScheme: ScreenshotTheme;
-  readonly extraHTTPHeaders?: Readonly<Record<string, string>>;
+  readonly extraHTTPHeaders?: Readonly<Record<string, string>> | undefined;
 }
 
 export interface ScreenshotContextHandle {
@@ -267,25 +270,25 @@ export type ScreenshotBrowserFactory = (options: {
 
 export interface ScreenshotsCommandOptions {
   readonly url: string;
-  readonly outDir?: string;
-  readonly viewports?: readonly ViewportSpec[];
-  readonly themes?: readonly ScreenshotTheme[];
-  readonly include?: readonly IncludeScope[];
-  readonly routes?: readonly string[];
-  readonly pluginRoutes?: readonly string[];
-  readonly samplePeople?: number;
-  readonly samplePlaces?: number;
-  readonly authCookie?: string;
-  readonly authHeaders?: readonly AuthHeader[];
-  readonly fullPage?: boolean;
-  readonly waitMs?: number;
-  readonly timeoutMs?: number;
-  readonly concurrency?: number;
-  readonly json?: boolean;
-  readonly fetchImpl?: typeof fetch;
-  readonly browserFactory?: ScreenshotBrowserFactory;
-  readonly now?: () => Date;
-  readonly env?: NodeJS.ProcessEnv;
+  readonly outDir?: string | undefined;
+  readonly viewports?: readonly ViewportSpec[] | undefined;
+  readonly themes?: readonly ScreenshotTheme[] | undefined;
+  readonly include?: readonly IncludeScope[] | undefined;
+  readonly routes?: readonly string[] | undefined;
+  readonly pluginRoutes?: readonly string[] | undefined;
+  readonly samplePeople?: number | undefined;
+  readonly samplePlaces?: number | undefined;
+  readonly authCookie?: string | undefined;
+  readonly authHeaders?: readonly AuthHeader[] | undefined;
+  readonly fullPage?: boolean | undefined;
+  readonly waitMs?: number | undefined;
+  readonly timeoutMs?: number | undefined;
+  readonly concurrency?: number | undefined;
+  readonly json?: boolean | undefined;
+  readonly fetchImpl?: typeof fetch | undefined;
+  readonly browserFactory?: ScreenshotBrowserFactory | undefined;
+  readonly now?: (() => Date) | undefined;
+  readonly env?: NodeJS.ProcessEnv | undefined;
 }
 
 export interface ScreenshotsCommandResult {

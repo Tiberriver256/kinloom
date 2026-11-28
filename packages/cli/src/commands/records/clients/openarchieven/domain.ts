@@ -260,7 +260,7 @@ export function parseRecordRef(archive: string, identifier: string | undefined):
   }
   const match = OPENARCH_URL_RE.exec(archive);
   if (match) {
-    return validateRecordRef(match[1], match[2]);
+    return validateRecordRef(match[1] ?? '', match[2] ?? '');
   }
   const colonIdx = archive.indexOf(':');
   if (colonIdx !== -1) {
@@ -333,7 +333,11 @@ export function formatA2aRecord(
       continue;
     }
     const evPlaceNode = isPlainRecord(ev['a2a_EventPlace']) ? ev['a2a_EventPlace'] : {};
-    const summary = [a2aText(ev['a2a_EventType']), fmtA2aDate(ev['a2a_EventDate']), a2aText(evPlaceNode['a2a_Place'])]
+    const summary = [
+      a2aText(ev['a2a_EventType']),
+      fmtA2aDate(ev['a2a_EventDate']),
+      a2aText(evPlaceNode['a2a_Place']),
+    ]
       .filter(Boolean)
       .join(' | ');
     if (summary) {

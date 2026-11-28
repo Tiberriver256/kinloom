@@ -67,7 +67,7 @@ export function validateNaid(naid: string): string {
     throw new CliValidationError(`Invalid NAID: '${naid}'`);
   }
   const urlMatch = CATALOG_RECORD_URL_RE.exec(raw);
-  if (urlMatch) {
+  if (urlMatch?.[1] !== undefined) {
     return urlMatch[1];
   }
   if (raw.includes('/') || raw.includes('\\')) {
@@ -77,7 +77,7 @@ export function validateNaid(naid: string): string {
   if (!match) {
     throw new CliValidationError(`Invalid NAID (expected digits): '${naid}'`);
   }
-  return match[1];
+  return match[1] ?? '';
 }
 
 export function isDirectDownloadUrl(raw: string): boolean {
@@ -182,20 +182,20 @@ export function normalizeQueryForWafRetry(query: string): string | null {
 export function buildQueryParams(
   query: string | null | undefined,
   options: {
-    readonly levels?: readonly string[];
-    readonly recordGroups?: readonly string[];
-    readonly online?: boolean;
-    readonly materialType?: string;
-    readonly person?: string;
-    readonly title?: string;
-    readonly geo?: string;
-    readonly control?: string;
-    readonly series?: string;
-    readonly startDate?: string;
-    readonly endDate?: string;
-    readonly page?: number;
-    readonly limit?: number;
-    readonly forApi?: boolean;
+    readonly levels?: readonly string[] | undefined;
+    readonly recordGroups?: readonly string[] | undefined;
+    readonly online?: boolean | undefined;
+    readonly materialType?: string | undefined;
+    readonly person?: string | undefined;
+    readonly title?: string | undefined;
+    readonly geo?: string | undefined;
+    readonly control?: string | undefined;
+    readonly series?: string | undefined;
+    readonly startDate?: string | undefined;
+    readonly endDate?: string | undefined;
+    readonly page?: number | undefined;
+    readonly limit?: number | undefined;
+    readonly forApi?: boolean | undefined;
   } = {}
 ): [string, string][] {
   const page = options.page ?? 1;

@@ -127,7 +127,12 @@ export function extractRecord(
       continue;
     }
     for (const ru of Array.isArray(po['referenceUnits']) ? po['referenceUnits'] : []) {
-      if (isPlainRecord(ru) && typeof ru['name'] === 'string' && ru['name'] && !locations.includes(ru['name'])) {
+      if (
+        isPlainRecord(ru) &&
+        typeof ru['name'] === 'string' &&
+        ru['name'] &&
+        !locations.includes(ru['name'])
+      ) {
         locations.push(ru['name']);
       }
     }
@@ -142,6 +147,7 @@ export function extractRecord(
       const selected = parsePageSpec(pageSpec, objs.length);
       out.objects = selected.map((p) => {
         const obj = objs[p - 1];
+        if (!obj) return { page: p, filename: '', url: '' };
         const filename =
           typeof obj['objectFilename'] === 'string' && obj['objectFilename']
             ? obj['objectFilename']
@@ -157,6 +163,7 @@ export function extractRecord(
       const texts: NaraExtractedTextItem[] = [];
       for (const p of selected) {
         const obj = objs[p - 1];
+        if (obj === undefined) continue;
         const txt =
           (typeof obj['extractedText'] === 'string' && obj['extractedText']) ||
           (typeof obj['otherExtractedText'] === 'string' && obj['otherExtractedText']) ||

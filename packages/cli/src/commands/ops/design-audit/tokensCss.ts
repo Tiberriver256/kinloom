@@ -41,7 +41,7 @@ export function analyzeCssMetrics(
   }
 
   for (const match of cleaned.matchAll(FONT_SIZE_DECL_RE)) {
-    const val = match[1].trim().toLowerCase().replace(/\s+/g, ' ');
+    const val = (match[1] ?? '').trim().toLowerCase().replace(/\s+/g, ' ');
     if (val && !['inherit', 'initial', 'unset'].includes(val)) {
       fontSizes.add(val);
     }
@@ -106,6 +106,7 @@ export function detectTokenAliasCycles(tokenMap: ReadonlyMap<string, TokenEntry>
         break;
       }
       const target = match[1];
+      if (target === undefined) break;
       if (visited.has(target)) {
         cycles.push([...visited, target].join(' -> '));
         break;
@@ -262,11 +263,11 @@ export function discoverRepoStyleFiles(repoRoot: string): {
 }
 
 export function auditTokensAndCss(options: {
-  readonly bundleDir?: string;
-  readonly repoRoot?: string;
-  readonly archetype?: DesignAuditArchetypeId;
-  readonly cssPaths?: readonly string[];
-  readonly tokenPaths?: readonly string[];
+  readonly bundleDir?: string | undefined;
+  readonly repoRoot?: string | undefined;
+  readonly archetype?: DesignAuditArchetypeId | undefined;
+  readonly cssPaths?: readonly string[] | undefined;
+  readonly tokenPaths?: readonly string[] | undefined;
   readonly writeOutput?: boolean;
 }): DesignAuditCssResult {
   const findings: DesignAuditFinding[] = [];

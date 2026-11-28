@@ -26,16 +26,20 @@ export interface CaptureTimeoutPolicy {
   readonly fullPageFallbackTimeoutMs: number;
 }
 
+const MOBILE_VIEWPORT: ViewportSpec = Object.freeze({ name: 'mobile', width: 390, height: 844 });
+const TABLET_VIEWPORT: ViewportSpec = Object.freeze({ name: 'tablet', width: 768, height: 1024 });
+const DESKTOP_VIEWPORT: ViewportSpec = Object.freeze({ name: 'desktop', width: 1440, height: 900 });
+
 export const PRESET_VIEWPORTS: Readonly<Record<string, ViewportSpec>> = Object.freeze({
-  mobile: Object.freeze({ name: 'mobile', width: 390, height: 844 }),
-  tablet: Object.freeze({ name: 'tablet', width: 768, height: 1024 }),
-  desktop: Object.freeze({ name: 'desktop', width: 1440, height: 900 }),
+  mobile: MOBILE_VIEWPORT,
+  tablet: TABLET_VIEWPORT,
+  desktop: DESKTOP_VIEWPORT,
 });
 
 export const DEFAULT_VIEWPORTS: readonly ViewportSpec[] = Object.freeze([
-  PRESET_VIEWPORTS['mobile'],
-  PRESET_VIEWPORTS['tablet'],
-  PRESET_VIEWPORTS['desktop'],
+  MOBILE_VIEWPORT,
+  TABLET_VIEWPORT,
+  DESKTOP_VIEWPORT,
 ]);
 
 export const DEFAULT_THEMES: readonly ScreenshotTheme[] = Object.freeze(['light', 'dark']);
@@ -123,8 +127,8 @@ export function normalizeRoutePath(raw: string): string {
     throw new CliValidationError(`Route '${raw}' must be a relative path starting with '/'.`);
   }
   const withSlash = trimmed.startsWith('/') ? trimmed : `/${trimmed}`;
-  const withoutHash = withSlash.split('#')[0];
-  const [pathnamePart, queryPart] = withoutHash.split('?');
+  const withoutHash = withSlash.split('#')[0] ?? '';
+  const [pathnamePart = '', queryPart] = withoutHash.split('?');
   const collapsedPath = trimTrailingChar(pathnamePart.replace(/\/+/g, '/'), '/') || '/';
   return queryPart ? `${collapsedPath}?${queryPart}` : collapsedPath;
 }
@@ -134,7 +138,7 @@ export function routeToSlug(route: string): string {
   if (pathOnly === '/' || pathOnly === '') {
     return 'home';
   }
-  return sanitizeSlug(pathOnly.replace(/^\/+/, '').replace(/\//g, '-'), 'page');
+  return sanitizeSlug((pathOnly ?? '').replace(/^\/+/, '').replace(/\//g, '-'), 'page');
 }
 
 export function parseViewportsOption(raw: string): readonly ViewportSpec[] {
@@ -162,9 +166,9 @@ export function parseViewportsOption(raw: string): readonly ViewportSpec[] {
         `Invalid viewport '${token}'. Expected preset (mobile, tablet, desktop) or '<name>:<width>x<height>'.`
       );
     }
-    const name = sanitizeSlug(match[1], 'viewport');
-    const width = Number.parseInt(match[2], 10);
-    const height = Number.parseInt(match[3], 10);
+    const name = sanitizeSlug(match[1] ?? '', 'viewport');
+    const width = Number.parseInt(match[2] ?? '', 10);
+    const height = Number.parseInt(match[3] ?? '', 10);
     if (width < 200 || width > 7680 || height < 200 || height > 7680) {
       throw new CliValidationError(`Viewport '${token}' dimensions must be between 200 and 7680 pixels.`);
     }
@@ -288,7 +292,7 @@ export function parseAuthCookieSpecs(
 export function buildScreenshotRelativePath(input: {
   readonly category: ScreenshotCategory;
   readonly slug: string;
-  readonly state?: string;
+  readonly state?: string | undefined;
   readonly viewport: string;
   readonly theme: ScreenshotTheme;
 }): string {
@@ -322,8 +326,8 @@ export function sanitizeUrlForReport(rawUrl: string): string {
 }
 
 export function buildAuthRequestHeaders(options: {
-  readonly authCookie?: string;
-  readonly authHeaders?: readonly AuthHeader[];
+  readonly authCookie?: string | undefined;
+  readonly authHeaders?: readonly AuthHeader[] | undefined;
 }): Record<string, string> {
   const headers: Record<string, string> = {};
   if (options.authHeaders) {
@@ -356,9 +360,9 @@ export function resolveCaptureTimeoutPolicy(input: {
   readonly baseTimeoutMs: number;
   readonly isMap: boolean;
   readonly isHeavyPage: boolean;
-  readonly heavyTimeoutMs?: number;
-  readonly mapSettleTimeoutMs?: number;
-  readonly env?: NodeJS.ProcessEnv;
+  readonly heavyTimeoutMs?: number | undefined;
+  readonly mapSettleTimeoutMs?: number | undefined;
+  readonly env?: NodeJS.ProcessEnv | undefined;
 }): CaptureTimeoutPolicy {
   const baseTimeoutMs = Math.max(500, Math.min(MAX_CAPTURE_TIMEOUT_MS, Math.floor(input.baseTimeoutMs)));
   const envHeavyMs = parseBoundedTimeoutEnv(

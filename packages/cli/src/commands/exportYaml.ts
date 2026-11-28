@@ -7,9 +7,9 @@ import { serializeSnapshotToYamlFiles } from './dataFiles.js';
 export interface ExportYamlCommandOptions {
   siteUrl: string;
   outDir: string;
-  token?: string;
-  stateFile?: string;
-  fetchImpl?: typeof fetch;
+  token?: string | undefined;
+  stateFile?: string | undefined;
+  fetchImpl?: typeof fetch | undefined;
 }
 
 export type ExportYamlCommandResult =
@@ -128,7 +128,9 @@ export async function runExportYamlCommand(
   for (const name of sortedNames) {
     assertSafeFilename(name);
     const fullPath = path.join(resolvedOutDir, name);
-    await writeFile(fullPath, files[name], 'utf8');
+    const fileContent = files[name];
+    if (fileContent === undefined) continue;
+    await writeFile(fullPath, fileContent, 'utf8');
     writtenFiles.push(fullPath);
   }
 

@@ -35,13 +35,12 @@ export function parseCssRgbTuple(raw: string | undefined | null): RgbTuple | nul
   }
   const hexMatch = value.match(/^#([0-9a-f]{3}|[0-9a-f]{6})$/i);
   if (hexMatch) {
-    const hex = hexMatch[1];
+    const hex = hexMatch[1] ?? '';
     if (hex.length === 3) {
-      return [
-        Number.parseInt(hex[0] + hex[0], 16),
-        Number.parseInt(hex[1] + hex[1], 16),
-        Number.parseInt(hex[2] + hex[2], 16),
-      ];
+      const h0 = hex.charAt(0);
+      const h1 = hex.charAt(1);
+      const h2 = hex.charAt(2);
+      return [Number.parseInt(h0 + h0, 16), Number.parseInt(h1 + h1, 16), Number.parseInt(h2 + h2, 16)];
     }
     return [
       Number.parseInt(hex.slice(0, 2), 16),

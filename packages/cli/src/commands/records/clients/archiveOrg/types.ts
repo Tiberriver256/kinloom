@@ -56,11 +56,11 @@ export interface PageIndex {
   printed_to_bookreader_ci: Record<string, number>;
   printed_to_scandata: Record<string, number>;
   segment_mode: string;
-  djvu_source?: string;
+  djvu_source?: string | undefined;
 }
 
 export interface ItemFileEntry {
-  readonly name?: string;
+  readonly name?: string | undefined;
   readonly format?: string;
   readonly size?: string | number;
   readonly [key: string]: unknown;
@@ -144,7 +144,7 @@ export function validateIdentifier(identifier: string): string {
   let cleaned = identifier.trim();
   const urlMatch = ARCHIVE_URL_RE.exec(cleaned);
   if (urlMatch) {
-    cleaned = urlMatch[1].trim();
+    cleaned = (urlMatch[1] ?? '').trim();
   }
   if (!cleaned || !SAFE_ID_RE.test(cleaned) || cleaned === '.' || cleaned === '..') {
     throw new RecordRuntimeError(`Invalid Internet Archive identifier: '${identifier}'`, 1);

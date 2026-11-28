@@ -72,7 +72,7 @@ function parseWranglerTomlBindings(raw: string): {
     if (!kv) {
       continue;
     }
-    const [, key, val] = kv;
+    const [, key, val = ''] = kv;
     if (section === 'd1' && key === 'database_name' && !dbName) {
       dbName = val.trim();
     } else if (section === 'r2' && key === 'bucket_name' && !r2Bucket) {

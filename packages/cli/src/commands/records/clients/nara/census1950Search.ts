@@ -64,12 +64,12 @@ function census1950PlainToken(raw: string, flag: string, maxLen: number): string
 }
 
 export function canonicalCensus1950Query(options: {
-  readonly state?: string;
-  readonly county?: string;
-  readonly name?: string;
-  readonly ed?: string;
+  readonly state?: string | undefined;
+  readonly county?: string | undefined;
+  readonly name?: string | undefined;
+  readonly ed?: string | undefined;
   readonly limit: number;
-  readonly page?: number;
+  readonly page?: number | undefined;
 }): CanonicalCensus1950Query {
   const page = options.page ?? 1;
   if (!Number.isInteger(options.limit) || options.limit < 1 || options.limit > 100) {

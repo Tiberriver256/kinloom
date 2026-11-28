@@ -21,12 +21,12 @@ export interface SeedCommandOptions {
   dataDir: string;
   configPath: string;
   siteUrl: string;
-  token?: string;
+  token?: string | undefined;
   dryRun?: boolean;
-  batchId?: string;
-  summary?: string;
-  chunkSize?: number;
-  fetchImpl?: typeof fetch;
+  batchId?: string | undefined;
+  summary?: string | undefined;
+  chunkSize?: number | undefined;
+  fetchImpl?: typeof fetch | undefined;
 }
 
 export interface SeedCommandResult {
@@ -36,10 +36,10 @@ export interface SeedCommandResult {
   updatedCount: number;
   unchangedCount: number;
   totalEntities: number;
-  chunksSubmitted?: number;
+  chunksSubmitted?: number | undefined;
   precompiledCounts: ArchiveBundle['meta']['counts'];
   reviewFlagsCount: number;
-  response?: SubmitBatchResponse;
+  response?: SubmitBatchResponse | undefined;
 }
 
 interface SeedEntityEntry {

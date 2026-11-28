@@ -33,8 +33,8 @@ export function parseHiskiParishes(page: string): HiskiParish[] {
   const parishes: HiskiParish[] = [];
   const regex = /<OPTION\s+VALUE="?([^">]+)"?[^>]*>([^<\r\n]+)/gi;
   for (const match of page.matchAll(regex)) {
-    const code = match[1].trim();
-    const name = unescapeAndClean(match[2]);
+    const code = (match[1] ?? '').trim();
+    const name = unescapeAndClean(match[2] ?? '');
     if (!PARISH_CODE_RE.test(code) || !name || seen.has(code)) {
       continue;
     }
@@ -141,7 +141,7 @@ export function parseHiskiResults(page: string): HiskiSearchResult {
       return;
     }
     const parishName = currentHeading.includes(' - ')
-      ? currentHeading.split(' - ', 1)[0].trim()
+      ? (currentHeading.split(' - ', 1)[0] ?? '').trim()
       : currentHeading;
 
     const rows =
@@ -176,7 +176,7 @@ export function parseHiskiResults(page: string): HiskiSearchResult {
 
       let eventHref = '';
       let eventMatch: RegExpExecArray | null = null;
-      for (const href of cells[0].hrefs) {
+      for (const href of cells[0]?.hrefs ?? []) {
         const m = HISKI_EVENT_HREF_RE.exec(href);
         if (m) {
           eventHref = href;
@@ -186,7 +186,7 @@ export function parseHiskiResults(page: string): HiskiSearchResult {
       }
 
       if (!eventMatch) {
-        if (records.length > 0 && cells.length >= 2 && !cells[0].text) {
+        if (records.length > 0 && cells.length >= 2 && !cells[0]?.text) {
           const note = cells
             .slice(1)
             .map((c) => c.text)
@@ -195,24 +195,24 @@ export function parseHiskiResults(page: string): HiskiSearchResult {
             .trim();
           if (note) {
             const last = records[records.length - 1];
-            last.comment = last.comment ? `${last.comment}; ${note}` : note;
+            if (last) last.comment = last.comment ? `${last.comment}; ${note}` : note;
           }
         }
         return;
       }
 
       const parishCode = eventMatch[1];
-      const bookCode = eventMatch[2].toLowerCase();
-      const rowId = eventMatch[3];
+      const bookCode = (eventMatch[2] ?? '').toLowerCase();
+      const rowId = eventMatch[3] ?? '';
       const texts = cells.map((c) => c.text);
-      records.push(hiskiRowToRecord(bookCode, parishName, parishCode, rowId, eventHref, texts));
+      records.push(hiskiRowToRecord(bookCode, parishName, parishCode ?? '', rowId, eventHref, texts));
     });
   });
 
   let reportedTotal: number | undefined;
   const totalMatches = [...page.matchAll(TOTAL_EVENTS_RE)];
   if (totalMatches.length > 0) {
-    reportedTotal = totalMatches.reduce((sum, m) => sum + Number.parseInt(m[1], 10), 0);
+    reportedTotal = totalMatches.reduce((sum, m) => sum + Number.parseInt(m[1] ?? '', 10), 0);
   }
 
   return {
@@ -252,7 +252,7 @@ export function parseHiskiEventDetail(
       if (cells.length === 0) {
         return;
       }
-      const label = cells[0].replace(/:+$/, '').trim();
+      const label = (cells[0] ?? '').replace(/:+$/, '').trim();
       const values = cells.slice(1).filter((v) => v.length > 0);
       if (label && label.toLowerCase() !== 'links') {
         fields[label] = values.join(' | ');
@@ -266,10 +266,10 @@ export function parseHiskiEventDetail(
     book: bookTitle,
     book_code: ref.bookCode,
     row_id: ref.rowId,
-    permalink_id: permalinkId,
+    permalink_id: permalinkId ?? '',
     permalink_url: permalinkId ? `${HISKI_ENDPOINT}?en+${permalinkId}` : '',
     event_url: `${HISKI_ENDPOINT}?en+${ref.parishCode}+${ref.bookCode}+${ref.rowId}`,
-    sshy_url: sshyUrl,
+    sshy_url: sshyUrl ?? '',
     fields,
   };
 }
@@ -292,9 +292,10 @@ export function parseDigihakemistoSearch(page: string): DigihakemistoArchiveRow[
     const nodigi = link.hasClass('nodigi') || link.find('.nodigi').length > 0;
     const comment = cleanText($(trEl).find('span.searchtarget.searchtarget2').first().text());
     const digitized = !nodigi && !comment.toLowerCase().includes('ei digitoitu');
-    const astiaUrl = /^\d+$/.test(archiveId) ? `${ASTIA_CARD_BASE}?id=${archiveId}` : '';
+    const archiveIdStr = archiveId ?? '';
+    const astiaUrl = /^\d+$/.test(archiveIdStr) ? `${ASTIA_CARD_BASE}?id=${archiveIdStr}` : '';
     results.push({
-      id: archiveId,
+      id: archiveIdStr,
       title,
       comment,
       digitized,

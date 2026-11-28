@@ -13,9 +13,9 @@ export interface PhonemeTermHint {
 
 export interface PronunciationCacheKeyInput {
   readonly text: string;
-  readonly phonetic?: string;
-  readonly ipa?: string;
-  readonly language?: string;
+  readonly phonetic?: string | undefined;
+  readonly ipa?: string | undefined;
+  readonly language?: string | undefined;
   readonly voice?: string;
 }
 
@@ -188,7 +188,7 @@ export function ipaToArpabet(rawIpa: string): string {
       i += 1;
       continue;
     }
-    if (/\s/.test(ch)) {
+    if (ch !== undefined && /\s/.test(ch)) {
       pendingStress = null;
       i += 1;
       continue;

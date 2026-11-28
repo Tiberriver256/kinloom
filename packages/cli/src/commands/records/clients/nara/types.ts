@@ -128,28 +128,28 @@ export interface NaraExtractedTextItem {
 
 export interface NaraRecordSummary {
   naId: string;
-  title?: string;
+  title?: string | undefined;
   url: string;
-  level?: string;
-  rg?: string | number;
-  rgTitle?: string;
-  series?: string;
-  seriesNaId?: string;
-  dates?: string[];
-  microform?: string[];
-  access?: string;
-  use?: string;
-  scope?: string;
-  location?: string | string[];
-  objectCount?: number;
-  objects?: NaraDigitalObjectSummary[];
-  extractedText?: NaraExtractedTextItem[];
-  transcriptions?: string[];
-  error?: string;
+  level?: string | undefined;
+  rg?: string | number | undefined;
+  rgTitle?: string | undefined;
+  series?: string | undefined;
+  seriesNaId?: string | undefined;
+  dates?: string[] | undefined;
+  microform?: string[] | undefined;
+  access?: string | undefined;
+  use?: string | undefined;
+  scope?: string | undefined;
+  location?: string | string[] | undefined;
+  objectCount?: number | undefined;
+  objects?: NaraDigitalObjectSummary[] | undefined;
+  extractedText?: NaraExtractedTextItem[] | undefined;
+  transcriptions?: string[] | undefined;
+  error?: string | undefined;
 }
 
 export interface NaraSearchPayload {
-  query?: string;
+  query?: string | undefined;
   searchUrl: string;
   total: number;
   results: NaraRecordSummary[];
@@ -159,14 +159,14 @@ export interface SearchFilterOptions {
   readonly levels: readonly string[];
   readonly recordGroups: readonly string[];
   readonly online: boolean;
-  readonly materialType?: string;
-  readonly person?: string;
-  readonly title?: string;
-  readonly geo?: string;
-  readonly control?: string;
-  readonly series?: string;
-  readonly startDate?: string;
-  readonly endDate?: string;
+  readonly materialType?: string | undefined;
+  readonly person?: string | undefined;
+  readonly title?: string | undefined;
+  readonly geo?: string | undefined;
+  readonly control?: string | undefined;
+  readonly series?: string | undefined;
+  readonly startDate?: string | undefined;
+  readonly endDate?: string | undefined;
   readonly page: number;
   readonly limit: number;
 }
@@ -197,9 +197,9 @@ export interface CanonicalCensus1950Query {
 }
 
 export interface Census1950ApiPayload {
-  readonly total?: number;
-  readonly page?: number;
-  readonly size?: number;
+  readonly total?: number | undefined;
+  readonly page?: number | undefined;
+  readonly size?: number | undefined;
   readonly results: readonly Record<string, unknown>[];
   readonly [key: string]: unknown;
 }
@@ -215,8 +215,8 @@ export interface Census1950ImageRecord {
 
 export interface NaraBrowserOverrides {
   readonly launcher?: ChromiumLauncher;
-  readonly closeTimeoutMs?: number;
-  readonly killGraceMs?: number;
+  readonly closeTimeoutMs?: number | undefined;
+  readonly killGraceMs?: number | undefined;
   readonly browserSearchMany?: (
     items: readonly (readonly [string | null, string])[],
     ctx: RecordCommandContext,
@@ -228,7 +228,7 @@ export interface NaraBrowserOverrides {
       readonly includeObjects: boolean;
       readonly includeText: boolean;
       readonly pageSpec: string | null;
-      readonly timeoutMs?: number;
+      readonly timeoutMs?: number | undefined;
     },
     ctx: RecordCommandContext
   ) => Promise<NaraRecordSummary[]>;

@@ -60,7 +60,7 @@ export async function runRecord(
   if (parsed.helpRequested) {
     return { exitCode: 0, bytesOut: emitStdout(ctx.io, renderRecordHelp()) };
   }
-  const cleanId = parseRegisterId(parsed.positionals[0]);
+  const cleanId = parseRegisterId(parsed.positionals[0] ?? '');
   const ttlHours = resolveTtlHours(getNumberOption(parsed, 'cacheTtlHours'), ctx);
   const { value: result, cacheHit } = await cachedJsonCall<RegisterDetailResult>({
     cacheDir: getCacheDir(ctx),
@@ -97,7 +97,7 @@ export async function runCollection(
   if (parsed.helpRequested) {
     return { exitCode: 0, bytesOut: emitStdout(ctx.io, renderCollectionHelp()) };
   }
-  const cleanId = parseArchiveId(parsed.positionals[0]);
+  const cleanId = parseArchiveId(parsed.positionals[0] ?? '');
   const ttlHours = resolveTtlHours(getNumberOption(parsed, 'cacheTtlHours'), ctx);
   const { value: result, cacheHit } = await cachedJsonCall<IiifCollectionResult>({
     cacheDir: getCacheDir(ctx),
@@ -138,7 +138,7 @@ export async function runManifest(
   if (limit < 1) {
     throw new CliValidationError('--limit must be >= 1.');
   }
-  const [volId] = normalizeBildid(parsed.positionals[0]);
+  const [volId] = normalizeBildid(parsed.positionals[0] ?? '');
   const ttlHours = resolveTtlHours(getNumberOption(parsed, 'cacheTtlHours'), ctx);
   const { value: result, cacheHit } = await cachedJsonCall<IiifManifestResult>({
     cacheDir: getCacheDir(ctx),
@@ -183,7 +183,11 @@ export async function runDownload(
   const overwrite = getBooleanOption(parsed, 'overwrite');
   const asJson = getBooleanOption(parsed, 'asJson');
 
-  const [url, pageId] = buildIiifImageUrl(target, { page, width, full });
+  const [url, pageId] = buildIiifImageUrl(target ?? '', {
+    ...(page !== undefined ? { page } : {}),
+    ...(width !== undefined ? { width } : {}),
+    full,
+  });
   const dest = resolveSafeOutputPath(out, `${pageId}.jpg`, ctx.env);
 
   let info: DownloadResult;

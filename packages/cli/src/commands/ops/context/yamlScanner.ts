@@ -27,7 +27,7 @@ export function extractNumericXref(xref: unknown): string | null {
     return null;
   }
   const match = /(\d{6,})/.exec(xref);
-  return match ? match[1] : null;
+  return match?.[1] ?? null;
 }
 
 export function formatLifespan(person: LooseYamlRecord): string {

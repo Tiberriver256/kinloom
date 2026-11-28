@@ -43,12 +43,12 @@ interface InvokeResult {
   readonly exitCode: number;
   readonly stdout: string;
   readonly stderr: string;
-  readonly cacheHit?: boolean;
+  readonly cacheHit?: boolean | undefined;
 }
 
 async function invokePrepScan(
   args: readonly string[],
-  overrides: Partial<RecordCommandContext> = {}
+  overrides: { [K in keyof RecordCommandContext]?: RecordCommandContext[K] | undefined } = {}
 ): Promise<InvokeResult> {
   const stdout: string[] = [];
   const stderr: string[] = [];
@@ -141,7 +141,7 @@ async function readPixels(
     .toBuffer({ resolveWithObject: true });
   const px = points.map(([x, y]) => {
     const idx = (y * info.width + x) * info.channels;
-    return [data[idx], data[idx + 1], data[idx + 2]];
+    return [data[idx]!, data[idx + 1]!, data[idx + 2]!];
   });
   return { size: [info.width, info.height], px };
 }
@@ -154,7 +154,7 @@ function buildTextPdf(pageTexts: readonly string[]): Buffer {
   objects[2] = `<< /Type /Pages /Kids [${pageIds.map((id) => `${id} 0 R`).join(' ')}] /Count ${pageTexts.length} >>`;
   objects[3] = '<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>';
   pageTexts.forEach((text, i) => {
-    const pageId = pageIds[i];
+    const pageId = pageIds[i]!;
     const stream = `BT /F1 12 Tf 72 720 Td (${text.replace(/([()\\])/g, '\\$1')}) Tj ET`;
     objects[pageId] =
       `<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] ` +
@@ -322,8 +322,8 @@ describe('prep-scan native client', () => {
       [300, 230],
     ]);
     expect(stitchPixels.size).toEqual([1800, 388]);
-    expect(Math.max(...stitchPixels.px[0])).toBeLessThan(55);
-    expect(Math.max(...stitchPixels.px[1])).toBeLessThan(20);
+    expect(Math.max(...stitchPixels.px[0]!)).toBeLessThan(55);
+    expect(Math.max(...stitchPixels.px[1]!)).toBeLessThan(20);
 
     // Poka-yoke: --out/-o works the same as positional output, and comma-split boxes are rejoined.
     const gridAliasOut = path.join(tmp, 'grid-alias.jpg');
@@ -1068,7 +1068,7 @@ describe('prep-scan native client', () => {
     };
     expect(pngBody.format).toBe('png');
     expect(pngBody.cache_hit).toBe(false);
-    expect(pngBody.pages[0].path.endsWith('page-001.png')).toBe(true);
+    expect(pngBody.pages[0]!.path.endsWith('page-001.png')).toBe(true);
     expect(pdftoppmCalls).toBe(7);
 
     // 6. Text mode works on cache hit
@@ -1170,13 +1170,13 @@ describe('prep-scan native client', () => {
       bytes: number;
     }>;
     expect(items).toHaveLength(2);
-    expect(items[0].source_size).toEqual([1200, 600]);
-    expect(items[0].width).toBeLessThanOrEqual(400);
+    expect(items[0]!.source_size).toEqual([1200, 600]);
+    expect(items[0]!.width).toBeLessThanOrEqual(400);
     // Rotated 90 deg: 600x1200 scaled to width 400 -> height 800
-    expect(items[0].height).toBeGreaterThan(items[0].width);
-    expect(items[0].path).not.toBe(items[1].path);
-    expect(fs.existsSync(items[0].path)).toBe(true);
-    expect(fs.existsSync(items[1].path)).toBe(true);
+    expect(items[0]!.height).toBeGreaterThan(items[0]!.width);
+    expect(items[0]!.path).not.toBe(items[1]!.path);
+    expect(fs.existsSync(items[0]!.path)).toBe(true);
+    expect(fs.existsSync(items[1]!.path)).toBe(true);
 
     const missing = await invokePrepScan(['preview', path.join(tmp, 'nope.png'), '--out-dir', outDir]);
     expect(missing.exitCode).toBe(1);

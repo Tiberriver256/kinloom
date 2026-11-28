@@ -134,7 +134,9 @@ export function extractGnisTxt(zipBytes: Uint8Array): { readonly name: string; r
   if (!txtName) {
     throw new RecordRuntimeError(`No .txt member in downloaded zip (members: ${names.join(', ')})`);
   }
-  const raw = Buffer.from(entries[txtName]).toString('utf8');
+  const entryBytes = entries[txtName];
+  if (!entryBytes) throw new RecordRuntimeError(`Missing zip member '${txtName}'`);
+  const raw = Buffer.from(entryBytes).toString('utf8');
   const text = raw.startsWith('\uFEFF') ? raw.slice(1) : raw;
   return { name: txtName, text };
 }
@@ -143,20 +145,22 @@ export function loadGnisRows(filePath: string): GnisRow[] {
   const raw = fs.readFileSync(filePath, 'utf8');
   const content = raw.startsWith('\uFEFF') ? raw.slice(1) : raw;
   const lines = content.split(/\r?\n/);
-  if (lines.length === 0 || (lines.length === 1 && lines[0].length === 0)) {
+  if (lines.length === 0 || (lines.length === 1 && (lines[0] ?? '').length === 0)) {
     return [];
   }
-  const header = lines[0].split('|').map((col) => col.trim());
+  const header = (lines[0] ?? '').split('|').map((col) => col.trim());
   const rows: GnisRow[] = [];
   for (let i = 1; i < lines.length; i += 1) {
     const line = lines[i];
+    if (line === undefined) continue;
     if (!line.trim()) {
       continue;
     }
     const fields = line.split('|');
     const row: GnisRow = {};
     for (let c = 0; c < header.length; c += 1) {
-      row[header[c]] = fields[c] ?? '';
+      const col = header[c];
+      if (col !== undefined) row[col] = fields[c] ?? '';
     }
     rows.push(row);
   }

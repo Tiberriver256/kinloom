@@ -172,7 +172,7 @@ export async function cmdStitch(
     return { exitCode: 0, bytesOut: emitStdout(ctx.io, renderSubcommandHelp('stitch')) };
   }
 
-  const src = resolveUserPathFromContext(parsed.positionals[0], ctx);
+  const src = resolveUserPathFromContext(parsed.positionals[0] ?? '', ctx);
   const outPath = resolveOutputAlias('stitch', parsed.positionals[1], getStringOption(parsed, 'outOpt'), ctx);
   const boxRaws = getStringListOption(parsed, 'box');
   const redactRaws = getStringListOption(parsed, 'redact');
@@ -185,8 +185,8 @@ export async function cmdStitch(
   const maxKb = getNumberOption(parsed, 'maxKb');
   const rawLabels = getStringListOption(parsed, 'labels');
   const labels =
-    rawLabels.length === 1 && rawLabels[0].includes(',')
-      ? rawLabels[0].split(',').map((s) => s.trim())
+    rawLabels.length === 1 && (rawLabels[0] ?? '').includes(',')
+      ? (rawLabels[0] ?? '').split(',').map((s) => s.trim())
       : rawLabels;
   const headerHeightOpt = getNumberOption(parsed, 'headerHeight');
   const headerH = labels.length > 0 ? (headerHeightOpt ?? 26) : 0;
@@ -213,7 +213,9 @@ export async function cmdStitch(
 
   const croppedBands: Array<{ readonly box: Box; readonly image: LoadedRgbImage }> = [];
   for (let i = 0; i < boxes.length; i += 1) {
-    const clamped = clampBox(boxes[i], img.width, img.height, `--box #${i + 1}`);
+    const box = boxes[i];
+    if (!box) continue;
+    const clamped = clampBox(box, img.width, img.height, `--box #${i + 1}`);
     const bandImg = await cropRgbImage(img, clamped);
     croppedBands.push({ box: clamped, image: bandImg });
   }
@@ -242,7 +244,9 @@ export async function cmdStitch(
   if (direction === 'horizontal') {
     let x = 0;
     for (let i = 0; i < croppedBands.length; i += 1) {
-      const { box: cbox, image: band } = croppedBands[i];
+      const entry = croppedBands[i];
+      if (!entry) continue;
+      const { box: cbox, image: band } = entry;
       const label = labels[i];
       const bandTop = headerH;
       if (headerH > 0) {
@@ -281,7 +285,9 @@ export async function cmdStitch(
   } else {
     let y = 0;
     for (let i = 0; i < croppedBands.length; i += 1) {
-      const { box: cbox, image: band } = croppedBands[i];
+      const entry = croppedBands[i];
+      if (!entry) continue;
+      const { box: cbox, image: band } = entry;
       const label = labels[i];
       if (headerH > 0) {
         overlays.push({

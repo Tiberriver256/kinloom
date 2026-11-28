@@ -52,7 +52,7 @@ async function buildAncestryNameIndex(
           const head = buf.subarray(0, bytesRead).toString('utf8');
           const m = namePattern.exec(head);
           if (m) {
-            const key = m[1].trim().toLowerCase();
+            const key = (m[1] ?? '').trim().toLowerCase();
             if (!index.has(key)) {
               index.set(key, fullPath);
             }
@@ -131,7 +131,9 @@ function collectRecordImagesForPerson(
       continue;
     }
     const imageId =
-      entry['RecordImageId'] !== undefined && entry['RecordImageId'] !== null ? String(entry['RecordImageId']) : null;
+      entry['RecordImageId'] !== undefined && entry['RecordImageId'] !== null
+        ? String(entry['RecordImageId'])
+        : null;
     const bytes =
       typeof entry['bytes'] === 'number' && Number.isFinite(entry['bytes'])
         ? entry['bytes']
@@ -291,9 +293,11 @@ function buildAncestrySummary(
     fullName: rawFullName ? scrubText(rawFullName, livingNamePattern) : null,
     lifeRange: card['LifeRange'] ? String(card['LifeRange']).replaceAll('&ndash;', '-') : null,
     birthDate: typeof card['BirthDate'] === 'string' ? card['BirthDate'] : null,
-    birthPlace: typeof card['BirthPlace'] === 'string' ? scrubText(card['BirthPlace'], livingNamePattern) : null,
+    birthPlace:
+      typeof card['BirthPlace'] === 'string' ? scrubText(card['BirthPlace'], livingNamePattern) : null,
     deathDate: typeof card['DeathDate'] === 'string' ? card['DeathDate'] : null,
-    deathPlace: typeof card['DeathPlace'] === 'string' ? scrubText(card['DeathPlace'], livingNamePattern) : null,
+    deathPlace:
+      typeof card['DeathPlace'] === 'string' ? scrubText(card['DeathPlace'], livingNamePattern) : null,
     factsUrl: typeof raw['factsUrl'] === 'string' ? raw['factsUrl'] : null,
     redactedLivingFactsCount,
     facts,

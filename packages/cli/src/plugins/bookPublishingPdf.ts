@@ -65,7 +65,7 @@ async function defaultLaunchPlaywrightBrowser(
 }
 
 export interface PlaywrightPdfRendererOptions {
-  readonly browserFactory?: PlaywrightPdfBrowserFactory;
+  readonly browserFactory?: PlaywrightPdfBrowserFactory | undefined;
   readonly importer?: (specifier: 'playwright-core' | 'playwright') => Promise<unknown>;
 }
 

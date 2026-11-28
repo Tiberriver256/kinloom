@@ -18,7 +18,7 @@ export const runOpenarchievenCommand: RecordHandler = async (args, ctx): Promise
     if (args.length === 0 || args[0] === '--help' || args[0] === '-h') {
       return { exitCode: 0, bytesOut: emitStdout(ctx.io, renderRootHelp()) };
     }
-    const [rawSubcmd, ...rest] = args;
+    const [rawSubcmd = '', ...rest] = args;
     const subcmd = resolveSubcommandAlias(rawSubcmd, SUBCOMMAND_ALIASES);
     switch (subcmd) {
       case 'search':

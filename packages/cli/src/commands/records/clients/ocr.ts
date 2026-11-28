@@ -114,7 +114,7 @@ export const runOcrCommand: RecordHandler = async (args, ctx): Promise<RecordCom
       const hits = completed.map((c) => c.cached);
       const allCached = hits.length > 0 && hits.every(Boolean);
 
-      if (!multi) {
+      if (!multi && completed[0] !== undefined) {
         const single = completed[0].data;
         const bytesOut = opts.tsv ? emitStdout(ctx.io, String(single)) : emitJsonStdout(ctx.io, single);
         return { exitCode: 0, bytesOut, cacheHit: allCached };
@@ -161,7 +161,7 @@ export const runOcrCommand: RecordHandler = async (args, ctx): Promise<RecordCom
     const hits = completed.map((c) => c.cached);
     const allCached = hits.length > 0 && hits.every(Boolean);
 
-    if (!multi) {
+    if (!multi && completed[0] !== undefined) {
       const singleRec = completed[0].record;
       const bytesOut = opts.json ? emitJsonStdout(ctx.io, singleRec) : emitStdout(ctx.io, singleRec.text);
       return { exitCode: 0, bytesOut, cacheHit: allCached };

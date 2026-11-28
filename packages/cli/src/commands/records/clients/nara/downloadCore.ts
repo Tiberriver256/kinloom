@@ -194,7 +194,7 @@ export async function downloadObjectToCache(
         throw new RecordRuntimeError(`HTTP ${resp.status} downloading ${validatedUrl}`);
       }
 
-      const contentType = (resp.headers.get('content-type') ?? '').split(';', 1)[0].trim();
+      const contentType = ((resp.headers.get('content-type') ?? '').split(';', 1)[0] ?? '').trim();
       const contentEncoding = (resp.headers.get('content-encoding') ?? '').trim().toLowerCase();
       const rawLen = (resp.headers.get('content-length') ?? '').trim();
       let expectedLen: number | null = null;

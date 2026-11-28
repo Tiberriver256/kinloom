@@ -558,8 +558,8 @@ describe('ops/telemetry', () => {
 
     const lines = (await readFile(telemetryFile, 'utf8')).trim().split('\n');
     expect(lines).toHaveLength(2);
-    const first = JSON.parse(lines[0]) as { subcmd: string; bytes_out: number; exit_code: number };
-    const second = JSON.parse(lines[1]) as { subcmd: string; exit_code: number };
+    const first = JSON.parse(lines[0]!) as { subcmd: string; bytes_out: number; exit_code: number };
+    const second = JSON.parse(lines[1]!) as { subcmd: string; exit_code: number };
     expect(first.subcmd).toBe('context');
     expect(first.bytes_out).toBe(12);
     expect(first.exit_code).toBe(0);
@@ -1194,9 +1194,9 @@ describe('ops/integrate', () => {
       await readFile(path.join(repoDir, 'data', 'narratives.yaml'), 'utf8')
     );
     expect(writtenNarratives).toHaveLength(1);
-    expect(writtenNarratives[0].kind).toBe('biography');
-    expect(writtenNarratives[0].subject_person_id).toBe('per_arthur_alder');
-    expect(writtenNarratives[0].source_ids).toEqual(['src_1880_census', 'src_1932_death_cert']);
+    expect(writtenNarratives[0]!.kind).toBe('biography');
+    expect(writtenNarratives[0]!.subject_person_id).toBe('per_arthur_alder');
+    expect(writtenNarratives[0]!.source_ids).toEqual(['src_1880_census', 'src_1932_death_cert']);
 
     const writtenPeople = parsePeopleYaml(await readFile(path.join(repoDir, 'data', 'people.yaml'), 'utf8'));
     const arthur = writtenPeople.find((p) => p.id === 'per_arthur_alder');
@@ -1375,15 +1375,15 @@ describe('ops/integrate', () => {
     };
 
     const badCitationPatch = structuredClone(basePatch);
-    badCitationPatch.narratives[0].body_md = 'Uncited claim.[^src_does_not_exist]';
+    badCitationPatch.narratives[0]!.body_md = 'Uncited claim.[^src_does_not_exist]';
     await writeFile(patchPath, JSON.stringify(badCitationPatch, null, 2), 'utf8');
     await expect(
       runIntegrateCommand({ repoDir, personId: 'per_arthur_alder', dryRun: true })
     ).rejects.toThrow("unknown inline source_id 'src_does_not_exist'");
 
     const badZeroPlacePatch = structuredClone(basePatch);
-    badZeroPlacePatch.places[0].lat = 0;
-    badZeroPlacePatch.places[0].lng = 0;
+    badZeroPlacePatch.places[0]!.lat = 0;
+    badZeroPlacePatch.places[0]!.lng = 0;
     await writeFile(patchPath, JSON.stringify(badZeroPlacePatch, null, 2), 'utf8');
     await expect(
       runIntegrateCommand({ repoDir, personId: 'per_arthur_alder', dryRun: true })
@@ -1910,7 +1910,7 @@ describe('ops/integrate', () => {
 
     // Updating an existing deceased person via patch.people cleanly merges and converges.
     const updatedPatch = structuredClone(patch);
-    updatedPatch.people[0].alt_names = ['William H. Alder'];
+    updatedPatch.people[0]!.alt_names = ['William H. Alder'];
     await writeFile(path.join(packageDir, 'patch.json'), JSON.stringify(updatedPatch, null, 2), 'utf8');
     const updateApply = await runIntegrateCommand({
       repoDir,
