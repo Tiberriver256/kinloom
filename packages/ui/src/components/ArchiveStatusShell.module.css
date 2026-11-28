@@ -8,6 +8,8 @@
 
 .kinloom-app:has(:global(.map-shell)),
 .kinloom-app:has(:global(.tree-shell-diagram)) {
+  height: 100vh;
+  /* biome-ignore lint/suspicious/noDuplicateProperties: 100vh fallback before 100dvh */
   height: 100dvh;
   overflow: hidden;
 }

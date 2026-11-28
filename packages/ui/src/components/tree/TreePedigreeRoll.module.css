@@ -548,6 +548,44 @@
   }
 }
 
+@media (max-width: 420px) {
+  .tree-roll-couple-row {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 6px;
+  }
+
+  .tree-roll-partner-pair {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 6px;
+    flex: 1 1 auto;
+    width: 100%;
+    max-width: none;
+  }
+
+  .tree-roll-card,
+  .tree-roll-partner-pair .tree-roll-card {
+    flex: 0 0 auto;
+    width: 100%;
+    max-width: none;
+  }
+
+  .tree-roll-union-hub {
+    align-self: center;
+  }
+
+  .tree-hanging-grid {
+    grid-template-columns: 1fr;
+    gap: 8px;
+  }
+
+  .tree-hanging-grid::before {
+    display: none;
+  }
+}
+
 .tree-roll-branch-caption {
   font-family: var(--font-ui);
   font-size: 0.75rem;

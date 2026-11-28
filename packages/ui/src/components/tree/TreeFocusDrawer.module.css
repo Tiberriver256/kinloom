@@ -7,16 +7,16 @@ aside.tree-focus-drawer {
   bottom: calc(18px + env(safe-area-inset-bottom, 0px));
   left: auto;
   z-index: 35;
-  max-height: calc(100dvh - var(--topbar-height) - 36px);
+  max-height: calc(100dvh - var(--shell-chrome-offset, var(--topbar-height)) - 36px);
   overflow-y: auto;
   overscroll-behavior: contain;
 }
 
 aside.tree-focus-drawer.tree-focus-drawer-diagram {
-  top: calc(var(--topbar-height) + 68px);
+  top: calc(var(--shell-chrome-offset, var(--topbar-height)) + 68px);
   right: calc(74px + env(safe-area-inset-right, 0px));
   bottom: auto;
-  max-height: calc(100dvh - var(--topbar-height) - 86px);
+  max-height: calc(100dvh - var(--shell-chrome-offset, var(--topbar-height)) - 86px);
 }
 
 .tree-focus-header {
@@ -284,7 +284,7 @@ aside.tree-focus-drawer.tree-focus-drawer-diagram {
     right: calc(10px + env(safe-area-inset-right, 0px));
     bottom: calc(10px + env(safe-area-inset-bottom, 0px));
     width: auto;
-    max-height: min(48dvh, calc(100dvh - var(--topbar-height) - 68px));
+    max-height: min(48dvh, calc(100dvh - var(--shell-chrome-offset, var(--topbar-height)) - 68px));
     overflow-y: auto;
     overscroll-behavior: contain;
     padding: 12px 14px 14px;

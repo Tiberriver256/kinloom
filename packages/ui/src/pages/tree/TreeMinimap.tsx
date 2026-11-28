@@ -8,6 +8,7 @@ import treePageStyles from '../TreePage.module.css';
 import type { ViewportSnapshot } from './useTreeViewportTransform.js';
 
 export interface TreeMinimapProps {
+  readonly minimapRef?: React.RefObject<HTMLElement | null>;
   readonly layout: ArchivalDiagramLayout;
   readonly spotlight: LineageSpotlight | null;
   readonly selectedPersonId: string | null;
@@ -20,6 +21,7 @@ export interface TreeMinimapProps {
 }
 
 export const TreeMinimap: React.FC<TreeMinimapProps> = ({
+  minimapRef,
   layout,
   spotlight,
   selectedPersonId,
@@ -88,6 +90,7 @@ export const TreeMinimap: React.FC<TreeMinimapProps> = ({
 
   return (
     <aside
+      ref={minimapRef}
       className={cx(treePageStyles, `tree-minimap${expanded ? ' is-expanded' : ' is-collapsed'}`)}
       aria-label="Tree overview minimap"
     >
@@ -190,7 +193,8 @@ export const TreeMinimap: React.FC<TreeMinimapProps> = ({
                 x2={bounds.maxX - 16}
                 y2={band.y + 26}
                 stroke="var(--border-decorative)"
-                strokeWidth={Math.max(4, graphH * 0.004)}
+                strokeWidth={1}
+                vectorEffect="non-scaling-stroke"
                 opacity="0.6"
               />
             ))}
@@ -224,10 +228,10 @@ export const TreeMinimap: React.FC<TreeMinimapProps> = ({
               y={viewRectY}
               width={viewRectW}
               height={viewRectH}
-              fill="var(--accent-primary)"
-              fillOpacity="0.14"
+              fill="var(--tree-minimap-viewport-fill, rgba(122, 70, 18, 0.12))"
               stroke="var(--accent-primary)"
-              strokeWidth={Math.max(8, Math.max(graphW, graphH) * 0.008)}
+              strokeWidth={1.5}
+              vectorEffect="non-scaling-stroke"
             />
           </svg>
         </button>

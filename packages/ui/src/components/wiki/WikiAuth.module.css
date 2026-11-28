@@ -162,6 +162,7 @@
 }
 
 .wiki-auth-notice-bar {
+  flex: 0 0 auto;
   display: flex;
   justify-content: space-between;
   align-items: center;
@@ -196,6 +197,7 @@
 
 /* Auth & Invite Strip (Whisper-thin, Single-line, Dismissible for Invite Guests) */
 .wiki-auth-banner {
+  flex: 0 0 auto;
   display: flex;
   justify-content: space-between;
   align-items: center;
