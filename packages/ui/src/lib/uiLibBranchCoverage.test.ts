@@ -382,6 +382,7 @@ describe('diagramLayout branch coverage', () => {
       earlyLossIds: new Set(),
       directPersonIds: new Set(),
       pivotPersonId: null,
+      anchorPersonId: null,
     };
     const layout = computeArchivalDiagramLayout(emptyModel);
     expect(layout.nodes).toHaveLength(0);
@@ -556,6 +557,7 @@ describe('diagramLayout branch coverage', () => {
       earlyLossIds: new Set(['e1']),
       directPersonIds: new Set(['p1', 'p2', 'c1']),
       pivotPersonId: 'c1',
+      anchorPersonId: null,
     };
 
     const layout = computeArchivalDiagramLayout(model);
@@ -796,6 +798,7 @@ describe('treeProjections branch coverage', () => {
       earlyLossIds: new Set(['p_early']),
       directPersonIds: new Set(['p_gp', 'p_pa']),
       pivotPersonId: 'p_gp',
+      anchorPersonId: null,
     };
 
     expect(computeLineageSpotlight({ selectedPersonId: 'unknown', model })).toBeNull();

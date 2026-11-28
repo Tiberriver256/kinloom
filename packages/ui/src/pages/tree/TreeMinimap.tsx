@@ -11,6 +11,7 @@ export interface TreeMinimapProps {
   readonly layout: ArchivalDiagramLayout;
   readonly spotlight: LineageSpotlight | null;
   readonly selectedPersonId: string | null;
+  readonly anchorPersonId?: string | null;
   readonly getViewportSnapshot: () => ViewportSnapshot;
   readonly subscribeTransform: (listener: (snapshot: ViewportSnapshot) => void) => () => void;
   readonly onNavigateToPoint: (graphX: number, graphY: number) => void;
@@ -22,6 +23,7 @@ export const TreeMinimap: React.FC<TreeMinimapProps> = ({
   layout,
   spotlight,
   selectedPersonId,
+  anchorPersonId = null,
   getViewportSnapshot,
   subscribeTransform,
   onNavigateToPoint,
@@ -195,8 +197,9 @@ export const TreeMinimap: React.FC<TreeMinimapProps> = ({
             {layout.nodes.map((node) => {
               const isSelected = selectedPersonId === node.person.id;
               const isLit = Boolean(highlightedIds?.has(node.person.id));
+              const isAnchor = anchorPersonId === node.person.id;
               const fill =
-                isSelected || isLit
+                isSelected || isLit || isAnchor
                   ? 'var(--accent-primary)'
                   : node.isDirect
                     ? 'var(--surface-header)'
@@ -204,13 +207,14 @@ export const TreeMinimap: React.FC<TreeMinimapProps> = ({
               return (
                 <rect
                   key={node.person.id}
+                  data-anchor={isAnchor ? 'true' : undefined}
                   x={node.x}
                   y={node.y}
                   width={node.width}
                   height={node.height}
                   rx={4}
                   fill={fill}
-                  opacity={highlightedIds && !isLit ? 0.3 : 0.9}
+                  opacity={highlightedIds && !isLit && !isAnchor ? 0.3 : 0.9}
                 />
               );
             })}

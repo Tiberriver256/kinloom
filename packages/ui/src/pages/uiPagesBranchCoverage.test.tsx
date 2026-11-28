@@ -4285,6 +4285,7 @@ describe('Wave 3 branch coverage: GlobalSearchModal, SourceCitationTag scans, Ar
       earlyLossIds: new Set(),
       directPersonIds: new Set(['per_henry']),
       pivotPersonId: 'per_henry',
+      anchorPersonId: null,
     };
     const livingWithMedia: Person = {
       ...RICH_BUNDLE.people[4],

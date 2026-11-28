@@ -159,6 +159,32 @@ function computeFocalDirectSpineIds(params: {
   return focal;
 }
 
+function computeAnchoredAncestorSpineIds(
+  anchorId: string,
+  peopleById: ReadonlyMap<string, Person>,
+  parentMap: ReadonlyMap<string, readonly string[]>
+): Set<string> {
+  const focal = new Set<string>([anchorId]);
+  const queue: string[] = [anchorId];
+  let head = 0;
+  while (head < queue.length) {
+    const cur = queue[head];
+    head += 1;
+    const parents = parentMap.get(cur);
+    if (!parents) {
+      continue;
+    }
+    for (let i = 0; i < parents.length; i += 1) {
+      const parentId = parents[i];
+      if (peopleById.has(parentId) && !focal.has(parentId)) {
+        focal.add(parentId);
+        queue.push(parentId);
+      }
+    }
+  }
+  return focal;
+}
+
 interface PreparedModeUnion {
   readonly draft: UnionDraft;
   readonly order: number;
@@ -188,6 +214,7 @@ interface PrecomputedBranchTopology {
   readonly spinePartnerIds: Set<string>;
   readonly earlyLossIds: Set<string>;
   readonly pivotPersonId: string | null;
+  readonly resolvedAnchorId: string | null;
   readonly rawGenBuckets: ReadonlyMap<number, readonly Person[]>;
   readonly sortedGenNums: readonly number[];
   fullModeData: PreparedModeData | null;
@@ -203,9 +230,11 @@ function getPrecomputedBranchTopology(
   people: readonly Person[],
   kinship: readonly KinshipEdge[],
   branchFilter: string | null | undefined,
-  defaultBranchId: string
+  defaultBranchId: string,
+  anchorPersonId: string | null | undefined
 ): PrecomputedBranchTopology {
-  const cacheKey = `${branchFilter ?? ''}\0${defaultBranchId}`;
+  const normalizedAnchor = anchorPersonId?.trim() || '';
+  const cacheKey = `${branchFilter ?? ''}\0${defaultBranchId}\0${normalizedAnchor}`;
   let byKinship = topologyCache.get(people);
   if (byKinship) {
     const existing = byKinship.get(kinship)?.get(cacheKey);
@@ -229,6 +258,9 @@ function getPrecomputedBranchTopology(
     branchIds.add(p.id);
     peopleById.set(p.id, p);
   }
+
+  const resolvedAnchorId =
+    normalizedAnchor.length > 0 && peopleById.has(normalizedAnchor) ? normalizedAnchor : null;
 
   const parentMap = new Map<string, string[]>();
   const childMap = new Map<string, string[]>();
@@ -255,7 +287,7 @@ function getPrecomputedBranchTopology(
 
   const earlyLossIds = new Set<string>();
   const directPersonIds = new Set<string>();
-  let pivotPersonId: string | null = null;
+  let pivotPersonId: string | null = resolvedAnchorId;
   let fallbackAncestorId: string | null = null;
   const rawGenMap = new Map<number, Person[]>();
 
@@ -264,7 +296,7 @@ function getPrecomputedBranchTopology(
     if (isDirectSpinePerson(p)) {
       directPersonIds.add(p.id);
     }
-    if (isEarlyChildhoodLoss(p, parentMap, childMap, spouseMap)) {
+    if (p.id !== resolvedAnchorId && isEarlyChildhoodLoss(p, parentMap, childMap, spouseMap)) {
       earlyLossIds.add(p.id);
     } else {
       const g = genByPersonId.get(p.id) ?? 0;
@@ -285,15 +317,18 @@ function getPrecomputedBranchTopology(
     pivotPersonId = fallbackAncestorId ?? branchPeople[0]?.id ?? null;
   }
 
-  const focalSpineIds = computeFocalDirectSpineIds({
-    branchPeople,
-    peopleById,
-    parentMap,
-    childMap,
-    spouseMap,
-    earlyLossIds,
-    directPersonIds,
-  });
+  const focalSpineIds =
+    resolvedAnchorId !== null
+      ? computeAnchoredAncestorSpineIds(resolvedAnchorId, peopleById, parentMap)
+      : computeFocalDirectSpineIds({
+          branchPeople,
+          peopleById,
+          parentMap,
+          childMap,
+          spouseMap,
+          earlyLossIds,
+          directPersonIds,
+        });
 
   const spinePartnerIds = new Set<string>(focalSpineIds);
   for (const pid of focalSpineIds) {
@@ -337,6 +372,7 @@ function getPrecomputedBranchTopology(
     spinePartnerIds,
     earlyLossIds,
     pivotPersonId,
+    resolvedAnchorId,
     rawGenBuckets: rawGenMap,
     sortedGenNums,
     fullModeData: null,
@@ -367,7 +403,8 @@ function getPreparedModeData(
     return topo.fullModeData;
   }
 
-  const modeDirectIds = effectiveMode === 'spine' ? topo.focalSpineIds : topo.directPersonIds;
+  const modeDirectIds =
+    topo.resolvedAnchorId !== null || effectiveMode === 'spine' ? topo.focalSpineIds : topo.directPersonIds;
   const unionDrafts = buildUnionDrafts({
     branchPeople: topo.branchPeople,
     genByPersonId: topo.genByPersonId,
@@ -439,7 +476,7 @@ function getPreparedModeData(
         const cid = survivingChildren[i].id;
         const hasDescendants = (topo.childMap.get(cid)?.length ?? 0) > 0;
         const hasSpouse = (topo.spouseMap.get(cid)?.length ?? 0) > 0;
-        const isDirect = topo.directPersonIds.has(cid);
+        const isDirect = modeDirectIds.has(cid);
         if (isDirect || hasDescendants || hasSpouse) {
           anchorOrBranching.push(cid);
         } else {
@@ -497,10 +534,12 @@ export function buildArchivalTreeModel({
   directModeBranchIds,
   mode,
   expandedUnionIds = new Set<string>(),
+  anchorPersonId = null,
 }: BuildArchivalTreeInput): ArchivalTreeModel {
-  const topo = getPrecomputedBranchTopology(people, kinship, branchFilter, defaultBranchId);
+  const topo = getPrecomputedBranchTopology(people, kinship, branchFilter, defaultBranchId, anchorPersonId);
 
   const supportsDirectForBranch =
+    topo.resolvedAnchorId !== null ||
     !directModeBranchIds ||
     !branchFilter ||
     branchFilter === 'all' ||
@@ -510,7 +549,8 @@ export function buildArchivalTreeModel({
     mode === 'spine' && supportsDirectForBranch && topo.focalSpineIds.size > 0 ? 'spine' : 'full';
 
   const modeData = getPreparedModeData(topo, effectiveMode);
-  const modeDirectIds = effectiveMode === 'spine' ? topo.focalSpineIds : topo.directPersonIds;
+  const modeDirectIds =
+    topo.resolvedAnchorId !== null || effectiveMode === 'spine' ? topo.focalSpineIds : topo.directPersonIds;
   const hasExpandedUnions = expandedUnionIds.size > 0;
 
   const unions: TreeUnion[] = [];
@@ -628,5 +668,6 @@ export function buildArchivalTreeModel({
     earlyLossIds: topo.earlyLossIds,
     directPersonIds: modeDirectIds,
     pivotPersonId: topo.pivotPersonId,
+    anchorPersonId: topo.resolvedAnchorId,
   };
 }

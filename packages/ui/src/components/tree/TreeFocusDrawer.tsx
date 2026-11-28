@@ -20,6 +20,9 @@ export interface TreeFocusDrawerProps {
   readonly baseUrl: string;
   readonly onSelectPerson: (person: Person) => void;
   readonly onClearFocus: () => void;
+  readonly activeAnchorPersonId?: string | null;
+  readonly onSetAnchorPerson?: (person: Person) => void;
+  readonly onResetAnchor?: () => void;
 }
 
 function formatCountLabel(count: number, singular: string, plural: string): string {
@@ -35,7 +38,11 @@ export const TreeFocusDrawer: React.FC<TreeFocusDrawerProps> = ({
   baseUrl,
   onSelectPerson,
   onClearFocus,
+  activeAnchorPersonId = null,
+  onSetAnchorPerson,
+  onResetAnchor,
 }) => {
+  const isCurrentAnchor = activeAnchorPersonId === person.id;
   const gen = model.genByPersonId.get(person.id);
   const isEarlyLoss = model.earlyLossIds.has(person.id);
   const spouseCount = spotlight?.immediateSpouseIds.size ?? 0;
@@ -83,6 +90,9 @@ export const TreeFocusDrawer: React.FC<TreeFocusDrawerProps> = ({
             <span className={cx(treeFocusStyles, 'tree-focus-living-pill')}>
               {KINLOOM_VOCABULARY.tree.livingBadge}
             </span>
+          )}
+          {isCurrentAnchor && (
+            <span className={cx(treeFocusStyles, 'tree-focus-anchor-pill')}>Spine anchor</span>
           )}
         </div>
         <button
@@ -175,6 +185,32 @@ export const TreeFocusDrawer: React.FC<TreeFocusDrawerProps> = ({
         >
           {KINLOOM_VOCABULARY.tree.openProfileCta}
         </Link>
+        {onSetAnchorPerson && !isCurrentAnchor && (
+          <button
+            type="button"
+            className={joinClasses(
+              cx(controlStyles, 'pill-btn'),
+              cx(treeFocusStyles, 'tree-focus-anchor-btn')
+            )}
+            onClick={() => {
+              onSetAnchorPerson(person);
+            }}
+          >
+            Trace ancestors from here
+          </button>
+        )}
+        {onResetAnchor && isCurrentAnchor && (
+          <button
+            type="button"
+            className={joinClasses(
+              cx(controlStyles, 'pill-btn'),
+              cx(treeFocusStyles, 'tree-focus-anchor-btn')
+            )}
+            onClick={onResetAnchor}
+          >
+            Reset to default
+          </button>
+        )}
         <button
           type="button"
           className={joinClasses(cx(controlStyles, 'pill-btn'), cx(treeFocusStyles, 'tree-focus-clear-btn'))}

@@ -524,4 +524,40 @@ describe('Tree layout property-based invariants (deterministic seed)', () => {
       }).buttonLabel
     ).toBe('Hide 2 other children (1 in direct line below)');
   });
+
+  it('maintains zero empty generations and non-overlapping layout for arbitrary anchorPersonId across generated DAGs', () => {
+    fc.assert(
+      fc.property(dagSpecArb, fc.nat({ max: 100 }), (spec, anchorSeed) => {
+        const { people, kinship } = buildSyntheticDag(spec);
+        const visibleCandidates = people.filter((p) => p.full_name.trim() !== 'Living');
+        if (visibleCandidates.length === 0) {
+          return;
+        }
+        const chosenAnchor = visibleCandidates[anchorSeed % visibleCandidates.length];
+        const model = buildArchivalTreeModel({
+          people,
+          kinship,
+          branchFilter: 'alder_line',
+          defaultBranchId: 'alder_line',
+          mode: spec.mode,
+          anchorPersonId: chosenAnchor.id,
+        });
+        const layout = computeArchivalDiagramLayout(model);
+
+        expect(model.anchorPersonId).toBe(chosenAnchor.id);
+        expect(model.pivotPersonId).toBe(chosenAnchor.id);
+        expect(model.directPersonIds.has(chosenAnchor.id)).toBe(true);
+        expect(model.earlyLossIds.has(chosenAnchor.id)).toBe(false);
+        expect(model.generations.every((g) => g.personIds.length > 0 && g.units.length > 0)).toBe(true);
+        expect(layout.byId.has(chosenAnchor.id)).toBe(true);
+
+        for (let i = 0; i < layout.nodes.length; i += 1) {
+          for (let j = i + 1; j < layout.nodes.length; j += 1) {
+            expect(boxesOverlap(layout.nodes[i], layout.nodes[j])).toBe(false);
+          }
+        }
+      }),
+      { seed: TREE_PROP_SEED + 76, numRuns: 60 }
+    );
+  });
 });

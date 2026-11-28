@@ -4,6 +4,7 @@ import type { TreeLineageMode, TreeSearchCandidate, TreeViewSurface } from '../.
 import { cx, joinClasses } from '../../lib/cx.js';
 import { KINLOOM_VOCABULARY } from '../../lib/vocabulary.js';
 import controlStyles from '../../styles/Controls.module.css';
+import { TreeAnchorPicker } from './TreeAnchorPicker.js';
 import { TreePersonSearch } from './TreePersonSearch.js';
 import treeToolbarStyles from './TreeToolbar.module.css';
 
@@ -27,6 +28,12 @@ export interface TreeToolbarProps {
   readonly onMobileSearchOpenChange: (open: boolean) => void;
   readonly canEdit: boolean;
   readonly onAddPerson: () => void;
+  readonly activeAnchor?: Person | null;
+  readonly anchorQuery?: string;
+  readonly onAnchorQueryChange?: (nextQuery: string) => void;
+  readonly anchorCandidates?: readonly TreeSearchCandidate[];
+  readonly onSelectAnchor?: (person: Person) => void;
+  readonly onResetAnchor?: () => void;
 }
 
 export const TreeToolbar: React.FC<TreeToolbarProps> = ({
@@ -49,6 +56,12 @@ export const TreeToolbar: React.FC<TreeToolbarProps> = ({
   onMobileSearchOpenChange,
   canEdit,
   onAddPerson,
+  activeAnchor = null,
+  anchorQuery = '',
+  onAnchorQueryChange,
+  anchorCandidates = [],
+  onSelectAnchor,
+  onResetAnchor,
 }) => (
   <div ref={shellRef} className={cx(treeToolbarStyles, 'tree-toolbar-shell')}>
     <div
@@ -140,11 +153,11 @@ export const TreeToolbar: React.FC<TreeToolbarProps> = ({
         </div>
       </div>
 
-      {(showDirectToggle || canEdit) && (
+      {(showDirectToggle || Boolean(onSelectAnchor) || canEdit) && (
         <div
           className={cx(
             treeToolbarStyles,
-            `tree-toolbar-row tree-toolbar-row-secondary${showDirectToggle ? '' : ' is-desktop-only'}`
+            `tree-toolbar-row tree-toolbar-row-secondary${showDirectToggle || onSelectAnchor ? '' : ' is-desktop-only'}`
           )}
         >
           {showDirectToggle && (
@@ -174,6 +187,17 @@ export const TreeToolbar: React.FC<TreeToolbarProps> = ({
                 {KINLOOM_VOCABULARY.tree.fullTree} ({activeCount})
               </button>
             </div>
+          )}
+
+          {onSelectAnchor && onAnchorQueryChange && onResetAnchor && (
+            <TreeAnchorPicker
+              activeAnchor={activeAnchor}
+              query={anchorQuery}
+              onQueryChange={onAnchorQueryChange}
+              candidates={anchorCandidates}
+              onSelectAnchor={onSelectAnchor}
+              onResetAnchor={onResetAnchor}
+            />
           )}
 
           {canEdit && (

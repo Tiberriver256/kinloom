@@ -19,6 +19,7 @@ export interface TreeOrthogonalCanvasProps {
   readonly layout: ArchivalDiagramLayout;
   readonly spotlight: LineageSpotlight | null;
   readonly selectedPersonId: string | null;
+  readonly anchorPersonId?: string | null;
   readonly semanticZoom: SemanticZoomLevel;
   readonly activeBranchLabel: string;
   readonly personThumbMap: ReadonlyMap<string, string>;
@@ -31,6 +32,7 @@ export const TreeOrthogonalCanvas: React.FC<TreeOrthogonalCanvasProps> = ({
   layout,
   spotlight,
   selectedPersonId,
+  anchorPersonId = null,
   semanticZoom,
   activeBranchLabel,
   personThumbMap,
@@ -145,6 +147,7 @@ export const TreeOrthogonalCanvas: React.FC<TreeOrthogonalCanvasProps> = ({
               initials={prepared.initials}
               isSelected={selectedPersonId === pid}
               isLit={Boolean(highlightedIds?.has(pid))}
+              isAnchor={anchorPersonId === pid}
               semanticZoom={semanticZoom}
               onSelect={onSelectPerson}
             />

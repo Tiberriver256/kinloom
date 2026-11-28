@@ -20,6 +20,8 @@ import {
   computeLineageSpotlight,
   findCollapsedUnionForPerson,
   isRedactedLivingPlaceholder,
+  isTreeSearchEligible,
+  resolveAnchorBranchFilter,
   resolveTreeFocusPlan,
   searchTreePeople,
 } from '../lib/archivalTreeModel.js';
@@ -36,7 +38,7 @@ import { useTreeViewportTransform } from './tree/useTreeViewportTransform.js';
 
 export const TreePage: React.FC = () => {
   const { siteConfig, baseUrl, bundle, placesById, capabilities, loading } = useArchiveData();
-  const [searchParams] = useSearchParams();
+  const [searchParams, setSearchParams] = useSearchParams();
 
   const personThumbMap = useMemo(
     () => (bundle ? buildPersonThumbMap(bundle) : new Map<string, string>()),
@@ -54,6 +56,7 @@ export const TreePage: React.FC = () => {
   const [liveAnnouncement, setLiveAnnouncement] = useState<string>('');
   const [createPersonOpen, setCreatePersonOpen] = useState<boolean>(false);
   const [searchQuery, setSearchQuery] = useState<string>('');
+  const [anchorQuery, setAnchorQuery] = useState<string>('');
   const [mobileSearchOpen, setMobileSearchOpen] = useState<boolean>(false);
   const [focusRequestSeq, setFocusRequestSeq] = useState<number>(0);
 
@@ -63,8 +66,27 @@ export const TreePage: React.FC = () => {
   const controlsRef = useRef<HTMLDivElement | null>(null);
   const appliedFocusSlugRef = useRef<string | null>(null);
   const pendingFocusPersonIdRef = useRef<string | null>(null);
+  const pendingAnimateRef = useRef<boolean>(false);
+  const prevAnchorIdRef = useRef<string | null>(null);
   const lastFitKeyRef = useRef<string | null>(null);
   const lastFocusedNodeRef = useRef<Element | null>(null);
+
+  const fullPeopleById = useMemo(
+    () => (bundle ? new Map(bundle.people.map((p) => [p.id, p])) : new Map<string, Person>()),
+    [bundle]
+  );
+
+  const anchorSlugParam = searchParams.get('anchor')?.trim() || null;
+  const activeAnchorPerson = useMemo(() => {
+    if (!bundle || !anchorSlugParam) {
+      return null;
+    }
+    return (
+      bundle.people.find(
+        (p) => p.slug === anchorSlugParam && isTreeSearchEligible(p, bundle.meta.build_mode)
+      ) ?? null
+    );
+  }, [bundle, anchorSlugParam]);
 
   const branchCounts = useMemo(
     () => computeTreeBranchCounts(bundle, defaultBranchId),
@@ -94,7 +116,8 @@ export const TreePage: React.FC = () => {
   const activeBranchLabel =
     branchFilter === 'all' ? siteConfig.site.familyName : (activeBranchConfig?.label ?? branchFilter);
 
-  const showDirectToggle = branchFilter === 'all' || (activeBranchConfig?.supportsDirectMode ?? true);
+  const showDirectToggle =
+    activeAnchorPerson !== null || branchFilter === 'all' || (activeBranchConfig?.supportsDirectMode ?? true);
 
   const model = useMemo(() => {
     if (!bundle) {
@@ -113,8 +136,17 @@ export const TreePage: React.FC = () => {
       directModeBranchIds: directModeBranchIds.length > 0 ? directModeBranchIds : undefined,
       mode,
       expandedUnionIds,
+      anchorPersonId: activeAnchorPerson?.id ?? null,
     });
-  }, [bundle, branchFilter, defaultBranchId, directModeBranchIds, mode, expandedUnionIds]);
+  }, [
+    bundle,
+    branchFilter,
+    defaultBranchId,
+    directModeBranchIds,
+    mode,
+    expandedUnionIds,
+    activeAnchorPerson,
+  ]);
 
   const diagramLayout = useMemo(() => computeArchivalDiagramLayout(model), [model]);
 
@@ -168,6 +200,23 @@ export const TreePage: React.FC = () => {
       limit: 10,
     });
   }, [bundle, searchQuery, model, branchFilter, defaultBranchId, branchLabelsById]);
+
+  const anchorCandidates = useMemo(() => {
+    if (!bundle) {
+      return [];
+    }
+    return searchTreePeople({
+      query: anchorQuery,
+      people: bundle.people,
+      buildMode: bundle.meta.build_mode,
+      model,
+      branchFilter,
+      defaultBranchId,
+      branchLabelsById,
+      limit: 12,
+      rankingMode: 'anchor',
+    });
+  }, [bundle, anchorQuery, model, branchFilter, defaultBranchId, branchLabelsById]);
 
   useEffect(() => {
     if (surface === 'diagram') {
@@ -265,11 +314,67 @@ export const TreePage: React.FC = () => {
     [branchFilter, defaultBranchId, mode, model]
   );
 
+  const handleSelectAnchorPerson = useCallback(
+    (person: Person): void => {
+      if (!bundle) {
+        return;
+      }
+      const { nextBranchFilter, clearedBranch } = resolveAnchorBranchFilter({
+        anchorPerson: person,
+        currentBranchFilter: branchFilter,
+        defaultBranchId,
+        peopleById: fullPeopleById,
+        kinship: bundle.kinship,
+      });
+      if (clearedBranch) {
+        setBranchFilter(nextBranchFilter);
+      }
+      setMode('spine');
+      setExpandedUnionIds(new Set());
+      setMobileSearchOpen(false);
+      const nextParams = new URLSearchParams(searchParams);
+      nextParams.set('anchor', person.slug);
+      nextParams.delete('mode');
+      setSearchParams(nextParams);
+      pendingFocusPersonIdRef.current = person.id;
+      pendingAnimateRef.current = true;
+      setFocusRequestSeq((seq) => seq + 1);
+      setLiveAnnouncement(
+        clearedBranch
+          ? `Switched to All Branches and traced ancestors from ${person.full_name}.`
+          : `Tracing direct ancestors from ${person.full_name}.`
+      );
+    },
+    [branchFilter, bundle, defaultBranchId, fullPeopleById, searchParams, setSearchParams]
+  );
+
+  const handleResetAnchor = useCallback((): void => {
+    const nextParams = new URLSearchParams(searchParams);
+    nextParams.delete('anchor');
+    setSearchParams(nextParams);
+    setExpandedUnionIds(new Set());
+    setLiveAnnouncement('Reset direct line anchor to archive default.');
+  }, [searchParams, setSearchParams]);
+
   // biome-ignore lint/correctness/useExhaustiveDependencies: focusRequestSeq is an intentional re-centering trigger
   useLayoutEffect(() => {
     if (!bundle) {
       return;
     }
+    if (activeAnchorPerson && branchFilter !== 'all') {
+      const { nextBranchFilter, clearedBranch } = resolveAnchorBranchFilter({
+        anchorPerson: activeAnchorPerson,
+        currentBranchFilter: branchFilter,
+        defaultBranchId,
+        peopleById: fullPeopleById,
+        kinship: bundle.kinship,
+      });
+      if (clearedBranch) {
+        setBranchFilter(nextBranchFilter);
+        return;
+      }
+    }
+
     const focusSlug = searchParams.get('focus');
     if (focusSlug && appliedFocusSlugRef.current !== focusSlug) {
       const targetPerson = bundle.people.find((p) => p.slug === focusSlug && !isRedactedLivingPlaceholder(p));
@@ -280,7 +385,20 @@ export const TreePage: React.FC = () => {
       }
     }
 
-    const fitKey = `${branchFilter}|${model.effectiveMode}|${surface}`;
+    const fitKey = `${branchFilter}|${model.effectiveMode}|${surface}|${model.anchorPersonId ?? 'default'}`;
+    if (prevAnchorIdRef.current !== model.anchorPersonId) {
+      prevAnchorIdRef.current = model.anchorPersonId;
+      if (model.anchorPersonId !== null) {
+        if (mode !== 'spine' && searchParams.get('mode') !== 'full') {
+          setMode('spine');
+          return;
+        }
+        if (!pendingFocusPersonIdRef.current) {
+          pendingFocusPersonIdRef.current = model.anchorPersonId;
+        }
+      }
+    }
+
     const pendingId = pendingFocusPersonIdRef.current;
     if (pendingId) {
       const collapsedUnion = findCollapsedUnionForPerson(pendingId, model);
@@ -288,12 +406,14 @@ export const TreePage: React.FC = () => {
         setExpandedUnionIds((prev) => new Set([...prev, collapsedUnion.id]));
         return;
       }
+      const shouldAnimate = pendingAnimateRef.current || lastFitKeyRef.current === fitKey;
       const centered =
         surface === 'diagram'
-          ? canvas.centerDiagramOnPerson(pendingId, lastFitKeyRef.current === fitKey)
+          ? canvas.centerDiagramOnPerson(pendingId, shouldAnimate)
           : canvas.scrollRollToPerson(pendingId);
       if (centered) {
         pendingFocusPersonIdRef.current = null;
+        pendingAnimateRef.current = false;
         lastFitKeyRef.current = fitKey;
         return;
       }
@@ -311,8 +431,12 @@ export const TreePage: React.FC = () => {
     }
   }, [
     bundle,
+    activeAnchorPerson,
+    defaultBranchId,
+    fullPeopleById,
     searchParams,
     branchFilter,
+    mode,
     model,
     surface,
     expandedUnionIds,
@@ -371,7 +495,7 @@ export const TreePage: React.FC = () => {
           if (
             e.target instanceof Element &&
             e.target.closest(
-              'button, a, select, input, .tree-toolbar, .tree-toolbar-shell, .tree-search-popover, .tree-popover, .tree-controls, .tree-minimap, .tree-node-card, .tree-diagram-sibling-btn'
+              'button, a, select, input, .tree-toolbar, .tree-toolbar-shell, .tree-search-popover, .tree-anchor-picker, .tree-anchor-popover, .tree-popover, .tree-controls, .tree-minimap, .tree-node-card, .tree-diagram-sibling-btn'
             )
           ) {
             return;
@@ -389,6 +513,23 @@ export const TreePage: React.FC = () => {
           branchCounts={branchCounts}
           branchFilter={branchFilter}
           onBranchFilterChange={(nextBranch) => {
+            if (nextBranch !== 'all' && activeAnchorPerson) {
+              const { clearedBranch } = resolveAnchorBranchFilter({
+                anchorPerson: activeAnchorPerson,
+                currentBranchFilter: nextBranch,
+                defaultBranchId,
+                peopleById: fullPeopleById,
+                kinship: bundle.kinship,
+              });
+              if (clearedBranch) {
+                const nextParams = new URLSearchParams(searchParams);
+                nextParams.delete('anchor');
+                setSearchParams(nextParams);
+                setLiveAnnouncement(
+                  `Cleared custom anchor ${activeAnchorPerson.full_name} because their lineage spans another branch.`
+                );
+              }
+            }
             setBranchFilter(nextBranch);
             setSelectedPersonId(null);
             setExpandedUnionIds(new Set());
@@ -417,6 +558,12 @@ export const TreePage: React.FC = () => {
           onAddPerson={() => {
             setCreatePersonOpen(true);
           }}
+          activeAnchor={activeAnchorPerson}
+          anchorQuery={anchorQuery}
+          onAnchorQueryChange={setAnchorQuery}
+          anchorCandidates={anchorCandidates}
+          onSelectAnchor={handleSelectAnchorPerson}
+          onResetAnchor={handleResetAnchor}
         />
 
         {model.totalVisibleCount === 0 ? (
@@ -453,6 +600,7 @@ export const TreePage: React.FC = () => {
             model={model}
             spotlight={spotlight}
             selectedPersonId={selectedPerson?.id ?? null}
+            anchorPersonId={model.anchorPersonId}
             personThumbMap={personThumbMap}
             baseUrl={baseUrl}
             familyLabel={activeBranchLabel}
@@ -470,6 +618,7 @@ export const TreePage: React.FC = () => {
                 layout={diagramLayout}
                 spotlight={spotlight}
                 selectedPersonId={selectedPerson?.id ?? null}
+                anchorPersonId={model.anchorPersonId}
                 semanticZoom={canvas.semanticZoom}
                 activeBranchLabel={activeBranchLabel}
                 personThumbMap={personThumbMap}
@@ -484,6 +633,7 @@ export const TreePage: React.FC = () => {
                 layout={diagramLayout}
                 spotlight={spotlight}
                 selectedPersonId={selectedPerson?.id ?? null}
+                anchorPersonId={model.anchorPersonId}
                 getViewportSnapshot={canvas.getViewportSnapshot}
                 subscribeTransform={canvas.subscribeTransform}
                 onNavigateToPoint={(gx, gy) => {
@@ -525,6 +675,9 @@ export const TreePage: React.FC = () => {
             baseUrl={baseUrl}
             onSelectPerson={handleFocusAndCenterPerson}
             onClearFocus={handleClearFocus}
+            activeAnchorPersonId={model.anchorPersonId}
+            onSetAnchorPerson={handleSelectAnchorPerson}
+            onResetAnchor={handleResetAnchor}
           />
         )}
 

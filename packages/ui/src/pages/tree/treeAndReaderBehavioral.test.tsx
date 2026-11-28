@@ -4,7 +4,7 @@ import { compileArchive, parseKinloomConfig } from '@kinloom/core';
 import type React from 'react';
 import { act, useEffect } from 'react';
 import { createRoot } from 'react-dom/client';
-import { MemoryRouter } from 'react-router-dom';
+import { MemoryRouter, useLocation } from 'react-router-dom';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { ArchivalMarkdown } from '../../components/ArchivalMarkdown.js';
 import { SourceReaderDrawer } from '../../components/SourceReaderDrawer.js';
@@ -212,6 +212,12 @@ const OpenReaderOnMount: React.FC<{ sourceId?: string }> = ({ sourceId = 'src_bo
   return null;
 };
 
+const LocationSearchProbe: React.FC<{ readonly onSearch: (search: string) => void }> = ({ onSearch }) => {
+  const loc = useLocation();
+  onSearch(loc.search);
+  return null;
+};
+
 afterEach(() => {
   while (cleanups.length > 0) {
     cleanups.pop()?.();
@@ -387,8 +393,16 @@ describe('TreePage canvas gestures, SourceReaderDrawer actions, and ArchivalMark
   });
 
   it('exercises SourceReaderDrawer multi-document switching, text downloads, copy, scan zoom, and load errors', async () => {
-    Object.defineProperty(URL, 'createObjectURL', { value: vi.fn(() => 'blob:reader'), configurable: true });
-    Object.defineProperty(URL, 'revokeObjectURL', { value: vi.fn(), configurable: true });
+    Object.defineProperty(URL, 'createObjectURL', {
+      value: vi.fn(() => 'blob:reader'),
+      writable: true,
+      configurable: true,
+    });
+    Object.defineProperty(URL, 'revokeObjectURL', {
+      value: vi.fn(),
+      writable: true,
+      configurable: true,
+    });
     Object.defineProperty(navigator, 'clipboard', {
       value: { writeText: vi.fn(async () => {}) },
       configurable: true,
@@ -494,5 +508,273 @@ describe('TreePage canvas gestures, SourceReaderDrawer actions, and ArchivalMark
     expect(mdContainer.querySelector('blockquote')?.textContent).toContain('Forty acres');
     expect(mdContainer.querySelectorAll('li').length).toBeGreaterThanOrEqual(4);
     expect(mdContainer.querySelector('a[href="https://example.test/deed"]')).not.toBeNull();
+  });
+
+  it('selects and resets dynamic focal person anchor via TreeAnchorPicker, TreeFocusDrawer, branch sync, minimap, and Mobile Roll', async () => {
+    const multiBranchConfig: KinloomSiteConfig = parseKinloomConfig({
+      site: {
+        title: 'Alder Multi-Branch Archive',
+        familyName: 'Alder',
+        gedcomSourceName: 'ALDER_ANCHOR_TEST',
+      },
+      branches: [
+        { id: 'alder_line', label: 'Alder Line', supportsDirectMode: true },
+        { id: 'mercer_line', label: 'Mercer Line', supportsDirectMode: false },
+      ],
+    });
+    const { bundle: multiBranchBundle } = compileArchive({
+      siteConfig: multiBranchConfig,
+      mode: 'private',
+      places: [],
+      sources: [],
+      events: [],
+      people: [
+        {
+          id: 'per_henry',
+          slug: 'henry-alder',
+          full_name: 'Henry Alder',
+          given_name: 'Henry',
+          surname: 'Alder',
+          alt_names: [],
+          sex: 'M',
+          is_living: false,
+          lineage_group: 'ancestor',
+          branch: 'alder_line',
+          birth_edtf: '1855',
+          death_edtf: '1932',
+          portrait_url: null,
+        },
+        {
+          id: 'per_gideon',
+          slug: 'gideon-mercer',
+          full_name: 'Gideon Mercer',
+          given_name: 'Gideon',
+          surname: 'Mercer',
+          alt_names: [],
+          sex: 'M',
+          is_living: false,
+          lineage_group: 'collateral',
+          branch: 'mercer_line',
+          birth_edtf: '1860',
+          death_edtf: '1930',
+          portrait_url: null,
+        },
+        {
+          id: 'per_clara',
+          slug: 'clara-mercer',
+          full_name: 'Clara Mercer',
+          given_name: 'Clara',
+          surname: 'Mercer',
+          alt_names: [],
+          sex: 'F',
+          is_living: false,
+          lineage_group: 'ancestor',
+          branch: 'mercer_line',
+          birth_edtf: '1888',
+          death_edtf: '1964',
+          portrait_url: null,
+        },
+        {
+          id: 'per_jordan',
+          slug: 'jordan-alder',
+          full_name: 'Jordan Alder',
+          given_name: 'Jordan',
+          surname: 'Alder',
+          alt_names: [],
+          sex: 'U',
+          is_living: true,
+          lineage_group: 'descendant',
+          branch: 'alder_line',
+          birth_edtf: '1984-05-01',
+          death_edtf: '',
+          portrait_url: null,
+        },
+      ],
+      kinship: [
+        { from: 'per_gideon', to: 'per_clara', relation: 'parent' },
+        { from: 'per_henry', to: 'per_jordan', relation: 'parent' },
+        { from: 'per_clara', to: 'per_jordan', relation: 'parent' },
+      ],
+    });
+
+    let latestSearch = '';
+
+    const container = mountEl(
+      <MemoryRouter initialEntries={['/tree?surface=diagram']}>
+        <ArchiveProvider siteConfig={multiBranchConfig} initialBundle={multiBranchBundle}>
+          <LocationSearchProbe
+            onSearch={(s) => {
+              latestSearch = s;
+            }}
+          />
+          <TreePage />
+        </ArchiveProvider>
+      </MemoryRouter>
+    );
+    await flushUi();
+    await flushUi();
+
+    // Filter to alder_line first so choosing Jordan Alder (whose mother Clara is in mercer_line) clears branch filter
+    const branchSelect = container.querySelector(
+      'select[aria-label="Select family branch"]'
+    ) as HTMLSelectElement | null;
+    expect(branchSelect).not.toBeNull();
+    if (branchSelect) {
+      act(() => {
+        branchSelect.value = 'alder_line';
+        branchSelect.dispatchEvent(new Event('change', { bubbles: true }));
+      });
+      await flushUi();
+    }
+
+    // Open TreeAnchorPicker and select Jordan Alder (named living person)
+    const trigger = container.querySelector('button[aria-haspopup="dialog"]') as HTMLButtonElement | null;
+    expect(trigger).not.toBeNull();
+    expect(trigger?.textContent).toContain('Trace from:');
+    expect(trigger?.textContent).toContain('Default');
+    act(() => {
+      trigger?.click();
+    });
+    await flushUi();
+
+    const anchorInput = container.querySelector(
+      'input[placeholder="Trace ancestors from…"]'
+    ) as HTMLInputElement | null;
+    expect(anchorInput).not.toBeNull();
+    const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set;
+    act(() => {
+      setter?.call(anchorInput, 'Jordan');
+      anchorInput?.dispatchEvent(new Event('input', { bubbles: true }));
+      anchorInput?.dispatchEvent(new Event('change', { bubbles: true }));
+    });
+    await flushUi();
+
+    const jordanOpt = Array.from(container.querySelectorAll('button[role="option"]')).find((b) =>
+      b.textContent?.includes('Jordan Alder')
+    ) as HTMLButtonElement | undefined;
+    expect(jordanOpt).toBeDefined();
+    act(() => {
+      jordanOpt?.click();
+    });
+    await flushUi();
+
+    // Verify URL sync, Direct Line mode, cleared branch filter, live announcement, canvas + minimap anchor markers
+    expect(latestSearch).toBe('?surface=diagram&anchor=jordan-alder');
+    expect(container.querySelector('main')?.getAttribute('data-mode')).toBe('spine');
+    expect(branchSelect?.value).toBe('all');
+    expect(container.querySelector('output.visually-hidden[aria-live="polite"]')?.textContent).toContain(
+      'Switched to All Branches and traced ancestors from Jordan Alder.'
+    );
+    expect(container.querySelector('g[data-person-id="per_jordan"][data-anchor="true"]')).not.toBeNull();
+    expect(container.querySelector('.tree-minimap-svg rect[data-anchor="true"]')).not.toBeNull();
+    // Both Henry (alder_line) and Gideon (mercer_line grandfather) appear on Jordan's ancestor spine
+    expect(container.querySelector('g[data-person-id="per_henry"]')).not.toBeNull();
+    expect(container.querySelector('g[data-person-id="per_gideon"]')).not.toBeNull();
+
+    // Click Clara Mercer on chart to open TreeFocusDrawer, then click "Trace ancestors from here"
+    const claraNode = container.querySelector('g[data-person-id="per_clara"]') as SVGGElement | null;
+    expect(claraNode).not.toBeNull();
+    act(() => {
+      claraNode?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+    await flushUi();
+
+    const traceFromHereBtn = Array.from(container.querySelectorAll('button')).find(
+      (b) => b.textContent?.trim() === 'Trace ancestors from here'
+    );
+    expect(traceFromHereBtn).toBeDefined();
+    act(() => {
+      traceFromHereBtn?.click();
+    });
+    await flushUi();
+
+    expect(latestSearch).toBe('?surface=diagram&anchor=clara-mercer');
+    expect(container.querySelector('g[data-person-id="per_clara"][data-anchor="true"]')).not.toBeNull();
+    expect(container.querySelector('g[data-person-id="per_gideon"]')).not.toBeNull();
+    // Jordan is Clara's child, not ancestor, so Jordan is NOT a rank node on Clara's spine
+    expect(container.querySelector('g[data-person-id="per_jordan"]')).toBeNull();
+    expect(container.textContent).toContain('Spine anchor');
+
+    // Reset to default via toolbar Reset button
+    const resetBtn = Array.from(container.querySelectorAll('button')).find(
+      (b) => b.textContent?.trim() === 'Reset to default'
+    );
+    expect(resetBtn).toBeDefined();
+    act(() => {
+      resetBtn?.click();
+    });
+    await flushUi();
+
+    expect(latestSearch).toBe('?surface=diagram');
+    expect(container.querySelector('g[data-anchor="true"]')).toBeNull();
+
+    // Keyboard navigation in TreeAnchorPicker: ArrowDown, ArrowUp, Enter, Escape, outside click, and branch-filter conflict clearing
+    act(() => {
+      trigger?.click();
+    });
+    await flushUi();
+    const kbInput = container.querySelector(
+      'input[placeholder="Trace ancestors from…"]'
+    ) as HTMLInputElement | null;
+    expect(kbInput).not.toBeNull();
+    act(() => {
+      kbInput?.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true }));
+      kbInput?.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowUp', bubbles: true }));
+      kbInput?.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+    });
+    await flushUi();
+    expect(latestSearch).toContain('anchor=');
+
+    // Selecting an incompatible branch clears custom anchor cleanly
+    if (branchSelect) {
+      act(() => {
+        branchSelect.value = 'alder_line';
+        branchSelect.dispatchEvent(new Event('change', { bubbles: true }));
+      });
+      await flushUi();
+    }
+    expect(latestSearch).toBe('?surface=diagram');
+
+    // Open popover, type query with no matches, Escape clears query, second Escape closes popover
+    act(() => {
+      trigger?.click();
+    });
+    await flushUi();
+    const escInput = container.querySelector(
+      'input[placeholder="Trace ancestors from…"]'
+    ) as HTMLInputElement | null;
+    act(() => {
+      setter?.call(escInput, 'NoMatchXYZ');
+      escInput?.dispatchEvent(new Event('input', { bubbles: true }));
+      escInput?.dispatchEvent(new Event('change', { bubbles: true }));
+    });
+    await flushUi();
+    expect(container.textContent).toContain('No matching people for');
+    act(() => {
+      escInput?.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+    });
+    await flushUi();
+    act(() => {
+      document.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }));
+    });
+    await flushUi();
+    expect(container.querySelector('div[role="dialog"]')).toBeNull();
+
+    // Mobile Pedigree Roll (?surface=roll&anchor=clara-mercer) marks anchor with Spine anchor badge
+    const rollMount = mountEl(
+      <MemoryRouter initialEntries={['/tree?surface=roll&anchor=clara-mercer']}>
+        <ArchiveProvider siteConfig={multiBranchConfig} initialBundle={multiBranchBundle}>
+          <TreePage />
+        </ArchiveProvider>
+      </MemoryRouter>
+    );
+    await flushUi();
+    await flushUi();
+
+    expect(rollMount.querySelector('main')?.getAttribute('data-surface')).toBe('roll');
+    expect(rollMount.querySelector('main')?.getAttribute('data-mode')).toBe('spine');
+    const rollAnchorCard = rollMount.querySelector('button[data-person-id="per_clara"][data-anchor="true"]');
+    expect(rollAnchorCard).not.toBeNull();
+    expect(rollAnchorCard?.textContent).toContain('Spine anchor');
   });
 });

@@ -262,12 +262,81 @@ export function resolveTreeFocusPlan(params: {
     };
   }
 
-  const needsFullMode = currentMode === 'spine' && (!isDirectSpinePerson(person) || !alreadyVisible);
+  const isOnActiveSpine =
+    model.anchorPersonId !== null ? model.directPersonIds.has(person.id) : isDirectSpinePerson(person);
+  const needsFullMode = currentMode === 'spine' && (!isOnActiveSpine || !alreadyVisible);
   return {
     nextBranchFilter,
     nextMode: needsFullMode ? 'full' : currentMode,
     expandUnionIds: collapsedUnion ? [collapsedUnion.id] : [],
   };
+}
+
+export function resolveAnchorBranchFilter(params: {
+  readonly anchorPerson: Person;
+  readonly currentBranchFilter: string;
+  readonly defaultBranchId: string;
+  readonly peopleById: ReadonlyMap<string, Person>;
+  readonly kinship: readonly KinshipEdge[];
+}): { readonly nextBranchFilter: string; readonly clearedBranch: boolean } {
+  const { anchorPerson, currentBranchFilter, defaultBranchId, peopleById, kinship } = params;
+  if (currentBranchFilter === 'all') {
+    return { nextBranchFilter: 'all', clearedBranch: false };
+  }
+
+  const anchorBranch = anchorPerson.branch || defaultBranchId;
+  if (anchorBranch !== currentBranchFilter) {
+    return { nextBranchFilter: 'all', clearedBranch: true };
+  }
+
+  const parentsByChild = new Map<string, string[]>();
+  for (let i = 0; i < kinship.length; i += 1) {
+    const edge = kinship[i];
+    if (edge.relation === 'parent') {
+      const list = parentsByChild.get(edge.to);
+      if (list) {
+        list.push(edge.from);
+      } else {
+        parentsByChild.set(edge.to, [edge.from]);
+      }
+    } else if (edge.relation === 'child') {
+      const list = parentsByChild.get(edge.from);
+      if (list) {
+        list.push(edge.to);
+      } else {
+        parentsByChild.set(edge.from, [edge.to]);
+      }
+    }
+  }
+
+  const visited = new Set<string>([anchorPerson.id]);
+  const queue: string[] = [anchorPerson.id];
+  let head = 0;
+  while (head < queue.length) {
+    const cur = queue[head];
+    head += 1;
+    const parentIds = parentsByChild.get(cur);
+    if (!parentIds) {
+      continue;
+    }
+    for (let i = 0; i < parentIds.length; i += 1) {
+      const pid = parentIds[i];
+      if (visited.has(pid)) {
+        continue;
+      }
+      visited.add(pid);
+      const parent = peopleById.get(pid);
+      if (!parent || isRedactedLivingPlaceholder(parent)) {
+        continue;
+      }
+      if ((parent.branch || defaultBranchId) !== currentBranchFilter) {
+        return { nextBranchFilter: 'all', clearedBranch: true };
+      }
+      queue.push(pid);
+    }
+  }
+
+  return { nextBranchFilter: currentBranchFilter, clearedBranch: false };
 }
 
 interface CachedPersonSearchEntry {
@@ -331,6 +400,7 @@ export function searchTreePeople(params: {
   readonly defaultBranchId: string;
   readonly branchLabelsById: ReadonlyMap<string, string>;
   readonly limit?: number;
+  readonly rankingMode?: 'focus' | 'anchor';
 }): TreeSearchCandidate[] {
   const {
     query,
@@ -341,6 +411,7 @@ export function searchTreePeople(params: {
     defaultBranchId,
     branchLabelsById,
     limit = 10,
+    rankingMode = 'focus',
   } = params;
 
   const normalizedQuery = normalizeSearchFold(query);
@@ -357,18 +428,34 @@ export function searchTreePeople(params: {
       continue;
     }
 
+    const genIdx = model.genByPersonId.get(person.id);
     let score = 0;
     if (queryTokens.length === 0) {
-      if (person.id === model.pivotPersonId) {
-        score += 120;
-      } else if (person.lineage_group === 'pivot_ancestor') {
-        score += 110;
-      } else if (model.directPersonIds.has(person.id)) {
-        score += 70;
+      if (rankingMode === 'anchor') {
+        if (model.anchorPersonId !== null && person.id === model.anchorPersonId) {
+          score += 140;
+        }
+        if (genIdx !== undefined) {
+          score += (genIdx + 1) * 10;
+        } else if (person.birth_year !== null) {
+          score += Math.max(0, Math.floor((person.birth_year - 1600) / 25));
+        }
+        if (person.is_living) {
+          score += 12;
+        }
+        score += Math.min(10, person.event_count);
       } else {
-        score += 30;
+        if (person.id === model.pivotPersonId) {
+          score += 120;
+        } else if (person.lineage_group === 'pivot_ancestor') {
+          score += 110;
+        } else if (model.directPersonIds.has(person.id)) {
+          score += 70;
+        } else {
+          score += 30;
+        }
+        score += Math.min(25, person.event_count);
       }
-      score += Math.min(25, person.event_count);
     } else {
       let allMatched = true;
       for (let t = 0; t < queryTokens.length; t += 1) {
@@ -420,7 +507,6 @@ export function searchTreePeople(params: {
       score += 4;
     }
 
-    const genIdx = model.genByPersonId.get(person.id);
     scored.push({
       score,
       candidate: {

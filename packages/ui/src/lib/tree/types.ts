@@ -75,6 +75,7 @@ export interface ArchivalTreeModel {
   readonly earlyLossIds: ReadonlySet<string>;
   readonly directPersonIds: ReadonlySet<string>;
   readonly pivotPersonId: string | null;
+  readonly anchorPersonId: string | null;
 }
 
 export interface DiagramPlacedNode {
@@ -252,6 +253,7 @@ export interface BuildArchivalTreeInput {
   readonly directModeBranchIds?: readonly string[];
   readonly mode: TreeLineageMode;
   readonly expandedUnionIds?: ReadonlySet<string>;
+  readonly anchorPersonId?: string | null;
 }
 
 const ROMAN_NUMERALS = ['I', 'II', 'III', 'IV', 'V', 'VI'] as const;

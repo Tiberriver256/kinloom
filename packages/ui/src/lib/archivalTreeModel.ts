@@ -5,6 +5,7 @@ export {
   findCollapsedUnionForPerson,
   isPersonVisibleOnCurrentSurface,
   isTreeSearchEligible,
+  resolveAnchorBranchFilter,
   resolveTreeFocusPlan,
   searchTreePeople,
 } from './tree/treeProjections.js';

@@ -249,6 +249,12 @@
   border-style: solid;
 }
 
+.tree-roll-card:global(.is-anchor) {
+  border-color: var(--accent-primary);
+  border-width: 2px;
+  border-style: solid;
+}
+
 .tree-roll-card:global(.is-selected) {
   background: var(--surface-header);
   border-color: var(--accent-primary);

@@ -5,6 +5,8 @@ import {
   buildArchivalTreeModel,
   computeArchivalDiagramLayout,
   type DiagramPoint,
+  resolveAnchorBranchFilter,
+  searchTreePeople,
 } from '../archivalTreeModel.js';
 import { estimateTreeLabelWidthPx, fitTreeCardNameToWidth } from '../treeNodeDisplay.js';
 
@@ -667,5 +669,192 @@ describe('Large 145-person 12-generation 4-branch asymmetric archive invariants'
       expect(estimateTreeLabelWidthPx(fitted, 11.5)).toBeLessThanOrEqual(detailTextBudget);
       expect(fitted.length).toBeGreaterThan(0);
     }
+  });
+
+  it('dynamically computes upward ancestor spine for any anchorPersonId with zero empty generations or drop collisions', () => {
+    const { people, kinship } = buildSynthetic145PersonArchive();
+    const baseline = buildArchivalTreeModel({ people, kinship, mode: 'spine' });
+    const explicitNull = buildArchivalTreeModel({ people, kinship, mode: 'spine', anchorPersonId: null });
+    expect(explicitNull.anchorPersonId).toBeNull();
+    expect([...explicitNull.directPersonIds]).toEqual([...baseline.directPersonIds]);
+
+    const parentMap = new Map<string, string[]>();
+    const childMap = new Map<string, string[]>();
+    for (const edge of kinship) {
+      if (edge.relation === 'parent') {
+        const parents = parentMap.get(edge.to) ?? [];
+        parents.push(edge.from);
+        parentMap.set(edge.to, parents);
+        const children = childMap.get(edge.from) ?? [];
+        children.push(edge.to);
+        childMap.set(edge.from, children);
+      }
+    }
+
+    const computeExpectedAncestors = (startId: string): Set<string> => {
+      const expected = new Set<string>([startId]);
+      const queue = [startId];
+      while (queue.length > 0) {
+        const cur = queue.shift();
+        if (!cur) continue;
+        for (const pid of parentMap.get(cur) ?? []) {
+          if (!expected.has(pid)) {
+            expected.add(pid);
+            queue.push(pid);
+          }
+        }
+      }
+      return expected;
+    };
+
+    const anchorIds = ['b1_g11_d5', 'b2_g7_cousin', 'b3_n3', 'b1_g5_h', 'b1_g0_h', 'b1_g8_inf1'];
+    for (const anchorId of anchorIds) {
+      const expectedAncestors = computeExpectedAncestors(anchorId);
+      const directChildrenOfAnchor = childMap.get(anchorId) ?? [];
+
+      for (const mode of ['spine', 'full'] as const) {
+        const model = buildArchivalTreeModel({
+          people,
+          kinship,
+          mode,
+          anchorPersonId: anchorId,
+        });
+        expect(model.anchorPersonId).toBe(anchorId);
+        expect(model.pivotPersonId).toBe(anchorId);
+        expect(model.effectiveMode).toBe(mode);
+        expect([...model.directPersonIds].toSorted()).toEqual([...expectedAncestors].toSorted());
+
+        for (const childId of directChildrenOfAnchor) {
+          expect(model.directPersonIds.has(childId)).toBe(false);
+        }
+
+        expect(model.generations.every((g) => g.units.length > 0 && g.personIds.length > 0)).toBe(true);
+
+        const layout = computeArchivalDiagramLayout(model);
+        expect(layout.byId.has(anchorId)).toBe(true);
+
+        // Pairwise non-overlapping nodes
+        for (let i = 0; i < layout.nodes.length; i += 1) {
+          const a = layout.nodes[i];
+          for (let j = i + 1; j < layout.nodes.length; j += 1) {
+            const b = layout.nodes[j];
+            const overlaps =
+              a.x < b.x + b.width && a.x + a.width > b.x && a.y < b.y + b.height && a.y + a.height > b.y;
+            expect(overlaps).toBe(false);
+          }
+        }
+
+        // Zero drop-through-node collisions
+        const nodeRects: BoxRect[] = layout.nodes.map((n) => ({
+          id: n.person.id,
+          left: n.x,
+          right: n.x + n.width,
+          top: n.y,
+          bottom: n.y + n.height,
+        }));
+        let hits = 0;
+        for (const bus of layout.buses) {
+          const parentSet = new Set(bus.parentIds);
+          for (const rect of nodeRects) {
+            if (!parentSet.has(rect.id) && polylineIntersectsRect(bus.stemPoints, rect)) {
+              hits += 1;
+            }
+          }
+          for (const drop of bus.childDrops) {
+            for (const rect of nodeRects) {
+              if (rect.id !== drop.childId && polylineIntersectsRect(drop.points, rect)) {
+                hits += 1;
+              }
+            }
+          }
+        }
+        expect(hits).toBe(0);
+      }
+    }
+
+    // Early-loss person promoted out of earlyLossIds when explicitly anchored
+    const infantModel = buildArchivalTreeModel({
+      people,
+      kinship,
+      mode: 'spine',
+      anchorPersonId: 'b1_g8_inf1',
+    });
+    expect(infantModel.earlyLossIds.has('b1_g8_inf1')).toBe(false);
+    expect(computeArchivalDiagramLayout(infantModel).byId.has('b1_g8_inf1')).toBe(true);
+
+    // Redacted living placeholder safely falls back to anchorPersonId: null
+    const redactedLiving: Person = makeSyntheticPerson('per_redacted_living', 'Living', {
+      lineageGroup: 'descendant',
+      branch: 'alder_line',
+      birthYear: null,
+      deathYear: null,
+      isLiving: true,
+    });
+    const fallbackModel = buildArchivalTreeModel({
+      people: [...people, redactedLiving],
+      kinship: [...kinship, { from: 'b1_g10_d0', to: 'per_redacted_living', relation: 'parent' }],
+      mode: 'spine',
+      anchorPersonId: 'per_redacted_living',
+    });
+    expect(fallbackModel.anchorPersonId).toBeNull();
+    expect(fallbackModel.peopleById.has('per_redacted_living')).toBe(false);
+
+    // Cross-branch anchor clears conflicting branch filter (maternal mercer_line ancestor of alder_line descendant)
+    const peopleById = new Map(people.map((p) => [p.id, p]));
+    const g11Person = peopleById.get('b1_g11_d0');
+    const g0Person = peopleById.get('b1_g0_h');
+    const cousinPerson = peopleById.get('b2_g7_cousin');
+    if (!g11Person || !g0Person || !cousinPerson) throw new Error('missing fixture people');
+
+    expect(
+      resolveAnchorBranchFilter({
+        anchorPerson: g11Person,
+        currentBranchFilter: 'alder_line',
+        defaultBranchId: 'alder_line',
+        peopleById,
+        kinship,
+      })
+    ).toEqual({ nextBranchFilter: 'all', clearedBranch: true });
+
+    expect(
+      resolveAnchorBranchFilter({
+        anchorPerson: g0Person,
+        currentBranchFilter: 'alder_line',
+        defaultBranchId: 'alder_line',
+        peopleById,
+        kinship,
+      })
+    ).toEqual({ nextBranchFilter: 'alder_line', clearedBranch: false });
+
+    expect(
+      resolveAnchorBranchFilter({
+        anchorPerson: cousinPerson,
+        currentBranchFilter: 'alder_line',
+        defaultBranchId: 'alder_line',
+        peopleById,
+        kinship,
+      })
+    ).toEqual({ nextBranchFilter: 'all', clearedBranch: true });
+
+    // Anchor candidate ranking favors deeper generations and active anchor first
+    const anchoredModel = buildArchivalTreeModel({
+      people,
+      kinship,
+      mode: 'spine',
+      anchorPersonId: 'b1_g11_d5',
+    });
+    const ranked = searchTreePeople({
+      query: '',
+      people,
+      buildMode: 'public',
+      model: anchoredModel,
+      branchFilter: 'all',
+      defaultBranchId: 'alder_line',
+      branchLabelsById: new Map([['alder_line', 'Alder Line']]),
+      limit: 5,
+      rankingMode: 'anchor',
+    });
+    expect(ranked[0]?.person.id).toBe('b1_g11_d5');
+    expect(ranked[1]?.genLabel).toBe('G12');
   });
 });

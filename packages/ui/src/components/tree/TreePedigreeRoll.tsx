@@ -23,6 +23,7 @@ export interface TreePedigreeRollProps {
   readonly model: ArchivalTreeModel;
   readonly spotlight: LineageSpotlight | null;
   readonly selectedPersonId: string | null;
+  readonly anchorPersonId?: string | null;
   readonly personThumbMap: ReadonlyMap<string, string>;
   readonly baseUrl: string;
   readonly familyLabel: string;
@@ -37,6 +38,7 @@ interface RollPersonCardProps {
   readonly isDirect: boolean;
   readonly isSelected: boolean;
   readonly isLit: boolean;
+  readonly isAnchor?: boolean;
   readonly hasSelection: boolean;
   readonly thumbUrl: string | null;
   readonly badgeLabel?: string;
@@ -49,6 +51,7 @@ const RollPersonCard: React.FC<RollPersonCardProps> = ({
   isDirect,
   isSelected,
   isLit,
+  isAnchor = false,
   hasSelection,
   thumbUrl,
   badgeLabel,
@@ -60,6 +63,7 @@ const RollPersonCard: React.FC<RollPersonCardProps> = ({
     'tree-node-card',
     'tree-roll-card',
     isDirect ? 'is-direct' : 'is-collateral',
+    isAnchor ? 'is-anchor' : '',
     isSelected ? 'is-selected' : '',
     isLit ? 'is-lit' : '',
     dimmed ? 'is-dimmed' : '',
@@ -72,6 +76,7 @@ const RollPersonCard: React.FC<RollPersonCardProps> = ({
       type="button"
       className={cx(pedigreeRollStyles, classes)}
       data-person-id={person.id}
+      data-anchor={isAnchor ? 'true' : undefined}
       aria-pressed={isSelected}
       onClick={() => {
         onSelect(person);
@@ -296,6 +301,7 @@ export const TreePedigreeRoll: React.FC<TreePedigreeRollProps> = ({
   model,
   spotlight,
   selectedPersonId,
+  anchorPersonId = null,
   personThumbMap,
   baseUrl,
   familyLabel,
@@ -384,14 +390,17 @@ export const TreePedigreeRoll: React.FC<TreePedigreeRollProps> = ({
               );
             };
 
+            const isSpineAnchor = anchorPersonId === member.id;
             const card = (
               <RollPersonCard
                 person={member}
                 isDirect={model.directPersonIds.has(member.id)}
                 isSelected={selectedPersonId === member.id}
                 isLit={Boolean(spotlight?.highlightedPersonIds.has(member.id))}
+                isAnchor={isSpineAnchor}
                 hasSelection={hasSelection}
                 thumbUrl={resolveThumb(member)}
+                badgeLabel={isSpineAnchor ? 'Spine anchor' : undefined}
                 onSelect={onSelectPerson}
               />
             );

@@ -20,6 +20,7 @@ export const DiagramNodeCard: React.FC<{
   readonly initials: string;
   readonly isSelected: boolean;
   readonly isLit: boolean;
+  readonly isAnchor?: boolean;
   readonly semanticZoom: SemanticZoomLevel;
   readonly onSelect: (person: Person, fromKeyboard: boolean) => void;
 }> = React.memo(
@@ -33,6 +34,7 @@ export const DiagramNodeCard: React.FC<{
     initials,
     isSelected,
     isLit,
+    isAnchor = false,
     semanticZoom,
     onSelect,
   }) => {
@@ -49,6 +51,9 @@ export const DiagramNodeCard: React.FC<{
     if (isSelected) {
       stroke = 'var(--accent-primary)';
       strokeWidth = 2.6;
+    } else if (isAnchor) {
+      stroke = 'var(--accent-primary)';
+      strokeWidth = 2.4;
     } else if (isLit) {
       stroke = 'var(--accent-primary)';
       strokeWidth = 2.1;
@@ -67,7 +72,9 @@ export const DiagramNodeCard: React.FC<{
     return (
       <g
         role="button"
-        className={`tree-node-card${node.isDirect ? ' is-direct' : ' is-collateral'}${isSelected ? ' is-selected' : ''}${isLit ? ' is-lit' : ''}`}
+        className={`tree-node-card${node.isDirect ? ' is-direct' : ' is-collateral'}${isSelected ? ' is-selected' : ''}${isLit ? ' is-lit' : ''}${isAnchor ? ' is-anchor' : ''}`}
+        data-person-id={person.id}
+        data-anchor={isAnchor ? 'true' : undefined}
         tabIndex={0}
         aria-label={`Inspect ${person.full_name}`}
         aria-pressed={isSelected}
@@ -109,7 +116,7 @@ export const DiagramNodeCard: React.FC<{
           fill={fill}
           stroke={stroke}
           strokeWidth={strokeWidth}
-          strokeDasharray={node.isDirect || isSelected || isLit ? undefined : '4 2'}
+          strokeDasharray={node.isDirect || isSelected || isLit || isAnchor ? undefined : '4 2'}
         />
 
         {semanticZoom === 'overview' ? (
