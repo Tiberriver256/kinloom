@@ -1,9 +1,16 @@
 import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
-import { fastLocaleCompare, parseYaml } from '@kinloom/core';
+import { fastLocaleCompare, type KinloomSiteConfig, parseYaml } from '@kinloom/core';
+import {
+  checkFaviconLightAccentDrift,
+  checkServiceWorkerAccentDrift,
+  checkWebManifestDrift,
+  resolveExpectedBrandkitProfile,
+} from '../shared/brandkitDrift.js';
 import type {
   LoadedVerifyArchive,
+  VerifyBrandkitManifestResult,
   VerifyExternalMediaHit,
   VerifyExternalMediaResult,
   VerifyTrackedBinaryExtension,
@@ -334,5 +341,66 @@ export function scanTrackedBinaryMedia(
     isGitRepo: true,
     trackedCount: trackedPaths.length,
     files,
+  };
+}
+
+function readOptionalUtf8(filePath: string): string | null {
+  try {
+    return fs.readFileSync(filePath, 'utf8');
+  } catch {
+    return null;
+  }
+}
+
+export function checkBrandkitManifest(
+  repoDir: string,
+  siteConfig: KinloomSiteConfig
+): VerifyBrandkitManifestResult {
+  const expected = resolveExpectedBrandkitProfile(siteConfig);
+  const warnings: string[] = [];
+
+  const manifestRaw = readOptionalUtf8(path.join(repoDir, 'public', 'site.webmanifest'));
+  let manifestName: string | null = null;
+  let manifestShortName: string | null = null;
+  if (manifestRaw !== null) {
+    const manifestDrift = checkWebManifestDrift(manifestRaw, expected);
+    manifestName = manifestDrift.manifestName;
+    manifestShortName = manifestDrift.manifestShortName;
+    if (manifestDrift.driftMessage) {
+      warnings.push(`public/${manifestDrift.driftMessage}`);
+    }
+  }
+
+  const faviconLightRaw = readOptionalUtf8(path.join(repoDir, 'public', 'favicon-light.svg'));
+  let faviconLightAccent: string | null = null;
+  if (faviconLightRaw !== null) {
+    const faviconDrift = checkFaviconLightAccentDrift(faviconLightRaw, expected);
+    faviconLightAccent = faviconDrift.actualAccent;
+    if (faviconDrift.driftMessage) {
+      warnings.push(`public/${faviconDrift.driftMessage}`);
+    }
+  }
+
+  const swRaw = readOptionalUtf8(path.join(repoDir, 'public', 'sw.js'));
+  let swAccent: string | null = null;
+  if (swRaw !== null) {
+    const swDrift = checkServiceWorkerAccentDrift(swRaw, expected);
+    swAccent = swDrift.actualAccent;
+    if (swDrift.driftMessage) {
+      warnings.push(`public/${swDrift.driftMessage}`);
+    }
+  }
+
+  return {
+    ok: warnings.length === 0,
+    manifestPath: 'public/site.webmanifest',
+    manifestExists: manifestRaw !== null,
+    configuredTitle: expected.siteTitle,
+    expectedAccent: expected.expectedAccent,
+    manifestName,
+    manifestShortName,
+    faviconLightAccent,
+    swAccent,
+    warnings,
   };
 }

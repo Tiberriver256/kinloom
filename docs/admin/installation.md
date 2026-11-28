@@ -42,7 +42,7 @@ The command creates a thin archive repository with these files:
 - `kinloom.config.yaml` stores site metadata, theme accent colors, branches, lineage sections, map defaults, and privacy rules.
 - `wrangler.jsonc` configures the Cloudflare Worker entrypoint (`src/worker.ts`), static SPA `ASSETS` binding (`run_worker_first: true`), `DB` (D1) binding, `MEDIA_BUCKET` (R2) binding, and `ARCHIVE_MODE: "private"`.
 - `data/*.yaml` creates empty starter YAML collections (`people.yaml`, `events.yaml`, `places.yaml`, `sources.yaml`, `kinship.yaml`, `media.yaml`, and `narratives.yaml`).
-- `public/` generates starter all-device brandkit assets (favicons, app icons, manifest, and Open Graph card) via `kinloom brandkit`.
+- `public/` generates starter all-device brandkit assets (favicons, app icons, manifest, service worker, and Open Graph card) via `kinloom brandkit` (which auto-detects `./kinloom.config.yaml` when `--config` is omitted; pass `--no-config` for generic Kinloom defaults).
 - `.github/workflows/backup.yml` and `.github/workflows/reconcile.yml` configure nightly YAML snapshots and weekly bundle reconciliation in GitHub Actions.
 - `extensions/README.md` documents where to add optional archive-specific UI, server, or CLI plugins.
 - `biome.json` and `.gitignore` configure formatting and prevent `.env`, `.wrangler/`, `dist/`, and `raw-gedcom/` from being committed.

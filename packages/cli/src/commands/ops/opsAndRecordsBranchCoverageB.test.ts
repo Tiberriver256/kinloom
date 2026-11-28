@@ -1477,12 +1477,25 @@ describe('ops reports and treeHygiene (verify/report, sync/report, integrateBatc
       pronunciation: pronCheck,
       externalMedia: { ok: true, checkedCount: 0, hits: [] },
       trackedMedia: { ok: true, isGitRepo: false, trackedCount: 0, files: [] },
+      brandkitManifest: {
+        ok: true,
+        manifestPath: 'public/site.webmanifest',
+        manifestExists: false,
+        configuredTitle: 'Alder Archive',
+        expectedAccent: '#7A4612',
+        manifestName: null,
+        manifestShortName: null,
+        faviconLightAccent: null,
+        swAccent: null,
+        warnings: [],
+      },
       pluginDiscoveryWarnings: ['disc warn'],
       pluginChecks,
       strictHygiene: true,
       strictPronunciation: true,
       strictExternalMedia: true,
       strictTrackedMedia: true,
+      strictBrandkit: true,
     });
     expect(diag.errors.length).toBeGreaterThan(30);
     expect(diag.warnings.length).toBeGreaterThan(60);
@@ -1495,6 +1508,7 @@ describe('ops reports and treeHygiene (verify/report, sync/report, integrateBatc
       strictPronunciation: true,
       strictExternalMedia: true,
       strictTrackedMedia: true,
+      strictBrandkit: true,
       checks: {
         citations: { ok: false, narrativesChecked: 1, errors: ['bad cite'] },
         places: { ok: false, placesChecked: 1, invalidPlaces: [] },
@@ -1532,6 +1546,18 @@ describe('ops reports and treeHygiene (verify/report, sync/report, integrateBatc
         pronunciation: pronCheck,
         externalMedia: { ok: true, checkedCount: 0, hits: [] },
         trackedMedia: { ok: true, isGitRepo: false, trackedCount: 0, files: [] },
+        brandkitManifest: {
+          ok: true,
+          manifestPath: 'public/site.webmanifest',
+          manifestExists: false,
+          configuredTitle: 'Alder Archive',
+          expectedAccent: '#7A4612',
+          manifestName: null,
+          manifestShortName: null,
+          faviconLightAccent: null,
+          swAccent: null,
+          warnings: [],
+        },
       },
       pluginChecks,
       hygiene: {

@@ -24,7 +24,12 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { runCli } from '../../../cli.js';
 import { EXIT_ERROR, EXIT_OK } from '../../../errors.js';
 import { runVerifyCommand } from '../verify.js';
-import { extractExternalAssetHost, scanExternalMediaUrls, scanTrackedBinaryMedia } from './assetChecks.js';
+import {
+  checkBrandkitManifest,
+  extractExternalAssetHost,
+  scanExternalMediaUrls,
+  scanTrackedBinaryMedia,
+} from './assetChecks.js';
 import type { LoadedVerifyArchive, VerifyCommandResult } from './types.js';
 
 const tempDirs: string[] = [];
@@ -899,5 +904,230 @@ describe('kinloom verify CLI integration for Issue #117 checks', () => {
     const helpText = helpCap.stdout.join('\n');
     expect(helpText).toContain('--strict-external-media');
     expect(helpText).toContain('--strict-tracked-media');
+    expect(helpText).toContain('--strict-brandkit');
+  });
+});
+
+describe('checkBrandkitManifest and kinloom verify Issue #124 guard', () => {
+  it('passes cleanly when public/site.webmanifest is absent, when assets match config, or when configured title is Kinloom', async () => {
+    const repoDir = await makeTempDir('kinloom-brandkit-verify-ok-');
+    const customConfig = parseKinloomConfigYaml(`schemaVersion: 1
+site:
+  title: Alder Family Archive
+  familyName: Alder
+  gedcomSourceName: ALDER_ARCHIVE
+  footerCredit: Alder Family
+theme:
+  accent: "#2F5245"
+`);
+
+    expect(checkBrandkitManifest(repoDir, customConfig)).toEqual({
+      ok: true,
+      manifestPath: 'public/site.webmanifest',
+      manifestExists: false,
+      configuredTitle: 'Alder Family Archive',
+      expectedAccent: '#2F5245',
+      manifestName: null,
+      manifestShortName: null,
+      faviconLightAccent: null,
+      swAccent: null,
+      warnings: [],
+    });
+
+    await mkdir(path.join(repoDir, 'public'), { recursive: true });
+    await writeFile(
+      path.join(repoDir, 'public', 'site.webmanifest'),
+      JSON.stringify({
+        name: 'Alder Family Archive',
+        short_name: 'Alder Family',
+        icons: [{ src: '/icon-192.png' }],
+      }),
+      'utf8'
+    );
+    await writeFile(
+      path.join(repoDir, 'public', 'favicon-light.svg'),
+      '<svg><style>.kl-accent { stroke: #2F5245; }</style></svg>',
+      'utf8'
+    );
+    await writeFile(
+      path.join(repoDir, 'public', 'sw.js'),
+      'const OFFLINE_HTML = ":root{--bg:#F5EFE2;--accent:#2F5245}";',
+      'utf8'
+    );
+
+    const matched = checkBrandkitManifest(repoDir, customConfig);
+    expect(matched.ok).toBe(true);
+    expect(matched.warnings).toEqual([]);
+    expect(matched.manifestName).toBe('Alder Family Archive');
+    expect(matched.faviconLightAccent).toBe('#2F5245');
+    expect(matched.swAccent).toBe('#2F5245');
+
+    // Configured title literally "Kinloom" does not warn on generic manifest
+    const kinloomConfig = parseKinloomConfigYaml(`schemaVersion: 1
+site:
+  title: Kinloom
+  familyName: Kinloom
+  gedcomSourceName: KINLOOM_DEMO
+  footerCredit: Kinloom
+`);
+    await writeFile(
+      path.join(repoDir, 'public', 'site.webmanifest'),
+      JSON.stringify({ name: 'Kinloom', short_name: 'Kinloom', icons: [{ src: '/icon-192.png' }] }),
+      'utf8'
+    );
+    await writeFile(
+      path.join(repoDir, 'public', 'favicon-light.svg'),
+      '<svg><style>.kl-accent { stroke: #7A4612; }</style></svg>',
+      'utf8'
+    );
+    await writeFile(
+      path.join(repoDir, 'public', 'sw.js'),
+      'const OFFLINE_HTML = ":root{--accent:#7A4612}";',
+      'utf8'
+    );
+    expect(checkBrandkitManifest(repoDir, kinloomConfig).ok).toBe(true);
+
+    // Malformed manifest JSON and custom non-Kinloom SVG/SW without accent tokens are ignored safely
+    await writeFile(path.join(repoDir, 'public', 'site.webmanifest'), '{not-valid-json', 'utf8');
+    await writeFile(
+      path.join(repoDir, 'public', 'favicon-light.svg'),
+      '<svg viewBox="0 0 32 32"></svg>',
+      'utf8'
+    );
+    await writeFile(
+      path.join(repoDir, 'public', 'sw.js'),
+      'self.addEventListener("fetch", () => {});',
+      'utf8'
+    );
+    const badJsonResult = checkBrandkitManifest(repoDir, customConfig);
+    expect(badJsonResult.ok).toBe(true);
+    expect(badJsonResult.manifestExists).toBe(true);
+    expect(badJsonResult.manifestName).toBeNull();
+    expect(badJsonResult.faviconLightAccent).toBeNull();
+    expect(badJsonResult.swAccent).toBeNull();
+
+    // Generic short_name alone (without generic name) still triggers warning
+    await writeFile(
+      path.join(repoDir, 'public', 'site.webmanifest'),
+      JSON.stringify({
+        name: 'Alder Family Archive',
+        short_name: 'Kinloom',
+        icons: [{ src: '/icon-192.png' }],
+      }),
+      'utf8'
+    );
+    const shortNameOnly = checkBrandkitManifest(repoDir, customConfig);
+    expect(shortNameOnly.ok).toBe(false);
+    expect(shortNameOnly.warnings[0]).toContain('(short_name="Kinloom")');
+
+    // Generic name alone (without generic short_name) still triggers warning
+    await writeFile(
+      path.join(repoDir, 'public', 'site.webmanifest'),
+      JSON.stringify({ name: 'Kinloom', short_name: 'Alder', icons: [{ src: '/icon-192.png' }] }),
+      'utf8'
+    );
+    const nameOnly = checkBrandkitManifest(repoDir, customConfig);
+    expect(nameOnly.ok).toBe(false);
+    expect(nameOnly.warnings[0]).toContain('(name="Kinloom")');
+  });
+
+  it('warns by default and fails under --strict-brandkit and --strict when manifest or brandkit assets drift from kinloom.config.yaml', async () => {
+    const repoDir = await createMinimalValidRepo({
+      siteConfig: parseKinloomConfigYaml(`schemaVersion: 1
+site:
+  title: Alder Family Archive
+  familyName: Alder
+  gedcomSourceName: ALDER_ARCHIVE
+  footerCredit: Alder Family
+theme:
+  accent: "#2F5245"
+privacy:
+  referenceYear: 2026
+  livingCutoffYears: 101
+pronunciations:
+  Henry Alder:
+    phonetic: HEN-ree AWL-der
+    ipa: /ˈhɛn.ri ˈɔːl.dər/
+    audio_url: /media/pronunciation-henry.wav
+    source_url: https://en.wiktionary.org/wiki/Alder
+  Oakville:
+    phonetic: OHK-vil
+    ipa: /ˈoʊk.vɪl/
+    audio_url: /media/pronunciation-oakville.wav
+    source_url: https://en.wikipedia.org/wiki/Oakville
+`),
+    });
+    await mkdir(path.join(repoDir, 'public'), { recursive: true });
+    await writeFile(
+      path.join(repoDir, 'public', 'site.webmanifest'),
+      JSON.stringify({ name: 'Kinloom', short_name: 'Kinloom', icons: [{ src: '/icon-192.png' }] }),
+      'utf8'
+    );
+    await writeFile(
+      path.join(repoDir, 'public', 'favicon-light.svg'),
+      '<svg><style>.kl-accent { stroke: #7A4612; }</style></svg>',
+      'utf8'
+    );
+    await writeFile(
+      path.join(repoDir, 'public', 'sw.js'),
+      'const OFFLINE_HTML = ":root{--bg:#F5EFE2;--accent:#7A4612}";',
+      'utf8'
+    );
+
+    // Default verify warns without failing (exit 0)
+    const defaultCap = createCaptureIo();
+    expect(await runCli(['verify', '--repo', repoDir, '--json'], { io: defaultCap.io })).toBe(EXIT_OK);
+    const parsedDefault = JSON.parse(defaultCap.stdout.join('\n')) as VerifyCommandResult;
+    expect(parsedDefault.ok).toBe(true);
+    expect(parsedDefault.strictBrandkit).toBe(false);
+    expect(parsedDefault.checks.brandkitManifest.ok).toBe(false);
+    expect(parsedDefault.checks.brandkitManifest.warnings).toHaveLength(3);
+    expect(parsedDefault.checks.brandkitManifest.warnings[0]).toContain('kinloom brandkit --out public');
+    expect(parsedDefault.checks.brandkitManifest.warnings[0]).toContain(
+      'name="Kinloom", short_name="Kinloom"'
+    );
+    expect(parsedDefault.checks.brandkitManifest.warnings[1]).toContain(
+      'favicon-light.svg uses accent #7A4612'
+    );
+    expect(parsedDefault.checks.brandkitManifest.warnings[2]).toContain(
+      'sw.js offline notice uses accent #7A4612'
+    );
+    expect(parsedDefault.warnings.filter((w) => w.startsWith('[brandkit-manifest]'))).toHaveLength(3);
+    expect(parsedDefault.errors).toEqual([]);
+
+    const defaultText = await runVerifyCommand({ repoDir });
+    expect(defaultText.rendered).toContain(
+      '11. Brandkit manifest: WARN | present=yes name=Kinloom warnings=3'
+    );
+
+    // --strict-brandkit fails (exit 1)
+    const strictBrandkitCap = createCaptureIo();
+    expect(
+      await runCli(['verify', '--repo', repoDir, '--strict-brandkit', '--json'], { io: strictBrandkitCap.io })
+    ).toBe(EXIT_ERROR);
+    const parsedStrictBrandkit = JSON.parse(strictBrandkitCap.stdout.join('\n')) as VerifyCommandResult;
+    expect(parsedStrictBrandkit.ok).toBe(false);
+    expect(parsedStrictBrandkit.strictBrandkit).toBe(true);
+    expect(parsedStrictBrandkit.errors).toHaveLength(3);
+    expect(parsedStrictBrandkit.errors.every((e) => e.startsWith('brandkit-manifest:'))).toBe(true);
+
+    // --strict also fails on brandkit drift
+    const strictCap = createCaptureIo();
+    expect(await runCli(['verify', '--repo', repoDir, '--strict'], { io: strictCap.io })).toBe(EXIT_ERROR);
+    expect(strictCap.stdout.join('\n')).toContain('11. Brandkit manifest: FAIL | present=yes name=Kinloom');
+
+    // Title drift (custom stale name, non-Kinloom) is also caught
+    await writeFile(
+      path.join(repoDir, 'public', 'site.webmanifest'),
+      JSON.stringify({
+        name: 'Old Archive Title',
+        short_name: 'Old Archive',
+        icons: [{ src: '/icon-192.png' }],
+      }),
+      'utf8'
+    );
+    const titleDrift = checkBrandkitManifest(repoDir, makeBaseSiteConfig());
+    expect(titleDrift.ok).toBe(false);
+    expect(titleDrift.warnings[0]).toContain('does not match expected title "Alder Family Archive"');
   });
 });

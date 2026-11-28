@@ -152,6 +152,7 @@ describe('unauthenticated private-mode PWA asset serving on createKinloomServer'
     expect(swText).toContain('"/api"');
     expect(swText).toContain('"/media"');
     expect(swText).toContain('"/data"');
+    expect(swText).toContain('--accent:#2F5245}');
     expect(swText).not.toMatch(/\bcaches\.open\b/);
 
     const themeInitRes = await server.fetch(new Request(`${origin}/theme-init.js`));
@@ -193,5 +194,36 @@ describe('unauthenticated private-mode PWA asset serving on createKinloomServer'
     // Non-GET/HEAD method on /sw.js falls through to 404.
     const postSw = await server.fetch(new Request(`${origin}/sw.js`, { method: 'POST' }));
     expect(postSw.status).toBe(404);
+  });
+
+  it('wires explicit siteConfig theme.accent and theme.accentDark into fallback /sw.js offline notice', async () => {
+    const siteConfig = parseKinloomConfig({
+      schemaVersion: 1,
+      site: {
+        title: 'Birch Family Archive',
+        familyName: 'Birch',
+        gedcomSourceName: 'BIRCH_ARCHIVE',
+        footerCredit: 'Built with Kinloom',
+      },
+      theme: { accent: '#1F4E5F', accentDark: '#7CC6D9' },
+      privacy: {
+        livingCutoffYears: 101,
+        referenceYear: 2026,
+      },
+    });
+    const ports = createInMemoryServerPorts(siteConfig);
+    const server = createKinloomServer({
+      siteConfig,
+      ports,
+      sessionSecret,
+      mode: 'private',
+    });
+
+    const swRes = await server.fetch(new Request(`${origin}/sw.js`));
+    expect(swRes.status).toBe(200);
+    const swText = await swRes.text();
+    expect(swText).toContain('Birch Family Archive');
+    expect(swText).toContain('--accent:#1F4E5F}');
+    expect(swText).toContain('--accent:#7CC6D9}}');
   });
 });

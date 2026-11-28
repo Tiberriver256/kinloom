@@ -5,7 +5,7 @@ import { KINLOOM_OG_DIMENSIONS, serializeKinloomConfigYaml } from '@kinloom/core
 import sharp from 'sharp';
 import { afterEach, describe, expect, it } from 'vitest';
 import { type CliIo, runCli } from '../cli.js';
-import { EXIT_OK } from '../errors.js';
+import { EXIT_OK, EXIT_USAGE } from '../errors.js';
 import { encodeIcoFromPngs, runBrandkitCommand } from './brandkit.js';
 
 const tempDirs: string[] = [];
@@ -203,8 +203,127 @@ describe('kinloom brandkit command', () => {
     const svg = await readFile(path.join(outDir, 'favicon.svg'), 'utf8');
     expect(svg).toContain('#2F5245');
 
-    // Re-running with --no-force skips all 11 existing files
+    // Re-running with --no-force skips all 12 existing files
     const skipResult = await runBrandkitCommand({ configPath, outDir, force: false, cwd: dir });
     expect(skipResult.files.every((f) => f.skipped)).toBe(true);
+    expect(skipResult.configResolution).toEqual({ kind: 'explicit', configPath });
+  });
+
+  it('auto-detects ./kinloom.config.yaml when --config is omitted, supports --no-config opt-out, and falls back when absent', async () => {
+    const dir = await makeTempDir('kinloom-brandkit-autodetect-');
+    const configPath = path.join(dir, 'kinloom.config.yaml');
+    const outDir = path.join(dir, 'public');
+
+    await writeFile(
+      configPath,
+      serializeKinloomConfigYaml({
+        schemaVersion: 1,
+        site: {
+          title: 'Cedar Valley Archive',
+          familyName: 'Cedar',
+          gedcomSourceName: 'CEDAR_ARCHIVE',
+          description: 'Four generations of the Cedar Valley lineage.',
+          footerCredit: 'Built with Kinloom',
+        },
+        theme: { accent: '#2F5245', accentDark: '#6FB99E' },
+        branches: [],
+        lineageSections: [],
+        featuredKinshipPairs: [],
+        migrationEras: [],
+        mapDefaults: { centerLat: 38.5, centerLng: -96.0, zoom: 4, minSpanDeg: 1.2 },
+        privacy: {
+          livingCutoffYears: 101,
+          privateModeShowsBirthYear: true,
+          stripLivingPortraits: true,
+          stripLivingResidenceSpans: true,
+          markGedcomLivingConfidential: true,
+        },
+      }),
+      'utf8'
+    );
+
+    const autoStdout: string[] = [];
+    const autoStderr: string[] = [];
+    const autoCode = await runCli(['brandkit', '--out', 'public'], {
+      io: { stdout: (l) => autoStdout.push(l), stderr: (l) => autoStderr.push(l) },
+      cwd: dir,
+    });
+    expect(autoCode).toBe(EXIT_OK);
+    expect(autoStderr).toEqual([]);
+    expect(autoStdout.join('\n')).toContain(`Auto-detected brandkit config at ${configPath}.`);
+
+    const autoManifest = JSON.parse(await readFile(path.join(outDir, 'site.webmanifest'), 'utf8')) as {
+      name: string;
+      short_name: string;
+      description: string;
+    };
+    expect(autoManifest.name).toBe('Cedar Valley Archive');
+    expect(autoManifest.short_name).toBe('Cedar Valley');
+    expect(autoManifest.description).toBe('Four generations of the Cedar Valley lineage.');
+
+    const autoFaviconLight = await readFile(path.join(outDir, 'favicon-light.svg'), 'utf8');
+    expect(autoFaviconLight).toContain('#2F5245');
+
+    const autoSw = await readFile(path.join(outDir, 'sw.js'), 'utf8');
+    expect(autoSw).toContain('Cedar Valley Archive');
+    expect(autoSw).toContain('--accent:#2F5245}');
+    expect(autoSw).toContain('--accent:#6FB99E}}');
+
+    // Explicit --no-config ignores ./kinloom.config.yaml and restores Kinloom defaults
+    const noConfigStdout: string[] = [];
+    const noConfigStderr: string[] = [];
+    const noConfigCode = await runCli(['brandkit', '--no-config', '--out', 'public'], {
+      io: { stdout: (l) => noConfigStdout.push(l), stderr: (l) => noConfigStderr.push(l) },
+      cwd: dir,
+    });
+    expect(noConfigCode).toBe(EXIT_OK);
+    expect(noConfigStderr).toEqual([]);
+    expect(noConfigStdout.join('\n')).toContain('Skipped config loading (--no-config)');
+
+    const defaultManifest = JSON.parse(await readFile(path.join(outDir, 'site.webmanifest'), 'utf8')) as {
+      name: string;
+      short_name: string;
+    };
+    expect(defaultManifest.name).toBe('Kinloom');
+    expect(defaultManifest.short_name).toBe('Kinloom');
+
+    const defaultSw = await readFile(path.join(outDir, 'sw.js'), 'utf8');
+    expect(defaultSw).toContain('--accent:#7A4612}');
+    expect(defaultSw).toContain('--accent:#D89C56}}');
+
+    // Combining --config and --no-config fails with usage error
+    const conflictStderr: string[] = [];
+    const conflictCode = await runCli(['brandkit', '--config', configPath, '--no-config', '--out', outDir], {
+      io: { stdout: () => {}, stderr: (l) => conflictStderr.push(l) },
+      cwd: dir,
+    });
+    expect(conflictCode).toBe(EXIT_USAGE);
+    expect(conflictStderr.join('\n')).toContain('Cannot combine `--config` with `--no-config`.');
+
+    // Directory without ./kinloom.config.yaml falls back cleanly and logs why
+    const emptyDir = await makeTempDir('kinloom-brandkit-noconfig-');
+    const fallbackStdout: string[] = [];
+    const fallbackCode = await runCli(['brandkit', '--out', 'public'], {
+      io: { stdout: (l) => fallbackStdout.push(l), stderr: () => {} },
+      cwd: emptyDir,
+    });
+    expect(fallbackCode).toBe(EXIT_OK);
+    expect(fallbackStdout.join('\n')).toContain(
+      'No ./kinloom.config.yaml found; using default Kinloom brandkit settings.'
+    );
+
+    // Invalid auto-detected ./kinloom.config.yaml fails with CliValidationError
+    await writeFile(path.join(emptyDir, 'kinloom.config.yaml'), 'site:\n  title: [unclosed', 'utf8');
+    await expect(runBrandkitCommand({ outDir: 'public', cwd: emptyDir })).rejects.toThrow(
+      /Invalid kinloom\.config\.yaml/
+    );
+
+    // --help documents auto-detection and --no-config
+    const helpStdout: string[] = [];
+    expect(
+      await runCli(['brandkit', '--help'], { io: { stdout: (l) => helpStdout.push(l), stderr: () => {} } })
+    ).toBe(EXIT_OK);
+    expect(helpStdout.join('\n')).toContain('auto-detect ./kinloom.config.yaml');
+    expect(helpStdout.join('\n')).toContain('--no-config');
   });
 });

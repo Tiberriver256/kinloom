@@ -49,7 +49,8 @@ Options:
     help: `Usage: kinloom brandkit [options]
 
 Options:
-  --config <path>      Path to kinloom.config.yaml (optional; uses Kinloom defaults if omitted)
+  --config <path>      Path to kinloom.config.yaml (default: auto-detect ./kinloom.config.yaml if present)
+  --no-config          Ignore ./kinloom.config.yaml and use generic Kinloom defaults
   --out <dir>          Output directory for brandkit assets (default: public)
   --title <text>       Override OG card & manifest title
   --subtitle <text>    Override OG card subtitle

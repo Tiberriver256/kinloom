@@ -36,7 +36,7 @@ Kinloom validates `kinloom.config.yaml` against `KinloomSiteConfigSchema` (`pack
 | `theme.accent` | 6-digit hex | Optional | Primary light-theme accent color (for example `"#7A4612"`). |
 | `theme.accentDark` | 6-digit hex | Optional | Optional dark-theme accent color override. |
 | `brand.siteName` | `string` | Optional | Short site name for web manifest and Open Graph tags. |
-| `brand.title` | `string` | Optional | Title override for generated brandkit icons and Open Graph cards. |
+| `brand.title` | `string` | Optional | Title override for generated brandkit icons, web manifest, and Open Graph cards (`kinloom brandkit` auto-detects `./kinloom.config.yaml` unless `--no-config` is passed). |
 | `brand.subtitle` | `string` | Optional | Subtitle line on the generated Open Graph card. |
 | `brand.metadataLine` | `string` | Optional | Monospace metadata line on the generated Open Graph card. |
 | `brand.accent` | 6-digit hex | Optional | Accent override for brandkit card and icon rendering. |

@@ -187,8 +187,35 @@ describe('standalone PWA primitives and privacy-safe service worker', () => {
     expect(offlineSandbox.forbiddenCaches.open).not.toHaveBeenCalled();
   });
 
-  it('defaults site title to Kinloom when omitted or blank', () => {
+  it('defaults site title to Kinloom and accents to #7A4612 / #D89C56 when omitted or blank', () => {
     const script = renderPrivacySafeServiceWorkerScript({ siteTitle: '   ' });
     expect(script).toContain('<title>Offline | Kinloom</title>');
+    expect(script).toContain('--accent:#7A4612}');
+    expect(script).toContain('--accent:#D89C56}}');
+  });
+
+  it('wires custom accent and accentDark into the sw.js offline notice with contrast-safe dark fallback and hex validation', () => {
+    const explicitBoth = renderPrivacySafeServiceWorkerScript({
+      siteTitle: 'Alder Family Archive',
+      accent: '#2f5245',
+      accentDark: '#6fb99e',
+    });
+    expect(explicitBoth).toContain('--accent:#2F5245}');
+    expect(explicitBoth).toContain('--accent:#6FB99E}}');
+
+    const derivedDark = renderPrivacySafeServiceWorkerScript({
+      siteTitle: 'Alder Family Archive',
+      accent: '#2F5245',
+    });
+    expect(derivedDark).toContain('--accent:#2F5245}');
+    expect(derivedDark).not.toContain('--accent:#D89C56}}');
+
+    const invalidHex = renderPrivacySafeServiceWorkerScript({
+      siteTitle: 'Alder Family Archive',
+      accent: '#000;background:red',
+      accentDark: 'not-a-hex',
+    });
+    expect(invalidHex).toContain('--accent:#7A4612}');
+    expect(invalidHex).toContain('--accent:#D89C56}}');
   });
 });
