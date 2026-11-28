@@ -30,7 +30,7 @@ import { R2IncrementalPatchBundleCache } from './adapters/r2BundleCache.js';
 import { R2MediaStore } from './adapters/r2MediaStore.js';
 import type { ExecutionContext, ExportedHandler, KinloomWorkerEnv } from './types.js';
 
-export const KINLOOM_WORKER_VERSION = '0.57.1';
+export const KINLOOM_WORKER_VERSION = '0.57.2';
 
 export {
   type AdminObservabilityStatsResponse,
