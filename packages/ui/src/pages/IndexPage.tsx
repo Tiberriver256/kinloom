@@ -1,7 +1,7 @@
 import type { Person, Place } from '@kinloom/core';
 import { buildFilteredGedcom7, buildGedcomExportFilename, buildPersonThumbMap } from '@kinloom/core';
 import type React from 'react';
-import { lazy, Suspense, useId, useMemo, useState } from 'react';
+import { lazy, Suspense, useEffect, useId, useMemo, useRef, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { ArchivalImage, EmptyStateNotice, PersonPortrait } from '../components/Atoms.js';
 import atomStyles from '../components/Atoms.module.css';
@@ -38,59 +38,110 @@ const LazyCreateEntityModal = lazy(async () => {
 interface ArchiveFrontispieceProps {
   readonly frontispiece: ResolvedArchiveFrontispiece;
   readonly baseUrl: string;
+  readonly canEdit: boolean;
+  readonly onAddPerson: () => void;
 }
 
-const ArchiveFrontispiece: React.FC<ArchiveFrontispieceProps> = ({ frontispiece, baseUrl }) => (
-  <section
-    className={joinClasses(
-      cx(layoutStyles, 'wire-banner'),
-      cx(
-        indexStyles,
-        frontispiece.isEditorialFrontispiece ? 'index-banner index-frontispiece' : 'index-banner'
-      )
-    )}
-  >
-    <div className={cx(indexStyles, 'index-frontispiece-copy')}>
-      {frontispiece.kicker && <div className={cx(atomStyles, 'folio-kicker')}>{frontispiece.kicker}</div>}
-      <h1>{frontispiece.headline}</h1>
-      <p>{frontispiece.intro}</p>
-      {frontispiece.metadataLine && (
-        <div className={cx(indexStyles, 'index-banner-meta')}>{frontispiece.metadataLine}</div>
+const ArchiveFrontispiece: React.FC<ArchiveFrontispieceProps> = ({
+  frontispiece,
+  baseUrl,
+  canEdit,
+  onAddPerson,
+}) => {
+  const aboutId = useId();
+  const [aboutOpen, setAboutOpen] = useState(false);
+  const hasCollapsibleAbout =
+    frontispiece.intro.length > 0 || frontispiece.featuredLinks.length > 0 || Boolean(frontispiece.image);
+
+  return (
+    <section
+      className={joinClasses(
+        cx(layoutStyles, 'wire-banner'),
+        cx(
+          indexStyles,
+          frontispiece.isEditorialFrontispiece ? 'index-banner index-frontispiece' : 'index-banner'
+        )
       )}
-      {frontispiece.featuredLinks.length > 0 && (
-        <nav
-          aria-label="Featured archive entry points"
-          className={cx(indexStyles, 'index-frontispiece-links')}
-        >
-          {frontispiece.featuredLinks.map((link) => (
-            <Link key={`${link.to}:${link.label}`} to={link.to} className={cx(atomStyles, 'ink-link-btn')}>
-              {link.label}
-            </Link>
-          ))}
-        </nav>
-      )}
-    </div>
-    {frontispiece.image && (
-      <figure className={cx(indexStyles, 'index-frontispiece-figure')}>
-        <ArchivalImage
-          src={frontispiece.image}
-          alt={frontispiece.imageAlt}
-          baseUrl={baseUrl}
-          loading="eager"
-          fetchPriority="high"
-          frameClassName={cx(indexStyles, 'index-frontispiece-frame')}
-          className={cx(indexStyles, 'index-frontispiece-img')}
-          fallbackCaption="Archive frontispiece image unavailable"
-        />
-        {frontispiece.imageCaption && (
-          <figcaption className={cx(indexStyles, 'index-frontispiece-caption')}>
-            {frontispiece.imageCaption}
-          </figcaption>
+    >
+      <div className={cx(indexStyles, 'index-frontispiece-copy')}>
+        <div className={cx(indexStyles, 'index-banner-head')}>
+          <div className={cx(indexStyles, 'index-banner-title-block')}>
+            {frontispiece.kicker && (
+              <div className={cx(atomStyles, 'folio-kicker')}>{frontispiece.kicker}</div>
+            )}
+            <h1>{frontispiece.headline}</h1>
+          </div>
+          {canEdit && (
+            <button type="button" className={cx(indexStyles, 'index-add-person-btn')} onClick={onAddPerson}>
+              + Add Person
+            </button>
+          )}
+        </div>
+
+        {(frontispiece.metadataLine || hasCollapsibleAbout) && (
+          <div className={cx(indexStyles, 'index-banner-meta-row')}>
+            {frontispiece.metadataLine && (
+              <div className={cx(indexStyles, 'index-banner-meta')}>{frontispiece.metadataLine}</div>
+            )}
+            {hasCollapsibleAbout && (
+              <button
+                type="button"
+                className={cx(indexStyles, 'index-about-toggle')}
+                aria-expanded={aboutOpen}
+                aria-controls={aboutId}
+                onClick={() => {
+                  setAboutOpen((open) => !open);
+                }}
+              >
+                {aboutOpen ? 'Hide info' : 'About this archive'}
+              </button>
+            )}
+          </div>
         )}
-      </figure>
-    )}
-  </section>
-);
+
+        <div id={aboutId} className={cx(indexStyles, `index-banner-about${aboutOpen ? ' is-open' : ''}`)}>
+          <p>{frontispiece.intro}</p>
+          {frontispiece.featuredLinks.length > 0 && (
+            <nav
+              aria-label="Featured archive entry points"
+              className={cx(indexStyles, 'index-frontispiece-links')}
+            >
+              {frontispiece.featuredLinks.map((link) => (
+                <Link
+                  key={`${link.to}:${link.label}`}
+                  to={link.to}
+                  className={cx(atomStyles, 'ink-link-btn')}
+                >
+                  {link.label}
+                </Link>
+              ))}
+            </nav>
+          )}
+        </div>
+      </div>
+
+      {frontispiece.image && (
+        <figure className={cx(indexStyles, `index-frontispiece-figure${aboutOpen ? ' is-about-open' : ''}`)}>
+          <ArchivalImage
+            src={frontispiece.image}
+            alt={frontispiece.imageAlt}
+            baseUrl={baseUrl}
+            loading="eager"
+            fetchPriority="high"
+            frameClassName={cx(indexStyles, 'index-frontispiece-frame')}
+            className={cx(indexStyles, 'index-frontispiece-img')}
+            fallbackCaption="Archive frontispiece image unavailable"
+          />
+          {frontispiece.imageCaption && (
+            <figcaption className={cx(indexStyles, 'index-frontispiece-caption')}>
+              {frontispiece.imageCaption}
+            </figcaption>
+          )}
+        </figure>
+      )}
+    </section>
+  );
+};
 
 interface LivingRelativesSectionProps {
   readonly people: readonly Person[];
@@ -127,8 +178,10 @@ const LivingRelativesSection: React.FC<LivingRelativesSectionProps> = ({
             cx(indexStyles, 'index-section-heading')
           )}
         >
-          <span>Living relatives</span>
-          <span className={cx(indexStyles, 'section-heading-count')}>{people.length}</span>
+          <span className={cx(indexStyles, 'index-section-heading-title')}>
+            <span>Living relatives</span>
+            <span className={cx(indexStyles, 'section-heading-count')}>({people.length})</span>
+          </span>
         </h2>
       </div>
       {autoCollapse && (
@@ -210,8 +263,37 @@ export const IndexPage: React.FC = () => {
   const [query, setQuery] = useState<string>('');
   const [exportStatus, setExportStatus] = useState<string>('');
   const [createOpen, setCreateOpen] = useState<boolean>(false);
+  const [mobileFiltersOpen, setMobileFiltersOpen] = useState<boolean>(false);
   const [expandedSectionIds, setExpandedSectionIds] = useState<ReadonlySet<string>>(() => new Set());
   const [livingExpanded, setLivingExpanded] = useState<boolean>(false);
+
+  const filtersPanelId = useId();
+  const filterShellRef = useRef<HTMLDivElement | null>(null);
+  const filtersTriggerRef = useRef<HTMLButtonElement | null>(null);
+
+  useEffect(() => {
+    if (!mobileFiltersOpen) {
+      return undefined;
+    }
+    const onPointerDown = (e: MouseEvent): void => {
+      if (filterShellRef.current && e.target instanceof Node && !filterShellRef.current.contains(e.target)) {
+        setMobileFiltersOpen(false);
+      }
+    };
+    const onKeyDown = (e: KeyboardEvent): void => {
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        setMobileFiltersOpen(false);
+        filtersTriggerRef.current?.focus();
+      }
+    };
+    document.addEventListener('mousedown', onPointerDown);
+    document.addEventListener('keydown', onKeyDown);
+    return (): void => {
+      document.removeEventListener('mousedown', onPointerDown);
+      document.removeEventListener('keydown', onKeyDown);
+    };
+  }, [mobileFiltersOpen]);
 
   const personThumbMap = useMemo(() => {
     if (!bundle) {
@@ -252,11 +334,12 @@ export const IndexPage: React.FC = () => {
   );
 
   const hasActiveQuery = query.trim().length > 0;
-  const hasActiveFilters = hasActiveQuery || onlyWithPhotos || branch !== 'all';
+  const hasActiveFilters = model.activeFilterCount > 0;
   const showBranchSelector = model.populatedBranches.length > 1;
   const hasVisibleResults = model.sections.length > 0 || model.livingPeople.length > 0;
 
   const handleViewChange = (nextView: PeopleDirectoryView): void => {
+    setMobileFiltersOpen(false);
     if (nextView === view) {
       return;
     }
@@ -279,6 +362,7 @@ export const IndexPage: React.FC = () => {
     setOnlyWithPhotos(false);
     setExpandedSectionIds(new Set());
     setLivingExpanded(false);
+    setMobileFiltersOpen(false);
     if (branch !== 'all') {
       setSearchParams(buildDirectoryUrlParams(searchParams, { branch: 'all' }), { replace: false });
     }
@@ -350,7 +434,14 @@ export const IndexPage: React.FC = () => {
     <div>
       <ExplorerTopBar />
       <main id="main-content" className={cx(layoutStyles, 'index-page')}>
-        <ArchiveFrontispiece frontispiece={frontispiece} baseUrl={baseUrl} />
+        <ArchiveFrontispiece
+          frontispiece={frontispiece}
+          baseUrl={baseUrl}
+          canEdit={capabilities.canEdit}
+          onAddPerson={() => {
+            setCreateOpen(true);
+          }}
+        />
 
         <PluginSlot name="indexHero" />
         <PluginSlot name="indexWidgets" />
@@ -375,30 +466,14 @@ export const IndexPage: React.FC = () => {
         {bundle && (
           <>
             <div
-              className={joinClasses(cx(controlStyles, 'filter-bar'), cx(indexStyles, 'index-filter-bar'))}
+              ref={filterShellRef}
+              className={joinClasses(
+                cx(controlStyles, 'filter-bar'),
+                cx(indexStyles, `index-filter-bar${mobileFiltersOpen ? ' is-filters-open' : ''}`)
+              )}
             >
-              <input
-                type="search"
-                className={cx(controlStyles, 'search-input')}
-                placeholder="Filter people by name or place…"
-                value={query}
-                onChange={(e) => {
-                  setQuery(e.target.value);
-                }}
-                aria-label={`Filter ${siteConfig.site.familyName} people by name or place`}
-              />
-              <div
-                className={cx(
-                  indexStyles,
-                  `index-filter-actions${capabilities.canEdit ? ' has-editor-actions' : ''}`
-                )}
-              >
-                <div
-                  className={cx(
-                    indexStyles,
-                    `index-filter-toggles${showBranchSelector ? ' has-branch-select' : ''}`
-                  )}
-                >
+              <div className={cx(indexStyles, 'index-filter-actions')}>
+                <div className={cx(indexStyles, 'index-toolbar-primary')}>
                   <div
                     role="group"
                     aria-label="Directory view"
@@ -432,65 +507,145 @@ export const IndexPage: React.FC = () => {
                     </button>
                   </div>
 
-                  {showBranchSelector && (
-                    <select
-                      aria-label="Filter by family branch"
-                      className={joinClasses(
-                        cx(controlStyles, 'pill-btn'),
-                        cx(indexStyles, 'index-branch-select')
-                      )}
-                      value={branch}
-                      onChange={(e) => {
-                        handleBranchChange(e.target.value);
-                      }}
-                    >
-                      <option value="all">All Branches ({model.branchCounts.all})</option>
-                      {model.populatedBranches.map((branchOption) => (
-                        <option key={branchOption.id} value={branchOption.id}>
-                          {branchOption.label} ({model.branchCounts[branchOption.id] || 0})
-                        </option>
-                      ))}
-                    </select>
-                  )}
-
-                  <div className={cx(indexStyles, 'index-filter-secondary-row')}>
-                    <button
-                      type="button"
-                      className={cx(
-                        controlStyles,
-                        `pill-btn index-media-filter-btn ${onlyWithPhotos ? 'active' : ''}`
-                      )}
-                      aria-pressed={onlyWithPhotos}
-                      onClick={() => {
-                        setOnlyWithPhotos((v) => !v);
-                      }}
-                    >
-                      With photos ({model.withPhotosCount})
-                    </button>
-
-                    {hasActiveFilters && (
-                      <button
-                        type="button"
-                        className={cx(controlStyles, 'pill-btn index-clear-btn')}
-                        onClick={handleClearFilters}
-                      >
-                        Clear
-                      </button>
-                    )}
-                  </div>
-                </div>
-
-                {capabilities.canEdit && (
                   <button
+                    ref={filtersTriggerRef}
                     type="button"
-                    className={cx(wikiChromeStyles, 'wiki-btn-secondary wiki-btn-sm index-add-person-btn')}
+                    className={joinClasses(
+                      cx(controlStyles, 'pill-btn'),
+                      cx(
+                        indexStyles,
+                        `index-filters-toggle-btn${mobileFiltersOpen ? ' active' : ''}${model.activeFilterCount > 0 ? ' has-active' : ''}`
+                      )
+                    )}
+                    aria-expanded={mobileFiltersOpen}
+                    aria-controls={filtersPanelId}
+                    aria-label={
+                      model.activeFilterCount > 0 ? `Filters (${model.activeFilterCount} active)` : 'Filters'
+                    }
                     onClick={() => {
-                      setCreateOpen(true);
+                      setMobileFiltersOpen((open) => !open);
                     }}
                   >
-                    + Add Person
+                    <svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true" focusable="false">
+                      <path
+                        d="M2.5 4h11M4.5 8h7M6.5 12h3"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="1.6"
+                        strokeLinecap="round"
+                      />
+                    </svg>
+                    <span>Filters</span>
+                    {model.activeFilterCount > 0 && (
+                      <span
+                        className={cx(indexStyles, 'index-filters-badge')}
+                        data-active-count={model.activeFilterCount}
+                        aria-hidden="true"
+                      >
+                        {model.activeFilterCount}
+                      </span>
+                    )}
                   </button>
-                )}
+                </div>
+
+                <div
+                  id={filtersPanelId}
+                  className={cx(
+                    indexStyles,
+                    `index-filters-panel${mobileFiltersOpen ? ' is-open' : ''}${showBranchSelector ? ' has-branch-select' : ''}`
+                  )}
+                  data-filters-open={mobileFiltersOpen ? 'true' : 'false'}
+                  data-photo-saturated={model.isPhotoFilterSaturated ? 'true' : 'false'}
+                >
+                  <div className={cx(indexStyles, 'index-filters-sheet-header')}>
+                    <span className={cx(indexStyles, 'index-filters-sheet-title')}>Filter archive</span>
+                    <button
+                      type="button"
+                      className={cx(indexStyles, 'index-filters-sheet-close')}
+                      aria-label="Close filters"
+                      onClick={() => {
+                        setMobileFiltersOpen(false);
+                        filtersTriggerRef.current?.focus();
+                      }}
+                    >
+                      Done
+                    </button>
+                  </div>
+
+                  <input
+                    type="search"
+                    className={joinClasses(
+                      cx(controlStyles, 'search-input'),
+                      cx(indexStyles, 'index-search-input')
+                    )}
+                    placeholder="Filter people by name or place…"
+                    value={query}
+                    onChange={(e) => {
+                      setQuery(e.target.value);
+                    }}
+                    aria-label={`Filter ${siteConfig.site.familyName} people by name or place`}
+                  />
+
+                  <div
+                    className={cx(
+                      indexStyles,
+                      `index-filter-toggles${showBranchSelector ? ' has-branch-select' : ''}`
+                    )}
+                  >
+                    {showBranchSelector && (
+                      <select
+                        aria-label="Filter by family branch"
+                        className={joinClasses(
+                          cx(controlStyles, 'pill-btn'),
+                          cx(indexStyles, 'index-branch-select')
+                        )}
+                        value={branch}
+                        onChange={(e) => {
+                          handleBranchChange(e.target.value);
+                        }}
+                      >
+                        <option value="all">All Branches ({model.branchCounts.all})</option>
+                        {model.populatedBranches.map((branchOption) => (
+                          <option key={branchOption.id} value={branchOption.id}>
+                            {branchOption.label} ({model.branchCounts[branchOption.id] || 0})
+                          </option>
+                        ))}
+                      </select>
+                    )}
+
+                    <div className={cx(indexStyles, 'index-filter-secondary-row')}>
+                      <button
+                        type="button"
+                        className={joinClasses(
+                          cx(
+                            controlStyles,
+                            `pill-btn index-media-filter-btn ${onlyWithPhotos ? 'active' : ''}`
+                          ),
+                          cx(indexStyles, 'index-media-filter-btn')
+                        )}
+                        aria-pressed={onlyWithPhotos}
+                        onClick={() => {
+                          setOnlyWithPhotos((v) => !v);
+                        }}
+                      >
+                        With photos ({model.withPhotosCount})
+                      </button>
+
+                      {hasActiveFilters && (
+                        <button
+                          type="button"
+                          className={joinClasses(
+                            cx(controlStyles, 'pill-btn index-clear-btn'),
+                            cx(indexStyles, 'index-clear-btn')
+                          )}
+                          onClick={handleClearFilters}
+                        >
+                          Clear
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                </div>
               </div>
             </div>
 
@@ -627,28 +782,20 @@ export const IndexPage: React.FC = () => {
                             idx === 0 ? 'is-first' : ''
                           )}
                         >
-                          <span>{section.heading}</span>
-                          <span className={cx(indexStyles, 'index-section-heading-meta')}>
-                            {section.kind === 'historical' && section.snapshotYear !== null && (
-                              <>
-                                <Link
-                                  to={`/time?year=${section.snapshotYear}`}
-                                  className={cx(indexStyles, 'index-era-snapshot-link')}
-                                >
-                                  See {section.snapshotYear} snapshot →
-                                </Link>
-                                <span
-                                  className={cx(indexStyles, 'index-section-meta-sep')}
-                                  aria-hidden="true"
-                                >
-                                  ·
-                                </span>
-                              </>
-                            )}
+                          <span className={cx(indexStyles, 'index-section-heading-title')}>
+                            <span>{section.heading}</span>
                             <span className={cx(indexStyles, 'section-heading-count')}>
-                              {section.people.length}
+                              ({section.people.length})
                             </span>
                           </span>
+                          {section.kind === 'historical' && section.snapshotYear !== null && (
+                            <Link
+                              to={`/time?year=${section.snapshotYear}`}
+                              className={cx(indexStyles, 'index-era-snapshot-link')}
+                            >
+                              {section.snapshotYear} snapshot →
+                            </Link>
+                          )}
                         </h2>
                         {section.kind === 'historical' && section.subtitle && (
                           <p className={cx(indexStyles, 'index-section-subtitle')}>{section.subtitle}</p>
@@ -663,9 +810,8 @@ export const IndexPage: React.FC = () => {
                           const mediaCount = p.media_count || 0;
                           const thumbUrl = personThumbMap.get(p.id) || p.portrait_url;
                           const eagerPortrait = idx === 0 && personIdx < 6;
-                          const suppressSparseLivingMeta = p.is_living;
-                          const showPlaceLine = !suppressSparseLivingMeta || Boolean(primaryPlace);
-                          const showMilestones = !suppressSparseLivingMeta || p.event_count > 0;
+                          const storyHook = model.storyHooks.get(p.id) ?? null;
+                          const showMilestones = p.event_count > 0;
 
                           return (
                             <Link
@@ -685,12 +831,26 @@ export const IndexPage: React.FC = () => {
                               <div className={cx(indexStyles, 'person-card-body')}>
                                 <h3>{p.full_name}</h3>
                                 <div className={cx(indexStyles, 'person-card-meta')}>
-                                  {formatPersonDirectoryLifespan(p)}
+                                  <span className={cx(indexStyles, 'person-card-lifespan')}>
+                                    {formatPersonDirectoryLifespan(p)}
+                                  </span>
+                                  {primaryPlace && (
+                                    <>
+                                      {' '}
+                                      <span
+                                        className={cx(indexStyles, 'person-card-meta-sep')}
+                                        aria-hidden="true"
+                                      >
+                                        ·
+                                      </span>{' '}
+                                      <span className={cx(indexStyles, 'person-card-place')}>
+                                        {primaryPlace.full_name}
+                                      </span>
+                                    </>
+                                  )}
                                 </div>
-                                {showPlaceLine && (
-                                  <div className={cx(indexStyles, 'person-card-place')}>
-                                    {primaryPlace ? primaryPlace.full_name : 'Location unrecorded'}
-                                  </div>
+                                {storyHook && (
+                                  <p className={cx(indexStyles, 'person-card-hook')}>{storyHook}</p>
                                 )}
                                 {(showMilestones || mediaCount > 0) && (
                                   <div className={cx(indexStyles, 'person-card-stats')}>

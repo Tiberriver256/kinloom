@@ -200,15 +200,20 @@ describe('IndexPage People Directory (#65)', () => {
     expect(utilityBar?.textContent).toContain('Showing 4 of 4 people');
     expect(utilityBar?.textContent).toContain('Export GEDCOM (4)');
 
-    // Monotonic era headings, subtitles, and /time?year= scent links
+    // Monotonic era headings with inline counts, zero redundant date-range subtitles, and standalone snapshot links
     const headings = [...container.querySelectorAll('h2')].map((h) => h.textContent ?? '');
     expect(headings[0]).toContain('Before 1700');
+    expect(headings[0]).toContain('(1)');
     expect(headings[1]).toContain('1800–1849');
+    expect(headings[1]).toContain('(1)');
     expect(headings[2]).toContain('1850–1899');
+    expect(headings[2]).toContain('(1)');
     expect(headings[3]).toContain('Living relatives');
-    expect(container.textContent).toContain('Born in the early nineteenth century');
-    expect(container.querySelector('a[href="/time?year=1850"]')?.textContent).toContain('See 1850 snapshot');
-    expect(container.querySelector('a[href="/time?year=1880"]')?.textContent).toContain('See 1880 snapshot');
+    expect(headings[3]).toContain('(1)');
+    expect(container.textContent).not.toContain('Born in the early nineteenth century');
+    expect(container.querySelector('a[href="/time?year=1850"]')?.textContent).toBe('1850 snapshot →');
+    expect(container.querySelector('a[href="/time?year=1880"]')?.textContent).toBe('1880 snapshot →');
+    expect(container.querySelector('.index-section-meta-sep')).toBeNull();
 
     // Compact living section renders named living relative with b. YYYY · Living and suppresses boilerplate
     const livingSection = container.querySelector('section[aria-label="Living relatives"]');
@@ -442,7 +447,19 @@ describe('IndexPage People Directory (#65)', () => {
     expect(img?.getAttribute('alt')).toBe('Cedar Valley orchard survey');
   });
 
-  it('formats Jump Strip counts with parentheses, separates era snapshot link from count with a middot, and configures mobile toolbar grid (#77)', () => {
+  it('simplifies era headers, supports progressive Filters popover, separates + Add Person, and renders living-safe story hooks (#89)', () => {
+    const place: Place = {
+      id: 'plc_hingham',
+      slug: 'hingham',
+      name: 'Hingham',
+      full_name: 'Hingham, Massachusetts',
+      place_type: 'town',
+      parent_id: null,
+      lat: 42.24,
+      lng: -70.89,
+      historical_names: [],
+      summary: '',
+    };
     const pre1700People: Person[] = Array.from({ length: 8 }, (_, idx) =>
       makePerson({
         id: `pre_${idx}`,
@@ -450,6 +467,7 @@ describe('IndexPage People Directory (#65)', () => {
         birth_year: 1640 + idx,
         death_year: 1700 + idx,
         branch: 'alder',
+        primary_place_id: idx === 0 ? 'plc_hingham' : null,
       })
     );
     const late1800People: Person[] = Array.from({ length: 20 }, (_, idx) =>
@@ -461,8 +479,65 @@ describe('IndexPage People Directory (#65)', () => {
         branch: 'birch',
       })
     );
+    const livingPerson = makePerson({
+      id: 'liv_0',
+      full_name: 'Jordan Alder',
+      birth_year: 1995,
+      is_living: true,
+      branch: 'alder',
+      event_count: 0,
+    });
+    const undatedPerson = makePerson({
+      id: 'undated_0',
+      full_name: 'Ezra Alder',
+      birth_year: null,
+      death_year: null,
+      branch: 'alder',
+    });
+    const bundle: ArchiveBundle = {
+      ...makeBundle([...pre1700People, ...late1800People, livingPerson, undatedPerson], [place]),
+      events: [
+        {
+          id: 'evt_pre_0',
+          title: 'Sailed from Great Yarmouth to Hingham, Massachusetts',
+          scope: 'personal',
+          event_kind: 'residence_anchor',
+          category: 'migration',
+          edtf_date: '1655',
+          display_date: '1655',
+          year: 1655,
+          time_min: 1655,
+          time_max: 1655,
+          place_id: 'plc_hingham',
+          summary: '',
+          participants: [{ person_id: 'pre_0', role: 'principal' }],
+          sources: [],
+        },
+        {
+          id: 'evt_liv_0',
+          title: 'Private living career note that must not leak',
+          scope: 'personal',
+          event_kind: 'point_event',
+          category: 'career',
+          edtf_date: '2020',
+          display_date: '2020',
+          year: 2020,
+          time_min: 2020,
+          time_max: 2020,
+          place_id: 'plc_hingham',
+          summary: '',
+          participants: [{ person_id: 'liv_0', role: 'principal' }],
+          sources: [],
+        },
+      ],
+    };
     const config = parseKinloomConfig({
-      site: { title: 'Alder & Birch Archive', familyName: 'Alder & Birch', gedcomSourceName: 'ALDER_77' },
+      site: {
+        title: 'Alder & Birch Archive',
+        familyName: 'Alder & Birch',
+        gedcomSourceName: 'ALDER_89',
+        description: 'Three centuries of orchards and timber across two coasts.',
+      },
       branches: [
         { id: 'alder', label: 'Alder Line' },
         { id: 'birch', label: 'Birch Line' },
@@ -472,55 +547,124 @@ describe('IndexPage People Directory (#65)', () => {
 
     const container = mountElement(
       <MemoryRouter initialEntries={['/']}>
-        <ArchiveProvider
-          siteConfig={config}
-          initialBundle={makeBundle([...pre1700People, ...late1800People])}
-        >
+        <ArchiveProvider siteConfig={config} initialBundle={bundle} capabilities={{ canEdit: true }}>
           <IndexPage />
         </ArchiveProvider>
       </MemoryRouter>
     );
 
-    // 1. Mobile toolbar grid hooks: has-branch-select on toggles and secondary row for photo filter
-    const toggles = container.querySelector('.index-filter-toggles');
-    expect(toggles?.classList.contains('has-branch-select')).toBe(true);
-    const secondaryRow = toggles?.querySelector('.index-filter-secondary-row');
-    expect(secondaryRow?.querySelector('.index-media-filter-btn')?.textContent?.trim()).toBe(
-      'With photos (0)'
+    // 1. + Add Person sits in the banner header, separate from read-only view filters
+    const bannerAddBtn = container.querySelector<HTMLButtonElement>(
+      '.index-banner-head .index-add-person-btn'
+    );
+    expect(bannerAddBtn?.textContent?.trim()).toBe('+ Add Person');
+    expect(container.querySelector('.index-filter-actions .index-add-person-btn')).toBeNull();
+
+    // 2. Mobile About this archive disclosure toggles intro visibility state
+    const aboutToggle = container.querySelector<HTMLButtonElement>('.index-about-toggle');
+    expect(aboutToggle?.textContent?.trim()).toBe('About this archive');
+    expect(aboutToggle?.getAttribute('aria-expanded')).toBe('false');
+    act(() => {
+      aboutToggle?.click();
+    });
+    expect(aboutToggle?.getAttribute('aria-expanded')).toBe('true');
+    expect(aboutToggle?.textContent?.trim()).toBe('Hide info');
+    expect(container.querySelector('.index-banner-about')?.classList.contains('is-open')).toBe(true);
+
+    // 3. Single-row mobile toolbar with Filters trigger, active count badge, Done, outside click, and Escape
+    const filtersToggle = container.querySelector<HTMLButtonElement>('.index-filters-toggle-btn');
+    const filtersPanel = container.querySelector<HTMLElement>('.index-filters-panel');
+    expect(filtersToggle?.getAttribute('aria-expanded')).toBe('false');
+    expect(filtersPanel?.getAttribute('data-filters-open')).toBe('false');
+    expect(filtersToggle?.querySelector('.index-filters-badge')).toBeNull();
+
+    act(() => {
+      filtersToggle?.click();
+    });
+    expect(filtersToggle?.getAttribute('aria-expanded')).toBe('true');
+    expect(filtersPanel?.getAttribute('data-filters-open')).toBe('true');
+
+    // Selecting a filter updates active filter badge count
+    const photosBtn = container.querySelector<HTMLButtonElement>('.index-media-filter-btn');
+    act(() => {
+      photosBtn?.click();
+    });
+    expect(filtersToggle?.querySelector('.index-filters-badge')?.textContent).toBe('1');
+    expect(filtersToggle?.getAttribute('aria-label')).toBe('Filters (1 active)');
+
+    // Done button closes panel
+    const doneBtn = container.querySelector<HTMLButtonElement>('.index-filters-sheet-close');
+    act(() => {
+      doneBtn?.click();
+    });
+    expect(filtersToggle?.getAttribute('aria-expanded')).toBe('false');
+
+    // Reopen and dismiss with Escape
+    act(() => {
+      filtersToggle?.click();
+    });
+    expect(filtersToggle?.getAttribute('aria-expanded')).toBe('true');
+    act(() => {
+      document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+    });
+    expect(filtersToggle?.getAttribute('aria-expanded')).toBe('false');
+
+    // Reopen and dismiss via outside click
+    act(() => {
+      filtersToggle?.click();
+    });
+    expect(filtersToggle?.getAttribute('aria-expanded')).toBe('true');
+    act(() => {
+      document.body.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }));
+    });
+    expect(filtersToggle?.getAttribute('aria-expanded')).toBe('false');
+
+    // Clear active photo filter
+    act(() => {
+      container.querySelector<HTMLButtonElement>('.index-clear-btn')?.click();
+    });
+    expect(filtersToggle?.querySelector('.index-filters-badge')).toBeNull();
+
+    // 4. Jump Strip counts formatted with parentheses: "Before 1700 (8)", "1850–99 (20)"
+    const jumpLinks = [...container.querySelectorAll<HTMLAnchorElement>('nav[aria-label="Jump to era"] a')];
+    expect(jumpLinks[0]?.textContent).toBe('Before 1700 (8)');
+    expect(jumpLinks[1]?.textContent).toBe('1850–99 (20)');
+
+    // 5. Simplified era section headers: inline count on left, standalone snapshot link on right, zero middot
+    const pre1700Heading = container.querySelector('#dir-sec-before-1700 .index-section-heading');
+    expect(pre1700Heading?.querySelector('.index-section-heading-title')?.textContent).toBe('Before 1700(8)');
+    expect(pre1700Heading?.querySelector('.index-era-snapshot-link')?.textContent).toBe('1665 snapshot →');
+    expect(pre1700Heading?.querySelector('.index-section-meta-sep')).toBeNull();
+    expect(container.querySelector('#dir-sec-before-1700 .index-section-subtitle')).toBeNull();
+    expect(container.querySelector('#dir-sec-undated .index-section-subtitle')?.textContent).toBe(
+      'Birth year not yet documented'
     );
 
-    // 2. Jump Strip counts formatted with parentheses: "Before 1700 (8)", "1850–99 (20)"
-    const jumpLinks = [...container.querySelectorAll<HTMLAnchorElement>('nav[aria-label="Jump to era"] a')];
-    expect(jumpLinks).toHaveLength(2);
-    expect(jumpLinks[0].querySelector('.jump-count')?.textContent).toBe('(8)');
-    expect(jumpLinks[1].querySelector('.jump-count')?.textContent).toBe('(20)');
-    expect(jumpLinks[0].textContent).toBe('Before 1700 (8)');
-    expect(jumpLinks[1].textContent).toBe('1850–99 (20)');
+    // 6. Story hook renders for historical ancestor and never leaks for living relative
+    const firstCard = container.querySelector('#dir-sec-before-1700 .person-card');
+    expect(firstCard?.querySelector('.person-card-hook')?.textContent).toBe(
+      'Sailed from Great Yarmouth to Hingham, Massachusetts'
+    );
+    expect(container.textContent).not.toContain('Private living career note that must not leak');
 
-    // 3. Era section header separates snapshot link from trailing count with middot
-    const pre1700Meta = container.querySelector('#dir-sec-before-1700 .index-section-heading-meta');
-    expect(pre1700Meta?.querySelector('.index-era-snapshot-link')?.textContent).toBe('See 1665 snapshot →');
-    const sep = pre1700Meta?.querySelector('.index-section-meta-sep');
-    expect(sep?.textContent).toBe('·');
-    expect(sep?.getAttribute('aria-hidden')).toBe('true');
-    expect(pre1700Meta?.querySelector('.section-heading-count')?.textContent).toBe('8');
-
-    // Switch to A–Z: no snapshot link -> no stray middot, and Jump Strip omits counts
+    // Switch to A–Z: Jump Strip omits counts, living card still omits story hook
     const azBtn = [...container.querySelectorAll<HTMLButtonElement>('button')].find(
       (b) => b.textContent?.trim() === 'A–Z'
     );
     act(() => {
       azBtn?.click();
     });
-    expect(container.querySelector('.index-section-meta-sep')).toBeNull();
     expect(container.querySelector('.jump-count')).toBeNull();
+    expect(container.textContent).not.toContain('Private living career note that must not leak');
 
-    // 4. Verify IndexPage.module.css enforces mobile <= 640px grid and shared DirectoryJumpStrip enforces hidden scrollbar + fade mask
+    // 7. Verify IndexPage.module.css enforces mobile <= 640px progressive disclosure and DirectoryJumpStrip enforces fade mask
     const here = dirname(fileURLToPath(import.meta.url));
     const css = readFileSync(resolve(here, 'IndexPage.module.css'), 'utf8');
     const jumpCss = readFileSync(resolve(here, '../components/atoms/DirectoryJumpStrip.module.css'), 'utf8');
     expect(css).toContain('@media (max-width: 640px)');
-    expect(css).toContain('grid-template-columns: auto minmax(0, 1fr);');
+    expect(css).toContain('.index-toolbar-primary');
+    expect(css).toContain('.index-filters-panel:global(.is-open)');
+    expect(css).toContain('.person-card-hook');
     expect(jumpCss).toContain('scrollbar-width: none;');
     expect(jumpCss).toContain('.jump-strip::-webkit-scrollbar');
     expect(jumpCss).toContain('@property --jump-fade-end');

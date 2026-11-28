@@ -6,10 +6,12 @@ import {
   buildDirectoryJumpTargetId,
   buildDirectoryUrlParams,
   buildPeopleDirectoryModel,
+  buildPersonStoryHookMap,
   compareByBirthThenName,
   compareBySurnameThenGiven,
   computeDirectoryBranchCounts,
   computeVisibleSectionPeople,
+  countActiveDirectoryFilters,
   DIRECTORY_JUMP_STRIP_THRESHOLD,
   DIRECTORY_SECTION_CAP_TRIGGER,
   DIRECTORY_SECTION_INITIAL_VISIBLE,
@@ -18,12 +20,15 @@ import {
   formatLivingLifespan,
   formatPersonDirectoryLifespan,
   hasPersonPhotoOrMedia,
+  isPhotoFilterSaturated,
   isRedactedLivingPerson,
   LIVING_AUTO_COLLAPSE_THRESHOLD,
   PEOPLE_DIRECTORY_ERA_BANDS,
+  PHOTO_FILTER_SATURATION_RATIO,
   parseDirectoryUrlParams,
   resolveArchiveFrontispiece,
   resolveEraBandId,
+  resolvePersonStoryHook,
 } from './peopleDirectoryModel.js';
 
 function makePerson(overrides: Partial<Person> & { id: string; full_name: string }): Person {
@@ -650,5 +655,377 @@ describe('peopleDirectoryModel', () => {
         livingDated
       )
     ).toBeLessThan(0);
+  });
+
+  it('omits redundant date-range era subtitles while keeping Undated explanation (#89)', () => {
+    for (const band of PEOPLE_DIRECTORY_ERA_BANDS) {
+      if (band.id === 'undated') {
+        expect(band.subtitle).toBe('Birth year not yet documented');
+      } else {
+        expect(band.subtitle).toBe('');
+      }
+    }
+  });
+
+  it('counts active filters and detects >= 85% photo saturation (#89)', () => {
+    expect(PHOTO_FILTER_SATURATION_RATIO).toBe(0.85);
+    expect(countActiveDirectoryFilters({ query: '', branch: 'all', onlyWithPhotos: false })).toBe(0);
+    expect(countActiveDirectoryFilters({ query: '  ', branch: 'all', onlyWithPhotos: false })).toBe(0);
+    expect(countActiveDirectoryFilters({ query: 'Alder', branch: 'all', onlyWithPhotos: false })).toBe(1);
+    expect(countActiveDirectoryFilters({ query: 'Alder', branch: 'birch', onlyWithPhotos: false })).toBe(2);
+    expect(countActiveDirectoryFilters({ query: 'Alder', branch: 'birch', onlyWithPhotos: true })).toBe(3);
+
+    expect(isPhotoFilterSaturated(0, 0)).toBe(false);
+    expect(isPhotoFilterSaturated(8, 10)).toBe(false);
+    expect(isPhotoFilterSaturated(17, 20)).toBe(true);
+    expect(isPhotoFilterSaturated(10, 10)).toBe(true);
+  });
+
+  it('builds deterministic 1-line story hooks for historical ancestors while strictly blocking living details (#89)', () => {
+    const places = [
+      makePlace('pl_1', 'Hingham', 'Hingham, Massachusetts'),
+      makePlace('pl_2', 'Monmouth County', 'Monmouth County, New Jersey'),
+      makePlace('pl_3', 'Berks County', 'Berks County, Pennsylvania'),
+      makePlace('pl_4', 'Rockingham County', 'Rockingham County, Virginia'),
+    ];
+    const placesById = new Map(places.map((p) => [p.id, p]));
+
+    const pBio = makePerson({ id: 'p_bio', full_name: 'Abraham Alder', birth_year: 1809, death_year: 1865 });
+    const pEvent = makePerson({ id: 'p_evt', full_name: 'Samuel Alder', birth_year: 1622, death_year: 1690 });
+    const pJourney = makePerson({
+      id: 'p_jrn',
+      full_name: 'Mordecai Alder',
+      birth_year: 1686,
+      death_year: 1736,
+    });
+    const pSingleSpan = makePerson({
+      id: 'p_one',
+      full_name: 'Quiet Alder',
+      birth_year: 1710,
+      death_year: 1770,
+    });
+    const pLivingNamed = makePerson({
+      id: 'p_liv',
+      full_name: 'Sam Rowan',
+      birth_year: 1991,
+      is_living: true,
+    });
+    const pLivingRedacted = makePerson({
+      id: 'p_red',
+      full_name: 'Living',
+      is_living: true,
+    });
+
+    const bundle: ArchiveBundle = {
+      ...makeBundle([pBio, pEvent, pJourney, pSingleSpan, pLivingNamed, pLivingRedacted], places),
+      narratives: [
+        {
+          id: 'nar_note',
+          slug: 'alder-note',
+          kind: 'research_note',
+          subject_person_id: 'p_bio',
+          title: 'Research Note',
+          summary: 'Secondary note that should lose to biography.',
+          body_md: 'Body',
+          person_ids: ['p_bio'],
+          place_ids: [],
+          event_ids: [],
+          source_ids: [],
+        },
+        {
+          id: 'nar_bio_b',
+          slug: 'alder-bio-b',
+          kind: 'biography',
+          subject_person_id: 'p_bio',
+          title: 'Later Bio',
+          summary: 'Later biography summary.',
+          body_md: 'Body',
+          person_ids: ['p_bio'],
+          place_ids: [],
+          event_ids: [],
+          source_ids: [],
+        },
+        {
+          id: 'nar_bio_a',
+          slug: 'alder-bio-a',
+          kind: 'biography',
+          subject_person_id: 'p_bio',
+          title: 'Primary Bio',
+          summary:
+            'Capt. Abraham Alder surveyed farms with Dr. Samuel Jr. in Springfield.[^src_1] Second sentence omitted here.',
+          body_md: 'Body',
+          person_ids: ['p_bio'],
+          place_ids: [],
+          event_ids: [],
+          source_ids: [],
+        },
+        {
+          id: 'nar_living',
+          slug: 'living-bio',
+          kind: 'biography',
+          subject_person_id: 'p_liv',
+          title: 'Living Private Bio',
+          summary: 'Private living narrative detail that must never appear.',
+          body_md: 'Body',
+          person_ids: ['p_liv'],
+          place_ids: [],
+          event_ids: [],
+          source_ids: [],
+        },
+      ],
+      events: [
+        {
+          id: 'evt_macro',
+          title: 'Regional storm',
+          scope: 'local',
+          event_kind: 'context_span',
+          category: 'migration',
+          edtf_date: '1635',
+          display_date: '1635',
+          year: 1635,
+          time_min: 1635,
+          time_max: 1635,
+          place_id: 'pl_1',
+          summary: '',
+          participants: [{ person_id: 'p_evt', role: 'principal' }],
+          sources: [],
+        },
+        {
+          id: 'evt_witness',
+          title: 'Witnessed deed',
+          scope: 'personal',
+          event_kind: 'point_event',
+          category: 'migration',
+          edtf_date: '1636',
+          display_date: '1636',
+          year: 1636,
+          time_min: 1636,
+          time_max: 1636,
+          place_id: 'pl_1',
+          summary: '',
+          participants: [{ person_id: 'p_evt', role: 'witness' }],
+          sources: [],
+        },
+        {
+          id: 'evt_blank',
+          title: '   ',
+          scope: 'personal',
+          event_kind: 'point_event',
+          category: 'migration',
+          edtf_date: '1636',
+          display_date: '1636',
+          year: 1636,
+          time_min: 1636,
+          time_max: 1636,
+          place_id: 'pl_1',
+          summary: '',
+          participants: [{ person_id: 'p_evt', role: 'principal' }],
+          sources: [],
+        },
+        {
+          id: 'evt_birth',
+          title: 'Baptism of Samuel Alder in Hingham',
+          scope: 'personal',
+          event_kind: 'residence_anchor',
+          category: 'life_milestone',
+          edtf_date: '1622',
+          display_date: '1622',
+          year: 1622,
+          time_min: 1622,
+          time_max: 1622,
+          place_id: 'pl_1',
+          summary: '',
+          participants: [{ person_id: 'p_evt', role: 'principal' }],
+          sources: [],
+        },
+        {
+          id: 'evt_custom',
+          title: 'Established cooperage workshop',
+          scope: 'family',
+          event_kind: 'point_event',
+          category: 'guild',
+          edtf_date: '1645',
+          display_date: '1645',
+          year: 1645,
+          time_min: 1645,
+          time_max: 1645,
+          place_id: 'pl_1',
+          summary: '',
+          participants: [{ person_id: 'p_evt', role: 'spouse' }],
+          sources: [],
+        },
+        {
+          id: 'evt_mig_late',
+          title: 'Later voyage',
+          scope: 'personal',
+          event_kind: 'residence_anchor',
+          category: 'migration',
+          edtf_date: '1640',
+          display_date: '1640',
+          year: 1640,
+          time_min: 1640,
+          time_max: 1640,
+          place_id: 'pl_1',
+          summary: '',
+          participants: [{ person_id: 'p_evt', role: 'principal' }],
+          sources: [],
+        },
+        {
+          id: 'evt_mig_early',
+          title: 'Samuel Alder sailed from Great Yarmouth to Hingham, Massachusetts',
+          scope: 'personal',
+          event_kind: 'residence_anchor',
+          category: 'migration',
+          edtf_date: '1637',
+          display_date: '1637',
+          year: 1637,
+          time_min: 1637,
+          time_max: 1637,
+          place_id: 'pl_1',
+          summary: '',
+          participants: [{ person_id: 'p_evt', role: 'principal' }],
+          sources: [],
+        },
+        {
+          id: 'evt_living',
+          title: 'Private living career event',
+          scope: 'personal',
+          event_kind: 'point_event',
+          category: 'career',
+          edtf_date: '2018',
+          display_date: '2018',
+          year: 2018,
+          time_min: 2018,
+          time_max: 2018,
+          place_id: 'pl_1',
+          summary: '',
+          participants: [{ person_id: 'p_liv', role: 'principal' }],
+          sources: [],
+        },
+      ],
+      residence_spans: [
+        {
+          id: 'sp_3',
+          person_id: 'p_jrn',
+          place_id: 'pl_3',
+          time_min: 1730,
+          time_max: 1736,
+          start_year: 1730,
+          end_year: 1736,
+          confidence_tier: 'Confirmed',
+          from_event_id: 'e1',
+          to_event_id: 'e2',
+        },
+        {
+          id: 'sp_1',
+          person_id: 'p_jrn',
+          place_id: 'pl_1',
+          time_min: 1686,
+          time_max: 1710,
+          start_year: 1686,
+          end_year: 1710,
+          confidence_tier: 'Confirmed',
+          from_event_id: 'e1',
+          to_event_id: 'e2',
+        },
+        {
+          id: 'sp_1b',
+          person_id: 'p_jrn',
+          place_id: 'pl_1',
+          time_min: 1710,
+          time_max: 1714,
+          start_year: null,
+          end_year: 1714,
+          confidence_tier: 'Confirmed',
+          from_event_id: 'e1',
+          to_event_id: 'e2',
+        },
+        {
+          id: 'sp_2',
+          person_id: 'p_jrn',
+          place_id: 'pl_2',
+          time_min: 1715,
+          time_max: 1729,
+          start_year: 1715,
+          end_year: 1729,
+          confidence_tier: 'Confirmed',
+          from_event_id: 'e1',
+          to_event_id: 'e2',
+        },
+        {
+          id: 'sp_4',
+          person_id: 'p_jrn',
+          place_id: 'pl_4',
+          time_min: 1736,
+          time_max: 1736,
+          start_year: 1736,
+          end_year: 1736,
+          confidence_tier: 'Confirmed',
+          from_event_id: 'e1',
+          to_event_id: 'e2',
+        },
+        {
+          id: 'sp_one',
+          person_id: 'p_one',
+          place_id: 'pl_1',
+          time_min: 1710,
+          time_max: 1770,
+          start_year: 1710,
+          end_year: 1770,
+          confidence_tier: 'Confirmed',
+          from_event_id: 'e1',
+          to_event_id: 'e2',
+        },
+        {
+          id: 'sp_liv_1',
+          person_id: 'p_liv',
+          place_id: 'pl_1',
+          time_min: 1995,
+          time_max: 2010,
+          start_year: 1995,
+          end_year: 2010,
+          confidence_tier: 'Confirmed',
+          from_event_id: 'e1',
+          to_event_id: 'e2',
+        },
+        {
+          id: 'sp_liv_2',
+          person_id: 'p_liv',
+          place_id: 'pl_2',
+          time_min: 2011,
+          time_max: 2025,
+          start_year: 2011,
+          end_year: 2025,
+          confidence_tier: 'Confirmed',
+          from_event_id: 'e1',
+          to_event_id: 'e2',
+        },
+      ],
+    };
+
+    const hookMap = buildPersonStoryHookMap(bundle, placesById);
+    expect(hookMap.get('p_bio')).toBe(
+      'Capt. Abraham Alder surveyed farms with Dr. Samuel Jr. in Springfield.'
+    );
+    expect(hookMap.get('p_evt')).toBe('Sailed from Great Yarmouth to Hingham, Massachusetts');
+    expect(hookMap.get('p_jrn')).toBe('Hingham → Monmouth County → Berks County');
+    expect(hookMap.has('p_one')).toBe(false);
+    expect(hookMap.has('p_liv')).toBe(false);
+    expect(hookMap.has('p_red')).toBe(false);
+
+    expect(resolvePersonStoryHook({ person: pBio, bundle, placesById })).toBe(
+      'Capt. Abraham Alder surveyed farms with Dr. Samuel Jr. in Springfield.'
+    );
+    expect(resolvePersonStoryHook({ person: pEvent, bundle, placesById })).toBe(
+      'Sailed from Great Yarmouth to Hingham, Massachusetts'
+    );
+    expect(resolvePersonStoryHook({ person: pJourney, bundle, placesById })).toBe(
+      'Hingham → Monmouth County → Berks County'
+    );
+    expect(resolvePersonStoryHook({ person: pSingleSpan, bundle, placesById })).toBeNull();
+    expect(resolvePersonStoryHook({ person: pLivingNamed, bundle, placesById })).toBeNull();
+    expect(resolvePersonStoryHook({ person: pLivingRedacted, bundle, placesById })).toBeNull();
+    expect(resolvePersonStoryHook({ person: pBio, bundle: null, placesById })).toBeNull();
+    expect(buildPersonStoryHookMap(null, placesById).size).toBe(0);
   });
 });

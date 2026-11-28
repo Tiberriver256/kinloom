@@ -345,10 +345,13 @@ test.describe('Wave 53B signed-in editor UX, per-element overflow/collision, and
     ]) {
       await page.setViewportSize({ width: vp.width, height: vp.height });
 
-      // IndexPage signed-in with 3-digit counts + multi-word plugin tab
+      // IndexPage signed-in with 3-digit counts + multi-word plugin tab (#89 compact header CTA + progressive Filters popover)
       await navigateAndWaitReady(page, `${wiki.baseUrl}/`);
-      await expect(page.locator('.index-filter-actions .index-add-person-btn')).toBeVisible();
+      await expect(page.locator('.index-banner-head .index-add-person-btn')).toBeVisible();
+      await expect(page.locator('.index-toolbar-primary .index-filters-toggle-btn')).toBeVisible();
       await expect(page.locator('.index-archive-utility-bar .index-export-link')).toBeVisible();
+      await page.locator('.index-toolbar-primary .index-filters-toggle-btn').click();
+      await expect(page.locator('.index-filters-panel.is-open')).toBeVisible();
       await page.evaluate(() => {
         const mediaBtn = document.querySelector('.index-media-filter-btn');
         if (mediaBtn) {
@@ -384,10 +387,10 @@ test.describe('Wave 53B signed-in editor UX, per-element overflow/collision, and
       expect(indexAudit.parentEscapes, `3-digit / @ ${vp.name} parentEscapes`).toEqual([]);
       expect(indexAudit.siblingCollisions, `3-digit / @ ${vp.name} siblingCollisions`).toEqual([]);
 
-      // Verify #65 browse toolbar rows and demoted archive utility bar stay clean with zero overflow
+      // Verify #89 compact header + Add Person, progressive Filters panel, and demoted archive utility bar
       const rowMetrics = await page.evaluate(() => {
         const container = document.querySelector('.index-filter-actions')!.getBoundingClientRect();
-        const toggles = document.querySelector('.index-filter-toggles')!.getBoundingClientRect();
+        const primaryBar = document.querySelector('.index-toolbar-primary')!.getBoundingClientRect();
         const add = document.querySelector('.index-add-person-btn')!.getBoundingClientRect();
         const utilityBar = document.querySelector('.index-archive-utility-bar')!.getBoundingClientRect();
         const exportLink = document
@@ -395,19 +398,22 @@ test.describe('Wave 53B signed-in editor UX, per-element overflow/collision, and
           .getBoundingClientRect();
         return {
           containerWidth: Math.round(container.width),
-          togglesWidth: Math.round(toggles.width),
+          primaryWidth: Math.round(primaryBar.width),
           addWidth: Math.round(add.width),
-          addBelowToggles: add.top >= toggles.bottom - 2,
+          addInFilterActions: Boolean(document.querySelector('.index-filter-actions .index-add-person-btn')),
           exportInsideUtilityBar:
             exportLink.left >= utilityBar.left - 1.5 && exportLink.right <= utilityBar.right + 1.5,
           exportInFilterActions: Boolean(document.querySelector('.index-filter-actions .index-export-link')),
         };
       });
-      expect(rowMetrics.togglesWidth).toBeGreaterThanOrEqual(rowMetrics.containerWidth - 4);
-      expect(rowMetrics.addBelowToggles).toBe(true);
-      expect(rowMetrics.addWidth).toBeGreaterThanOrEqual(rowMetrics.containerWidth - 4);
+      expect(rowMetrics.primaryWidth).toBeGreaterThanOrEqual(rowMetrics.containerWidth - 4);
+      expect(rowMetrics.addInFilterActions).toBe(false);
+      expect(rowMetrics.addWidth).toBeLessThan(rowMetrics.containerWidth * 0.65);
       expect(rowMetrics.exportInsideUtilityBar).toBe(true);
       expect(rowMetrics.exportInFilterActions).toBe(false);
+
+      await page.locator('.index-filters-sheet-close').click();
+      await expect(page.locator('.index-filters-panel.is-open')).toHaveCount(0);
 
       await maybeScreenshot(page, `index-signed-in-3digit-${vp.name}.png`);
 

@@ -1,4 +1,13 @@
-import type { ArchiveBundle, BranchConfig, KinloomSiteConfig, Person, Place } from '@kinloom/core';
+import type {
+  ArchiveBundle,
+  ArchiveEvent,
+  BranchConfig,
+  KinloomSiteConfig,
+  Narrative,
+  Person,
+  Place,
+  ResidenceSpan,
+} from '@kinloom/core';
 import { fastLocaleCompare, resolveDefaultBranchId } from '@kinloom/core';
 import { isRedactedLivingPlaceholder } from './tree/types.js';
 
@@ -29,7 +38,7 @@ export const PEOPLE_DIRECTORY_ERA_BANDS: readonly EraBandDefinition[] = [
     id: 'before-1700',
     heading: 'Before 1700',
     shortLabel: 'Before 1700',
-    subtitle: 'Seventeenth-century and earlier roots',
+    subtitle: '',
     minYear: null,
     maxYear: 1699,
     snapshotYear: 1665,
@@ -38,7 +47,7 @@ export const PEOPLE_DIRECTORY_ERA_BANDS: readonly EraBandDefinition[] = [
     id: '1700s',
     heading: '1700s',
     shortLabel: '1700s',
-    subtitle: 'Born 1700–1799',
+    subtitle: '',
     minYear: 1700,
     maxYear: 1799,
     snapshotYear: 1750,
@@ -47,7 +56,7 @@ export const PEOPLE_DIRECTORY_ERA_BANDS: readonly EraBandDefinition[] = [
     id: '1800-1849',
     heading: '1800–1849',
     shortLabel: '1800–49',
-    subtitle: 'Born in the early nineteenth century',
+    subtitle: '',
     minYear: 1800,
     maxYear: 1849,
     snapshotYear: 1850,
@@ -56,7 +65,7 @@ export const PEOPLE_DIRECTORY_ERA_BANDS: readonly EraBandDefinition[] = [
     id: '1850-1899',
     heading: '1850–1899',
     shortLabel: '1850–99',
-    subtitle: 'Born in the late nineteenth century',
+    subtitle: '',
     minYear: 1850,
     maxYear: 1899,
     snapshotYear: 1880,
@@ -65,7 +74,7 @@ export const PEOPLE_DIRECTORY_ERA_BANDS: readonly EraBandDefinition[] = [
     id: '1900-1949',
     heading: '1900–1949',
     shortLabel: '1900–49',
-    subtitle: 'Born in the first half of the 1900s',
+    subtitle: '',
     minYear: 1900,
     maxYear: 1949,
     snapshotYear: 1925,
@@ -74,7 +83,7 @@ export const PEOPLE_DIRECTORY_ERA_BANDS: readonly EraBandDefinition[] = [
     id: '1950-plus',
     heading: '1950 & Later',
     shortLabel: '1950+',
-    subtitle: 'Born 1950 or later',
+    subtitle: '',
     minYear: 1950,
     maxYear: null,
     snapshotYear: 1970,
@@ -95,6 +104,7 @@ export const DIRECTORY_SECTION_CAP_TRIGGER = 24;
 export const DIRECTORY_SECTION_INITIAL_VISIBLE = 18;
 export const LIVING_AUTO_COLLAPSE_THRESHOLD = 12;
 export const FRONTISPIECE_MAX_LINKS = 4;
+export const PHOTO_FILTER_SATURATION_RATIO = 0.85;
 
 export interface HistoricalDirectorySection {
   readonly kind: 'historical';
@@ -138,12 +148,15 @@ export interface PeopleDirectoryModel {
   readonly populatedBranches: readonly BranchConfig[];
   readonly branchCounts: Readonly<Record<string, number>>;
   readonly withPhotosCount: number;
+  readonly isPhotoFilterSaturated: boolean;
+  readonly activeFilterCount: number;
   readonly filteredPeople: readonly Person[];
   readonly sections: readonly DirectorySection[];
   readonly livingPeople: readonly Person[];
   readonly showJumpStrip: boolean;
   readonly autoCollapseLiving: boolean;
   readonly jumpItems: readonly DirectoryJumpItem[];
+  readonly storyHooks: ReadonlyMap<string, string>;
 }
 
 export interface ArchiveFrontispieceLink {
@@ -182,6 +195,270 @@ export function isRedactedLivingPerson(person: Person): boolean {
 
 export function hasPersonPhotoOrMedia(person: Person): boolean {
   return (person.media_count || 0) > 0 || Boolean(person.portrait_url);
+}
+
+export function countActiveDirectoryFilters(
+  filter: Pick<PeopleDirectoryFilterState, 'query' | 'branch' | 'onlyWithPhotos'>
+): number {
+  return (
+    (filter.query.trim().length > 0 ? 1 : 0) +
+    (filter.branch !== 'all' ? 1 : 0) +
+    (filter.onlyWithPhotos ? 1 : 0)
+  );
+}
+
+export function isPhotoFilterSaturated(withPhotosCount: number, totalCount: number): boolean {
+  return totalCount > 0 && withPhotosCount / totalCount >= PHOTO_FILTER_SATURATION_RATIO;
+}
+
+const STORY_EVENT_CATEGORY_RANK: Readonly<Record<string, number>> = {
+  migration: 0,
+  homestead: 0,
+  career: 0,
+  occupation: 0,
+  military: 0,
+  public_office: 0,
+  service: 0,
+  life_milestone: 2,
+  vital: 2,
+  birth: 2,
+  death: 2,
+  burial: 2,
+};
+
+const STORY_PARTICIPANT_ROLES = new Set(['principal', 'spouse', 'subject']);
+
+function rankStoryEventCategory(category: string | null | undefined): number {
+  const normalized = category?.trim().toLowerCase() ?? '';
+  if (!normalized) {
+    return 2;
+  }
+  return STORY_EVENT_CATEGORY_RANK[normalized] ?? 1;
+}
+
+const ABBREVIATION_BEFORE_PERIOD_RE =
+  /(?:\b(?:Jr|Sr|Dr|Mr|Mrs|Ms|St|Capt|Maj|Gen|Rev|Col|Lt|Hon|Gov|Sen|Pres|No|Vol|p|pp)|[A-Z]\.[A-Z])$/i;
+
+function cleanStoryHookText(raw: string, options?: { readonly firstSentenceOnly?: boolean }): string {
+  const stripped = raw
+    .replace(/\[\^[^\]]+\]/g, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+  if (!stripped) {
+    return '';
+  }
+  if (!options?.firstSentenceOnly) {
+    return stripped;
+  }
+  let searchFrom = 20;
+  while (searchFrom < stripped.length) {
+    const idx = stripped.indexOf('. ', searchFrom);
+    if (idx === -1) {
+      break;
+    }
+    const prefix = stripped.slice(0, idx);
+    if (!ABBREVIATION_BEFORE_PERIOD_RE.test(prefix)) {
+      return stripped.slice(0, idx + 1);
+    }
+    searchFrom = idx + 2;
+  }
+  return stripped;
+}
+
+function stripLeadingPersonName(hook: string, fullName: string): string {
+  const name = fullName.trim();
+  if (!name || !hook.startsWith(`${name} `)) {
+    return hook;
+  }
+  const rest = hook.slice(name.length + 1).trim();
+  if (rest.length < 12 || !/^[a-z]/.test(rest)) {
+    return hook;
+  }
+  return `${rest[0]?.toUpperCase() ?? ''}${rest.slice(1)}`;
+}
+
+function compareStoryNarratives(a: Narrative, b: Narrative): number {
+  const aBio = a.kind === 'biography' ? 0 : 1;
+  const bBio = b.kind === 'biography' ? 0 : 1;
+  if (aBio !== bBio) {
+    return aBio - bBio;
+  }
+  return fastLocaleCompare(a.id, b.id);
+}
+
+function compareStoryEvents(a: ArchiveEvent, b: ArchiveEvent): number {
+  const rankDiff = rankStoryEventCategory(a.category) - rankStoryEventCategory(b.category);
+  if (rankDiff !== 0) {
+    return rankDiff;
+  }
+  const aYear = a.year ?? Number.POSITIVE_INFINITY;
+  const bYear = b.year ?? Number.POSITIVE_INFINITY;
+  if (aYear !== bYear) {
+    return aYear - bYear;
+  }
+  return fastLocaleCompare(a.id, b.id);
+}
+
+function compareResidenceSpans(a: ResidenceSpan, b: ResidenceSpan): number {
+  const aStart = a.start_year ?? a.time_min;
+  const bStart = b.start_year ?? b.time_min;
+  if (aStart !== bStart) {
+    return aStart - bStart;
+  }
+  return fastLocaleCompare(a.id, b.id);
+}
+
+function buildResidenceJourneyHook(
+  spans: readonly ResidenceSpan[],
+  placesById: ReadonlyMap<string, Place>
+): string | null {
+  const ordered = spans.toSorted(compareResidenceSpans);
+  const distinctPlaces: string[] = [];
+  for (const span of ordered) {
+    const placeName = placesById.get(span.place_id)?.name.trim();
+    if (placeName && !distinctPlaces.includes(placeName)) {
+      distinctPlaces.push(placeName);
+    }
+  }
+  if (distinctPlaces.length < 2) {
+    return null;
+  }
+  return distinctPlaces.slice(0, 3).join(' → ');
+}
+
+function selectPersonStoryHookFromSlices(params: {
+  readonly person: Person;
+  readonly narratives: readonly Narrative[];
+  readonly events: readonly ArchiveEvent[];
+  readonly residenceSpans: readonly ResidenceSpan[];
+  readonly placesById: ReadonlyMap<string, Place>;
+}): string | null {
+  const { person, narratives, events, residenceSpans, placesById } = params;
+  // Never derive narrative, event, or residence hooks for living people.
+  if (person.is_living || isRedactedLivingPerson(person)) {
+    return null;
+  }
+
+  for (const narrative of narratives.toSorted(compareStoryNarratives)) {
+    const cleaned = cleanStoryHookText(narrative.summary ?? '', { firstSentenceOnly: true });
+    if (cleaned) {
+      return stripLeadingPersonName(cleaned, person.full_name);
+    }
+  }
+
+  for (const event of events.toSorted(compareStoryEvents)) {
+    const cleaned = cleanStoryHookText(event.title);
+    if (cleaned) {
+      return stripLeadingPersonName(cleaned, person.full_name);
+    }
+  }
+
+  return buildResidenceJourneyHook(residenceSpans, placesById);
+}
+
+export function buildPersonStoryHookMap(
+  bundle: ArchiveBundle | null,
+  placesById: ReadonlyMap<string, Place>
+): ReadonlyMap<string, string> {
+  const hooks = new Map<string, string>();
+  if (!bundle) {
+    return hooks;
+  }
+
+  const eligibleIds = new Set<string>();
+  for (const person of bundle.people) {
+    if (!person.is_living && !isRedactedLivingPerson(person)) {
+      eligibleIds.add(person.id);
+    }
+  }
+
+  const narrativesByPerson = new Map<string, Narrative[]>();
+  for (const narrative of bundle.narratives ?? []) {
+    const subjectId = narrative.subject_person_id;
+    if (!subjectId || !eligibleIds.has(subjectId) || !narrative.summary?.trim()) {
+      continue;
+    }
+    const list = narrativesByPerson.get(subjectId);
+    if (list) {
+      list.push(narrative);
+    } else {
+      narrativesByPerson.set(subjectId, [narrative]);
+    }
+  }
+
+  const eventsByPerson = new Map<string, ArchiveEvent[]>();
+  for (const event of bundle.events) {
+    if (event.scope !== 'personal' && event.scope !== 'family') {
+      continue;
+    }
+    if (!event.title.trim()) {
+      continue;
+    }
+    for (const participant of event.participants) {
+      if (!eligibleIds.has(participant.person_id) || !STORY_PARTICIPANT_ROLES.has(participant.role)) {
+        continue;
+      }
+      const list = eventsByPerson.get(participant.person_id);
+      if (list) {
+        list.push(event);
+      } else {
+        eventsByPerson.set(participant.person_id, [event]);
+      }
+    }
+  }
+
+  const spansByPerson = new Map<string, ResidenceSpan[]>();
+  for (const span of bundle.residence_spans) {
+    if (!eligibleIds.has(span.person_id)) {
+      continue;
+    }
+    const list = spansByPerson.get(span.person_id);
+    if (list) {
+      list.push(span);
+    } else {
+      spansByPerson.set(span.person_id, [span]);
+    }
+  }
+
+  for (const person of bundle.people) {
+    if (!eligibleIds.has(person.id)) {
+      continue;
+    }
+    const hook = selectPersonStoryHookFromSlices({
+      person,
+      narratives: narrativesByPerson.get(person.id) ?? [],
+      events: eventsByPerson.get(person.id) ?? [],
+      residenceSpans: spansByPerson.get(person.id) ?? [],
+      placesById,
+    });
+    if (hook) {
+      hooks.set(person.id, hook);
+    }
+  }
+
+  return hooks;
+}
+
+export function resolvePersonStoryHook(params: {
+  readonly person: Person;
+  readonly bundle: ArchiveBundle | null;
+  readonly placesById: ReadonlyMap<string, Place>;
+}): string | null {
+  const { person, bundle, placesById } = params;
+  if (!bundle || person.is_living || isRedactedLivingPerson(person)) {
+    return null;
+  }
+  const narratives = (bundle.narratives ?? []).filter(
+    (n) => n.subject_person_id === person.id && Boolean(n.summary?.trim())
+  );
+  const events = bundle.events.filter(
+    (e) =>
+      (e.scope === 'personal' || e.scope === 'family') &&
+      Boolean(e.title.trim()) &&
+      e.participants.some((pt) => pt.person_id === person.id && STORY_PARTICIPANT_ROLES.has(pt.role))
+  );
+  const residenceSpans = bundle.residence_spans.filter((s) => s.person_id === person.id);
+  return selectPersonStoryHookFromSlices({ person, narratives, events, residenceSpans, placesById });
 }
 
 export function buildDirectoryJumpTargetId(sectionId: string): string {
@@ -311,6 +588,13 @@ export function buildPeopleDirectoryModel(params: {
       : publicPeople.filter((p) => (p.branch || defaultBranchId) === activeBranch);
 
   const withPhotosCount = branchScopedPeople.filter(hasPersonPhotoOrMedia).length;
+  const photoFilterSaturated = isPhotoFilterSaturated(withPhotosCount, branchScopedPeople.length);
+  const activeFilterCount = countActiveDirectoryFilters({
+    query: filter.query,
+    branch: activeBranch,
+    onlyWithPhotos: filter.onlyWithPhotos,
+  });
+  const storyHooks = buildPersonStoryHookMap(bundle, placesById);
   const normalizedQuery = filter.query.trim().toLowerCase();
 
   const filteredPeople = branchScopedPeople.filter((person) => {
@@ -367,12 +651,15 @@ export function buildPeopleDirectoryModel(params: {
       populatedBranches,
       branchCounts,
       withPhotosCount,
+      isPhotoFilterSaturated: photoFilterSaturated,
+      activeFilterCount,
       filteredPeople,
       sections,
       livingPeople: [],
       showJumpStrip: filteredPeople.length > DIRECTORY_JUMP_STRIP_THRESHOLD,
       autoCollapseLiving: false,
       jumpItems,
+      storyHooks,
     };
   }
 
@@ -435,12 +722,15 @@ export function buildPeopleDirectoryModel(params: {
     populatedBranches,
     branchCounts,
     withPhotosCount,
+    isPhotoFilterSaturated: photoFilterSaturated,
+    activeFilterCount,
     filteredPeople,
     sections,
     livingPeople,
     showJumpStrip: filteredPeople.length > DIRECTORY_JUMP_STRIP_THRESHOLD,
     autoCollapseLiving,
     jumpItems,
+    storyHooks,
   };
 }
 

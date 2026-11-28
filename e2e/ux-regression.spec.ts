@@ -995,12 +995,31 @@ test.describe('Wave 50B UX regression suite', () => {
       await page.setViewportSize({ width: vp.width, height: vp.height });
 
       await page.goto('/');
+      if (vp.width <= 640) {
+        const filtersBtn = page.locator('.index-filters-toggle-btn');
+        await expect(filtersBtn).toBeVisible();
+        const primaryHeights = await page.evaluate(() =>
+          [...document.querySelectorAll('.index-toolbar-primary button')].map((el) => ({
+            cls: el.className,
+            height: Math.round(el.getBoundingClientRect().height),
+          }))
+        );
+        expect(primaryHeights.length, `no mobile index primary controls found at ${vp.name}`).toBeGreaterThan(
+          0
+        );
+        for (const item of primaryHeights) {
+          expect(item.height, `${item.cls} < 44px at ${vp.name}`).toBeGreaterThanOrEqual(44);
+        }
+        await filtersBtn.click();
+      }
       await expect(page.locator('.search-input').first()).toBeVisible();
       const indexHeights = await page.evaluate(() =>
-        [...document.querySelectorAll('.search-input, .index-filter-actions .pill-btn')].map((el) => ({
-          cls: el.className,
-          height: Math.round(el.getBoundingClientRect().height),
-        }))
+        [...document.querySelectorAll('.search-input, .index-filter-actions .pill-btn')]
+          .filter((el) => window.getComputedStyle(el).display !== 'none')
+          .map((el) => ({
+            cls: el.className,
+            height: Math.round(el.getBoundingClientRect().height),
+          }))
       );
       expect(indexHeights.length, `no index controls found at ${vp.name}`).toBeGreaterThan(0);
       for (const item of indexHeights) {
