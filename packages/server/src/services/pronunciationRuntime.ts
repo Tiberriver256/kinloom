@@ -7,6 +7,8 @@ import type {
   PronunciationPhonemeMode,
 } from '@kinloom/core';
 import {
+  Chirp3HdPronunciationAudioGenerator,
+  DEFAULT_CHIRP3_HD_VOICE,
   DEFAULT_GEMINI_TTS_MODEL,
   DEFAULT_GEMINI_TTS_VOICE,
   GeminiPronunciationAudioGenerator,
@@ -15,8 +17,8 @@ import {
 
 export const PRONUNCIATION_PLUGIN_ID = 'kinloom-pronunciation';
 
-export type PronunciationTtsBackend = 'gemini' | 'openai-speech' | 'disabled';
-export type PronunciationFallbackBackend = 'none' | 'gemini' | 'openai-speech';
+export type PronunciationTtsBackend = 'gemini' | 'chirp3-hd' | 'openai-speech' | 'disabled';
+export type PronunciationFallbackBackend = 'none' | 'gemini' | 'chirp3-hd' | 'openai-speech';
 
 export interface PronunciationPluginRuntimeConfig {
   readonly primaryBackend: PronunciationTtsBackend;
@@ -24,6 +26,8 @@ export interface PronunciationPluginRuntimeConfig {
   readonly openAiBaseUrl: string;
   readonly defaultModel: string;
   readonly defaultVoice: string;
+  readonly chirpVoice: string;
+  readonly gcpProjectId: string;
   readonly phonemeMode: PronunciationPhonemeMode;
   readonly autoGenerateOnSave: boolean;
 }
@@ -34,12 +38,24 @@ export const DEFAULT_PRONUNCIATION_RUNTIME_CONFIG: PronunciationPluginRuntimeCon
   openAiBaseUrl: '',
   defaultModel: DEFAULT_GEMINI_TTS_MODEL,
   defaultVoice: DEFAULT_GEMINI_TTS_VOICE,
+  chirpVoice: DEFAULT_CHIRP3_HD_VOICE,
+  gcpProjectId: '',
   phonemeMode: 'ipa',
   autoGenerateOnSave: true,
 };
 
-const VALID_PRIMARY_BACKENDS = new Set<PronunciationTtsBackend>(['gemini', 'openai-speech', 'disabled']);
-const VALID_FALLBACK_BACKENDS = new Set<PronunciationFallbackBackend>(['none', 'gemini', 'openai-speech']);
+const VALID_PRIMARY_BACKENDS = new Set<PronunciationTtsBackend>([
+  'gemini',
+  'chirp3-hd',
+  'openai-speech',
+  'disabled',
+]);
+const VALID_FALLBACK_BACKENDS = new Set<PronunciationFallbackBackend>([
+  'none',
+  'gemini',
+  'chirp3-hd',
+  'openai-speech',
+]);
 const VALID_PHONEME_MODES = new Set<PronunciationPhonemeMode>(['ipa', 'arpabet', 'plain']);
 
 export function parsePronunciationRuntimeConfig(
@@ -69,6 +85,12 @@ export function parsePronunciationRuntimeConfig(
       typeof values.default_voice === 'string' && values.default_voice.trim().length > 0
         ? values.default_voice.trim()
         : fallback.defaultVoice,
+    chirpVoice:
+      typeof values.chirp_voice === 'string' && values.chirp_voice.trim().length > 0
+        ? values.chirp_voice.trim()
+        : fallback.chirpVoice,
+    gcpProjectId:
+      typeof values.gcp_project_id === 'string' ? values.gcp_project_id.trim() : fallback.gcpProjectId,
     phonemeMode:
       typeof rawPhoneme === 'string' && VALID_PHONEME_MODES.has(rawPhoneme as PronunciationPhonemeMode)
         ? (rawPhoneme as PronunciationPhonemeMode)
@@ -91,7 +113,7 @@ export function resolveActivePronunciationGeneratorLabel(params: {
     return 'disabled';
   }
 
-  const backends: Array<'gemini' | 'openai-speech'> = [config.primaryBackend];
+  const backends: Array<'gemini' | 'chirp3-hd' | 'openai-speech'> = [config.primaryBackend];
   if (config.fallbackBackend !== 'none' && config.fallbackBackend !== config.primaryBackend) {
     backends.push(config.fallbackBackend);
   }
@@ -104,6 +126,10 @@ export function resolveActivePronunciationGeneratorLabel(params: {
       if (injectedGenerator) {
         return injectedGenerator.adapterKind ?? 'custom';
       }
+    } else if (backend === 'chirp3-hd') {
+      if (configuredSecrets.google_cloud_tts_api_key || envDefaults?.googleCloudTtsApiKey?.trim()) {
+        return 'chirp3-hd';
+      }
     } else if (backend === 'openai-speech') {
       if (config.openAiBaseUrl.trim().length > 0) {
         return 'openai-speech';
@@ -114,14 +140,24 @@ export function resolveActivePronunciationGeneratorLabel(params: {
   return injectedGenerator ? (injectedGenerator.adapterKind ?? 'custom') : 'none';
 }
 
+export function resolveConfiguredDefaultVoice(config: PronunciationPluginRuntimeConfig): string {
+  return config.primaryBackend === 'chirp3-hd' ? config.chirpVoice : config.defaultVoice;
+}
+
 class FallbackPronunciationGenerator implements PronunciationAudioGenerator {
   readonly adapterKind: string;
   private readonly primary: PronunciationAudioGenerator;
   private readonly fallback: PronunciationAudioGenerator;
+  private readonly primaryDefaultVoice?: string;
 
-  constructor(primary: PronunciationAudioGenerator, fallback: PronunciationAudioGenerator) {
+  constructor(
+    primary: PronunciationAudioGenerator,
+    fallback: PronunciationAudioGenerator,
+    primaryDefaultVoice?: string
+  ) {
     this.primary = primary;
     this.fallback = fallback;
+    this.primaryDefaultVoice = primaryDefaultVoice;
     this.adapterKind = primary.adapterKind ?? 'custom';
   }
 
@@ -131,7 +167,11 @@ class FallbackPronunciationGenerator implements PronunciationAudioGenerator {
     try {
       return await this.primary.generate(params);
     } catch {
-      return this.fallback.generate(params);
+      const fallbackParams =
+        this.primaryDefaultVoice && params.voice === this.primaryDefaultVoice
+          ? { ...params, voice: undefined }
+          : params;
+      return this.fallback.generate(fallbackParams);
     }
   }
 }
@@ -202,15 +242,18 @@ export async function resolveEffectivePronunciationRuntime(params: {
   }
 
   let storedGeminiKey: string | null = null;
+  let storedCloudTtsKey: string | null = null;
   let storedOpenAiKey: string | null = null;
   if (params.pluginSettingsStore && typeof params.pluginSettingsStore.getSecretValue === 'function') {
     try {
-      [storedGeminiKey, storedOpenAiKey] = await Promise.all([
+      [storedGeminiKey, storedCloudTtsKey, storedOpenAiKey] = await Promise.all([
         params.pluginSettingsStore.getSecretValue(PRONUNCIATION_PLUGIN_ID, 'gemini_api_key'),
+        params.pluginSettingsStore.getSecretValue(PRONUNCIATION_PLUGIN_ID, 'google_cloud_tts_api_key'),
         params.pluginSettingsStore.getSecretValue(PRONUNCIATION_PLUGIN_ID, 'openai_api_key'),
       ]);
     } catch {
       storedGeminiKey = null;
+      storedCloudTtsKey = null;
       storedOpenAiKey = null;
     }
   }
@@ -220,9 +263,18 @@ export async function resolveEffectivePronunciationRuntime(params: {
     hasStoredSettings && config.defaultModel.trim().length > 0
       ? config.defaultModel.trim()
       : params.envDefaults?.geminiModel?.trim() || config.defaultModel;
+  const effectiveCloudTtsKey =
+    storedCloudTtsKey?.trim() || params.envDefaults?.googleCloudTtsApiKey?.trim() || '';
+  const effectiveGcpProjectId = config.gcpProjectId.trim() || params.envDefaults?.gcpProjectId?.trim() || '';
+  const effectiveChirpVoice =
+    hasStoredSettings && config.chirpVoice.trim().length > 0
+      ? config.chirpVoice.trim()
+      : params.envDefaults?.chirpVoice?.trim() || config.chirpVoice;
   const fetchFn = params.envDefaults?.fetchImpl;
 
-  function buildForBackend(backend: 'gemini' | 'openai-speech'): PronunciationAudioGenerator | null {
+  function buildForBackend(
+    backend: 'gemini' | 'chirp3-hd' | 'openai-speech'
+  ): PronunciationAudioGenerator | null {
     if (backend === 'gemini') {
       if (effectiveGeminiKey) {
         return new GeminiPronunciationAudioGenerator({
@@ -234,6 +286,17 @@ export async function resolveEffectivePronunciationRuntime(params: {
       }
       if (params.injectedGenerator) {
         return params.injectedGenerator;
+      }
+      return null;
+    }
+    if (backend === 'chirp3-hd') {
+      if (effectiveCloudTtsKey) {
+        return new Chirp3HdPronunciationAudioGenerator({
+          apiKey: effectiveCloudTtsKey,
+          gcpProjectId: effectiveGcpProjectId || undefined,
+          defaultVoice: effectiveChirpVoice,
+          fetchFn,
+        });
       }
       return null;
     }
@@ -260,7 +323,11 @@ export async function resolveEffectivePronunciationRuntime(params: {
       kind: 'ready',
       config,
       hasStoredSettings,
-      generator: new FallbackPronunciationGenerator(primaryGen, fallbackGen),
+      generator: new FallbackPronunciationGenerator(
+        primaryGen,
+        fallbackGen,
+        resolveConfiguredDefaultVoice(config)
+      ),
       activeGeneratorLabel: primaryGen.adapterKind ?? 'custom',
     };
   }

@@ -234,6 +234,11 @@ export {
 export { D1UserOnboardingStore } from './adapters/d1UserOnboardingStore.js';
 export {
   buildPronunciationPrompt,
+  Chirp3HdPronunciationAudioGenerator,
+  type Chirp3HdPronunciationAudioGeneratorOptions,
+  CLOUD_TTS_SYNTHESIZE_ENDPOINT,
+  DEFAULT_CHIRP3_HD_LANGUAGE,
+  DEFAULT_CHIRP3_HD_VOICE,
   DEFAULT_GEMINI_TTS_MODEL,
   DEFAULT_GEMINI_TTS_VOICE,
   DEFAULT_OPENAI_TTS_MODEL,
@@ -242,6 +247,7 @@ export {
   type GeminiPronunciationAudioGeneratorOptions,
   OpenAiSpeechPronunciationGenerator,
   type OpenAiSpeechPronunciationGeneratorOptions,
+  resolveChirp3HdVoiceName,
   wrapPcmAsWav,
 } from './adapters/geminiPronunciationGenerator.js';
 export {
@@ -342,10 +348,18 @@ export function createCloudflareWorker(
       });
       const pronunciationGenerator = options.pronunciationGenerator;
       const pronunciationEnv =
-        env.GEMINI_API_KEY || env.GEMINI_TTS_MODEL || options.pronunciationFetch
+        env.GEMINI_API_KEY ||
+        env.GEMINI_TTS_MODEL ||
+        env.GOOGLE_CLOUD_TTS_API_KEY ||
+        env.GCP_PROJECT_ID ||
+        env.CHIRP3_HD_VOICE ||
+        options.pronunciationFetch
           ? {
               geminiApiKey: env.GEMINI_API_KEY,
               geminiModel: env.GEMINI_TTS_MODEL,
+              googleCloudTtsApiKey: env.GOOGLE_CLOUD_TTS_API_KEY,
+              gcpProjectId: env.GCP_PROJECT_ID,
+              chirpVoice: env.CHIRP3_HD_VOICE,
               fetchImpl: options.pronunciationFetch,
             }
           : undefined;

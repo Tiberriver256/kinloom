@@ -9,6 +9,9 @@ export const DEFAULT_GEMINI_TTS_MODEL = 'gemini-3.8-flash-tts';
 export const DEFAULT_GEMINI_TTS_VOICE = 'Charon';
 export const DEFAULT_OPENAI_TTS_MODEL = 'kokoro';
 export const DEFAULT_OPENAI_TTS_VOICE = 'alloy';
+export const CLOUD_TTS_SYNTHESIZE_ENDPOINT = 'https://texttospeech.googleapis.com/v1/text:synthesize';
+export const DEFAULT_CHIRP3_HD_LANGUAGE = 'en-US';
+export const DEFAULT_CHIRP3_HD_VOICE = 'en-US-Chirp3-HD-Charon';
 
 export interface GeminiPronunciationAudioGeneratorOptions {
   apiKey: string;
@@ -22,6 +25,15 @@ export interface OpenAiSpeechPronunciationGeneratorOptions {
   apiKey?: string;
   model?: string;
   defaultVoice?: string;
+  fetchFn?: typeof fetch;
+}
+
+export interface Chirp3HdPronunciationAudioGeneratorOptions {
+  apiKey: string;
+  gcpProjectId?: string;
+  defaultVoice?: string;
+  defaultLanguageCode?: string;
+  endpointUrl?: string;
   fetchFn?: typeof fetch;
 }
 
@@ -50,6 +62,10 @@ const GeminiGenerateContentResponseSchema = z.object({
       code: z.number().optional(),
     })
     .optional(),
+});
+
+const CloudTtsSynthesizeResponseSchema = z.object({
+  audioContent: z.string().min(1),
 });
 
 function decodeBase64ToBytes(base64: string): Uint8Array {
@@ -149,6 +165,22 @@ const LANGUAGE_DISPLAY_NAMES: Readonly<Record<string, string>> = {
   'en-gb': 'British English',
 };
 
+const CHIRP_BCP47_DEFAULTS: Readonly<Record<string, string>> = {
+  en: 'en-US',
+  nl: 'nl-NL',
+  sv: 'sv-SE',
+  fi: 'fi-FI',
+  pl: 'pl-PL',
+  de: 'de-DE',
+  fr: 'fr-FR',
+  it: 'it-IT',
+  es: 'es-ES',
+  no: 'nb-NO',
+  nb: 'nb-NO',
+  nn: 'nb-NO',
+  da: 'da-DK',
+};
+
 function formatLanguageDirective(language: string): string {
   const trimmed = language.trim();
   const lower = trimmed.toLowerCase();
@@ -174,6 +206,44 @@ function trimTrailingSlashes(value: string): string {
     end -= 1;
   }
   return end === value.length ? value : value.slice(0, end);
+}
+
+function normalizeChirpLanguageCode(language: string | undefined, fallback: string): string {
+  const trimmed = language?.trim();
+  if (!trimmed) {
+    return fallback;
+  }
+  const normalized = trimmed.replaceAll('_', '-');
+  const lower = normalized.toLowerCase();
+  const directDefault = CHIRP_BCP47_DEFAULTS[lower];
+  if (directDefault) {
+    return directDefault;
+  }
+  const parts = normalized.split('-').filter((part) => part.length > 0);
+  if (parts.length >= 2) {
+    return `${parts[0].toLowerCase()}-${parts[1].toUpperCase()}`;
+  }
+  return fallback;
+}
+
+function extractLanguageCodeFromChirpVoice(voice: string): string | null {
+  const match = /^([a-z]{2,3}-[a-z]{2})-/i.exec(voice.trim());
+  if (!match) {
+    return null;
+  }
+  const [lang, region] = match[1].split('-');
+  return `${lang.toLowerCase()}-${region.toUpperCase()}`;
+}
+
+export function resolveChirp3HdVoiceName(voice: string, languageCode: string): string {
+  const trimmed = voice.trim();
+  if (!trimmed) {
+    return `${languageCode}-Chirp3-HD-Charon`;
+  }
+  if (trimmed.includes('-')) {
+    return trimmed;
+  }
+  return `${languageCode}-Chirp3-HD-${trimmed}`;
 }
 
 export function buildPronunciationPrompt(params: {
@@ -325,6 +395,139 @@ export class GeminiPronunciationAudioGenerator implements PronunciationAudioGene
       const channels = parseMimeParamInt(mimeType, 'channels', 1);
       wavBytes = wrapPcmAsWav(rawBytes, sampleRate, channels, 16);
     }
+
+    return {
+      bytes: wavBytes,
+      contentType: 'audio/wav',
+      ext: 'wav',
+    };
+  }
+}
+
+export class Chirp3HdPronunciationAudioGenerator implements PronunciationAudioGenerator {
+  readonly adapterKind = 'chirp3-hd';
+  private readonly apiKey: string;
+  private readonly gcpProjectId: string | null;
+  private readonly defaultVoice: string;
+  private readonly defaultLanguageCode: string;
+  private readonly endpointUrl: string;
+  private readonly fetchFn: typeof fetch;
+
+  constructor(options: Chirp3HdPronunciationAudioGeneratorOptions) {
+    if (!options.apiKey?.trim()) {
+      throw new Error('Chirp3HdPronunciationAudioGenerator requires a non-empty apiKey.');
+    }
+    this.apiKey = options.apiKey.trim();
+    const trimmedProject = options.gcpProjectId?.trim() ?? '';
+    this.gcpProjectId = trimmedProject.length > 0 ? trimmedProject : null;
+    this.defaultLanguageCode = normalizeChirpLanguageCode(
+      options.defaultLanguageCode,
+      DEFAULT_CHIRP3_HD_LANGUAGE
+    );
+    this.defaultVoice = options.defaultVoice?.trim() || DEFAULT_CHIRP3_HD_VOICE;
+    this.endpointUrl = options.endpointUrl?.trim() || CLOUD_TTS_SYNTHESIZE_ENDPOINT;
+    this.fetchFn = options.fetchFn ?? globalThis.fetch.bind(globalThis);
+  }
+
+  async generate(params: {
+    text: string;
+    phonetic?: string;
+    ipa?: string;
+    language?: string;
+    voice?: string;
+    phonemeMode?: PronunciationPhonemeMode;
+  }): Promise<PronunciationAudioResult> {
+    const mode: PronunciationPhonemeMode = params.phonemeMode ?? 'ipa';
+    const text = params.text.trim();
+    const phonetic = params.phonetic?.trim() ?? '';
+    const rawIpa = params.ipa?.trim() ?? '';
+    const strippedIpa = rawIpa ? trimEdgeSlashes(rawIpa).trim() : '';
+
+    let spokenText = text;
+    let customPronunciations:
+      | {
+          pronunciations: Array<{
+            phrase: string;
+            phoneticEncoding: 'PHONETIC_ENCODING_IPA';
+            pronunciation: string;
+          }>;
+        }
+      | undefined;
+
+    if (mode === 'plain') {
+      spokenText = phonetic || text;
+    } else if (strippedIpa && text) {
+      spokenText = text;
+      customPronunciations = {
+        pronunciations: [
+          {
+            phrase: text,
+            phoneticEncoding: 'PHONETIC_ENCODING_IPA',
+            pronunciation: strippedIpa,
+          },
+        ],
+      };
+    } else {
+      spokenText = phonetic || text;
+    }
+
+    if (!spokenText) {
+      throw new Error('Pronunciation text must not be empty.');
+    }
+
+    const rawVoice = params.voice?.trim() || this.defaultVoice;
+    const requestedLanguage = params.language?.trim();
+    const inferredVoiceLanguage = extractLanguageCodeFromChirpVoice(rawVoice);
+    const languageCode = requestedLanguage
+      ? normalizeChirpLanguageCode(requestedLanguage, this.defaultLanguageCode)
+      : (inferredVoiceLanguage ?? this.defaultLanguageCode);
+    const voiceName = resolveChirp3HdVoiceName(rawVoice, languageCode);
+    const effectiveLanguageCode = extractLanguageCodeFromChirpVoice(voiceName) ?? languageCode;
+
+    const headers: Record<string, string> = {
+      'content-type': 'application/json',
+      'x-goog-api-key': this.apiKey,
+    };
+    if (this.gcpProjectId) {
+      headers['x-goog-user-project'] = this.gcpProjectId;
+    }
+
+    const inputPayload: Record<string, unknown> = { text: spokenText };
+    if (customPronunciations) {
+      inputPayload.customPronunciations = customPronunciations;
+    }
+
+    const response = await this.fetchFn(this.endpointUrl, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({
+        input: inputPayload,
+        voice: {
+          languageCode: effectiveLanguageCode,
+          name: voiceName,
+        },
+        audioConfig: {
+          audioEncoding: 'LINEAR16',
+          sampleRateHertz: 24000,
+        },
+      }),
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text().catch(() => '');
+      throw new Error(
+        `Google Cloud Chirp 3 HD TTS request failed with HTTP ${response.status}: ${errorText.slice(0, 200)}`
+      );
+    }
+
+    const rawPayload: unknown = await response.json();
+    const parsedPayload = CloudTtsSynthesizeResponseSchema.safeParse(rawPayload);
+    if (!parsedPayload.success) {
+      throw new Error('Google Cloud Chirp 3 HD TTS response did not contain audioContent.');
+    }
+
+    const rawBytes = decodeBase64ToBytes(parsedPayload.data.audioContent);
+    const wavBytes = isRiffWav(rawBytes) ? rawBytes : wrapPcmAsWav(rawBytes, 24000, 1, 16);
 
     return {
       bytes: wavBytes,

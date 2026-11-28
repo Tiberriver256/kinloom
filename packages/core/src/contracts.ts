@@ -408,6 +408,9 @@ export interface PronunciationAudioGenerator {
 export interface PronunciationEnvDefaults {
   readonly geminiApiKey?: string;
   readonly geminiModel?: string;
+  readonly googleCloudTtsApiKey?: string;
+  readonly gcpProjectId?: string;
+  readonly chirpVoice?: string;
   readonly fetchImpl?: typeof fetch;
 }
 

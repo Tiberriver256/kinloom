@@ -31,6 +31,8 @@ export interface PronunciationPluginOptions {
   readonly defaultOpenAiBaseUrl?: string;
   readonly defaultModel?: string;
   readonly defaultVoice?: string;
+  readonly defaultChirpVoice?: string;
+  readonly defaultGcpProjectId?: string;
   readonly defaultPhonemeMode?: PronunciationPhonemeMode;
   readonly defaultAutoGenerateOnSave?: boolean;
 }
@@ -82,6 +84,7 @@ function buildPronunciationSettingsSchema(options: PronunciationPluginOptions): 
             helpText: 'Primary text-to-speech provider used when synthesizing pronunciation audio.',
             options: [
               { value: 'gemini', label: 'Google Gemini TTS' },
+              { value: 'chirp3-hd', label: 'Google Cloud Chirp 3 HD TTS' },
               { value: 'openai-speech', label: 'OpenAI-Compatible Speech API' },
               { value: 'disabled', label: 'Disabled (Lexicon Text Only)' },
             ],
@@ -97,6 +100,7 @@ function buildPronunciationSettingsSchema(options: PronunciationPluginOptions): 
             options: [
               { value: 'none', label: 'None' },
               { value: 'gemini', label: 'Google Gemini TTS' },
+              { value: 'chirp3-hd', label: 'Google Cloud Chirp 3 HD TTS' },
               { value: 'openai-speech', label: 'OpenAI-Compatible Speech API' },
             ],
             validate: (val, all) => {
@@ -145,6 +149,26 @@ function buildPronunciationSettingsSchema(options: PronunciationPluginOptions): 
             helpText: 'Speaker voice used when an entity entry does not specify a custom voice.',
           },
           {
+            key: 'chirp_voice',
+            label: 'Chirp 3 HD Default Voice',
+            type: 'string',
+            defaultValue: options.defaultChirpVoice ?? DEFAULT_PRONUNCIATION_RUNTIME_CONFIG.chirpVoice,
+            placeholder: 'en-US-Chirp3-HD-Charon',
+            maxLength: 80,
+            helpText:
+              'Google Cloud Chirp 3 HD voice name or speaker (for example, en-US-Chirp3-HD-Charon or Charon).',
+          },
+          {
+            key: 'gcp_project_id',
+            label: 'Google Cloud Quota Project ID',
+            type: 'string',
+            defaultValue: options.defaultGcpProjectId ?? DEFAULT_PRONUNCIATION_RUNTIME_CONFIG.gcpProjectId,
+            placeholder: 'optional-gcp-project-id',
+            maxLength: 120,
+            helpText:
+              'Optional GCP project ID sent via x-goog-user-project when calling Google Cloud Text-to-Speech.',
+          },
+          {
             key: 'phoneme_mode',
             label: 'Phoneme Mode',
             type: 'select',
@@ -184,6 +208,15 @@ function buildPronunciationSettingsSchema(options: PronunciationPluginOptions): 
             helpText: 'Write-only API key for Google Gemini TTS.',
           },
           {
+            key: 'google_cloud_tts_api_key',
+            label: 'Google Cloud TTS API Key',
+            type: 'secret',
+            placeholder: 'Enter Google Cloud TTS API key',
+            minLength: 8,
+            maxLength: 512,
+            helpText: 'Write-only API key for Google Cloud Text-to-Speech (Chirp 3 HD).',
+          },
+          {
             key: 'openai_api_key',
             label: 'OpenAI-Compatible API Key',
             type: 'secret',
@@ -217,7 +250,7 @@ const PRONUNCIATION_DOCS = {
       id: 'tts-providers',
       heading: 'Configuring TTS Providers',
       markdown:
-        'Select a TTS routing mode and configure provider credentials in **Plugins & Integrations**. Secret keys are write-only and never returned to the browser.',
+        'Select primary and optional fallback TTS backends (Google Gemini TTS, Google Cloud Chirp 3 HD TTS, or OpenAI-compatible speech) and configure write-only provider credentials in **Plugins & Integrations**. Secret keys are never returned to the browser.',
     },
   ],
 } as const;
@@ -233,6 +266,8 @@ export function createPronunciationPlugin(
     openAiBaseUrl: options.defaultOpenAiBaseUrl ?? DEFAULT_PRONUNCIATION_RUNTIME_CONFIG.openAiBaseUrl,
     defaultModel: options.defaultModel ?? DEFAULT_PRONUNCIATION_RUNTIME_CONFIG.defaultModel,
     defaultVoice: options.defaultVoice ?? DEFAULT_PRONUNCIATION_RUNTIME_CONFIG.defaultVoice,
+    chirpVoice: options.defaultChirpVoice ?? DEFAULT_PRONUNCIATION_RUNTIME_CONFIG.chirpVoice,
+    gcpProjectId: options.defaultGcpProjectId ?? DEFAULT_PRONUNCIATION_RUNTIME_CONFIG.gcpProjectId,
     phonemeMode: options.defaultPhonemeMode ?? DEFAULT_PRONUNCIATION_RUNTIME_CONFIG.phonemeMode,
     autoGenerateOnSave:
       options.defaultAutoGenerateOnSave ?? DEFAULT_PRONUNCIATION_RUNTIME_CONFIG.autoGenerateOnSave,
@@ -274,6 +309,9 @@ export function createPronunciationPlugin(
       const configuredProviders: string[] = [];
       if (ctx.configuredSecrets.gemini_api_key) {
         configuredProviders.push('gemini');
+      }
+      if (ctx.configuredSecrets.google_cloud_tts_api_key) {
+        configuredProviders.push('chirp3-hd');
       }
       if (ctx.configuredSecrets.openai_api_key) {
         configuredProviders.push('openai-speech');

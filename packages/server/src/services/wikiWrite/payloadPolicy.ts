@@ -28,7 +28,10 @@ import {
 import { randomBytes, toHex } from '../../crypto.js';
 import { KinloomHttpError } from '../../errors.js';
 import { generateAndStorePronunciationAudio } from '../pronunciationHelper.js';
-import { resolveEffectivePronunciationRuntime } from '../pronunciationRuntime.js';
+import {
+  resolveConfiguredDefaultVoice,
+  resolveEffectivePronunciationRuntime,
+} from '../pronunciationRuntime.js';
 
 export interface WorkingEntityRecord {
   lifecycle: EntityLifecycleState;
@@ -393,7 +396,7 @@ export async function maybeGenerateEntityPronunciationAudio(
       ipa: nextPron.ipa,
       language: nextPron.language,
       ...(runtime.hasStoredSettings
-        ? { voice: runtime.config.defaultVoice, phonemeMode: runtime.config.phonemeMode }
+        ? { voice: resolveConfiguredDefaultVoice(runtime.config), phonemeMode: runtime.config.phonemeMode }
         : {}),
     });
     return {

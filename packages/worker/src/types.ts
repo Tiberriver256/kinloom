@@ -153,6 +153,9 @@ export interface KinloomWorkerEnv {
   ARCHIVE_MODE?: 'public' | 'private';
   GEMINI_API_KEY?: string;
   GEMINI_TTS_MODEL?: string;
+  GOOGLE_CLOUD_TTS_API_KEY?: string;
+  GCP_PROJECT_ID?: string;
+  CHIRP3_HD_VOICE?: string;
   CF_WEB_ANALYTICS_TOKEN?: string;
   KINLOOM_BUILD_SHA?: string;
   KINLOOM_BUILD_TIMESTAMP?: string;

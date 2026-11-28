@@ -176,6 +176,7 @@ describe('Declarative Plugin Settings API, RBAC/CSRF, write-only secrets, and re
     });
     expect(pronInitial?.secrets).toEqual({
       gemini_api_key: { configured: false, updated_at: null },
+      google_cloud_tts_api_key: { configured: false, updated_at: null },
       openai_api_key: { configured: false, updated_at: null },
     });
 
@@ -215,6 +216,7 @@ describe('Declarative Plugin Settings API, RBAC/CSRF, write-only secrets, and re
     const updatedAfterSecrets = AdminPluginSettingsUpdateResponseSchema.parse(JSON.parse(saveSecretsText));
     expect(updatedAfterSecrets.plugin.secrets).toEqual({
       gemini_api_key: { configured: true, updated_at: '2026-11-27T12:00:00.000Z' },
+      google_cloud_tts_api_key: { configured: false, updated_at: null },
       openai_api_key: { configured: true, updated_at: '2026-11-27T12:00:00.000Z' },
     });
     expect(updatedAfterSecrets.plugin.readonly_values.configured_credentials).toBe('gemini, openai-speech');

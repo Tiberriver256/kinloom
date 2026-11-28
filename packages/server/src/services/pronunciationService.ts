@@ -14,7 +14,10 @@ import {
 } from '@kinloom/core';
 import { KinloomHttpError } from '../errors.js';
 import { generateAndStorePronunciationAudio, type StoredPronunciationAudio } from './pronunciationHelper.js';
-import { resolveEffectivePronunciationRuntime } from './pronunciationRuntime.js';
+import {
+  resolveConfiguredDefaultVoice,
+  resolveEffectivePronunciationRuntime,
+} from './pronunciationRuntime.js';
 
 export interface PronunciationServiceDeps {
   readonly repository: Pick<EntityReadStore, 'getEntity'>;
@@ -130,7 +133,8 @@ export class PronunciationService {
     }
 
     const effectiveVoice =
-      input.voice?.trim() || (runtime.hasStoredSettings ? runtime.config.defaultVoice : undefined);
+      input.voice?.trim() ||
+      (runtime.hasStoredSettings ? resolveConfiguredDefaultVoice(runtime.config) : undefined);
 
     return generateAndStorePronunciationAudio({
       generator: runtime.generator,
@@ -198,7 +202,10 @@ export class PronunciationService {
           ipa: nextEntry.ipa,
           language: nextEntry.language,
           ...(runtime.hasStoredSettings
-            ? { voice: runtime.config.defaultVoice, phonemeMode: runtime.config.phonemeMode }
+            ? {
+                voice: resolveConfiguredDefaultVoice(runtime.config),
+                phonemeMode: runtime.config.phonemeMode,
+              }
             : {}),
         });
         nextEntry.audio_url = stored.audio_url;

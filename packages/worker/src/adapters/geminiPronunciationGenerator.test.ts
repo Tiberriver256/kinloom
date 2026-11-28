@@ -1,9 +1,13 @@
 import { describe, expect, it, vi } from 'vitest';
 import {
   buildPronunciationPrompt,
+  Chirp3HdPronunciationAudioGenerator,
+  CLOUD_TTS_SYNTHESIZE_ENDPOINT,
+  DEFAULT_CHIRP3_HD_VOICE,
   DEFAULT_GEMINI_TTS_MODEL,
   DEFAULT_GEMINI_TTS_VOICE,
   GeminiPronunciationAudioGenerator,
+  resolveChirp3HdVoiceName,
   wrapPcmAsWav,
 } from './geminiPronunciationGenerator.js';
 
@@ -269,5 +273,179 @@ describe('GeminiPronunciationAudioGenerator', () => {
     const audio = await generator.generate({ text: 'New Salem' });
     expect(audio.contentType).toBe('audio/wav');
     expect(audio.bytes.slice(44)).toEqual(rawPcm);
+  });
+});
+
+describe('Chirp3HdPronunciationAudioGenerator', () => {
+  it('calls Cloud TTS text:synthesize with x-goog-api-key, x-goog-user-project, IPA customPronunciations, and wraps LINEAR16 PCM as WAV', async () => {
+    const rawPcm = new Uint8Array([0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77, 0x88]);
+    const mockFetch = vi.fn(async (_input: string | URL | Request, _init?: RequestInit) => {
+      return new Response(JSON.stringify({ audioContent: bytesToBase64(rawPcm) }), {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      });
+    });
+
+    const generator = new Chirp3HdPronunciationAudioGenerator({
+      apiKey: 'test-cloud-tts-key',
+      gcpProjectId: 'kinloom-archive-prod',
+      defaultVoice: 'Charon',
+      fetchFn: mockFetch as unknown as typeof fetch,
+    });
+
+    const result = await generator.generate({
+      text: 'Goes',
+      ipa: '/ɣus/',
+      phonetic: 'HOOS',
+      language: 'nl',
+      phonemeMode: 'ipa',
+    });
+
+    expect(mockFetch).toHaveBeenCalledTimes(1);
+    const [url, init] = mockFetch.mock.calls[0];
+    expect(url).toBe(CLOUD_TTS_SYNTHESIZE_ENDPOINT);
+    expect(init?.method).toBe('POST');
+    const headers = init?.headers as Record<string, string> | undefined;
+    expect(headers?.['x-goog-api-key']).toBe('test-cloud-tts-key');
+    expect(headers?.['x-goog-user-project']).toBe('kinloom-archive-prod');
+
+    const sentBody = JSON.parse(String(init?.body)) as {
+      input: {
+        text: string;
+        customPronunciations?: {
+          pronunciations: Array<{ phrase: string; phoneticEncoding: string; pronunciation: string }>;
+        };
+      };
+      voice: { languageCode: string; name: string };
+      audioConfig: { audioEncoding: string; sampleRateHertz: number };
+    };
+    expect(sentBody.input.text).toBe('Goes');
+    expect(sentBody.input.customPronunciations?.pronunciations).toEqual([
+      {
+        phrase: 'Goes',
+        phoneticEncoding: 'PHONETIC_ENCODING_IPA',
+        pronunciation: 'ɣus',
+      },
+    ]);
+    expect(sentBody.voice).toEqual({
+      languageCode: 'nl-NL',
+      name: 'nl-NL-Chirp3-HD-Charon',
+    });
+    expect(sentBody.audioConfig).toEqual({
+      audioEncoding: 'LINEAR16',
+      sampleRateHertz: 24000,
+    });
+
+    expect(result.contentType).toBe('audio/wav');
+    expect(result.ext).toBe('wav');
+    expect(result.bytes.byteLength).toBe(44 + rawPcm.byteLength);
+    expect(String.fromCharCode(...result.bytes.slice(0, 4))).toBe('RIFF');
+    expect(result.bytes.slice(44)).toEqual(rawPcm);
+  });
+
+  it('passes through RIFF WAV audioContent, supports plain/arpabet modes, and resolves full voice language codes', async () => {
+    const existingWav = wrapPcmAsWav(new Uint8Array([0x0a, 0x0b, 0x0c, 0x0d]), 24000);
+    const sentPayloads: Array<{
+      url: string;
+      headers: Record<string, string>;
+      body: Record<string, unknown>;
+    }> = [];
+    const mockFetch = vi.fn(async (input: string | URL | Request, init?: RequestInit) => {
+      sentPayloads.push({
+        url: String(input),
+        headers: (init?.headers ?? {}) as Record<string, string>,
+        body: JSON.parse(String(init?.body ?? '{}')) as Record<string, unknown>,
+      });
+      return new Response(JSON.stringify({ audioContent: bytesToBase64(existingWav) }), {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      });
+    });
+
+    const generator = new Chirp3HdPronunciationAudioGenerator({
+      apiKey: 'test-cloud-tts-key',
+      fetchFn: mockFetch as unknown as typeof fetch,
+    });
+
+    // Plain mode omits customPronunciations and speaks phonetic respelling
+    const plainRes = await generator.generate({
+      text: 'Thomas Mercer',
+      phonetic: 'TOM-us MER-ser',
+      ipa: 'ˈmɜːrsər',
+      voice: 'en-GB-Chirp3-HD-Kore',
+      phonemeMode: 'plain',
+    });
+    expect(plainRes.bytes).toEqual(existingWav);
+    expect(sentPayloads[0]?.headers['x-goog-user-project']).toBeUndefined();
+    expect(sentPayloads[0]?.body.input).toEqual({ text: 'TOM-us MER-ser' });
+    expect(sentPayloads[0]?.body.voice).toEqual({
+      languageCode: 'en-GB',
+      name: 'en-GB-Chirp3-HD-Kore',
+    });
+
+    // ARPAbet without IPA falls back to phonetic respelling; default voice uses en-US
+    await generator.generate({
+      text: 'Bramwell',
+      phonetic: 'BRAM-wel',
+      language: 'en_us',
+      phonemeMode: 'arpabet',
+    });
+    expect(sentPayloads[1]?.body.input).toEqual({ text: 'BRAM-wel' });
+    expect(sentPayloads[1]?.body.voice).toEqual({
+      languageCode: 'en-US',
+      name: DEFAULT_CHIRP3_HD_VOICE,
+    });
+
+    expect(resolveChirp3HdVoiceName('   ', 'en-US')).toBe('en-US-Chirp3-HD-Charon');
+    expect(resolveChirp3HdVoiceName('Kore', 'de-DE')).toBe('de-DE-Chirp3-HD-Kore');
+    expect(resolveChirp3HdVoiceName('fr-FR-Chirp3-HD-Aoede', 'en-US')).toBe('fr-FR-Chirp3-HD-Aoede');
+  });
+
+  it('rejects empty apiKey, empty text, HTTP errors, and malformed responses', async () => {
+    expect(() => new Chirp3HdPronunciationAudioGenerator({ apiKey: '   ' })).toThrow(/non-empty apiKey/);
+
+    const failFetch = vi.fn(async () => new Response('service unavailable', { status: 503 }));
+    const genFail = new Chirp3HdPronunciationAudioGenerator({
+      apiKey: 'test-cloud-tts-key',
+      fetchFn: failFetch as unknown as typeof fetch,
+    });
+    await expect(genFail.generate({ text: '   ' })).rejects.toThrow(/must not be empty/);
+    await expect(genFail.generate({ text: 'New Salem' })).rejects.toThrow(/HTTP 503/);
+
+    const badJsonFetch = vi.fn(
+      async () =>
+        new Response(JSON.stringify({ audioContent: '' }), {
+          status: 200,
+          headers: { 'content-type': 'application/json' },
+        })
+    );
+    const genBad = new Chirp3HdPronunciationAudioGenerator({
+      apiKey: 'test-cloud-tts-key',
+      fetchFn: badJsonFetch as unknown as typeof fetch,
+    });
+    await expect(genBad.generate({ text: 'New Salem' })).rejects.toThrow(/did not contain audioContent/);
+
+    // Unrecognized single-part language, non-BCP47 hyphenated voice, custom endpoint, plain without phonetic, and default phonemeMode
+    const rawPcm2 = new Uint8Array([0x01, 0x02, 0x03, 0x04]);
+    const customBodies: Array<{ url: string; body: Record<string, unknown> }> = [];
+    const customFetch = vi.fn(async (input: string | URL | Request, init?: RequestInit) => {
+      customBodies.push({
+        url: String(input),
+        body: JSON.parse(String(init?.body ?? '{}')) as Record<string, unknown>,
+      });
+      return new Response(JSON.stringify({ audioContent: bytesToBase64(rawPcm2) }), { status: 200 });
+    });
+    const genCustom = new Chirp3HdPronunciationAudioGenerator({
+      apiKey: 'test-cloud-tts-key',
+      defaultLanguageCode: 'en_gb',
+      defaultVoice: 'Chirp3-HD-Puck',
+      endpointUrl: 'https://tts-proxy.example.test/v1/text:synthesize',
+      fetchFn: customFetch as unknown as typeof fetch,
+    });
+    await genCustom.generate({ text: 'Alder', language: 'xx' });
+    await genCustom.generate({ text: 'Mercer', phonemeMode: 'plain' });
+    expect(customBodies[0]?.url).toBe('https://tts-proxy.example.test/v1/text:synthesize');
+    expect(customBodies[0]?.body.voice).toEqual({ languageCode: 'en-GB', name: 'Chirp3-HD-Puck' });
+    expect(customBodies[1]?.body.input).toEqual({ text: 'Mercer' });
   });
 });

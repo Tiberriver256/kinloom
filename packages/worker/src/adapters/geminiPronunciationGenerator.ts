@@ -1,5 +1,10 @@
 export {
   buildPronunciationPrompt,
+  Chirp3HdPronunciationAudioGenerator,
+  type Chirp3HdPronunciationAudioGeneratorOptions,
+  CLOUD_TTS_SYNTHESIZE_ENDPOINT,
+  DEFAULT_CHIRP3_HD_LANGUAGE,
+  DEFAULT_CHIRP3_HD_VOICE,
   DEFAULT_GEMINI_TTS_MODEL,
   DEFAULT_GEMINI_TTS_VOICE,
   DEFAULT_OPENAI_TTS_MODEL,
@@ -8,5 +13,6 @@ export {
   type GeminiPronunciationAudioGeneratorOptions,
   OpenAiSpeechPronunciationGenerator,
   type OpenAiSpeechPronunciationGeneratorOptions,
+  resolveChirp3HdVoiceName,
   wrapPcmAsWav,
 } from '@kinloom/server';

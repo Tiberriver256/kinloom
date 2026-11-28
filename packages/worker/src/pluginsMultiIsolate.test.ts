@@ -156,12 +156,32 @@ describe('Cloudflare Worker multi-isolate D1 + R2 persistence (Book Publishing, 
       ARCHIVE_MODE: 'public',
     };
 
-    const ttsCalls: Array<{ url: string; apiKey: string | null; body: string }> = [];
+    const ttsCalls: Array<{
+      url: string;
+      apiKey: string | null;
+      quotaProject: string | null;
+      body: string;
+    }> = [];
+    let simulateGeminiRateLimit = false;
     const mockTtsFetch: typeof fetch = async (input, init) => {
       const url = typeof input === 'string' ? input : input.toString();
       const headers = new Headers(init?.headers);
       const body = String(init?.body ?? '');
-      ttsCalls.push({ url, apiKey: headers.get('x-goog-api-key'), body });
+      ttsCalls.push({
+        url,
+        apiKey: headers.get('x-goog-api-key'),
+        quotaProject: headers.get('x-goog-user-project'),
+        body,
+      });
+      if (url.includes('generativelanguage.googleapis.com') && simulateGeminiRateLimit) {
+        return new Response('RESOURCE_EXHAUSTED', { status: 429 });
+      }
+      if (url.includes('texttospeech.googleapis.com/v1/text:synthesize')) {
+        return new Response(JSON.stringify({ audioContent: makeFakePcmBase64() }), {
+          status: 200,
+          headers: { 'content-type': 'application/json' },
+        });
+      }
       return new Response(
         JSON.stringify({
           candidates: [
@@ -481,6 +501,64 @@ describe('Cloudflare Worker multi-isolate D1 + R2 persistence (Book Publishing, 
     expect(ttsCalls[0]?.apiKey).toBe('AIzaSyCrossIsolateD1Key_777');
     expect(ttsCalls[0]?.body).toContain('"voiceName":"Kore"');
     expect(ttsCalls[0]?.body).not.toContain('ˈeɪdə');
+
+    // Configure Gemini primary + Chirp 3 HD fallback on Isolate A -> fresh Isolate F fails over on Gemini 429!
+    const saveChirpFailoverRes = await isolateA.fetch(
+      new Request(`${CONTRACT_TEST_ORIGIN}/api/admin/plugin-settings/${PRONUNCIATION_PLUGIN_ID}`, {
+        method: 'PUT',
+        headers: {
+          'content-type': 'application/json',
+          origin: CONTRACT_TEST_ORIGIN,
+          cookie: adminCookie,
+        },
+        body: JSON.stringify({
+          values: {
+            primary_backend: 'gemini',
+            fallback_backend: 'chirp3-hd',
+            chirp_voice: 'en-US-Chirp3-HD-Kore',
+            gcp_project_id: 'kinloom-d1-quota',
+            phoneme_mode: 'ipa',
+          },
+          secrets: {
+            google_cloud_tts_api_key: { action: 'set', value: 'AIzaSyCrossIsolateChirpKey_999' },
+          },
+        }),
+      }),
+      envPrivate
+    );
+    expect(saveChirpFailoverRes.status).toBe(200);
+    const saveChirpBody = await saveChirpFailoverRes.text();
+    expect(saveChirpBody).not.toContain('AIzaSyCrossIsolateChirpKey_999');
+
+    simulateGeminiRateLimit = true;
+    const isolateF = makeIsolate([]);
+    const genFailoverRes = await isolateF.fetch(
+      new Request(`${CONTRACT_TEST_ORIGIN}/api/pronunciation/generate`, {
+        method: 'POST',
+        headers: {
+          'content-type': 'application/json',
+          origin: CONTRACT_TEST_ORIGIN,
+          cookie: adminCookie,
+        },
+        body: JSON.stringify({
+          entity_type: 'person',
+          entity_id: ancestor.id,
+          phonetic: 'AY-duh AWL-der',
+          ipa: 'ˈeɪdə ˈɔːldər',
+          force: true,
+        }),
+      }),
+      envPrivate
+    );
+    expect(genFailoverRes.status).toBe(200);
+    expect(ttsCalls).toHaveLength(3);
+    expect(ttsCalls[1]?.url).toContain('generativelanguage.googleapis.com');
+    expect(ttsCalls[2]?.url).toContain('texttospeech.googleapis.com/v1/text:synthesize');
+    expect(ttsCalls[2]?.apiKey).toBe('AIzaSyCrossIsolateChirpKey_999');
+    expect(ttsCalls[2]?.quotaProject).toBe('kinloom-d1-quota');
+    expect(ttsCalls[2]?.body).toContain('en-US-Chirp3-HD-Kore');
+    expect(ttsCalls[2]?.body).toContain('PHONETIC_ENCODING_IPA');
+    simulateGeminiRateLimit = false;
 
     // Disable Pronunciation on Isolate A -> fresh Isolate E returns 503 PRONUNCIATION_DISABLED!
     await isolateA.fetch(

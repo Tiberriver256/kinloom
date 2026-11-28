@@ -4,8 +4,12 @@ import { createInMemoryServerPorts } from '../adapters/inMemory.js';
 import { createPronunciationPlugin, PRONUNCIATION_PLUGIN_ID } from '../plugins/pronunciationPlugin.js';
 import {
   buildPronunciationPrompt,
+  Chirp3HdPronunciationAudioGenerator,
+  CLOUD_TTS_SYNTHESIZE_ENDPOINT,
+  DEFAULT_CHIRP3_HD_VOICE,
   GeminiPronunciationAudioGenerator,
   OpenAiSpeechPronunciationGenerator,
+  resolveChirp3HdVoiceName,
   wrapPcmAsWav,
 } from '../services/pronunciationGenerators.js';
 import { computePronunciationPromptHash } from '../services/pronunciationHelper.js';
@@ -1209,5 +1213,330 @@ describe('Shared pronunciation lexicon endpoints (GET /api/pronunciations, PUT /
         configuredSecrets: {},
       })
     ).toBe('none');
+  });
+  it('supports Google Cloud Chirp 3 HD primary backend and Gemini -> Chirp 3 HD failover on 429/503', async () => {
+    const siteConfig = createSyntheticSiteConfig();
+    const calls: Array<{ url: string; apiKey: string | null; quotaProject: string | null; body: string }> =
+      [];
+    const rawPcm = new Uint8Array([0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08]);
+    let pcmBinary = '';
+    for (const byte of rawPcm) {
+      pcmBinary += String.fromCharCode(byte);
+    }
+    const pcmBase64 = btoa(pcmBinary);
+
+    let geminiFailureStatus = 429;
+    const failoverFetch: typeof fetch = async (input, init) => {
+      const url = typeof input === 'string' ? input : input.toString();
+      const headers = new Headers(init?.headers);
+      const body = String(init?.body ?? '');
+      calls.push({
+        url,
+        apiKey: headers.get('x-goog-api-key'),
+        quotaProject: headers.get('x-goog-user-project'),
+        body,
+      });
+      if (url.includes('generativelanguage.googleapis.com')) {
+        return new Response('rate limit exceeded', { status: geminiFailureStatus });
+      }
+      if (url.includes('texttospeech.googleapis.com/v1/text:synthesize')) {
+        return new Response(JSON.stringify({ audioContent: pcmBase64 }), {
+          status: 200,
+          headers: { 'content-type': 'application/json' },
+        });
+      }
+      return new Response('unexpected url', { status: 500 });
+    };
+
+    const ports = createInMemoryServerPorts(siteConfig);
+    const server = createKinloomServer({
+      siteConfig,
+      sessionSecret: SECRET,
+      ports: {
+        ...ports,
+        pronunciationEnv: { fetchImpl: failoverFetch },
+        plugins: [createPronunciationPlugin()],
+      },
+    });
+
+    const adminCookie = await createUserCookie(ports, {
+      email: 'steward@example.test',
+      display_name: 'Archive Steward',
+      role: 'admin',
+    });
+
+    const alder = createSyntheticHistoricalPerson({
+      id: 'per_elias_alder',
+      slug: 'elias-alder',
+      full_name: 'Elias Alder',
+      given_name: 'Elias',
+      surname: 'Alder',
+    });
+    const seedRes = await server.fetch(
+      new Request(`${ORIGIN}/api/entities/person`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', origin: ORIGIN, cookie: adminCookie },
+        body: JSON.stringify({
+          entity_id: alder.id,
+          data: alder,
+          summary: 'Seed Elias Alder',
+          has_primary_source: true,
+        }),
+      })
+    );
+    expect(seedRes.status).toBe(201);
+
+    const cloudTtsKey = 'AIzaSyChirp3HdSecretKey_88776655';
+    const saveRes = await server.fetch(
+      new Request(`${ORIGIN}/api/admin/plugin-settings/${PRONUNCIATION_PLUGIN_ID}`, {
+        method: 'PUT',
+        headers: { 'content-type': 'application/json', origin: ORIGIN, cookie: adminCookie },
+        body: JSON.stringify({
+          values: {
+            primary_backend: 'gemini',
+            fallback_backend: 'chirp3-hd',
+            chirp_voice: 'en-US-Chirp3-HD-Kore',
+            gcp_project_id: 'kinloom-tts-quota',
+            phoneme_mode: 'ipa',
+          },
+          secrets: {
+            gemini_api_key: { action: 'set', value: 'AIzaSyGeminiPrimaryKey_11223344' },
+            google_cloud_tts_api_key: { action: 'set', value: cloudTtsKey },
+          },
+        }),
+      })
+    );
+    expect(saveRes.status).toBe(200);
+    const saveBody = await saveRes.text();
+    expect(saveBody).not.toContain(cloudTtsKey);
+    const parsedSave = JSON.parse(saveBody) as {
+      plugin: {
+        readonly_values: { active_generator: string; configured_credentials: string };
+        secrets: { google_cloud_tts_api_key: { configured: boolean } };
+      };
+    };
+    expect(parsedSave.plugin.readonly_values.active_generator).toBe('gemini-tts');
+    expect(parsedSave.plugin.readonly_values.configured_credentials).toBe('gemini, chirp3-hd');
+    expect(parsedSave.plugin.secrets.google_cloud_tts_api_key.configured).toBe(true);
+
+    // Gemini returns 429 -> seamlessly fails over to Google Cloud Chirp 3 HD
+    const failoverRes = await server.fetch(
+      new Request(`${ORIGIN}/api/pronunciation/generate`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', origin: ORIGIN, cookie: adminCookie },
+        body: JSON.stringify({
+          entity_type: 'person',
+          entity_id: alder.id,
+          ipa: 'ɪˈlaɪəs ˈɔːldər',
+          phonetic: 'ih-LY-us AWL-der',
+        }),
+      })
+    );
+    expect(failoverRes.status).toBe(200);
+    expect(calls).toHaveLength(2);
+    expect(calls[0]?.url).toContain('generativelanguage.googleapis.com');
+    expect(calls[1]?.url).toContain('texttospeech.googleapis.com/v1/text:synthesize');
+    expect(calls[1]?.apiKey).toBe(cloudTtsKey);
+    expect(calls[1]?.quotaProject).toBe('kinloom-tts-quota');
+    expect(calls[1]?.body).toContain('PHONETIC_ENCODING_IPA');
+    expect(calls[1]?.body).toContain('en-US-Chirp3-HD-Kore');
+
+    // Gemini returns 503 -> also fails over to Chirp 3 HD
+    geminiFailureStatus = 503;
+    const failover503Res = await server.fetch(
+      new Request(`${ORIGIN}/api/pronunciation/generate`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', origin: ORIGIN, cookie: adminCookie },
+        body: JSON.stringify({
+          entity_type: 'person',
+          entity_id: alder.id,
+          ipa: 'ɪˈlaɪəs ˈɔːldər',
+          force: true,
+        }),
+      })
+    );
+    expect(failover503Res.status).toBe(200);
+    expect(calls).toHaveLength(4);
+    expect(calls[3]?.url).toContain('texttospeech.googleapis.com/v1/text:synthesize');
+
+    // Explicit per-entity voice override is preserved across Gemini -> Chirp 3 HD failover
+    const failoverCustomVoiceRes = await server.fetch(
+      new Request(`${ORIGIN}/api/pronunciation/generate`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', origin: ORIGIN, cookie: adminCookie },
+        body: JSON.stringify({
+          entity_type: 'person',
+          entity_id: alder.id,
+          voice: 'nl-NL-Chirp3-HD-Aoede',
+          force: true,
+        }),
+      })
+    );
+    expect(failoverCustomVoiceRes.status).toBe(200);
+    expect(calls[calls.length - 1]?.body).toContain('nl-NL-Chirp3-HD-Aoede');
+
+    // Direct chirp3-hd primary backend with stored settings, then without key (503 unavailable)
+    const switchChirpRes = await server.fetch(
+      new Request(`${ORIGIN}/api/admin/plugin-settings/${PRONUNCIATION_PLUGIN_ID}`, {
+        method: 'PUT',
+        headers: { 'content-type': 'application/json', origin: ORIGIN, cookie: adminCookie },
+        body: JSON.stringify({
+          values: {
+            primary_backend: 'chirp3-hd',
+            fallback_backend: 'none',
+            chirp_voice: 'en-US-Chirp3-HD-Charon',
+          },
+        }),
+      })
+    );
+    expect(switchChirpRes.status).toBe(200);
+    const directChirpRes = await server.fetch(
+      new Request(`${ORIGIN}/api/pronunciation/generate`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', origin: ORIGIN, cookie: adminCookie },
+        body: JSON.stringify({
+          entity_type: 'person',
+          entity_id: alder.id,
+          force: true,
+        }),
+      })
+    );
+    expect(directChirpRes.status).toBe(200);
+    expect(calls[calls.length - 1]?.url).toContain('texttospeech.googleapis.com/v1/text:synthesize');
+    expect(calls[calls.length - 1]?.body).toContain('en-US-Chirp3-HD-Charon');
+
+    // Clear google_cloud_tts_api_key -> chirp3-hd primary becomes unavailable (503)
+    await server.fetch(
+      new Request(`${ORIGIN}/api/admin/plugin-settings/${PRONUNCIATION_PLUGIN_ID}`, {
+        method: 'PUT',
+        headers: { 'content-type': 'application/json', origin: ORIGIN, cookie: adminCookie },
+        body: JSON.stringify({
+          secrets: { google_cloud_tts_api_key: { action: 'clear' } },
+        }),
+      })
+    );
+    const missingKeyRes = await server.fetch(
+      new Request(`${ORIGIN}/api/pronunciation/generate`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', origin: ORIGIN, cookie: adminCookie },
+        body: JSON.stringify({ entity_type: 'person', entity_id: alder.id, force: true }),
+      })
+    );
+    expect(missingKeyRes.status).toBe(503);
+
+    // Direct chirp3-hd primary backend + label resolver coverage
+    expect(
+      resolveActivePronunciationGeneratorLabel({
+        config: { ...DEFAULT_PRONUNCIATION_RUNTIME_CONFIG, primaryBackend: 'chirp3-hd' },
+        configuredSecrets: { google_cloud_tts_api_key: true },
+      })
+    ).toBe('chirp3-hd');
+    expect(
+      resolveActivePronunciationGeneratorLabel({
+        config: { ...DEFAULT_PRONUNCIATION_RUNTIME_CONFIG, primaryBackend: 'chirp3-hd' },
+        configuredSecrets: {},
+        envDefaults: { googleCloudTtsApiKey: 'env-cloud-tts-key' },
+      })
+    ).toBe('chirp3-hd');
+    expect(
+      resolveActivePronunciationGeneratorLabel({
+        config: { ...DEFAULT_PRONUNCIATION_RUNTIME_CONFIG, primaryBackend: 'chirp3-hd' },
+        configuredSecrets: {},
+      })
+    ).toBe('none');
+  });
+
+  it('exercises Chirp3HdPronunciationAudioGenerator direct unit paths (IPA, plain, arpabet, WAV passthrough, voice/language normalization, errors)', async () => {
+    expect(() => new Chirp3HdPronunciationAudioGenerator({ apiKey: '   ' })).toThrow(/non-empty apiKey/);
+    expect(resolveChirp3HdVoiceName('  ', 'en-US')).toBe('en-US-Chirp3-HD-Charon');
+    expect(resolveChirp3HdVoiceName('Kore', 'nl-NL')).toBe('nl-NL-Chirp3-HD-Kore');
+    expect(resolveChirp3HdVoiceName('fr-FR-Chirp3-HD-Aoede', 'en-US')).toBe('fr-FR-Chirp3-HD-Aoede');
+
+    const rawPcm = new Uint8Array([0x01, 0x02, 0x03, 0x04]);
+    const existingWav = wrapPcmAsWav(rawPcm, 24000, 1, 16);
+    const toB64 = (bytes: Uint8Array) => {
+      let s = '';
+      for (const b of bytes) {
+        s += String.fromCharCode(b);
+      }
+      return btoa(s);
+    };
+
+    const requests: Array<{ url: string; headers: Record<string, string>; body: Record<string, unknown> }> =
+      [];
+    let returnWav = false;
+    const mockFetch: typeof fetch = async (input, init) => {
+      requests.push({
+        url: String(input),
+        headers: (init?.headers ?? {}) as Record<string, string>,
+        body: JSON.parse(String(init?.body ?? '{}')) as Record<string, unknown>,
+      });
+      return new Response(JSON.stringify({ audioContent: toB64(returnWav ? existingWav : rawPcm) }), {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      });
+    };
+
+    const gen = new Chirp3HdPronunciationAudioGenerator({
+      apiKey: 'test-chirp-key',
+      gcpProjectId: 'proj-alpha',
+      defaultVoice: 'Charon',
+      fetchFn: mockFetch,
+    });
+
+    // 1. IPA with short language code 'nl' -> nl-NL-Chirp3-HD-Charon + PCM wrapped to WAV
+    const ipaRes = await gen.generate({
+      text: 'Goes',
+      ipa: '/ɣus/',
+      phonetic: 'HOOS',
+      language: 'nl',
+      phonemeMode: 'ipa',
+    });
+    expect(ipaRes.bytes.byteLength).toBe(44 + rawPcm.byteLength);
+    expect(requests[0]?.url).toBe(CLOUD_TTS_SYNTHESIZE_ENDPOINT);
+    expect(requests[0]?.headers['x-goog-user-project']).toBe('proj-alpha');
+    expect(requests[0]?.body.voice).toEqual({ languageCode: 'nl-NL', name: 'nl-NL-Chirp3-HD-Charon' });
+
+    // 2. Plain mode with phonetic + RIFF WAV passthrough + full voice name language extraction
+    returnWav = true;
+    const plainRes = await gen.generate({
+      text: 'Thomas Mercer',
+      phonetic: 'TOM-us MER-ser',
+      voice: 'en-GB-Chirp3-HD-Kore',
+      phonemeMode: 'plain',
+    });
+    expect(plainRes.bytes).toEqual(existingWav);
+    expect(requests[1]?.body.input).toEqual({ text: 'TOM-us MER-ser' });
+    expect(requests[1]?.body.voice).toEqual({ languageCode: 'en-GB', name: 'en-GB-Chirp3-HD-Kore' });
+
+    // 3. Plain mode without phonetic, unrecognized single-part language, non-BCP47 voice, custom endpoint
+    const genCustom = new Chirp3HdPronunciationAudioGenerator({
+      apiKey: 'test-chirp-key',
+      defaultLanguageCode: 'en_us',
+      defaultVoice: 'Chirp3-HD-Puck',
+      endpointUrl: 'https://tts-custom.example.test/v1/text:synthesize',
+      fetchFn: mockFetch,
+    });
+    await genCustom.generate({ text: 'Alder', language: 'xx', phonemeMode: 'plain' });
+    await genCustom.generate({ text: 'Bramwell', phonetic: 'BRAM-wel', phonemeMode: 'arpabet' });
+    expect(requests[2]?.url).toBe('https://tts-custom.example.test/v1/text:synthesize');
+    expect(requests[2]?.headers['x-goog-user-project']).toBeUndefined();
+    expect(requests[2]?.body.voice).toEqual({ languageCode: 'en-US', name: 'Chirp3-HD-Puck' });
+    expect(requests[3]?.body.input).toEqual({ text: 'BRAM-wel' });
+    expect(DEFAULT_CHIRP3_HD_VOICE).toBe('en-US-Chirp3-HD-Charon');
+
+    // 4. Error paths: empty text, HTTP 429, malformed JSON
+    await expect(gen.generate({ text: '   ' })).rejects.toThrow(/must not be empty/);
+    const errGen = new Chirp3HdPronunciationAudioGenerator({
+      apiKey: 'test-chirp-key',
+      fetchFn: async () => new Response('quota exceeded', { status: 429 }),
+    });
+    await expect(errGen.generate({ text: 'Alder' })).rejects.toThrow(/HTTP 429/);
+
+    const badGen = new Chirp3HdPronunciationAudioGenerator({
+      apiKey: 'test-chirp-key',
+      fetchFn: async () => new Response(JSON.stringify({ audioContent: '' }), { status: 200 }),
+    });
+    await expect(badGen.generate({ text: 'Alder' })).rejects.toThrow(/did not contain audioContent/);
   });
 });
