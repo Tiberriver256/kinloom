@@ -87,6 +87,7 @@ const BUILTIN_COMMAND_HANDLERS: Readonly<Record<BuiltInExecutableCommandName, Bu
   telemetry: async (rest, ctx) => (await import('./liveAndUtilityCommands.js')).runTelemetry(rest, ctx),
   screenshots: async (rest, ctx) => (await import('./screenshotsCommand.js')).runScreenshots(rest, ctx),
   'design-audit': async (rest, ctx) => (await import('./designAuditCommand.js')).runDesignAudit(rest, ctx),
+  stories: async (rest, ctx) => (await import('../commands/stories.js')).runStoriesCommand(rest, ctx),
   records: (rest, ctx) => runRecordsCliCommand(rest, ctx),
   guide: (rest, ctx) => runGuideCliCommand(rest, ctx.io),
 };

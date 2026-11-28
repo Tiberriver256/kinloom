@@ -49,6 +49,9 @@ export * from './revisions.js';
 export * from './schemas/adminDocs.js';
 export * from './schemas/changelogs.js';
 export * from './schemas/index.js';
+// Specialty Stories Validator & Portable Compiler
+export * from './stories/compileStory.js';
+export * from './stories/validateStory.js';
 export * from './validateArchive.js';
 export * from './version.js';
 // Deterministic YAML Loader & Serializer

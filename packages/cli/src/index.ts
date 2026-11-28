@@ -78,6 +78,12 @@ export {
   type SliceGedcomCommandResult,
 } from './commands/sliceGedcom.js';
 export {
+  buildScaffoldStory,
+  runStoriesCommand,
+  STORIES_HELP,
+  slugifyStoryTitle,
+} from './commands/stories.js';
+export {
   runSubmitBatchCommand,
   type SubmitBatchCommandOptions,
   type SubmitBatchCommandResult,
