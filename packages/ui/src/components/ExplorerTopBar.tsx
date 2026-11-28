@@ -9,11 +9,63 @@ import { isPluginNavRouteActive, selectVisiblePluginNavRoutes } from '../lib/plu
 import { KINLOOM_VOCABULARY } from '../lib/vocabulary.js';
 import { AuthSessionActorContext } from '../machines/authSessionMachine.js';
 import { PluginSlot, useKinloomPlugins } from '../plugins/PluginContext.js';
+import type { KinloomUiPluginRoute } from '../plugins/types.js';
 import controlStyles from '../styles/Controls.module.css';
 import { initialsOf } from './Atoms.js';
 import topBarStyles from './ExplorerTopBar.module.css';
 import { SignInModal } from './wiki/SignInModal.js';
 import wikiChromeStyles from './wiki/WikiChrome.module.css';
+
+export interface ActiveOverflowNavSection {
+  readonly id: string;
+  readonly label: string;
+  readonly inDesktopAccountMenu: boolean;
+}
+
+export function resolveOverflowNavSection(
+  pathname: string,
+  navPluginRoutes: readonly (Pick<KinloomUiPluginRoute, 'path' | 'navLabel' | 'navMatchPrefix'> & {
+    readonly pluginId: string;
+  })[]
+): ActiveOverflowNavSection | null {
+  if (pathname === '/evidence') {
+    return {
+      id: 'evidence',
+      label: KINLOOM_VOCABULARY.nav.evidence,
+      inDesktopAccountMenu: false,
+    };
+  }
+  if (pathname === '/kinship') {
+    return {
+      id: 'kinship',
+      label: KINLOOM_VOCABULARY.nav.kinship,
+      inDesktopAccountMenu: false,
+    };
+  }
+  if (pathname === '/changes') {
+    return {
+      id: 'changes',
+      label: KINLOOM_VOCABULARY.nav.recentChanges,
+      inDesktopAccountMenu: true,
+    };
+  }
+  if (pathname === '/admin') {
+    return {
+      id: 'admin',
+      label: KINLOOM_VOCABULARY.nav.siteSettings,
+      inDesktopAccountMenu: true,
+    };
+  }
+  const activePlugin = navPluginRoutes.find((route) => isPluginNavRouteActive(route, pathname));
+  if (activePlugin) {
+    return {
+      id: `plugin:${activePlugin.pluginId}:${activePlugin.path}`,
+      label: activePlugin.navLabel ?? activePlugin.pluginId,
+      inDesktopAccountMenu: false,
+    };
+  }
+  return null;
+}
 
 export const ExplorerTopBar: React.FC = () => {
   const { siteConfig, featuredDocumentId, capabilities, session, dataSource } = useArchiveData();
@@ -76,6 +128,7 @@ export const ExplorerTopBar: React.FC = () => {
   const isPeopleActive = location.pathname === '/' || location.pathname.startsWith('/person/');
   const isPlacesActive = location.pathname === '/places' || location.pathname.startsWith('/place/');
   const isTimeActive = location.pathname === '/time';
+  const activeOverflowSection = resolveOverflowNavSection(location.pathname, navPluginRoutes);
 
   const isSignedInMember = Boolean(session?.authenticated && session.principal_kind === 'user');
   const isInviteViewer = Boolean(session && session.principal_kind === 'invite_viewer');
@@ -229,14 +282,14 @@ export const ExplorerTopBar: React.FC = () => {
           <nav className={cx(topBarStyles, 'nav-links')} aria-label="Primary">
             <Link
               to="/"
-              className={cx(topBarStyles, `nav-pill nav-axis ${isPeopleActive ? 'active' : ''}`)}
+              className={cx(topBarStyles, `nav-pill ${isPeopleActive ? 'active' : ''}`)}
               aria-current={isPeopleActive ? 'page' : undefined}
             >
               {KINLOOM_VOCABULARY.nav.people}
             </Link>
             <Link
               to="/places"
-              className={cx(topBarStyles, `nav-pill nav-axis ${isPlacesActive ? 'active' : ''}`)}
+              className={cx(topBarStyles, `nav-pill ${isPlacesActive ? 'active' : ''}`)}
               aria-current={isPlacesActive ? 'page' : undefined}
             >
               {KINLOOM_VOCABULARY.nav.places}
@@ -245,7 +298,7 @@ export const ExplorerTopBar: React.FC = () => {
               to="/evidence"
               className={cx(
                 topBarStyles,
-                `nav-pill nav-axis nav-pill-desktop-only ${location.pathname === '/evidence' ? 'active' : ''}`
+                `nav-pill nav-pill-desktop-only ${location.pathname === '/evidence' ? 'active' : ''}`
               )}
               aria-current={location.pathname === '/evidence' ? 'page' : undefined}
             >
@@ -322,7 +375,7 @@ export const ExplorerTopBar: React.FC = () => {
 
           <button
             type="button"
-            className={cx(topBarStyles, 'nav-pill nav-pill-desktop-only')}
+            className={cx(topBarStyles, 'topbar-utility-btn nav-pill-desktop-only')}
             onClick={handleOpenSources}
           >
             {KINLOOM_VOCABULARY.nav.sources}
@@ -330,7 +383,7 @@ export const ExplorerTopBar: React.FC = () => {
 
           <button
             type="button"
-            className={cx(topBarStyles, 'nav-pill nav-search-btn nav-pill-desktop-only')}
+            className={cx(topBarStyles, 'topbar-utility-btn nav-search-btn nav-pill-desktop-only')}
             onClick={openSearch}
             aria-label={KINLOOM_VOCABULARY.nav.searchDesktop}
             title={KINLOOM_VOCABULARY.nav.searchTooltip}
@@ -380,7 +433,7 @@ export const ExplorerTopBar: React.FC = () => {
           {isInviteViewer && (
             <button
               type="button"
-              className={cx(topBarStyles, 'nav-pill nav-pill-desktop-only')}
+              className={cx(topBarStyles, 'topbar-utility-btn nav-pill-desktop-only')}
               onClick={() => {
                 setSignInOpen(true);
               }}
@@ -423,10 +476,25 @@ export const ExplorerTopBar: React.FC = () => {
               <button
                 ref={accountTriggerRef}
                 type="button"
-                className={cx(wikiChromeStyles, `topbar-account-btn ${accountOpen ? 'is-open' : ''}`)}
+                className={joinClasses(
+                  cx(wikiChromeStyles, `topbar-account-btn ${accountOpen ? 'is-open' : ''}`),
+                  activeOverflowSection ? cx(topBarStyles, 'topbar-menu-active-mobile') : '',
+                  activeOverflowSection?.inDesktopAccountMenu
+                    ? cx(topBarStyles, 'topbar-menu-active-desktop')
+                    : ''
+                )}
                 aria-expanded={accountOpen}
                 aria-controls={disclosureMenuId}
                 aria-label={`Account menu for ${memberLabel}`}
+                aria-description={
+                  activeOverflowSection ? `Current section: ${activeOverflowSection.label}` : undefined
+                }
+                data-active-section={activeOverflowSection?.label}
+                title={
+                  activeOverflowSection
+                    ? `Account menu (${activeOverflowSection.label})`
+                    : `Account menu for ${memberLabel}`
+                }
                 onClick={() => {
                   setAccountOpen((open) => !open);
                 }}
@@ -454,11 +522,20 @@ export const ExplorerTopBar: React.FC = () => {
               <button
                 ref={accountTriggerRef}
                 type="button"
-                className={cx(topBarStyles, `topbar-mobile-icon-btn ${accountOpen ? 'is-open' : ''}`)}
+                className={cx(
+                  topBarStyles,
+                  `topbar-mobile-icon-btn ${accountOpen ? 'is-open' : ''} ${activeOverflowSection ? 'topbar-menu-active-mobile' : ''}`
+                )}
                 aria-expanded={accountOpen}
                 aria-controls={disclosureMenuId}
                 aria-label="Archive menu"
-                title="Archive menu"
+                aria-description={
+                  activeOverflowSection ? `Current section: ${activeOverflowSection.label}` : undefined
+                }
+                data-active-section={activeOverflowSection?.label}
+                title={
+                  activeOverflowSection ? `Archive menu (${activeOverflowSection.label})` : 'Archive menu'
+                }
                 onClick={() => {
                   setAccountOpen((open) => !open);
                 }}
@@ -752,7 +829,7 @@ export const ExplorerTopBar: React.FC = () => {
               <button
                 ref={guideTriggerRef}
                 type="button"
-                className={cx(topBarStyles, `nav-pill nav-guide-btn ${guideOpen ? 'active' : ''}`)}
+                className={cx(topBarStyles, `topbar-utility-btn nav-guide-btn ${guideOpen ? 'active' : ''}`)}
                 aria-label="Guide"
                 aria-haspopup="menu"
                 aria-expanded={guideOpen}

@@ -6,6 +6,7 @@ import type {
   Place,
   SearchResultKind,
 } from '@kinloom/core';
+import { KINLOOM_VOCABULARY } from './vocabulary.js';
 
 export interface CommandBarQuickAction {
   readonly id: 'tree' | 'map' | 'kinship' | 'evidence';
@@ -17,25 +18,25 @@ export interface CommandBarQuickAction {
 export const COMMAND_BAR_QUICK_ACTIONS: readonly CommandBarQuickAction[] = [
   {
     id: 'tree',
-    label: 'Go to Tree',
+    label: `Open ${KINLOOM_VOCABULARY.nav.tree}`,
     route: '/tree',
     description: 'Explore family lines & pedigree',
   },
   {
     id: 'map',
-    label: 'Go to Map',
+    label: `Open ${KINLOOM_VOCABULARY.nav.map}`,
     route: '/map',
     description: 'Trace places & migration routes',
   },
   {
     id: 'kinship',
-    label: 'Trace Kinship',
+    label: `Open ${KINLOOM_VOCABULARY.nav.kinship}`,
     route: '/kinship',
     description: 'Find how two people connect',
   },
   {
     id: 'evidence',
-    label: 'Evidence',
+    label: `Open ${KINLOOM_VOCABULARY.nav.evidence}`,
     route: '/evidence',
     description: 'Browse primary records & citations',
   },

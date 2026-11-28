@@ -346,7 +346,7 @@ export const RecentChangesPage: React.FC<RecentChangesPageProps> = ({ initialRev
               {error}
             </div>
           )}
-          {loading && <p className={cx(controlStyles, 'empty-ring-note')}>Loading research field reports…</p>}
+          {loading && <p className={cx(controlStyles, 'empty-ring-note')}>Loading revision history…</p>}
           {!loading && groupedFeed.length === 0 && (
             <p className={cx(controlStyles, 'empty-ring-note')}>
               {getEmptyRevisionFeedMessage(authorFilter, onlyUnreviewed)}

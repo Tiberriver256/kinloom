@@ -220,7 +220,8 @@ describe('IndexPage People Directory (#65)', () => {
     expect(livingSection?.textContent).toContain('Sam Rowan');
     expect(livingSection?.textContent).toContain('b. 1991 · Living');
     expect(livingSection?.textContent).not.toContain('Location unrecorded');
-    expect(livingSection?.textContent).not.toContain('0 milestones');
+    expect(livingSection?.textContent).not.toContain('0 events');
+    expect(livingSection?.textContent).not.toContain('milestone');
 
     // Branch selector updates URL (?branch=birch) and renders Family Tree scent link
     const branchSelect = container.querySelector<HTMLSelectElement>(
@@ -253,7 +254,8 @@ describe('IndexPage People Directory (#65)', () => {
     expect(rSection?.textContent).toContain('Sam Rowan');
     expect(rSection?.textContent).toContain('b. 1991 · Living');
     expect(rSection?.textContent).not.toContain('Location unrecorded');
-    expect(rSection?.textContent).not.toContain('0 milestones');
+    expect(rSection?.textContent).not.toContain('0 events');
+    expect(rSection?.textContent).not.toContain('milestone');
 
     // With photos toggle filters down to Clara Birch
     const photosBtn = [...container.querySelectorAll<HTMLButtonElement>('button')].find((b) =>

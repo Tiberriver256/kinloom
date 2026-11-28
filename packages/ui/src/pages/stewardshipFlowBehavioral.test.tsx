@@ -636,6 +636,7 @@ describe('Issue #69 stewardship flows: EvidenceLegend, uncited CTA, completeness
     await flushUi();
     await flushUi();
 
+    expect(feedEl.querySelector('h1')?.textContent).toBe('Revision History');
     expect(feedEl.textContent).toContain('Research Field Report: 1 event added');
     expect(feedEl.textContent).toContain('Updated birth date for Clara Barton');
     expect(feedEl.textContent).toContain('Possible duplicate event detected:');

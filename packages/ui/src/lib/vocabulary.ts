@@ -229,9 +229,13 @@ export const KINLOOM_VOCABULARY = {
     clearReview: 'Undo',
     clearReviewAria: 'Clear steward review stamp',
     needsReviewLabel: 'Needs review',
-    fieldReportsHeading: 'Research Field Reports',
+    fieldReportsHeading: 'Revision History',
   },
 } as const;
+
+export function formatEventCount(count: number): string {
+  return `${count} ${count === 1 ? 'event' : 'events'}`;
+}
 
 export function formatPhotoDocumentCount(count: number): string {
   return `${count} ${count === 1 ? 'photo or document' : 'photos & documents'}`;

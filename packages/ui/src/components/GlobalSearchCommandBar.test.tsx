@@ -555,14 +555,14 @@ describe('GlobalSearchModal Archival Command Bar (#71)', () => {
     expect(dialog?.textContent).toContain('Recently viewed');
     expect(dialog?.textContent).toContain('Thomas Alder (1835–1902)');
     expect(dialog?.textContent).toContain('Quick actions');
-    expect(dialog?.textContent).toContain('Go to Tree');
-    expect(dialog?.textContent).toContain('Go to Map');
-    expect(dialog?.textContent).toContain('Trace Kinship');
-    expect(dialog?.textContent).toContain('Evidence');
+    expect(dialog?.textContent).toContain('Open Tree');
+    expect(dialog?.textContent).toContain('Open Map');
+    expect(dialog?.textContent).toContain('Open Kinship');
+    expect(dialog?.textContent).toContain('Open Evidence');
 
-    // Click Go to Tree quick action
+    // Click Open Tree quick action
     const treeBtn = [...container.querySelectorAll<HTMLButtonElement>('dialog button')].find((b) =>
-      b.textContent?.includes('Go to Tree')
+      b.textContent?.includes('Open Tree')
     );
     expect(treeBtn).toBeDefined();
     act(() => {

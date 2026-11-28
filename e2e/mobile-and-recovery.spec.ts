@@ -181,46 +181,97 @@ test('error boundary catches a broken lazy route chunk and posts client telemetr
   await telemetryPosted;
 });
 
-test('Mobile 390px Dark Mode: unified 4px topbar geometry, Guide in Archive menu, sans-serif UI controls, and high-contrast active Jump Strip (#88)', async ({
+test('Mobile 360px/390px Dark Mode & Desktop 1280px: zero title truncation, Trunk Test indicator, uniform nav weight, calm utility chrome, and Revision History (#88, #96)', async ({
   page,
 }) => {
-  await page.setViewportSize({ width: 390, height: 844 });
-  await page.emulateMedia({ colorScheme: 'dark' });
-  await page.goto('/', { waitUntil: 'networkidle' });
+  for (const vp of [
+    { name: '360x800', width: 360, height: 800 },
+    { name: '390x844', width: 390, height: 844 },
+  ]) {
+    await page.setViewportSize({ width: vp.width, height: vp.height });
+    await page.emulateMedia({ colorScheme: 'dark' });
+    await page.goto('/', { waitUntil: 'networkidle' });
 
-  // 1. Desktop Guide button is hidden from the 390px topbar; site title fits without truncation
-  const desktopGuideBtn = page.locator('header button:has-text("Guide")');
-  await expect(desktopGuideBtn)
-    .toHaveCount(0)
-    .catch(async () => {
-      await expect(desktopGuideBtn.first()).toBeHidden();
-    });
+    // 1. Desktop Guide and theme buttons are hidden at <= 420px; site title fits without truncation
+    const desktopGuideBtn = page.locator('header button:has-text("Guide")');
+    await expect(desktopGuideBtn)
+      .toHaveCount(0)
+      .catch(async () => {
+        await expect(desktopGuideBtn.first()).toBeHidden();
+      });
 
-  const brandFits = await page
-    .locator('header a')
-    .first()
-    .evaluate((el) => el.scrollWidth <= el.clientWidth + 1);
-  expect(brandFits).toBe(true);
+    const brandMetrics = await page
+      .locator('header a')
+      .first()
+      .evaluate((el) => ({
+        scrollWidth: el.scrollWidth,
+        clientWidth: el.clientWidth,
+        overflowX: document.documentElement.scrollWidth - window.innerWidth,
+      }));
+    expect(brandMetrics.scrollWidth, `Brand truncated at ${vp.name}`).toBeLessThanOrEqual(
+      brandMetrics.clientWidth + 1
+    );
+    expect(brandMetrics.overflowX, `Horizontal overflow at ${vp.name}`).toBeLessThanOrEqual(1);
 
-  // 2. All visible right-side topbar controls share unified 4px border-radius (no circles or 999px pills)
-  const radii = await page.locator('header button').evaluateAll((buttons) =>
-    buttons
-      .filter((btn) => {
-        const style = window.getComputedStyle(btn);
-        const rect = btn.getBoundingClientRect();
-        return style.display !== 'none' && style.visibility !== 'hidden' && rect.width > 0 && rect.height > 0;
-      })
-      .map((btn) => ({
-        label: btn.getAttribute('aria-label') || btn.textContent?.trim() || '',
-        radius: window.getComputedStyle(btn).borderRadius,
-      }))
-  );
-  expect(radii.length).toBeGreaterThanOrEqual(3);
-  for (const item of radii) {
-    expect(item.radius).toBe('4px');
+    // 2. Visible right-side mobile topbar triggers are >= 44px with unified 4px border-radius and quiet borderless chrome
+    const rightControls = await page.locator('header button').evaluateAll((buttons) =>
+      buttons
+        .filter((btn) => {
+          const style = window.getComputedStyle(btn);
+          const rect = btn.getBoundingClientRect();
+          return (
+            style.display !== 'none' && style.visibility !== 'hidden' && rect.width > 0 && rect.height > 0
+          );
+        })
+        .map((btn) => {
+          const style = window.getComputedStyle(btn);
+          const rect = btn.getBoundingClientRect();
+          return {
+            label: btn.getAttribute('aria-label') || btn.textContent?.trim() || '',
+            radius: style.borderRadius,
+            width: Math.round(rect.width),
+            height: Math.round(rect.height),
+          };
+        })
+    );
+    expect(rightControls.length, `Mobile topbar triggers at ${vp.name}`).toBeGreaterThanOrEqual(2);
+    for (const item of rightControls) {
+      expect(item.radius, `${item.label} radius at ${vp.name}`).toBe('4px');
+      expect(item.width, `${item.label} width at ${vp.name}`).toBeGreaterThanOrEqual(44);
+      expect(item.height, `${item.label} height at ${vp.name}`).toBeGreaterThanOrEqual(44);
+    }
+
+    // Appearance controls remain accessible inside Archive menu at <= 420px
+    const archiveBtn = page.getByRole('button', { name: 'Archive menu' });
+    await archiveBtn.click();
+    await expect(page.getByRole('radiogroup', { name: 'Appearance' })).toBeVisible();
+    await page.keyboard.press('Escape');
   }
 
-  // 3. Directory toolbar buttons & selects use UI sans-serif, never IBM Plex Mono
+  // 3. Mobile Trunk Test orientation on overflow routes (/kinship, /evidence, /changes)
+  await page.setViewportSize({ width: 360, height: 800 });
+  for (const routeCase of [
+    { path: '/kinship', expectedSection: 'Kinship' },
+    { path: '/evidence', expectedSection: 'Evidence' },
+    { path: '/changes', expectedSection: 'Revision History', expectedH1: 'Revision History' },
+  ]) {
+    await page.goto(routeCase.path, { waitUntil: 'networkidle' });
+    const archiveBtn = page.getByRole('button', { name: 'Archive menu' });
+    await expect(archiveBtn).toHaveAttribute('data-active-section', routeCase.expectedSection);
+    const activeVisual = await archiveBtn.evaluate((el) => ({
+      className: el.className,
+      boxShadow: window.getComputedStyle(el).boxShadow,
+    }));
+    expect(activeVisual.className).toContain('topbar-menu-active-mobile');
+    expect(activeVisual.boxShadow).not.toBe('none');
+    if (routeCase.expectedH1) {
+      await expect(page.locator('main h1')).toHaveText(routeCase.expectedH1);
+    }
+  }
+
+  // 4. Directory toolbar buttons & selects use UI sans-serif, never IBM Plex Mono; active Jump Strip high-contrast
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto('/', { waitUntil: 'networkidle' });
   const controlFonts = await page.locator('main button, main select').evaluateAll((els) =>
     els
       .filter((el) => {
@@ -235,7 +286,7 @@ test('Mobile 390px Dark Mode: unified 4px topbar geometry, Guide in Archive menu
     expect(family).not.toContain('IBM Plex Mono');
   }
 
-  // 4. Dark-mode active DirectoryJumpStrip link uses bright amber ink (#f5cc8f -> rgb(245, 204, 143)) on transparent fill
+  // Dark-mode active DirectoryJumpStrip link uses bright amber ink (#f5cc8f -> rgb(245, 204, 143)) on transparent fill
   const activeJump = page.locator('a[aria-current="location"]').first();
   await expect(activeJump).toBeVisible();
   const jumpStyle = await activeJump.evaluate((el) => {
@@ -249,4 +300,51 @@ test('Mobile 390px Dark Mode: unified 4px topbar geometry, Guide in Archive menu
   expect(jumpStyle.color).toBe('rgb(245, 204, 143)');
   expect(jumpStyle.backgroundColor).toBe('rgba(0, 0, 0, 0)');
   expect(jumpStyle.borderBottomWidth).toBe('2px');
+
+  // 5. Desktop 1280x800: uniform 500 weight on all inactive nav links, 600 on active, Reading Room in UI sans, and zero year-readout crowding
+  await page.setViewportSize({ width: 1280, height: 800 });
+  await page.goto('/person/abraham-lincoln-1809', { waitUntil: 'networkidle' });
+  const desktopTopbar = await page.evaluate(() => {
+    const navLinks = [...document.querySelectorAll('nav[aria-label="Primary"] a')].map((a) => {
+      const cs = window.getComputedStyle(a);
+      const rect = a.getBoundingClientRect();
+      return {
+        text: a.textContent?.trim() ?? '',
+        active: a.getAttribute('aria-current') === 'page',
+        fontWeight: cs.fontWeight,
+        color: cs.color,
+        right: Math.round(rect.right),
+      };
+    });
+    const readingRoom = [...document.querySelectorAll('header button')].find(
+      (b) => b.textContent?.trim() === 'Reading Room'
+    );
+    const readingRoomStyle = readingRoom ? window.getComputedStyle(readingRoom) : null;
+    const yearEl = document.querySelector('header a[href^="/time?year="]');
+    const yearRect = yearEl ? yearEl.getBoundingClientRect() : null;
+    const lastNavRight = navLinks.at(-1)?.right ?? 0;
+    return {
+      navLinks,
+      readingRoomFont: readingRoomStyle?.fontFamily ?? '',
+      readingRoomRadius: readingRoomStyle?.borderRadius ?? '',
+      yearVisible: Boolean(yearRect && yearRect.width > 0),
+      navToYearGap: yearRect ? Math.round(yearRect.left - lastNavRight) : null,
+      headerHeight: Math.round(document.querySelector('header.topbar')?.getBoundingClientRect().height ?? 0),
+    };
+  });
+  const activeNavs = desktopTopbar.navLinks.filter((n) => n.active);
+  const inactiveNavs = desktopTopbar.navLinks.filter((n) => !n.active);
+  expect(activeNavs).toHaveLength(1);
+  expect(activeNavs[0].fontWeight).toBe('600');
+  expect(inactiveNavs.length).toBeGreaterThanOrEqual(6);
+  for (const link of inactiveNavs) {
+    expect(link.fontWeight, `Inactive nav ${link.text} weight`).toBe('500');
+    expect(link.color, `Inactive nav ${link.text} color matches peers`).toBe(inactiveNavs[0].color);
+  }
+  expect(desktopTopbar.readingRoomFont).not.toContain('Newsreader');
+  expect(desktopTopbar.readingRoomRadius).toBe('4px');
+  expect(desktopTopbar.headerHeight).toBeLessThanOrEqual(64);
+  if (desktopTopbar.yearVisible) {
+    expect(desktopTopbar.navToYearGap ?? 0).toBeGreaterThanOrEqual(24);
+  }
 });

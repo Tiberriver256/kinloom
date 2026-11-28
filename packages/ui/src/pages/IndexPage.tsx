@@ -24,7 +24,7 @@ import {
   parseDirectoryUrlParams,
   resolveArchiveFrontispiece,
 } from '../lib/peopleDirectoryModel.js';
-import { formatPhotoDocumentCount, formatReaderLoadError } from '../lib/vocabulary.js';
+import { formatEventCount, formatPhotoDocumentCount, formatReaderLoadError } from '../lib/vocabulary.js';
 import { PluginSlot } from '../plugins/PluginContext.js';
 import controlStyles from '../styles/Controls.module.css';
 import layoutStyles from '../styles/Layout.module.css';
@@ -225,7 +225,7 @@ const LivingRelativesSection: React.FC<LivingRelativesSectionProps> = ({
                       )}
                       {person.event_count > 0 && (
                         <span className={cx(indexStyles, 'living-row-milestones')}>
-                          {person.event_count} milestone{person.event_count === 1 ? '' : 's'}
+                          {formatEventCount(person.event_count)}
                         </span>
                       )}
                       {mediaCount > 0 && (
@@ -856,7 +856,7 @@ export const IndexPage: React.FC = () => {
                                   <div className={cx(indexStyles, 'person-card-stats')}>
                                     {showMilestones && (
                                       <span className={cx(indexStyles, 'person-card-milestones')}>
-                                        {p.event_count} milestone{p.event_count === 1 ? '' : 's'}
+                                        {formatEventCount(p.event_count)}
                                       </span>
                                     )}
                                     {mediaCount > 0 && (

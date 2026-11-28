@@ -6,9 +6,11 @@ import { createRoot } from 'react-dom/client';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { describe, expect, it } from 'vitest';
 import { ArchiveProvider } from '../context/ArchiveProvider.js';
+import { COMMAND_BAR_QUICK_ACTIONS } from '../lib/searchPreview.js';
+import { formatEventCount, KINLOOM_VOCABULARY } from '../lib/vocabulary.js';
 import { PersonPage } from '../pages/PersonPage.js';
 import { TreePage } from '../pages/TreePage.js';
-import { ExplorerTopBar } from './ExplorerTopBar.js';
+import { ExplorerTopBar, resolveOverflowNavSection } from './ExplorerTopBar.js';
 import { SourceReaderDrawer } from './SourceReaderDrawer.js';
 import { AuthStatusBanner, getInviteStripDismissKey } from './wiki/AuthStatusBanner.js';
 
@@ -246,6 +248,109 @@ describe('ExplorerTopBar mobile & account menu behavior', () => {
 
     unmount();
     window.sessionStorage.clear();
+  });
+
+  it('classifies overflow routes for mobile Trunk Test orientation, highlights menu triggers, uses utility chrome for Reading Room, and unifies controlled vocabulary (#96)', () => {
+    const pluginRoutes = [
+      { pluginId: 'recipes', path: '/recipes', navLabel: 'Recipes', navMatchPrefix: '/recipes' },
+      { pluginId: 'notes', path: '/notes', navMatchPrefix: '/notes' },
+    ];
+    expect(resolveOverflowNavSection('/', pluginRoutes)).toBeNull();
+    expect(resolveOverflowNavSection('/person/clara-barton', pluginRoutes)).toBeNull();
+    expect(resolveOverflowNavSection('/places', pluginRoutes)).toBeNull();
+    expect(resolveOverflowNavSection('/time', pluginRoutes)).toBeNull();
+    expect(resolveOverflowNavSection('/tree', pluginRoutes)).toBeNull();
+    expect(resolveOverflowNavSection('/map', pluginRoutes)).toBeNull();
+    expect(resolveOverflowNavSection('/evidence', pluginRoutes)).toEqual({
+      id: 'evidence',
+      label: 'Evidence',
+      inDesktopAccountMenu: false,
+    });
+    expect(resolveOverflowNavSection('/kinship', pluginRoutes)).toEqual({
+      id: 'kinship',
+      label: 'Kinship',
+      inDesktopAccountMenu: false,
+    });
+    expect(resolveOverflowNavSection('/changes', pluginRoutes)).toEqual({
+      id: 'changes',
+      label: 'Revision History',
+      inDesktopAccountMenu: true,
+    });
+    expect(resolveOverflowNavSection('/admin', pluginRoutes)).toEqual({
+      id: 'admin',
+      label: 'Site Administration',
+      inDesktopAccountMenu: true,
+    });
+    expect(resolveOverflowNavSection('/recipes/apple-pie', pluginRoutes)).toEqual({
+      id: 'plugin:recipes:/recipes',
+      label: 'Recipes',
+      inDesktopAccountMenu: false,
+    });
+    expect(resolveOverflowNavSection('/notes/1', pluginRoutes)).toEqual({
+      id: 'plugin:notes:/notes',
+      label: 'notes',
+      inDesktopAccountMenu: false,
+    });
+
+    const bundle = buildTestBundle([]);
+    // Signed-out visitor on /kinship gets active Trunk Test marker on Archive menu, uniform nav links, and utility-styled Reading Room
+    const kinshipView = renderIntoDom(
+      <MemoryRouter initialEntries={['/kinship']}>
+        <ArchiveProvider siteConfig={siteConfig} initialBundle={bundle}>
+          <ExplorerTopBar />
+        </ArchiveProvider>
+      </MemoryRouter>
+    );
+    const archiveBtn = kinshipView.container.querySelector<HTMLButtonElement>(
+      'button[aria-label="Archive menu"]'
+    );
+    expect(archiveBtn?.dataset.activeSection).toBe('Kinship');
+    expect(archiveBtn?.getAttribute('aria-description')).toBe('Current section: Kinship');
+    expect(archiveBtn?.className).toContain('topbar-menu-active-mobile');
+    expect(kinshipView.container.querySelectorAll('nav[aria-label="Primary"] a.nav-axis')).toHaveLength(0);
+    const readingRoomBtn = [...kinshipView.container.querySelectorAll('header button')].find(
+      (b) => b.textContent?.trim() === 'Reading Room'
+    );
+    expect(readingRoomBtn?.className).toContain('topbar-utility-btn');
+    expect(readingRoomBtn?.className).not.toContain('nav-pill ');
+    kinshipView.unmount();
+
+    // Signed-in admin on /changes highlights Account menu trigger for both mobile and desktop
+    const changesView = renderIntoDom(
+      <MemoryRouter initialEntries={['/changes']}>
+        <ArchiveProvider
+          siteConfig={siteConfig}
+          initialBundle={bundle}
+          session={{
+            authenticated: true,
+            principal_kind: 'user',
+            role: 'admin',
+            displayName: 'Morgan Reid',
+          }}
+        >
+          <ExplorerTopBar />
+        </ArchiveProvider>
+      </MemoryRouter>
+    );
+    const accountBtn = changesView.container.querySelector<HTMLButtonElement>(
+      'button[aria-label="Account menu for Morgan Reid"]'
+    );
+    expect(accountBtn?.dataset.activeSection).toBe('Revision History');
+    expect(accountBtn?.className).toContain('topbar-menu-active-mobile');
+    expect(accountBtn?.className).toContain('topbar-menu-active-desktop');
+    changesView.unmount();
+
+    // Controlled vocabulary consistency
+    expect(KINLOOM_VOCABULARY.nav.recentChanges).toBe('Revision History');
+    expect(KINLOOM_VOCABULARY.stewardship.fieldReportsHeading).toBe('Revision History');
+    expect(formatEventCount(1)).toBe('1 event');
+    expect(formatEventCount(7)).toBe('7 events');
+    expect(COMMAND_BAR_QUICK_ACTIONS.map((a) => a.label)).toEqual([
+      'Open Tree',
+      'Open Map',
+      'Open Kinship',
+      'Open Evidence',
+    ]);
   });
 });
 
