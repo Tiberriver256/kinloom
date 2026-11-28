@@ -1,1 +1,1 @@
-export const KINLOOM_UI_VERSION = '0.54.5';
+export const KINLOOM_UI_VERSION = '0.54.6';
