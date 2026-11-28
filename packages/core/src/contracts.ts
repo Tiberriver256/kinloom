@@ -16,6 +16,7 @@ import type {
   StoredEntityRow,
   UserRecord,
 } from './contractsPrimitives.js';
+import type { PluginDocumentation } from './schemas/adminDocs.js';
 import type { ChangelogEntry } from './schemas/changelogs.js';
 import type { KinloomSiteConfig } from './schemas/config.js';
 import type { PluginRuntimeStatus, PluginStatusProbeResult } from './schemas/diagnostics.js';
@@ -321,6 +322,7 @@ export interface KinloomServerPlugin {
   readonly version?: string;
   readonly status?: PluginRuntimeStatus;
   readonly changelog?: readonly ChangelogEntry[];
+  readonly documentation?: PluginDocumentation;
   readonly routes?: readonly KinloomServerPluginRoute[];
   readonly settingsSchema?: PluginSettingsSchema;
   /** Optional SQL namespace segment (for example 'recipes' -> tables must start with 'plugin_recipes_'). */

@@ -860,6 +860,27 @@ function splitRecipesRouteSegments(pathname: string): readonly string[] {
  * Registers `/api/plugins/recipes*` read and photo endpoints, `#44` declarative admin settings,
  * and versioned `plugin_recipes_*` SQL migrations.
  */
+const RECIPES_SERVER_DOCS = {
+  id: 'docs-recipes-server',
+  title: 'Family Recipe Sharing (Server)',
+  summary:
+    'SQL-backed heirloom recipe catalog with ancestor attribution, photos, stars, and threaded comments.',
+  sections: [
+    {
+      id: 'storage-migrations',
+      heading: 'Isolated Plugin SQL Namespace',
+      markdown:
+        'Stores recipes, photos, stars, and comments inside the isolated `plugin_recipes_*` D1 namespace via idempotent plugin migrations.',
+    },
+    {
+      id: 'attribution-privacy',
+      heading: 'Ancestor Attribution & Permissions',
+      markdown:
+        'Recipes can be attributed to deceased ancestors in the archive. Configure editor/viewer permissions and photo upload limits under **Plugins & Integrations**.',
+    },
+  ],
+} as const;
+
 export function createRecipesServerPlugin(options: RecipesServerPluginOptions = {}): KinloomServerPlugin {
   const pluginId = options.id?.trim() || RECIPES_PLUGIN_ID;
 
@@ -867,6 +888,7 @@ export function createRecipesServerPlugin(options: RecipesServerPluginOptions = 
     return {
       id: pluginId,
       name: 'Family Recipe Sharing (disabled)',
+      documentation: RECIPES_SERVER_DOCS,
       version: KINLOOM_SERVER_VERSION,
       status: 'disabled',
     };
@@ -1742,6 +1764,7 @@ export function createRecipesServerPlugin(options: RecipesServerPluginOptions = 
   return {
     id: pluginId,
     name: 'Family Recipe Sharing',
+    documentation: RECIPES_SERVER_DOCS,
     version: KINLOOM_SERVER_VERSION,
     status: 'active',
     databaseNamespace: RECIPES_DATABASE_NAMESPACE,

@@ -107,6 +107,20 @@ function isLivingPerson(person: Person | undefined): boolean {
   return person.is_living || person.full_name === 'Living';
 }
 
+const NARRATIVE_AUDIO_DOCS = {
+  id: 'docs-narrative-audio-ui',
+  title: 'Narrative Audio Player',
+  summary: 'Persistent audio player and narrative header controls for spoken family stories.',
+  sections: [
+    {
+      id: 'playback',
+      heading: 'Audio Playback Across Routes',
+      markdown:
+        'Adds a listen button to narrative headers and mounts a persistent mini-player in the app shell so visitors can keep listening while navigating the archive.',
+    },
+  ],
+} as const;
+
 export function createNarrativeAudioPlugin(options: NarrativeAudioPluginOptions = {}): KinloomUiPlugin {
   const id = options.id ?? 'kinloom-narrative-audio';
   const defaultStoryVoice = options.defaultStoryVoice ?? 'Charon';
@@ -140,6 +154,7 @@ export function createNarrativeAudioPlugin(options: NarrativeAudioPluginOptions 
   return {
     id,
     name: 'Narrative Audio',
+    documentation: NARRATIVE_AUDIO_DOCS,
     version: KINLOOM_UI_VERSION,
     changelog: [
       {

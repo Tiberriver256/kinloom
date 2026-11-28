@@ -490,11 +490,33 @@ function hasActiveWorkersObservability(ports: KinloomServerPorts | undefined): b
  * visits per normalized route/entity slug and UTC day, serves admin observability stats, and
  * optionally exposes read-only single-page visit counts for deceased people, places, and narratives.
  */
+const PAGE_VISIT_STATS_DOCS = {
+  id: 'docs-page-visit-stats',
+  title: 'Page Visit Stats',
+  summary:
+    'Privacy-preserving aggregate view counts for deceased people, places, and narratives without cookies or IP storage.',
+  sections: [
+    {
+      id: 'privacy-model',
+      heading: 'Zero-Cookie Aggregate Counting',
+      markdown:
+        'Counts aggregate page views for deceased archive entities only. Living people are strictly excluded, and no visitor IP addresses, cookies, or tracking fingerprints are stored.',
+    },
+    {
+      id: 'administration',
+      heading: 'Configuration & Badges',
+      markdown:
+        'Configure tracking status and public badge visibility under **Plugins & Integrations**. Pair with the Page Visit Stats UI plugin to display counters and admin analytics panels.',
+    },
+  ],
+} as const;
+
 export function createPageVisitStatsPlugin(options: PageVisitStatsPluginOptions = {}): KinloomServerPlugin {
   if (options.enabled === false) {
     return {
       id: PAGE_VISIT_STATS_PLUGIN_ID,
       name: 'Page Visit Stats (disabled)',
+      documentation: PAGE_VISIT_STATS_DOCS,
       version: KINLOOM_SERVER_VERSION,
       changelog: [
         {
@@ -564,6 +586,7 @@ export function createPageVisitStatsPlugin(options: PageVisitStatsPluginOptions 
   return {
     id: PAGE_VISIT_STATS_PLUGIN_ID,
     name: 'Page Visit Stats',
+    documentation: PAGE_VISIT_STATS_DOCS,
     version: KINLOOM_SERVER_VERSION,
     status: 'active',
     changelog: [

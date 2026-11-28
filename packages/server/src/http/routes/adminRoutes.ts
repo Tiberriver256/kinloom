@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import type { AdminDocsService } from '../../services/adminDocsService.js';
 import type { AdminService } from '../../services/adminService.js';
 import type { ChangelogService } from '../../services/changelogService.js';
 import type { PluginSettingsService } from '../../services/pluginSettingsService.js';
@@ -31,6 +32,7 @@ const UpdateUserBodySchema = z.object({
 const BUILTIN_ADMIN_DOMAINS = new Set([
   'system',
   'changelogs',
+  'docs',
   'plugin-settings',
   'invites',
   'agent-tokens',
@@ -41,7 +43,8 @@ export function createAdminRouteHandler(
   adminService: AdminService,
   systemDiagnosticsService?: SystemDiagnosticsService,
   pluginSettingsService?: PluginSettingsService,
-  changelogService?: ChangelogService
+  changelogService?: ChangelogService,
+  adminDocsService?: AdminDocsService
 ): HttpRouteHandler {
   return async (ctx) => {
     const { request, url, method, segments, auth, telemetry } = ctx;
@@ -69,6 +72,10 @@ export function createAdminRouteHandler(
 
     if (segments[2] === 'changelogs' && method === 'GET' && segments.length === 3 && changelogService) {
       return jsonResponse(changelogService.getChangelogs(), 200);
+    }
+
+    if (segments[2] === 'docs' && method === 'GET' && segments.length === 3 && adminDocsService) {
+      return jsonResponse(adminDocsService.getDocs(), 200);
     }
 
     if (segments[2] === 'plugin-settings' && pluginSettingsService) {

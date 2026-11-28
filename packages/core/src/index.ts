@@ -11,6 +11,7 @@ export * from './clock.js';
 export * from './compileArchive.js';
 // Shared Phase 3 Contracts & Port Interfaces
 export * from './contracts.js';
+export * from './docs/builtinAdminDocs.js';
 export * from './domain/archiveSearch.js';
 export * from './domain/archiveStatus.js';
 export * from './domain/citations.js';
@@ -43,6 +44,7 @@ export * from './privacy.js';
 export * from './residenceSpans.js';
 // Wiki Revision Diff & Revert Engine
 export * from './revisions.js';
+export * from './schemas/adminDocs.js';
 export * from './schemas/changelogs.js';
 export * from './schemas/index.js';
 export * from './validateArchive.js';

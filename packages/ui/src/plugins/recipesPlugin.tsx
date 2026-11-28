@@ -76,6 +76,20 @@ const RecipeBookIcon = (
  * Registers `/recipes`, `/recipes/favorites`, `/recipes/:slug`, plus `personRelated`
  * and `indexWidgets` archival slots.
  */
+const RECIPES_UI_DOCS = {
+  id: 'docs-recipes-ui',
+  title: 'Family Recipe Sharing UI',
+  summary: 'Recipe catalog, editor, photo gallery, and deceased-ancestor related recipe cards.',
+  sections: [
+    {
+      id: 'routes-and-slots',
+      heading: 'Catalog Routes & Person Page Integration',
+      markdown:
+        'Registers `/recipes` browsing and editing routes and surfaces attributed heirloom recipes in the `personRelated` slot on deceased ancestor pages.',
+    },
+  ],
+} as const;
+
 export function createRecipesUiPlugin(options: RecipesUiPluginOptions = {}): KinloomUiPlugin {
   const id = options.id?.trim() || RECIPES_UI_PLUGIN_ID;
 
@@ -83,6 +97,7 @@ export function createRecipesUiPlugin(options: RecipesUiPluginOptions = {}): Kin
     return {
       id,
       name: 'Family Recipe Sharing UI (disabled)',
+      documentation: RECIPES_UI_DOCS,
       version: KINLOOM_UI_VERSION,
       changelog: [
         {
@@ -127,6 +142,7 @@ export function createRecipesUiPlugin(options: RecipesUiPluginOptions = {}): Kin
   return {
     id,
     name: 'Family Recipe Sharing',
+    documentation: RECIPES_UI_DOCS,
     version: KINLOOM_UI_VERSION,
     status: 'active',
     provider,

@@ -9,6 +9,7 @@ import type {
   Narrative,
   Person,
   Place,
+  PluginDocumentation,
   PluginRuntimeStatus,
 } from '@kinloom/core';
 import type React from 'react';
@@ -87,6 +88,7 @@ export interface KinloomUiPlugin {
   readonly version?: string;
   readonly status?: PluginRuntimeStatus;
   readonly changelog?: readonly ChangelogEntry[];
+  readonly documentation?: PluginDocumentation;
   /** Optional React provider wrapping the app shell so plugin slots share persistent state across routes. */
   readonly provider?: React.ComponentType<{ children: React.ReactNode }>;
   readonly routes?: readonly KinloomUiPluginRoute[];

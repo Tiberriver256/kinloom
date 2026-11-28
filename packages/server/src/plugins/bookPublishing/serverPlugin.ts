@@ -401,6 +401,27 @@ function parseReferenceYear(iso: string): number {
  * Optional, strictly off-by-default Kinloom server plugin for archival landscape hardcover
  * book compilation, prepress PDF export, and print-on-demand fulfillment (Lulu Print API + Mock).
  */
+const BOOK_PUBLISHING_SERVER_DOCS = {
+  id: 'docs-book-publishing-server',
+  title: 'Archival Book Publishing (Server)',
+  summary:
+    'Compiles print-ready family history PDFs with strict living-person privacy gating and publisher export.',
+  sections: [
+    {
+      id: 'compilation',
+      heading: 'Print-Ready PDF Compilation',
+      markdown:
+        'Generates archival book interiors and covers from deceased branch records, narratives, and cited sources with deterministic trim-size geometry.',
+    },
+    {
+      id: 'privacy-gate',
+      heading: 'Mandatory Living-Person Privacy Gate',
+      markdown:
+        'Every book compilation job runs through the privacy gate so living relatives are never included in printed or exported artifacts.',
+    },
+  ],
+} as const;
+
 export function createBookPublishingServerPlugin(
   options: BookPublishingServerPluginOptions = {}
 ): KinloomServerPlugin {
@@ -408,6 +429,7 @@ export function createBookPublishingServerPlugin(
     return {
       id: BOOK_PUBLISHING_PLUGIN_ID,
       name: 'Archival Book Publishing (disabled)',
+      documentation: BOOK_PUBLISHING_SERVER_DOCS,
       version: KINLOOM_SERVER_VERSION,
       status: 'disabled',
       getStatus: () => ({ status: 'disabled', detail: 'Disabled via plugin options' }),
@@ -641,6 +663,7 @@ export function createBookPublishingServerPlugin(
   return {
     id: BOOK_PUBLISHING_PLUGIN_ID,
     name: 'Archival Book Publishing',
+    documentation: BOOK_PUBLISHING_SERVER_DOCS,
     version: KINLOOM_SERVER_VERSION,
     status: 'active',
     settingsSchema,

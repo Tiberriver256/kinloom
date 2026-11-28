@@ -1,5 +1,11 @@
-import type { CallerPrincipal, KinloomServerPluginRoute, KinloomSiteConfig } from '@kinloom/core';
+import {
+  type CallerPrincipal,
+  type KinloomServerPluginRoute,
+  type KinloomSiteConfig,
+  validatePluginDocumentation,
+} from '@kinloom/core';
 import { KinloomHttpError, toErrorResponseData } from '../errors.js';
+import { AdminDocsService } from '../services/adminDocsService.js';
 import { AdminService } from '../services/adminService.js';
 import { AuthService } from '../services/authService.js';
 import { BundleReadService } from '../services/bundleReadService.js';
@@ -112,6 +118,8 @@ export const RESERVED_SERVER_ROUTE_PREFIXES: readonly string[] = [
   '/api/admin/agent-tokens',
   '/api/admin/users',
   '/api/admin/system',
+  '/api/admin/changelogs',
+  '/api/admin/docs',
   '/api/admin/plugin-settings',
   '/api/pronunciations',
   '/api/pronunciation',
@@ -140,6 +148,10 @@ export function validateAndCompilePluginRoutes(
       throw new RangeError(`Duplicate server plugin id '${pluginId}'.`);
     }
     seenPluginIds.add(pluginId);
+
+    if (plugin.documentation !== undefined) {
+      validatePluginDocumentation(plugin.documentation, `Server plugin '${pluginId}'`);
+    }
 
     const databaseNamespace =
       plugin.databaseNamespace !== undefined
@@ -327,7 +339,8 @@ export function createKinloomServer(config: KinloomServerConfig): KinloomServer 
       adminService,
       systemDiagnosticsService,
       pluginSettingsService,
-      new ChangelogService({ plugins, workerVersion: config.diagnostics?.workerVersion })
+      new ChangelogService({ plugins, workerVersion: config.diagnostics?.workerVersion }),
+      new AdminDocsService({ plugins })
     ),
   ];
 

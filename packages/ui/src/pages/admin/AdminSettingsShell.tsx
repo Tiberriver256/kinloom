@@ -1,11 +1,13 @@
 import type {
   AdminChangelogsResponse,
   AdminDiagnosticsReport,
+  AdminDocsResponse,
   PluginSettingsSnapshot,
   PluginSettingsUpdateRequest,
 } from '@kinloom/core';
 import type React from 'react';
 import { PluginSlot } from '../../plugins/PluginContext.js';
+import { AdminDocsSection } from './AdminDocsSection.js';
 import { ChangelogsSection } from './ChangelogsSection.js';
 import { PluginSettingsSection } from './PluginSettingsSection.js';
 import { SystemDiagnosticsSection } from './SystemDiagnosticsSection.js';
@@ -21,6 +23,11 @@ export interface AdminSettingsShellProps {
   readonly changelogsError?: string | null;
   readonly changelogsSupported?: boolean;
   readonly onRefreshChangelogs?: () => Promise<void>;
+  readonly docs?: AdminDocsResponse | null;
+  readonly docsLoading?: boolean;
+  readonly docsError?: string | null;
+  readonly docsSupported?: boolean;
+  readonly onRefreshDocs?: () => Promise<void>;
   readonly pluginSettings?: readonly PluginSettingsSnapshot[];
   readonly pluginSettingsLoading?: boolean;
   readonly pluginSettingsError?: string | null;
@@ -50,6 +57,11 @@ export const AdminSettingsShell: React.FC<AdminSettingsShellProps> = ({
   changelogsError = null,
   changelogsSupported = false,
   onRefreshChangelogs,
+  docs = null,
+  docsLoading = false,
+  docsError = null,
+  docsSupported = false,
+  onRefreshDocs,
   pluginSettings = [],
   pluginSettingsLoading = false,
   pluginSettingsError = null,
@@ -76,6 +88,13 @@ export const AdminSettingsShell: React.FC<AdminSettingsShellProps> = ({
         onUpdatePlugin={onUpdatePluginSettings}
       />
     )}
+    <AdminDocsSection
+      docs={docs}
+      loading={docsLoading}
+      error={docsError}
+      supported={docsSupported}
+      onRefresh={onRefreshDocs ?? (async () => {})}
+    />
     <ChangelogsSection
       changelogs={changelogs}
       loading={changelogsLoading}

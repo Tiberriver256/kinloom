@@ -27,6 +27,21 @@ export interface BookPublishingUiPluginOptions {
  * Optional, strictly off-by-default Kinloom UI plugin rendering the admin-only Archival Hardcover
  * Book Publishing panel inside AdminSettingsShell (`slots.adminSettings`).
  */
+const BOOK_PUBLISHING_UI_DOCS = {
+  id: 'docs-book-publishing-ui',
+  title: 'Archival Book Publishing UI',
+  summary:
+    'Admin interface for configuring book editions, previewing page counts, and triggering PDF builds.',
+  sections: [
+    {
+      id: 'admin-workflow',
+      heading: 'Building & Downloading Editions',
+      markdown:
+        'Mounts the Book Publishing panel inside Site Administration to select branches, configure trim dimensions, and download compiled archival PDFs.',
+    },
+  ],
+} as const;
+
 export function createBookPublishingPlugin(options: BookPublishingUiPluginOptions = {}): KinloomUiPlugin {
   const id = options.id ?? BOOK_PUBLISHING_UI_PLUGIN_ID;
 
@@ -34,6 +49,7 @@ export function createBookPublishingPlugin(options: BookPublishingUiPluginOption
     return {
       id,
       name: 'Archival Book Publishing UI (disabled)',
+      documentation: BOOK_PUBLISHING_UI_DOCS,
       version: KINLOOM_UI_VERSION,
       changelog: [
         {
@@ -58,6 +74,7 @@ export function createBookPublishingPlugin(options: BookPublishingUiPluginOption
   return {
     id,
     name: 'Archival Book Publishing',
+    documentation: BOOK_PUBLISHING_UI_DOCS,
     version: KINLOOM_UI_VERSION,
     status: 'active',
     provider,

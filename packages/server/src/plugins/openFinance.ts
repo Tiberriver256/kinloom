@@ -316,11 +316,32 @@ function buildSettingsSchema(initialConfig: OpenFinanceConfig): PluginSettingsSc
  * Optional, off-by-default Kinloom server plugin for open-cost transparency and allowlisted
  * multi-platform community donation links. Zero payment custody and zero @kinloom/core coupling.
  */
+const OPEN_FINANCE_DOCS = {
+  id: 'docs-open-finance',
+  title: 'Open Finance & Donations',
+  summary: 'Transparent archive operating ledger and optional family donation links.',
+  sections: [
+    {
+      id: 'ledger-management',
+      heading: 'Operating Costs & Transparency Ledger',
+      markdown:
+        'Track recurring hosting, domain, and archival preservation expenses in a public or member-visible transparency ledger alongside optional support links.',
+    },
+    {
+      id: 'visibility',
+      heading: 'Visibility & Access',
+      markdown:
+        'Control whether the Support & Finance page appears in site navigation and footer links from **Plugins & Integrations**. Only `admin` users can modify ledger entries.',
+    },
+  ],
+} as const;
+
 export function createOpenFinancePlugin(options: OpenFinancePluginOptions = {}): KinloomServerPlugin {
   if (options.enabled === false) {
     return {
       id: OPEN_FINANCE_PLUGIN_ID,
       name: 'Open Finance & Donations (disabled)',
+      documentation: OPEN_FINANCE_DOCS,
       version: KINLOOM_SERVER_VERSION,
       changelog: [
         {
@@ -393,6 +414,7 @@ export function createOpenFinancePlugin(options: OpenFinancePluginOptions = {}):
   return {
     id: OPEN_FINANCE_PLUGIN_ID,
     name: 'Open Finance & Donations',
+    documentation: OPEN_FINANCE_DOCS,
     version: KINLOOM_SERVER_VERSION,
     status: 'active',
     settingsSchema,

@@ -11,7 +11,12 @@ import type {
   UserRecord,
   UserRole,
 } from '@kinloom/core';
-import { type AdminChangelogsResponse, parseAdminChangelogsResponse } from '@kinloom/core';
+import {
+  type AdminChangelogsResponse,
+  type AdminDocsResponse,
+  parseAdminChangelogsResponse,
+  parseAdminDocsResponse,
+} from '@kinloom/core';
 import { parseErrorEnvelope } from './httpClient.js';
 import {
   parseAdminDiagnosticsReport,
@@ -100,6 +105,9 @@ export function createHttpAdminDataSource(transport: HttpTransportCallbacks): Ad
     },
     async getChangelogs(): Promise<AdminChangelogsResponse> {
       return transport.requestJson('/api/admin/changelogs', parseAdminChangelogsResponse);
+    },
+    async getAdminDocs(): Promise<AdminDocsResponse> {
+      return transport.requestJson('/api/admin/docs', parseAdminDocsResponse);
     },
     async getPluginSettings(): Promise<readonly PluginSettingsSnapshot[]> {
       return transport.requestJson('/api/admin/plugin-settings', parseAdminPluginSettingsListResponse);

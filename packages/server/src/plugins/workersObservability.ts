@@ -384,6 +384,27 @@ function buildWorkersReadonlySettings(
  * Emits privacy-safe structured JSON logs, X-Request-Id propagation, and RFC Server-Timing headers.
  * Passing `{ enabled: false }` returns an inert no-op plugin with zero lifecycle hooks.
  */
+const WORKERS_OBSERVABILITY_DOCS = {
+  id: 'docs-workers-observability',
+  title: 'Cloudflare Workers Observability',
+  summary:
+    'Structured request logs, Server-Timing spans, security telemetry, and optional Cloudflare Web Analytics.',
+  sections: [
+    {
+      id: 'overview',
+      heading: 'Overview & Telemetry Controls',
+      markdown:
+        'Captures structured JSON request logs, `Server-Timing` spans (`d1`, `r2`, `bundle`, `total`), and optional security event telemetry without leaking living-person PII or credentials.',
+    },
+    {
+      id: 'configuration',
+      heading: 'Enabling & Privacy Disclosures',
+      markdown:
+        'Toggle observability, `Server-Timing`, security telemetry, and Cloudflare Web Analytics from **Plugins & Integrations** in Site Administration. When Web Analytics is active, Kinloom automatically adds its disclosure to `/privacy`.',
+    },
+  ],
+} as const;
+
 export function createWorkersObservabilityPlugin(
   options: WorkersObservabilityPluginOptions = {}
 ): KinloomServerPlugin {
@@ -396,6 +417,7 @@ export function createWorkersObservabilityPlugin(
     return {
       id: WORKERS_OBSERVABILITY_PLUGIN_ID,
       name: 'Cloudflare Workers Observability (disabled)',
+      documentation: WORKERS_OBSERVABILITY_DOCS,
       version: KINLOOM_SERVER_VERSION,
       changelog: [
         {
@@ -485,6 +507,7 @@ export function createWorkersObservabilityPlugin(
   return {
     id: WORKERS_OBSERVABILITY_PLUGIN_ID,
     name: 'Cloudflare Workers Observability',
+    documentation: WORKERS_OBSERVABILITY_DOCS,
     version: KINLOOM_SERVER_VERSION,
     status: 'active',
     settingsSchema,

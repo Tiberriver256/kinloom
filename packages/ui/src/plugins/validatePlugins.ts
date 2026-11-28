@@ -1,4 +1,4 @@
-import type { EntityType } from '@kinloom/core';
+import { type EntityType, validatePluginDocumentation } from '@kinloom/core';
 import type {
   EntityCreateFormEntry,
   EntityEditFormEntry,
@@ -79,6 +79,10 @@ export function validateAndCompileUiPlugins(plugins: readonly KinloomUiPlugin[])
       throw new RangeError(`Duplicate UI plugin id '${pluginId}'.`);
     }
     seenPluginIds.add(pluginId);
+
+    if (plugin.documentation !== undefined) {
+      validatePluginDocumentation(plugin.documentation, `UI plugin '${pluginId}'`);
+    }
 
     if (plugin.routes) {
       for (const route of plugin.routes) {

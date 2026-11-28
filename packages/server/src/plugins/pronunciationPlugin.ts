@@ -220,6 +220,26 @@ function buildPronunciationSettingsSchema(options: PronunciationPluginOptions): 
  * First-class Kinloom server plugin exposing declarative Pronunciation & TTS settings
  * (backends, endpoints, voice/model, phoneme mode, and write-only masked API keys) in Admin Settings.
  */
+const PRONUNCIATION_DOCS = {
+  id: 'docs-pronunciation',
+  title: 'Pronunciation & TTS',
+  summary: 'Canonical surname/place pronunciation lexicon and neural text-to-speech audio generation.',
+  sections: [
+    {
+      id: 'lexicon',
+      heading: 'Pronunciation Lexicon & Audio Cache',
+      markdown:
+        'Stores IPA and phonetic spellings for family surnames and historic place names. Generated audio clips are content-addressed in R2 to avoid redundant synthesis calls.',
+    },
+    {
+      id: 'tts-providers',
+      heading: 'Configuring TTS Providers',
+      markdown:
+        'Select a TTS routing mode and configure provider credentials in **Plugins & Integrations**. Secret keys are write-only and never returned to the browser.',
+    },
+  ],
+} as const;
+
 export function createPronunciationPlugin(
   options: PronunciationPluginOptions = {}
 ): KinloomServerPlugin & { readonly getRuntimeConfig: () => PronunciationPluginRuntimeConfig } {
@@ -238,6 +258,7 @@ export function createPronunciationPlugin(
   return {
     id: PRONUNCIATION_PLUGIN_ID,
     name: 'Pronunciation & TTS',
+    documentation: PRONUNCIATION_DOCS,
     version: KINLOOM_SERVER_VERSION,
     changelog: [
       {

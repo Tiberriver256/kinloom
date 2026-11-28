@@ -37,6 +37,20 @@ export interface ObservabilityStatsUiPluginOptions {
  * Page Visit Stats dashboard in AdminSettingsShell and optional subtle archival visit count badges
  * on deceased person and place views, plus SPA route visit beacons.
  */
+const OBSERVABILITY_STATS_UI_DOCS = {
+  id: 'docs-observability-stats-ui',
+  title: 'Page Visit Stats UI',
+  summary: 'Aggregate page-view badges on deceased entity pages and an Admin readership summary panel.',
+  sections: [
+    {
+      id: 'beacons-and-badges',
+      heading: 'Beacons, Badges & Admin Summary',
+      markdown:
+        'Sends lightweight cookieless visit beacons for deceased people and places, renders optional visit count badges, and adds a readership overview to Site Administration.',
+    },
+  ],
+} as const;
+
 export function createObservabilityStatsPlugin(
   options: ObservabilityStatsUiPluginOptions = {}
 ): KinloomUiPlugin {
@@ -46,6 +60,7 @@ export function createObservabilityStatsPlugin(
     return {
       id,
       name: 'Page Visit Stats UI (disabled)',
+      documentation: OBSERVABILITY_STATS_UI_DOCS,
       version: KINLOOM_UI_VERSION,
       changelog: [
         {
@@ -82,6 +97,7 @@ export function createObservabilityStatsPlugin(
   return {
     id,
     name: 'Page Visit Stats',
+    documentation: OBSERVABILITY_STATS_UI_DOCS,
     version: KINLOOM_UI_VERSION,
     status: 'active',
     provider,

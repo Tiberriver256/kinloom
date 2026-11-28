@@ -46,6 +46,20 @@ export interface OpenFinanceUiPluginOptions {
  * Optional, off-by-default Kinloom UI plugin that renders the archival-styled Open Finance & Support
  * page (`/support`), optional navigation and footer links, and the Admin Settings ledger editor.
  */
+const OPEN_FINANCE_UI_DOCS = {
+  id: 'docs-open-finance-ui',
+  title: 'Open Finance & Support UI',
+  summary: 'Public transparency ledger page, navigation links, and Admin ledger editor panel.',
+  sections: [
+    {
+      id: 'ui-slots',
+      heading: 'Registered Routes & Admin Controls',
+      markdown:
+        'Registers the `/support` transparency page and an Admin settings panel for editing operating costs and donation links. Requires `createOpenFinancePlugin()` on the server for live saves.',
+    },
+  ],
+} as const;
+
 export function createOpenFinancePlugin(options: OpenFinanceUiPluginOptions = {}): KinloomUiPlugin {
   const id = options.id ?? OPEN_FINANCE_UI_PLUGIN_ID;
 
@@ -53,6 +67,7 @@ export function createOpenFinancePlugin(options: OpenFinanceUiPluginOptions = {}
     return {
       id,
       name: 'Open Finance & Support UI (disabled)',
+      documentation: OPEN_FINANCE_UI_DOCS,
       version: KINLOOM_UI_VERSION,
       changelog: [
         {
@@ -92,6 +107,7 @@ export function createOpenFinancePlugin(options: OpenFinanceUiPluginOptions = {}
   return {
     id,
     name: 'Open Finance & Support',
+    documentation: OPEN_FINANCE_UI_DOCS,
     version: KINLOOM_UI_VERSION,
     status: 'active',
     provider,

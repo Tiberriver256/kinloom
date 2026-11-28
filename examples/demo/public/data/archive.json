@@ -2381,9 +2381,9 @@
       "alternate_places": [
         {
           "place_name": "Rockingham County, Virginia",
-          "place_id": "pl_rockingham_va",
           "source_id": "src_lincoln_scripps_1860",
-          "note": "In his June 1860 autobiography for John Locke Scripps, President Lincoln mistakenly believed his grandfather Abraham had been born in Rockingham County, Virginia rather than Berks County, Pennsylvania."
+          "note": "In his June 1860 autobiography for John Locke Scripps, President Lincoln mistakenly believed his grandfather Abraham had been born in Rockingham County, Virginia rather than Berks County, Pennsylvania.",
+          "place_id": "pl_rockingham_va"
         }
       ],
       "place_id": "pl_berks_pa",
