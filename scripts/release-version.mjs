@@ -13,6 +13,7 @@ import { execFileSync, spawnSync } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { syncBuiltinModuleChangelogs } from './sync-changelogs.mjs';
 
 const GIT_FORMAT = '%H%x1f%h%x1f%an%x1f%ae%x1f%s%x1f%b%x1e';
 const DEP_FIELDS = ['dependencies', 'devDependencies', 'peerDependencies', 'optionalDependencies'];
@@ -338,6 +339,7 @@ export function applyVersionFiles(root, version) {
     const next = rewriteSource(fs.readFileSync(full, 'utf8'), rule, version);
     fs.writeFileSync(full, next);
   }
+  syncBuiltinModuleChangelogs(root, version);
 }
 
 function listSemverTags(cwd, { mergedOnly = false } = {}) {

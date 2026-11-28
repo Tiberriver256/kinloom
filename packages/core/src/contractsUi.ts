@@ -7,6 +7,7 @@ import type {
   RevisionQuery,
   UserRecord,
 } from './contractsPrimitives.js';
+import type { AdminChangelogsResponse } from './schemas/changelogs.js';
 import type { AdminDiagnosticsReport } from './schemas/diagnostics.js';
 import type {
   ArchiveBundle,
@@ -133,6 +134,7 @@ export interface AdminDataSource {
   createAgentToken(input: { label: string; scope: AgentTokenScope }): Promise<CreatedAgentTokenResponse>;
   revokeAgentToken(tokenId: string): Promise<void>;
   getSystemDiagnostics?(): Promise<AdminDiagnosticsReport>;
+  getChangelogs?(): Promise<AdminChangelogsResponse>;
   getPluginSettings?(): Promise<readonly PluginSettingsSnapshot[]>;
   updatePluginSettings?(
     pluginId: string,

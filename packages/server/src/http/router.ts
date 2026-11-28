@@ -3,6 +3,7 @@ import { KinloomHttpError, toErrorResponseData } from '../errors.js';
 import { AdminService } from '../services/adminService.js';
 import { AuthService } from '../services/authService.js';
 import { BundleReadService } from '../services/bundleReadService.js';
+import { ChangelogService } from '../services/changelogService.js';
 import { MediaService } from '../services/mediaService.js';
 import { PluginSettingsService } from '../services/pluginSettingsService.js';
 import { PronunciationService } from '../services/pronunciationService.js';
@@ -322,7 +323,12 @@ export function createKinloomServer(config: KinloomServerConfig): KinloomServer 
     createWikiRouteHandler({ bundleReadService, wikiWriteService }),
     createPronunciationRouteHandler({ pronunciationService, mode }),
     createMediaAndTalkRouteHandler({ mediaService, talkService }),
-    createAdminRouteHandler(adminService, systemDiagnosticsService, pluginSettingsService),
+    createAdminRouteHandler(
+      adminService,
+      systemDiagnosticsService,
+      pluginSettingsService,
+      new ChangelogService({ plugins, workerVersion: config.diagnostics?.workerVersion })
+    ),
   ];
 
   async function handleRequest(

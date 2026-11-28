@@ -322,6 +322,19 @@ export function createOpenFinancePlugin(options: OpenFinancePluginOptions = {}):
       id: OPEN_FINANCE_PLUGIN_ID,
       name: 'Open Finance & Donations (disabled)',
       version: KINLOOM_SERVER_VERSION,
+      changelog: [
+        {
+          version: '0.61.0',
+          date: '2026-11-28',
+          summary: 'Open Finance ledger API, allowlisted funding links, and runtime settings sync.',
+          changes: [
+            {
+              category: 'added',
+              text: 'Open Finance ledger API, allowlisted funding links, and runtime settings sync.',
+            },
+          ],
+        },
+      ],
       status: 'disabled',
       getStatus: () => ({ status: 'disabled', detail: 'Disabled via plugin options' }),
     };

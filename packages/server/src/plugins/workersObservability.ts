@@ -397,6 +397,19 @@ export function createWorkersObservabilityPlugin(
       id: WORKERS_OBSERVABILITY_PLUGIN_ID,
       name: 'Cloudflare Workers Observability (disabled)',
       version: KINLOOM_SERVER_VERSION,
+      changelog: [
+        {
+          version: '0.61.0',
+          date: '2026-11-28',
+          summary: 'X-Request-Id, Server-Timing headers, and structured request telemetry.',
+          changes: [
+            {
+              category: 'added',
+              text: 'X-Request-Id, Server-Timing headers, and structured request telemetry.',
+            },
+          ],
+        },
+      ],
       status: 'disabled',
       settingsSchema: disabledSchema,
       observabilityFlags: {

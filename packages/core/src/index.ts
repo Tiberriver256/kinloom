@@ -3,6 +3,7 @@
 // Brandkit SVG, Manifest, Head Tags & Privacy-Safe OG Metadata
 export * from './brandkit.js';
 export * from './bundleFastValidate.js';
+export * from './changelogs/builtinModuleChangelogs.js';
 // Core Domain Algorithms (UI-agnostic)
 export * from './citations.js';
 export * from './clock.js';
@@ -42,6 +43,7 @@ export * from './privacy.js';
 export * from './residenceSpans.js';
 // Wiki Revision Diff & Revert Engine
 export * from './revisions.js';
+export * from './schemas/changelogs.js';
 export * from './schemas/index.js';
 export * from './validateArchive.js';
 export * from './version.js';

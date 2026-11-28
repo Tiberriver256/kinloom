@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import type { AdminService } from '../../services/adminService.js';
+import type { ChangelogService } from '../../services/changelogService.js';
 import type { PluginSettingsService } from '../../services/pluginSettingsService.js';
 import type { SystemDiagnosticsService } from '../../services/systemDiagnosticsService.js';
 import { enforceCsrfOrigin, requireMinRole } from '../authMiddleware.js';
@@ -27,12 +28,20 @@ const UpdateUserBodySchema = z.object({
   display_name: z.string().optional(),
 });
 
-const BUILTIN_ADMIN_DOMAINS = new Set(['system', 'plugin-settings', 'invites', 'agent-tokens', 'users']);
+const BUILTIN_ADMIN_DOMAINS = new Set([
+  'system',
+  'changelogs',
+  'plugin-settings',
+  'invites',
+  'agent-tokens',
+  'users',
+]);
 
 export function createAdminRouteHandler(
   adminService: AdminService,
   systemDiagnosticsService?: SystemDiagnosticsService,
-  pluginSettingsService?: PluginSettingsService
+  pluginSettingsService?: PluginSettingsService,
+  changelogService?: ChangelogService
 ): HttpRouteHandler {
   return async (ctx) => {
     const { request, url, method, segments, auth, telemetry } = ctx;
@@ -56,6 +65,10 @@ export function createAdminRouteHandler(
     if (segments[2] === 'system' && method === 'GET' && segments.length === 3 && systemDiagnosticsService) {
       const report = await systemDiagnosticsService.getReport();
       return jsonResponse(report, 200);
+    }
+
+    if (segments[2] === 'changelogs' && method === 'GET' && segments.length === 3 && changelogService) {
+      return jsonResponse(changelogService.getChangelogs(), 200);
     }
 
     if (segments[2] === 'plugin-settings' && pluginSettingsService) {

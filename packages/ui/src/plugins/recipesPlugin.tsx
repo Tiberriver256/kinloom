@@ -84,6 +84,19 @@ export function createRecipesUiPlugin(options: RecipesUiPluginOptions = {}): Kin
       id,
       name: 'Family Recipe Sharing UI (disabled)',
       version: KINLOOM_UI_VERSION,
+      changelog: [
+        {
+          version: '0.61.0',
+          date: '2026-11-28',
+          summary: 'Family Recipe Box browse, photo upload, stars, comments, and home widget.',
+          changes: [
+            {
+              category: 'added',
+              text: 'Family Recipe Box browse, photo upload, stars, comments, and home widget.',
+            },
+          ],
+        },
+      ],
       status: 'disabled',
     };
   }

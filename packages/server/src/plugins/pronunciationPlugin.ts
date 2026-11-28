@@ -239,6 +239,16 @@ export function createPronunciationPlugin(
     id: PRONUNCIATION_PLUGIN_ID,
     name: 'Pronunciation & TTS',
     version: KINLOOM_SERVER_VERSION,
+    changelog: [
+      {
+        version: '0.61.0',
+        date: '2026-11-28',
+        summary: 'Pronunciation lexicon management and write-only TTS secret settings.',
+        changes: [
+          { category: 'added', text: 'Pronunciation lexicon management and write-only TTS secret settings.' },
+        ],
+      },
+    ],
     status: runtimeConfig.primaryBackend === 'disabled' ? 'disabled' : 'active',
     settingsSchema,
     getRuntimeConfig: () => ({ ...runtimeConfig }),

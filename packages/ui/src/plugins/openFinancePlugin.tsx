@@ -54,6 +54,19 @@ export function createOpenFinancePlugin(options: OpenFinanceUiPluginOptions = {}
       id,
       name: 'Open Finance & Support UI (disabled)',
       version: KINLOOM_UI_VERSION,
+      changelog: [
+        {
+          version: '0.61.0',
+          date: '2026-11-28',
+          summary: 'Open Finance transparency ledger, support page, and admin settings sync.',
+          changes: [
+            {
+              category: 'added',
+              text: 'Open Finance transparency ledger, support page, and admin settings sync.',
+            },
+          ],
+        },
+      ],
       status: 'disabled',
     };
   }

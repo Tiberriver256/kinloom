@@ -496,6 +496,19 @@ export function createPageVisitStatsPlugin(options: PageVisitStatsPluginOptions 
       id: PAGE_VISIT_STATS_PLUGIN_ID,
       name: 'Page Visit Stats (disabled)',
       version: KINLOOM_SERVER_VERSION,
+      changelog: [
+        {
+          version: '0.61.0',
+          date: '2026-11-28',
+          summary: 'Privacy-first page visit stats, SPA visit beacon, and public badge toggle.',
+          changes: [
+            {
+              category: 'added',
+              text: 'Privacy-first page visit stats, SPA visit beacon, and public badge toggle.',
+            },
+          ],
+        },
+      ],
       status: 'disabled',
       getStatus: () => ({ status: 'disabled', detail: 'Disabled via plugin options' }),
     };
@@ -553,6 +566,19 @@ export function createPageVisitStatsPlugin(options: PageVisitStatsPluginOptions 
     name: 'Page Visit Stats',
     version: KINLOOM_SERVER_VERSION,
     status: 'active',
+    changelog: [
+      {
+        version: '0.61.0',
+        date: '2026-11-28',
+        summary: 'Privacy-first page visit stats, SPA visit beacon, and public badge toggle.',
+        changes: [
+          {
+            category: 'added',
+            text: 'Privacy-first page visit stats, SPA visit beacon, and public badge toggle.',
+          },
+        ],
+      },
+    ],
     settingsSchema,
     documentContributions: {
       privacyDisclosures: [

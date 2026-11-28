@@ -35,6 +35,19 @@ export function createBookPublishingPlugin(options: BookPublishingUiPluginOption
       id,
       name: 'Archival Book Publishing UI (disabled)',
       version: KINLOOM_UI_VERSION,
+      changelog: [
+        {
+          version: '0.61.0',
+          date: '2026-11-28',
+          summary: 'Book Publishing Admin panel, quote estimator, and preview PDF compiler.',
+          changes: [
+            {
+              category: 'added',
+              text: 'Book Publishing Admin panel, quote estimator, and preview PDF compiler.',
+            },
+          ],
+        },
+      ],
       status: 'disabled',
     };
   }

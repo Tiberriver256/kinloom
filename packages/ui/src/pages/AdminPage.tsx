@@ -1,4 +1,5 @@
 import type {
+  AdminChangelogsResponse,
   AdminDataSource,
   AdminDiagnosticsReport,
   AgentTokenScope,
@@ -47,6 +48,9 @@ export const AdminPage: React.FC<AdminPageProps> = ({ adminClient, extraSettings
   const [diagnostics, setDiagnostics] = useState<AdminDiagnosticsReport | null>(null);
   const [diagnosticsLoading, setDiagnosticsLoading] = useState<boolean>(false);
   const [diagnosticsError, setDiagnosticsError] = useState<string | null>(null);
+  const [changelogs, setChangelogs] = useState<AdminChangelogsResponse | null>(null);
+  const [changelogsLoading, setChangelogsLoading] = useState<boolean>(false);
+  const [changelogsError, setChangelogsError] = useState<string | null>(null);
   const [pluginSettings, setPluginSettings] = useState<readonly PluginSettingsSnapshot[]>([]);
   const [pluginSettingsLoading, setPluginSettingsLoading] = useState<boolean>(false);
   const [pluginSettingsError, setPluginSettingsError] = useState<string | null>(null);
@@ -80,6 +84,7 @@ export const AdminPage: React.FC<AdminPageProps> = ({ adminClient, extraSettings
   const [signInOpen, setSignInOpen] = useState(false);
 
   const diagnosticsSupported = Boolean(client?.getSystemDiagnostics);
+  const changelogsSupported = Boolean(client?.getChangelogs);
   const pluginSettingsSupported = Boolean(client?.getPluginSettings && client?.updatePluginSettings);
 
   const loadDiagnostics = useCallback(async (): Promise<void> => {
@@ -98,6 +103,25 @@ export const AdminPage: React.FC<AdminPageProps> = ({ adminClient, extraSettings
       setDiagnosticsError(err instanceof Error ? err.message : String(err));
     } finally {
       setDiagnosticsLoading(false);
+    }
+  }, [client, capabilities.canManageSite]);
+
+  const loadChangelogs = useCallback(async (): Promise<void> => {
+    if (!client?.getChangelogs || !capabilities.canManageSite) {
+      setChangelogs(null);
+      setChangelogsLoading(false);
+      setChangelogsError(null);
+      return;
+    }
+    setChangelogsLoading(true);
+    setChangelogsError(null);
+    try {
+      const data = await client.getChangelogs();
+      setChangelogs(data);
+    } catch (err) {
+      setChangelogsError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setChangelogsLoading(false);
     }
   }, [client, capabilities.canManageSite]);
 
@@ -135,9 +159,10 @@ export const AdminPage: React.FC<AdminPageProps> = ({ adminClient, extraSettings
         source: 'plugin-settings-section',
       });
       void loadDiagnostics();
+      void loadChangelogs();
       return updated;
     },
-    [client, notifyPluginSettingsUpdated, loadDiagnostics]
+    [client, notifyPluginSettingsUpdated, loadDiagnostics, loadChangelogs]
   );
 
   useEffect(() => {
@@ -213,8 +238,9 @@ export const AdminPage: React.FC<AdminPageProps> = ({ adminClient, extraSettings
   useEffect(() => {
     void loadAll();
     void loadDiagnostics();
+    void loadChangelogs();
     void loadPluginSettings();
-  }, [loadAll, loadDiagnostics, loadPluginSettings]);
+  }, [loadAll, loadDiagnostics, loadChangelogs, loadPluginSettings]);
 
   const handleToggleRole = async (user: UserRecord): Promise<void> => {
     if (!client) {
@@ -459,6 +485,11 @@ export const AdminPage: React.FC<AdminPageProps> = ({ adminClient, extraSettings
           diagnosticsError={diagnosticsError}
           diagnosticsSupported={diagnosticsSupported}
           onRefreshDiagnostics={loadDiagnostics}
+          changelogs={changelogs}
+          changelogsLoading={changelogsLoading}
+          changelogsError={changelogsError}
+          changelogsSupported={changelogsSupported}
+          onRefreshChangelogs={loadChangelogs}
           pluginSettings={pluginSettings}
           pluginSettingsLoading={pluginSettingsLoading}
           pluginSettingsError={pluginSettingsError}

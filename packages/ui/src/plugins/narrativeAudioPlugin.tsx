@@ -141,6 +141,16 @@ export function createNarrativeAudioPlugin(options: NarrativeAudioPluginOptions 
     id,
     name: 'Narrative Audio',
     version: KINLOOM_UI_VERSION,
+    changelog: [
+      {
+        version: '0.61.0',
+        date: '2026-11-28',
+        summary: 'Kind-aware Narrative Audio margin bar and persistent playback dock.',
+        changes: [
+          { category: 'added', text: 'Kind-aware Narrative Audio margin bar and persistent playback dock.' },
+        ],
+      },
+    ],
     status: 'active',
     provider: NarrativeAudioProvider,
     slots: {

@@ -1,10 +1,12 @@
 import type {
+  AdminChangelogsResponse,
   AdminDiagnosticsReport,
   PluginSettingsSnapshot,
   PluginSettingsUpdateRequest,
 } from '@kinloom/core';
 import type React from 'react';
 import { PluginSlot } from '../../plugins/PluginContext.js';
+import { ChangelogsSection } from './ChangelogsSection.js';
 import { PluginSettingsSection } from './PluginSettingsSection.js';
 import { SystemDiagnosticsSection } from './SystemDiagnosticsSection.js';
 
@@ -14,6 +16,11 @@ export interface AdminSettingsShellProps {
   readonly diagnosticsError: string | null;
   readonly diagnosticsSupported: boolean;
   readonly onRefreshDiagnostics: () => Promise<void>;
+  readonly changelogs?: AdminChangelogsResponse | null;
+  readonly changelogsLoading?: boolean;
+  readonly changelogsError?: string | null;
+  readonly changelogsSupported?: boolean;
+  readonly onRefreshChangelogs?: () => Promise<void>;
   readonly pluginSettings?: readonly PluginSettingsSnapshot[];
   readonly pluginSettingsLoading?: boolean;
   readonly pluginSettingsError?: string | null;
@@ -38,6 +45,11 @@ export const AdminSettingsShell: React.FC<AdminSettingsShellProps> = ({
   diagnosticsError,
   diagnosticsSupported,
   onRefreshDiagnostics,
+  changelogs = null,
+  changelogsLoading = false,
+  changelogsError = null,
+  changelogsSupported = false,
+  onRefreshChangelogs,
   pluginSettings = [],
   pluginSettingsLoading = false,
   pluginSettingsError = null,
@@ -64,6 +76,13 @@ export const AdminSettingsShell: React.FC<AdminSettingsShellProps> = ({
         onUpdatePlugin={onUpdatePluginSettings}
       />
     )}
+    <ChangelogsSection
+      changelogs={changelogs}
+      loading={changelogsLoading}
+      error={changelogsError}
+      supported={changelogsSupported}
+      onRefresh={onRefreshChangelogs ?? (async () => {})}
+    />
     <PluginSlot name="adminSettings" />
     {extraPanels}
   </div>

@@ -47,6 +47,19 @@ export function createObservabilityStatsPlugin(
       id,
       name: 'Page Visit Stats UI (disabled)',
       version: KINLOOM_UI_VERSION,
+      changelog: [
+        {
+          version: '0.61.0',
+          date: '2026-11-28',
+          summary: 'Page Visit Stats dashboard, SPA visit beacon tracker, and public visit badges.',
+          changes: [
+            {
+              category: 'added',
+              text: 'Page Visit Stats dashboard, SPA visit beacon tracker, and public visit badges.',
+            },
+          ],
+        },
+      ],
       status: 'disabled',
     };
   }

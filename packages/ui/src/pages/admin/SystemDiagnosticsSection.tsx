@@ -299,7 +299,9 @@ export const SystemDiagnosticsSection: React.FC<SystemDiagnosticsSectionProps> =
         <>
           <div className={cx(diagStyles, 'diag-grid')}>
             <div className={cx(diagStyles, 'diag-card')}>
-              <h3 className={cx(diagStyles, 'diag-card-title')}>Versions &amp; Build Provenance</h3>
+              <h3 className={cx(diagStyles, 'diag-card-title')}>
+                Versions &amp; Build Provenance · <a href="#admin-changelogs">View changelogs →</a>
+              </h3>
               <dl className={cx(diagStyles, 'diag-dl')}>
                 <dt>UI version</dt>
                 <dd>{clientEnv.ui_version}</dd>
