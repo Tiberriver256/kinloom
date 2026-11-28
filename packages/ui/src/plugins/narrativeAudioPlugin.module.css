@@ -172,13 +172,13 @@
 }
 
 .narrative-audio-pill {
-  font-family: var(--font-mono);
+  font-family: var(--font-ui);
   font-variant-numeric: tabular-nums;
-  font-size: 0.72rem;
-  padding: 4px 9px;
-  border: 1px solid var(--border-control);
-  border-radius: var(--radius-sm);
-  background: var(--surface-card);
+  font-size: 0.78rem;
+  padding: 4px 10px;
+  border: 1px solid var(--border-decorative);
+  border-radius: var(--radius-md);
+  background: var(--surface-subtle);
   color: var(--text-primary);
   cursor: pointer;
   transition: background 0.15s ease;

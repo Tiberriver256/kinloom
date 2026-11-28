@@ -54,10 +54,10 @@
 }
 
 .person-section-jump-link {
-  font-family: var(--font-mono);
-  font-size: 0.78rem;
+  font-family: var(--font-ui);
+  font-size: 0.84rem;
   font-weight: 600;
-  color: var(--accent-primary);
+  color: var(--jump-active-fg, var(--accent-primary));
   text-decoration: none;
   padding: 2px 4px;
 }
@@ -340,36 +340,40 @@
 }
 
 .person-family-chip {
-  display: inline-block;
+  display: inline-flex;
+  align-items: baseline;
+  gap: 4px;
   padding: 2px 0;
   line-height: 1.5;
   border: none;
-  border-bottom: 1px dotted var(--border-control);
   background: transparent;
   color: var(--surface-header);
   font-family: var(--font-serif);
   font-size: 0.94rem;
-  text-decoration: none;
+  text-decoration: underline dotted var(--border-control);
+  text-underline-offset: 3px;
+  text-decoration-thickness: 1px;
   transition:
     color 140ms ease,
-    border-color 140ms ease;
+    text-decoration-color 140ms ease;
 }
 
 .person-family-chip span {
   font-family: var(--font-mono);
   font-size: 0.72rem;
   color: var(--text-secondary);
+  text-decoration: none;
 }
 
 .person-family-chip:hover {
   color: var(--radar-copresence);
-  border-bottom-color: var(--radar-copresence);
+  text-decoration-color: var(--radar-copresence);
 }
 
 .person-family-chip:global(.is-redacted) {
   color: var(--text-secondary);
   font-style: italic;
-  border-bottom-style: dashed;
+  text-decoration-style: dashed;
 }
 
 .person-living-pill {

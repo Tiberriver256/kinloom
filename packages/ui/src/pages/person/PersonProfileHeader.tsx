@@ -10,7 +10,6 @@ import { CitationBadge } from '../../components/wiki/WikiBadges.js';
 import { cx } from '../../lib/cx.js';
 import { isRedactedLivingPlaceholder } from '../../lib/tree/types.js';
 import { KINLOOM_VOCABULARY } from '../../lib/vocabulary.js';
-import controlStyles from '../../styles/Controls.module.css';
 import personStyles from '../PersonPage.module.css';
 import { extractBirthYearForLiving, type ImmediateFamilySummary } from './personViewModel.js';
 
@@ -205,7 +204,7 @@ export const PersonProfileHeader: React.FC<PersonProfileHeaderProps> = ({
           )}
           <button
             type="button"
-            className={cx(controlStyles, 'pill-btn print-hide')}
+            className={cx(atomStyles, 'ink-link-btn print-hide')}
             onClick={onExportGedcom}
             title={`Download family tree file for ${person.full_name}`}
           >
