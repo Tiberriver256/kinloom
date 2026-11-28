@@ -12,6 +12,7 @@ import {
   SYNC_HELP,
   TELEMETRY_HELP,
   VERIFY_HELP,
+  VERIFY_LIVE_HELP,
 } from '../commands/ops/help.js';
 import { formatRecordCommandsHelp } from '../commands/records/help.js';
 
@@ -177,6 +178,12 @@ Options:
     help: VERIFY_HELP,
   },
   {
+    name: 'verify-live',
+    category: 'ops',
+    summary: 'Verify live deployments (401 gate, plugins, living privacy, browser/PWA, D1 cleanup)',
+    help: VERIFY_LIVE_HELP,
+  },
+  {
     name: 'media',
     category: 'ops',
     summary: 'Inspect and deduplicate local archive media records (dry-run by default)',
@@ -239,7 +246,7 @@ Options:
 Browse all embedded Kinloom archival, scan-prep, OCR, audio, and workflow guides.
 
 Examples:
-  kinloom guide                              List all 27 embedded guides by category
+  kinloom guide                              List all 28 embedded guides by category
   kinloom guide nara                         Show the National Archives (NARA) workflow guide
   kinloom guide ocr                          Show the safe batch OCR workflow guide
   kinloom guide pronounce                    Show the pronunciation lookup & audit guide

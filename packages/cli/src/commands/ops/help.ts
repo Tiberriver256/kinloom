@@ -317,7 +317,8 @@ from any live Kinloom server URL, along with a machine-readable manifest.json an
 zero-dependency browsable index.html contact sheet.
 
 Options:
-  --url <baseUrl>             Target Kinloom server URL (http:// or https://, required)
+  --url <baseUrl>             Target Kinloom server URL (required unless derived via --with-temp-auth)
+  --repo <dir>                Archive repository root for --with-temp-auth wrangler lookup (default: cwd)
   --out-dir <dir>             Output directory (default: ./kinloom-screenshots)
   --viewports <list>          Comma-separated presets or name:WxH specs
                               (default: mobile:390x844,tablet:768x1024,desktop:1440x900)
@@ -329,6 +330,7 @@ Options:
   --sample-places <N>         Representative place dossiers discovered from bundle (default: 1)
   --auth-cookie <cookie>      Optional Cookie header for authenticated previews (never saved)
   --auth-header <name: value> Optional HTTP header for authenticated previews (repeatable, never saved)
+  --with-temp-auth            Mint and auto-revoke a temporary D1 viewer invite via Wrangler
   --full-page                 Capture full scrollable page height (default: true)
   --no-full-page              Capture viewport-only height for page screenshots
   --wait-ms <ms>              Settle delay after load and font readiness (default: 350)
@@ -363,9 +365,35 @@ Options:
   --tokens <path>      Explicit .tokens.json or .resolver.json path(s) (repeatable or comma-separated)
   --bundle <dir>       Existing artifact bundle directory (for \`css\` and \`sarif\`)
   --baseline <sarif>   Baseline SARIF 2.1.0 file for ratchet regression diffing
+  --auth-cookie <str>  Optional Cookie header for authenticated private-archive audits (never saved)
+  --auth-header <hdr>  Optional HTTP header (\`Name: value\`, repeatable, never saved)
+  --with-temp-auth     Mint and auto-revoke a temporary D1 viewer invite via Wrangler
   --static-only        Skip browser capture and run static CSS/DTCG checks only
   --fail-on-error      Exit with code 1 when any blocking error finding is detected
   --force              Overwrite existing plan file in \`init\`
   --json               Emit structured JSON output
   --guide              Show the embedded design-audit workflow guide
   -h, --help           Show this help message`;
+
+export const VERIFY_LIVE_HELP = `Usage: kinloom verify-live [options]
+
+Verify a live Kinloom deployment end to end with automatic ephemeral Cloudflare D1 auth:
+  1. Anonymous GET /api/bundle returns HTTP 401 (privacy gate active)
+  2. Authenticated synthetic probe + plugin health checks (--expect-plugins)
+  3. Live /api/bundle living-person privacy invariants (0 living portraits, 0 exact YYYY-MM-DD living birthdates, 0 living residence spans, 0 living media/narratives)
+  4. Optional headless Playwright smoke check (--browser: visible H1, 0 pageerror, 0 failed /assets/* or /api/* requests)
+  5. Optional PWA & brandkit asset checks (--check-pwa: /site.webmanifest, /sw.js, /favicon-light.svg, /favicon-dark.svg)
+  6. Guaranteed ephemeral D1 cleanup (backupCount === 1 before/after and remainingTmpCount === 0)
+
+Options:
+  --repo <dir>            Archive repository root for wrangler config lookup (default: cwd)
+  --url <url>             Target archive URL (default: derived from wrangler routes[0].pattern)
+  --token <secret>        Explicit bearer token (skips ephemeral D1 auth)
+  --with-temp-auth        Require ephemeral D1 auth (default when --token is omitted and wrangler config exists)
+  --expect-plugins <csv>  Comma-separated server plugin IDs required to be active and healthy
+  --browser               Run headless Playwright smoke check against / using an ephemeral viewer invite
+  --check-pwa             Verify /site.webmanifest, /sw.js, /favicon-light.svg, and /favicon-dark.svg
+  --timeout-ms <ms>       Per-request/check timeout in milliseconds (default: 15000)
+  --json                  Emit machine-readable JSON verification report
+  --guide                 Show the embedded verify-live workflow guide
+  -h, --help              Show this help message`;

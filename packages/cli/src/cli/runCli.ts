@@ -28,6 +28,7 @@ export async function runCli(argv: readonly string[], options?: RunCliOptions): 
     fetchImpl: options?.fetchImpl,
     plugins: options?.plugins,
     screenshotBrowserFactory: options?.screenshotBrowserFactory,
+    execWrangler: options?.execWrangler,
   };
 
   try {

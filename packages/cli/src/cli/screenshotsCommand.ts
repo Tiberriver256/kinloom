@@ -25,6 +25,7 @@ export async function runScreenshots(rest: readonly string[], ctx: CliDispatchCo
     allowPositionals: false,
     options: {
       url: { type: 'string' },
+      repo: { type: 'string' },
       'out-dir': { type: 'string' },
       viewports: { type: 'string' },
       themes: { type: 'string' },
@@ -35,6 +36,7 @@ export async function runScreenshots(rest: readonly string[], ctx: CliDispatchCo
       'sample-places': { type: 'string' },
       'auth-cookie': { type: 'string' },
       'auth-header': { type: 'string', multiple: true },
+      'with-temp-auth': { type: 'boolean', default: false },
       'full-page': { type: 'boolean', default: false },
       'no-full-page': { type: 'boolean', default: false },
       'wait-ms': { type: 'string' },
@@ -47,8 +49,11 @@ export async function runScreenshots(rest: readonly string[], ctx: CliDispatchCo
   if (values['full-page'] && values['no-full-page']) {
     throw new CliValidationError('Specify either `--full-page` or `--no-full-page`, not both.');
   }
+  if (values['with-temp-auth'] && values['auth-cookie']?.trim()) {
+    throw new CliValidationError('Specify either `--auth-cookie` or `--with-temp-auth`, not both.');
+  }
 
-  const url = requireStringFlag(values.url, '--url');
+  const url = values['with-temp-auth'] ? values.url?.trim() : requireStringFlag(values.url, '--url');
   const [
     {
       parseAuthHeader,
@@ -99,6 +104,9 @@ export async function runScreenshots(rest: readonly string[], ctx: CliDispatchCo
         samplePlaces,
         authCookie: values['auth-cookie'],
         authHeaders,
+        withTempAuth: values['with-temp-auth'],
+        repoDir: values.repo ? path.resolve(ctx.cwd, values.repo) : ctx.cwd,
+        execWrangler: ctx.execWrangler,
         fullPage,
         waitMs,
         timeoutMs,

@@ -45,6 +45,7 @@ import type {
   ScreenshotTheme,
   ViewportSpec,
 } from './screenshots/types.js';
+import { redeemEphemeralInviteSession, withEphemeralD1Auth } from './shared/ephemeralAuth.js';
 
 export { SCREENSHOTS_HELP } from './help.js';
 export * from './screenshots/browser.js';
@@ -55,7 +56,7 @@ export * from './screenshots/report.js';
 export type * from './screenshots/types.js';
 
 function resolveRunConfig(options: ScreenshotsCommandOptions): ResolvedScreenshotRunConfig {
-  const targetUrl = validateTargetBaseUrl(options.url);
+  const targetUrl = validateTargetBaseUrl(options.url ?? '');
   const viewports = options.viewports && options.viewports.length > 0 ? options.viewports : DEFAULT_VIEWPORTS;
   const themes = options.themes && options.themes.length > 0 ? options.themes : DEFAULT_THEMES;
   const include = options.include && options.include.length > 0 ? options.include : DEFAULT_INCLUDE;
@@ -109,6 +110,54 @@ function resolveRunConfig(options: ScreenshotsCommandOptions): ResolvedScreensho
 }
 
 export async function runScreenshotsCommand(
+  options: ScreenshotsCommandOptions
+): Promise<ScreenshotsCommandResult> {
+  if (options.withTempAuth) {
+    if (options.authCookie?.trim()) {
+      throw new CliValidationError('Specify either `--auth-cookie` or `--with-temp-auth`, not both.');
+    }
+    const repoDir = path.resolve(options.repoDir?.trim() || process.cwd());
+    const { value } = await withEphemeralD1Auth(
+      {
+        repoDir,
+        urlOverride: options.url,
+        mintInvite: true,
+        inviteLabel: 'tmp-kinloom-screenshots-invite',
+        createdBy: 'kinloom screenshots',
+        execWrangler: options.execWrangler,
+        backupTokenLabel: options.backupTokenLabel,
+      },
+      async (auth) => {
+        const resolvedUrl = options.url?.trim() || auth.baseUrl || '';
+        if (!resolvedUrl) {
+          throw new CliValidationError(
+            'Missing target URL. Pass `--url <baseUrl>` or configure `routes[0].pattern` in wrangler config.'
+          );
+        }
+        if (!auth.invite) {
+          throw new Error('Ephemeral D1 auth did not mint a viewer invite.');
+        }
+        const sessionCookie = await redeemEphemeralInviteSession({
+          baseUrl: resolvedUrl,
+          inviteToken: auth.invite.token,
+          fetchImpl: options.fetchImpl,
+          timeoutMs: options.timeoutMs,
+        });
+        return executeScreenshotsCommand({
+          ...options,
+          url: resolvedUrl,
+          authCookie: sessionCookie,
+          withTempAuth: false,
+        });
+      }
+    );
+    return value;
+  }
+
+  return executeScreenshotsCommand(options);
+}
+
+async function executeScreenshotsCommand(
   options: ScreenshotsCommandOptions
 ): Promise<ScreenshotsCommandResult> {
   const config = resolveRunConfig(options);

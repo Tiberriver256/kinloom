@@ -20,6 +20,8 @@ import type {
   DesignAuditTheme,
   DesignAuditUiState,
 } from './design-audit/types.js';
+import { redeemEphemeralInviteSession, withEphemeralD1Auth } from './shared/ephemeralAuth.js';
+import type { WranglerExecutor } from './shared/wrangler.js';
 
 export * from './design-audit/apca.js';
 export * from './design-audit/archetypes.js';
@@ -63,6 +65,12 @@ export interface DesignAuditRunOptions {
   readonly json?: boolean | undefined;
   readonly browserFactory?: DesignAuditBrowserFactory | undefined;
   readonly loadingDelayMs?: number | undefined;
+  readonly withTempAuth?: boolean | undefined;
+  readonly authCookie?: string | undefined;
+  readonly authHeaders?: Readonly<Record<string, string>> | undefined;
+  readonly fetchImpl?: typeof fetch | undefined;
+  readonly execWrangler?: WranglerExecutor | undefined;
+  readonly backupTokenLabel?: string | undefined;
 }
 
 export interface DesignAuditRunResult {
@@ -145,6 +153,61 @@ export function formatDesignAuditTextReport(result: Omit<DesignAuditRunResult, '
 }
 
 export async function runDesignAuditCommand(options: DesignAuditRunOptions): Promise<DesignAuditRunResult> {
+  if (options.withTempAuth && options.authCookie?.trim()) {
+    throw new CliValidationError('Specify either `--auth-cookie` or `--with-temp-auth`, not both.');
+  }
+
+  if (options.withTempAuth && !options.staticOnly) {
+    const repoDir = path.resolve(options.repoRoot ?? process.cwd());
+    const { value } = await withEphemeralD1Auth(
+      {
+        repoDir,
+        urlOverride: options.url,
+        mintInvite: true,
+        inviteLabel: 'tmp-kinloom-design-audit-invite',
+        createdBy: 'kinloom design-audit',
+        execWrangler: options.execWrangler,
+        backupTokenLabel: options.backupTokenLabel,
+      },
+      async (auth) => {
+        const resolvedUrl = options.url?.trim() || auth.baseUrl || '';
+        if (!resolvedUrl && !options.planPath) {
+          throw new CliValidationError(
+            'Missing target URL. Pass `--url <baseUrl>` or configure `routes[0].pattern` in wrangler config.'
+          );
+        }
+        if (!auth.invite) {
+          throw new Error('Ephemeral D1 auth did not mint a viewer invite.');
+        }
+        let targetBaseUrl = resolvedUrl;
+        if (!targetBaseUrl && options.planPath) {
+          const resolvedPlan = path.resolve(options.planPath);
+          if (!fs.existsSync(resolvedPlan)) {
+            throw new CliValidationError(`Design-audit plan file not found: ${resolvedPlan}`);
+          }
+          const planData = JSON.parse(fs.readFileSync(resolvedPlan, 'utf8')) as DesignAuditPlan;
+          targetBaseUrl = planData.baseUrl;
+        }
+        const sessionCookie = await redeemEphemeralInviteSession({
+          baseUrl: targetBaseUrl,
+          inviteToken: auth.invite.token,
+          fetchImpl: options.fetchImpl,
+        });
+        return executeDesignAuditCommand({
+          ...options,
+          ...(resolvedUrl ? { url: resolvedUrl } : {}),
+          authCookie: sessionCookie,
+          withTempAuth: false,
+        });
+      }
+    );
+    return value;
+  }
+
+  return executeDesignAuditCommand(options);
+}
+
+async function executeDesignAuditCommand(options: DesignAuditRunOptions): Promise<DesignAuditRunResult> {
   let plan: DesignAuditPlan;
   let bundleDir: string;
 
@@ -208,6 +271,8 @@ export async function runDesignAuditCommand(options: DesignAuditRunOptions): Pro
         bundleDir,
         browserFactory: options.browserFactory,
         loadingDelayMs: options.loadingDelayMs,
+        authCookie: options.authCookie,
+        authHeaders: options.authHeaders,
       });
     } catch (err: unknown) {
       degradedReason = err instanceof Error ? err.message : String(err);

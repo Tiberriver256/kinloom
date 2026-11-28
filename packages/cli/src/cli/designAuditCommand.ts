@@ -60,6 +60,31 @@ function parseUiStates(raw: string | undefined): DesignAuditUiState[] | undefine
   return out;
 }
 
+function parseDesignAuditAuthHeaders(
+  rawValues: readonly string[] | undefined
+): Record<string, string> | undefined {
+  if (!rawValues || rawValues.length === 0) {
+    return undefined;
+  }
+  const headers: Record<string, string> = {};
+  for (const raw of rawValues) {
+    if (/[\r\n]/.test(raw)) {
+      throw new CliValidationError('Option `--auth-header` must not contain CR or LF characters.');
+    }
+    const colonIdx = raw.indexOf(':');
+    if (colonIdx <= 0) {
+      throw new CliValidationError('Option `--auth-header` must be formatted as `Header-Name: value`.');
+    }
+    const name = raw.slice(0, colonIdx).trim();
+    const value = raw.slice(colonIdx + 1).trim();
+    if (!name || !value || !/^[!#$%&'*+\-.^_`|~0-9A-Za-z]+$/.test(name)) {
+      throw new CliValidationError('Option `--auth-header` has an invalid HTTP header name or empty value.');
+    }
+    headers[name] = value;
+  }
+  return headers;
+}
+
 export async function runDesignAudit(rest: readonly string[], ctx: CliDispatchContext): Promise<CliExitCode> {
   const first = rest[0];
   const isSubcommand = first !== undefined && !first.startsWith('-');
@@ -216,14 +241,22 @@ export async function runDesignAudit(rest: readonly string[], ctx: CliDispatchCo
       css: { type: 'string', multiple: true },
       tokens: { type: 'string', multiple: true },
       baseline: { type: 'string' },
+      'auth-cookie': { type: 'string' },
+      'auth-header': { type: 'string', multiple: true },
+      'with-temp-auth': { type: 'boolean', default: false },
       'static-only': { type: 'boolean', default: false },
       'fail-on-error': { type: 'boolean', default: false },
       json: { type: 'boolean', default: false },
     },
   });
 
+  if (values['with-temp-auth'] && values['auth-cookie']?.trim()) {
+    throw new CliValidationError('Specify either `--auth-cookie` or `--with-temp-auth`, not both.');
+  }
+
   const arch = values.archetype ? mod.resolveDesignAuditArchetype(values.archetype).id : undefined;
   const routes = splitCsvFlags(values.routes);
+  const authHeaders = parseDesignAuditAuthHeaders(values['auth-header']);
 
   const result = await measureCommand(
     {
@@ -246,6 +279,11 @@ export async function runDesignAudit(rest: readonly string[], ctx: CliDispatchCo
         cssPaths: splitCsvFlags(values.css),
         tokenPaths: splitCsvFlags(values.tokens),
         baselinePath: values.baseline ? path.resolve(ctx.cwd, values.baseline) : undefined,
+        withTempAuth: values['with-temp-auth'],
+        authCookie: values['auth-cookie'],
+        authHeaders,
+        fetchImpl: ctx.fetchImpl,
+        execWrangler: ctx.execWrangler,
         staticOnly: values['static-only'],
         failOnError: values['fail-on-error'],
         json: values.json,

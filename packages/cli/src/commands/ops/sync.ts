@@ -1,6 +1,7 @@
 import path from 'node:path';
 import type { EntityType } from '@kinloom/core';
 import { CliValidationError } from '../../errors.js';
+import { withEphemeralD1Auth } from './shared/ephemeralAuth.js';
 import {
   detectSyncMediaLayout,
   findMissingRemoteMedia,
@@ -32,12 +33,12 @@ import {
   type SyncSubmittedBatch,
 } from './sync/types.js';
 import {
-  cleanupTempTokens,
   DEFAULT_BACKUP_TOKEN_LABEL,
   defaultWranglerExecutor,
   loadWranglerBindings,
-  mintTempTokens,
   resolveWranglerBin,
+  SYNC_TEMP_TOKEN_ID_PREFIX,
+  SYNC_TEMP_TOKEN_LABEL,
 } from './sync/wrangler.js';
 
 export { SYNC_HELP } from './help.js';
@@ -126,129 +127,127 @@ export async function runSyncCommand(options: SyncCommandOptions = {}): Promise<
   const summary =
     options.summary?.trim() || `Sync ${local.siteConfig.site.familyName} archive from local YAML`;
 
-  const minted = await mintTempTokens(ctx);
-  const mintedIds = [minted.read_backup.tokenId, minted.write_batch.tokenId];
+  const { value: baseReport, cleanup: ephemeralCleanup } = await withEphemeralD1Auth(
+    {
+      repoDir,
+      urlOverride: options.siteUrl,
+      wranglerBin,
+      execWrangler: ctx.execWrangler,
+      agentTokenScopes: ['read_backup', 'write_batch'],
+      tokenIdPrefix: SYNC_TEMP_TOKEN_ID_PREFIX,
+      tokenLabel: SYNC_TEMP_TOKEN_LABEL,
+      createdBy: 'kinloom sync',
+      backupTokenLabel,
+      verifyBackupBefore: false,
+      verifyBackupAfter: true,
+    },
+    async (auth) => {
+      const readToken = auth.agentTokens.read_backup?.rawToken;
+      const writeToken = auth.agentTokens.write_batch?.rawToken;
+      if (!readToken || !writeToken) {
+        throw new Error('Ephemeral D1 auth did not mint required read_backup and write_batch tokens.');
+      }
 
-  let cleanupResult: SyncCleanupSummary | null = null;
-  let primaryError: unknown = null;
-  let baseReport: Omit<SyncCommandResult, 'rendered'> | null = null;
+      const remoteSnap = await fetchRemoteSnapshot(ctx, readToken);
+      const remoteByType = indexRemoteSnapshot(remoteSnap.snapshot);
 
-  try {
-    const remoteSnap = await fetchRemoteSnapshot(ctx, minted.read_backup.rawToken);
-    const remoteByType = indexRemoteSnapshot(remoteSnap.snapshot);
+      const plan = computeSyncPlan({
+        selectedTypes,
+        localByType: sanitizedLocal.byType,
+        remoteByType,
+        includeLiving,
+        allowDeletes,
+        explicitDeletes,
+      });
 
-    const plan = computeSyncPlan({
-      selectedTypes,
-      localByType: sanitizedLocal.byType,
-      remoteByType,
-      includeLiving,
-      allowDeletes,
-      explicitDeletes,
-    });
+      const mediaUploadTargetsMap = new Map<string, MediaUploadTarget>();
+      for (const rawMediaPath of uploadMediaPaths) {
+        const target = resolveMediaUploadTarget(repoDir, mediaLayout, rawMediaPath);
+        mediaUploadTargetsMap.set(target.r2Key, target);
+      }
 
-    const mediaUploadTargetsMap = new Map<string, MediaUploadTarget>();
-    for (const rawMediaPath of uploadMediaPaths) {
-      const target = resolveMediaUploadTarget(repoDir, mediaLayout, rawMediaPath);
-      mediaUploadTargetsMap.set(target.r2Key, target);
-    }
-
-    let checkedRemoteMediaCount = 0;
-    if (syncMissingMedia) {
-      const missingRes = await findMissingRemoteMedia(
-        ctx,
-        minted.write_batch.rawToken,
-        sanitizedLocal.byType.media,
-        {
+      let checkedRemoteMediaCount = 0;
+      if (syncMissingMedia) {
+        const missingRes = await findMissingRemoteMedia(ctx, writeToken, sanitizedLocal.byType.media, {
           siteConfig: local.siteConfig,
           people: sanitizedLocal.byType.person,
           places: sanitizedLocal.byType.place,
-        }
-      );
-      checkedRemoteMediaCount = missingRes.checkedCount;
-      for (const item of missingRes.missing) {
-        mediaUploadTargetsMap.set(item.r2Key, item);
-      }
-    }
-
-    const mediaUploadTargets = [...mediaUploadTargetsMap.values()];
-    let uploadedKeys: string[] = [];
-    let batchesSubmitted: SyncSubmittedBatch[] = [];
-    let recompile: SyncRecompileSummary | null = null;
-    let liveVerification: SyncLiveVerificationSummary | null = null;
-
-    if (!dryRun) {
-      if (mediaUploadTargets.length > 0) {
-        uploadedKeys = await uploadMediaTargets(ctx, mediaUploadTargets, concurrency);
-      }
-      if (plan.patches.length > 0) {
-        batchesSubmitted = await submitPatchChunks({
-          ctx,
-          writeToken: minted.write_batch.rawToken,
-          batchLabel: local.siteConfig.site.familyName,
-          summary,
-          patches: plan.patches,
-          chunkSize,
         });
-        recompile = await purgeCompiledBundleAndRecompile(ctx, minted.write_batch.rawToken);
+        checkedRemoteMediaCount = missingRes.checkedCount;
+        for (const item of missingRes.missing) {
+          mediaUploadTargetsMap.set(item.r2Key, item);
+        }
       }
-      if (verifyLive) {
-        const expectedRevision =
-          batchesSubmitted[batchesSubmitted.length - 1]?.head_revision_id ?? remoteSnap.headRevisionId;
-        liveVerification = await verifyLiveEndpoints({
-          ctx,
-          writeToken: minted.write_batch.rawToken,
-          expectedRevision,
+      const mediaUploadTargets = [...mediaUploadTargetsMap.values()];
+      let uploadedKeys: string[] = [];
+      let batchesSubmitted: SyncSubmittedBatch[] = [];
+      let recompile: SyncRecompileSummary | null = null;
+      let liveVerification: SyncLiveVerificationSummary | null = null;
+
+      if (!dryRun) {
+        if (mediaUploadTargets.length > 0) {
+          uploadedKeys = await uploadMediaTargets(ctx, mediaUploadTargets, concurrency);
+        }
+        if (plan.patches.length > 0) {
+          batchesSubmitted = await submitPatchChunks({
+            ctx,
+            writeToken,
+            batchLabel: local.siteConfig.site.familyName,
+            summary,
+            patches: plan.patches,
+            chunkSize,
+          });
+          recompile = await purgeCompiledBundleAndRecompile(ctx, writeToken);
+        }
+        if (verifyLive) {
+          const expectedRevision =
+            batchesSubmitted[batchesSubmitted.length - 1]?.head_revision_id ?? remoteSnap.headRevisionId;
+          liveVerification = await verifyLiveEndpoints({
+            ctx,
+            writeToken,
+            expectedRevision,
+            uploadedKeys,
+            concurrency,
+          });
+        }
+      }
+
+      const report: Omit<SyncCommandResult, 'rendered'> = {
+        repoDir,
+        baseUrl: bindings.baseUrl,
+        dbName: bindings.dbName,
+        r2Bucket: bindings.r2Bucket,
+        dryRun,
+        selectedTypes,
+        remoteHeadBefore: remoteSnap.headRevisionId,
+        remoteEtagBefore: remoteSnap.etag,
+        countsByType: plan.countsByType,
+        totalPatches: plan.patches.length,
+        chunkSize,
+        plannedBatches: Math.ceil(plan.patches.length / chunkSize),
+        changedSamples: plan.changedSamples,
+        filteredOutLivingMedia: sanitizedLocal.filteredOutMediaCount,
+        media: {
+          checkedRemoteCount: checkedRemoteMediaCount,
+          plannedUploads: mediaUploadTargets.map((t) => t.r2Key),
           uploadedKeys,
           concurrency,
-        });
-      }
+        },
+        batchesSubmitted,
+        recompile,
+        liveVerification,
+        cleanup: null,
+      };
+      return report;
     }
+  );
 
-    baseReport = {
-      repoDir,
-      baseUrl: bindings.baseUrl,
-      dbName: bindings.dbName,
-      r2Bucket: bindings.r2Bucket,
-      dryRun,
-      selectedTypes,
-      remoteHeadBefore: remoteSnap.headRevisionId,
-      remoteEtagBefore: remoteSnap.etag,
-      countsByType: plan.countsByType,
-      totalPatches: plan.patches.length,
-      chunkSize,
-      plannedBatches: Math.ceil(plan.patches.length / chunkSize),
-      changedSamples: plan.changedSamples,
-      filteredOutLivingMedia: sanitizedLocal.filteredOutMediaCount,
-      media: {
-        checkedRemoteCount: checkedRemoteMediaCount,
-        plannedUploads: mediaUploadTargets.map((t) => t.r2Key),
-        uploadedKeys,
-        concurrency,
-      },
-      batchesSubmitted,
-      recompile,
-      liveVerification,
-      cleanup: null,
-    };
-  } catch (err: unknown) {
-    primaryError = err;
-  } finally {
-    try {
-      cleanupResult = await cleanupTempTokens(ctx, mintedIds);
-    } catch (cleanupErr: unknown) {
-      if (!primaryError) {
-        primaryError = cleanupErr;
-      }
-    }
-  }
-
-  if (primaryError !== null) {
-    throw primaryError;
-  }
-  if (!baseReport) {
-    throw new Error('Sync completed without producing a report.');
-  }
-
+  const cleanupResult: SyncCleanupSummary = {
+    deletedTokenIds: [...ephemeralCleanup.deletedTokenIds],
+    remainingTmpCount: ephemeralCleanup.remainingTmpCount,
+    backupTokenLabel: ephemeralCleanup.backupTokenLabel,
+    backupCount: ephemeralCleanup.backupCountAfter,
+  };
   baseReport.cleanup = cleanupResult;
 
   const rendered = options.json ? `${JSON.stringify(baseReport, null, 2)}\n` : formatSyncReport(baseReport);

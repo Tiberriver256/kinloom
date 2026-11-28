@@ -1,3 +1,5 @@
+import type { WranglerExecutor } from '../commands/ops/shared/wrangler.js';
+
 export const SYNTHETIC_PROBE_PLUGIN_ID = 'kinloom-synthetic-probe';
 export const SYNTHETIC_PROBE_COMMAND_NAME = 'probe';
 export const SYNTHETIC_PROBE_VERIFY_CHECK_ID = 'synthetic-probe';
@@ -69,6 +71,10 @@ export interface SyntheticProbePluginOptions {
   readonly fetchImpl?: typeof fetch | undefined;
   /** Optional clock for deterministic latency and timestamp measurement. */
   readonly clock?: SyntheticProbeClock;
+  /** Optional wrangler executor for deterministic tests of `--with-temp-auth`. */
+  readonly execWrangler?: WranglerExecutor | undefined;
+  /** Optional backup token label verified by `--with-temp-auth` cleanup. */
+  readonly backupTokenLabel?: string | undefined;
 }
 
 export interface SecurityHeaderCheckResult {

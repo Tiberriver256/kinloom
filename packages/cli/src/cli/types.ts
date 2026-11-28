@@ -1,5 +1,6 @@
 import { type ParseArgsConfig, parseArgs } from 'node:util';
 import type { ScreenshotBrowserFactory } from '../commands/ops/screenshots/types.js';
+import type { WranglerExecutor } from '../commands/ops/shared/wrangler.js';
 import { type CliExitCode, CliValidationError, EXIT_ERROR } from '../errors.js';
 import type { CliIo } from '../io.js';
 import type { KinloomCliPlugin } from '../pluginTypes.js';
@@ -7,11 +8,12 @@ import type { KinloomCliPlugin } from '../pluginTypes.js';
 export { type CliIo, DEFAULT_IO } from '../io.js';
 
 export interface RunCliOptions {
-  io?: CliIo;
+  io?: CliIo | undefined;
   fetchImpl?: typeof fetch | undefined;
   cwd?: string | undefined;
-  plugins?: readonly KinloomCliPlugin[];
-  screenshotBrowserFactory?: ScreenshotBrowserFactory;
+  plugins?: readonly KinloomCliPlugin[] | undefined;
+  screenshotBrowserFactory?: ScreenshotBrowserFactory | undefined;
+  execWrangler?: WranglerExecutor | undefined;
 }
 
 export interface CliDispatchContext {
@@ -21,6 +23,7 @@ export interface CliDispatchContext {
   fetchImpl?: typeof fetch | undefined;
   plugins?: readonly KinloomCliPlugin[] | undefined;
   screenshotBrowserFactory?: ScreenshotBrowserFactory | undefined;
+  execWrangler?: WranglerExecutor | undefined;
 }
 
 export function requireStringFlag(value: string | undefined, flagName: string): string {

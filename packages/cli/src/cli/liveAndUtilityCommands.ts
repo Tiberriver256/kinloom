@@ -360,3 +360,60 @@ export async function runTelemetry(rest: readonly string[], ctx: CliDispatchCont
   writeRenderedOutput(ctx.io, result.rendered);
   return EXIT_OK;
 }
+
+export async function runVerifyLive(rest: readonly string[], ctx: CliDispatchContext): Promise<CliExitCode> {
+  const { values } = safeParseArgs({
+    args: rest,
+    allowPositionals: false,
+    options: {
+      repo: { type: 'string' },
+      url: { type: 'string' },
+      token: { type: 'string' },
+      'with-temp-auth': { type: 'boolean', default: false },
+      'expect-plugins': { type: 'string' },
+      browser: { type: 'boolean', default: false },
+      'check-pwa': { type: 'boolean', default: false },
+      'timeout-ms': { type: 'string' },
+      json: { type: 'boolean', default: false },
+    },
+  });
+
+  if (values['with-temp-auth'] && values.token?.trim()) {
+    throw new CliValidationError('Specify either `--token` or `--with-temp-auth`, not both.');
+  }
+
+  const [{ parseExpectedPluginsCsv, runVerifyLiveCommand }, { measureCommand }] = await Promise.all([
+    import('../commands/ops/verify-live.js'),
+    import('../commands/ops/telemetry.js'),
+  ]);
+
+  const expectPlugins = parseExpectedPluginsCsv(values['expect-plugins']);
+  const timeoutMs = parseOptionalPositiveInt(values['timeout-ms'], '--timeout-ms');
+
+  const result = await measureCommand(
+    {
+      subcmd: 'verify-live',
+      extractResultMeta: (res) => ({
+        exitCode: res.ok ? EXIT_OK : EXIT_ERROR,
+        bytesOut: Buffer.byteLength(res.rendered, 'utf8'),
+      }),
+    },
+    () =>
+      runVerifyLiveCommand({
+        repoDir: values.repo ?? ctx.cwd,
+        url: values.url,
+        token: values.token,
+        withTempAuth: values['with-temp-auth'],
+        expectPlugins,
+        browser: values.browser,
+        checkPwa: values['check-pwa'],
+        timeoutMs,
+        json: values.json,
+        fetchImpl: ctx.fetchImpl,
+        execWrangler: ctx.execWrangler,
+      })
+  );
+
+  writeRenderedOutput(ctx.io, result.rendered);
+  return result.ok ? EXIT_OK : EXIT_ERROR;
+}

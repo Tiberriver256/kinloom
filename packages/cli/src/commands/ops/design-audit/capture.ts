@@ -39,7 +39,14 @@ export interface DesignAuditBrowserPage {
   keyboard?: { press: (key: string) => Promise<void> };
 }
 
+export interface DesignAuditCookieSpec {
+  readonly name: string;
+  readonly value: string;
+  readonly url: string;
+}
+
 export interface DesignAuditBrowserContext {
+  addCookies?: (cookies: readonly DesignAuditCookieSpec[]) => Promise<void>;
   newPage: () => Promise<DesignAuditBrowserPage>;
   close: () => Promise<void>;
 }
@@ -48,6 +55,7 @@ export interface DesignAuditBrowser {
   newContext: (opts: {
     viewport: { width: number; height: number };
     deviceScaleFactor?: number;
+    extraHTTPHeaders?: Readonly<Record<string, string>>;
   }) => Promise<DesignAuditBrowserContext>;
   close: () => Promise<void>;
 }
@@ -345,11 +353,60 @@ async function auditFocusOcclusion(page: DesignAuditBrowserPage): Promise<Design
   return issues;
 }
 
+export function parseDesignAuditCookieSpecs(
+  cookieHeader: string,
+  baseUrl: string
+): readonly DesignAuditCookieSpec[] {
+  if (/[\r\n]/.test(cookieHeader)) {
+    throw new Error('Auth cookie must not contain CR or LF characters.');
+  }
+  const originUrl = new URL(baseUrl).origin;
+  const specs: DesignAuditCookieSpec[] = [];
+  for (const pair of cookieHeader.split(';')) {
+    const trimmed = pair.trim();
+    if (!trimmed) {
+      continue;
+    }
+    const eqIdx = trimmed.indexOf('=');
+    if (eqIdx <= 0) {
+      throw new Error('Auth cookie entries must be formatted as `name=value`.');
+    }
+    const name = trimmed.slice(0, eqIdx).trim();
+    const value = trimmed.slice(eqIdx + 1).trim();
+    if (name) {
+      specs.push({ name, value, url: originUrl });
+    }
+  }
+  return specs;
+}
+
+async function openAuthenticatedContext(
+  browser: DesignAuditBrowser,
+  viewport: { readonly width: number; readonly height: number },
+  auth: {
+    readonly extraHTTPHeaders?: Readonly<Record<string, string>> | undefined;
+    readonly cookieSpecs: readonly DesignAuditCookieSpec[];
+  },
+  deviceScaleFactor?: number
+): Promise<DesignAuditBrowserContext> {
+  const context = await browser.newContext({
+    viewport: { width: viewport.width, height: viewport.height },
+    ...(deviceScaleFactor !== undefined ? { deviceScaleFactor } : {}),
+    ...(auth.extraHTTPHeaders ? { extraHTTPHeaders: auth.extraHTTPHeaders } : {}),
+  });
+  if (auth.cookieSpecs.length > 0 && context.addCookies) {
+    await context.addCookies(auth.cookieSpecs);
+  }
+  return context;
+}
+
 export async function runDesignAuditCaptureMatrix(options: {
   readonly plan: DesignAuditPlan;
   readonly bundleDir: string;
   readonly browserFactory?: DesignAuditBrowserFactory | undefined;
   readonly loadingDelayMs?: number | undefined;
+  readonly authCookie?: string | undefined;
+  readonly authHeaders?: Readonly<Record<string, string>> | undefined;
 }): Promise<DesignAuditManifest> {
   const { plan, bundleDir } = options;
   const shotsDir = path.join(bundleDir, 'screenshots');
@@ -358,6 +415,17 @@ export async function runDesignAuditCaptureMatrix(options: {
   fs.mkdirSync(shotsDir, { recursive: true });
   fs.mkdirSync(domDir, { recursive: true });
   fs.mkdirSync(cssDir, { recursive: true });
+
+  const trimmedCookie = options.authCookie?.trim() || undefined;
+  const cookieSpecs = trimmedCookie ? parseDesignAuditCookieSpecs(trimmedCookie, plan.baseUrl) : [];
+  const mergedHeaders: Record<string, string> = { ...(options.authHeaders ?? {}) };
+  if (trimmedCookie) {
+    mergedHeaders['Cookie'] = trimmedCookie;
+  }
+  const authContextConfig = {
+    extraHTTPHeaders: Object.keys(mergedHeaders).length > 0 ? mergedHeaders : undefined,
+    cookieSpecs,
+  };
 
   const browser = await (options.browserFactory ?? defaultBrowserFactory)();
   const captures: DesignAuditCaptureRecord[] = [];
@@ -375,10 +443,12 @@ export async function runDesignAuditCaptureMatrix(options: {
             if (uiState !== 'ideal' && vp.width !== 360 && vp.width !== 1440) {
               continue;
             }
-            const context = await browser.newContext({
-              viewport: { width: vp.width, height: vp.height },
-              deviceScaleFactor: 1,
-            });
+            const context = await openAuthenticatedContext(
+              browser,
+              { width: vp.width, height: vp.height },
+              authContextConfig,
+              1
+            );
             try {
               const page = await context.newPage();
               if (page.emulateMedia) {
@@ -466,7 +536,11 @@ export async function runDesignAuditCaptureMatrix(options: {
           }
 
           if (vp.width === 1440 && theme === 'light') {
-            const rmCtx = await browser.newContext({ viewport: { width: 1440, height: 900 } });
+            const rmCtx = await openAuthenticatedContext(
+              browser,
+              { width: 1440, height: 900 },
+              authContextConfig
+            );
             try {
               const rmPage = await rmCtx.newPage();
               if (rmPage.emulateMedia) {

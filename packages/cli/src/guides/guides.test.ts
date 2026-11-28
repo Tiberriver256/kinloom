@@ -35,12 +35,12 @@ const SKILL_ORIGIN_GUIDE_IDS = new Set([
 ]);
 
 describe('embedded workflow guides', () => {
-  it('ships all 26 embedded guides across the 6 guide categories plus narrative-audio/script-rules', () => {
-    expect(EMBEDDED_GUIDES).toHaveLength(27);
+  it('ships all 28 embedded guides across the 6 guide categories plus narrative-audio/script-rules', () => {
+    expect(EMBEDDED_GUIDES).toHaveLength(28);
     expect(GUIDE_CATEGORIES).toHaveLength(6);
 
     const ids = EMBEDDED_GUIDES.map((g) => g.id);
-    expect(new Set(ids).size).toBe(27);
+    expect(new Set(ids).size).toBe(28);
 
     const byCategory = new Map<string, number>();
     for (const guide of EMBEDDED_GUIDES) {
@@ -52,7 +52,7 @@ describe('embedded workflow guides', () => {
     expect(byCategory.get('international')).toBe(4);
     expect(byCategory.get('directories-guides')).toBe(2);
     expect(byCategory.get('media-ocr')).toBe(3);
-    expect(byCategory.get('ops')).toBe(2);
+    expect(byCategory.get('ops')).toBe(3);
 
     for (const guide of EMBEDDED_GUIDES) {
       const resolved = resolveEmbeddedGuide(guide.command);

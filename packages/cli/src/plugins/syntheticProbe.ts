@@ -1,4 +1,6 @@
+import path from 'node:path';
 import { parseOptionalPositiveInt, parseOptionalPositiveNumber, safeParseArgs } from '../cli/types.js';
+import { withEphemeralD1Auth } from '../commands/ops/shared/ephemeralAuth.js';
 import { type CliExitCode, CliValidationError, EXIT_ERROR, EXIT_OK } from '../errors.js';
 import type {
   KinloomCheckResult,
@@ -71,10 +73,12 @@ RFC Server-Timing spans, R2 media HTTP 206 byte-range delivery, and optional liv
 health checks against a Kinloom archive.
 
 Options:
-  --url <baseUrl>                 Target archive base URL (or KINLOOM_PROBE_URL / plugin targetUrl)
+  --url <baseUrl>                 Target archive base URL (or KINLOOM_PROBE_URL / plugin targetUrl / wrangler routes[0] with --with-temp-auth)
+  --repo <dir>                    Archive repository root for --with-temp-auth wrangler lookup (default: cwd)
   --media-path <path>             Explicit same-origin media path for the 206 Range probe
   --media-range-bytes <bytes>     Leading byte count for the Range probe (default: ${DEFAULT_MEDIA_RANGE_BYTES})
   --token <secret>                Bearer token (defaults to KINLOOM_PROBE_TOKEN, KINLOOM_TOKEN, or KINLOOM_AGENT_TOKEN)
+  --with-temp-auth                Mint and auto-revoke a temporary D1 read_backup token via Wrangler
   --plugins                       Run live plugin health checks and private-archive leak guard
   --expect-plugins <csv>          Comma-separated server plugin IDs required to be active (implies --plugins)
   --timeout-ms <ms>               Per-request timeout in ms (default: ${DEFAULT_PROBE_TIMEOUT_MS})
@@ -93,6 +97,8 @@ function parseProbeCommandArgs(
   pluginOptions: SyntheticProbePluginOptions
 ): {
   readonly targetUrl: string;
+  readonly repoDir?: string | undefined;
+  readonly withTempAuth: boolean;
   readonly mediaPath?: string | undefined;
   readonly mediaPathSource?: 'flag' | 'option' | undefined;
   readonly mediaRangeBytes: number;
@@ -108,6 +114,8 @@ function parseProbeCommandArgs(
     allowPositionals: false,
     options: {
       url: { type: 'string' },
+      repo: { type: 'string' },
+      'with-temp-auth': { type: 'boolean', default: false },
       'media-path': { type: 'string' },
       'media-range-bytes': { type: 'string' },
       token: { type: 'string' },
@@ -125,9 +133,14 @@ function parseProbeCommandArgs(
     },
   });
 
+  const withTempAuth = Boolean(values['with-temp-auth']);
+  if (withTempAuth && values.token?.trim()) {
+    throw new CliValidationError('Specify either `--token` or `--with-temp-auth`, not both.');
+  }
+
   const targetUrl =
     values.url?.trim() || pluginOptions.targetUrl?.trim() || process.env['KINLOOM_PROBE_URL']?.trim() || '';
-  if (!targetUrl) {
+  if (!targetUrl && !withTempAuth) {
     throw new CliValidationError(
       'Missing target URL. Pass `--url <baseUrl>`, configure `targetUrl`, or set KINLOOM_PROBE_URL.'
     );
@@ -173,7 +186,7 @@ function parseProbeCommandArgs(
     pluginOptions.timeoutMs ??
     DEFAULT_PROBE_TIMEOUT_MS;
 
-  const token = resolveProbeToken(values.token, pluginOptions.token);
+  const token = withTempAuth ? undefined : resolveProbeToken(values.token, pluginOptions.token);
   const cliExpectPlugins = parseExpectedPluginsCsv(values['expect-plugins']);
   const expectPlugins = cliExpectPlugins.length > 0 ? cliExpectPlugins : (pluginOptions.expectPlugins ?? []);
   const checkPlugins =
@@ -181,6 +194,8 @@ function parseProbeCommandArgs(
 
   return {
     targetUrl,
+    repoDir: values.repo?.trim() || undefined,
+    withTempAuth,
     mediaPath,
     mediaPathSource,
     mediaRangeBytes,
@@ -200,19 +215,48 @@ function createProbeCommand(pluginOptions: SyntheticProbePluginOptions): Kinloom
     help: SYNTHETIC_PROBE_HELP,
     async run(args: readonly string[], ctx: KinloomCliPluginContext): Promise<CliExitCode> {
       const parsed = parseProbeCommandArgs(args, pluginOptions);
-      const report = await runSyntheticProbe({
-        targetUrl: parsed.targetUrl,
-        mediaPath: parsed.mediaPath,
-        mediaPathSource: parsed.mediaPathSource,
-        mediaRangeBytes: parsed.mediaRangeBytes,
-        token: parsed.token,
-        budgets: parsed.budgets,
-        timeoutMs: parsed.timeoutMs,
-        checkPlugins: parsed.checkPlugins,
-        expectPlugins: parsed.expectPlugins,
-        fetchImpl: ctx.fetchImpl ?? pluginOptions.fetchImpl,
-        clock: pluginOptions.clock,
-      });
+      const executeProbe = (targetUrl: string, token?: string) =>
+        runSyntheticProbe({
+          targetUrl,
+          mediaPath: parsed.mediaPath,
+          mediaPathSource: parsed.mediaPathSource,
+          mediaRangeBytes: parsed.mediaRangeBytes,
+          token,
+          budgets: parsed.budgets,
+          timeoutMs: parsed.timeoutMs,
+          checkPlugins: parsed.checkPlugins,
+          expectPlugins: parsed.expectPlugins,
+          fetchImpl: ctx.fetchImpl ?? pluginOptions.fetchImpl,
+          clock: pluginOptions.clock,
+        });
+
+      let report: Awaited<ReturnType<typeof runSyntheticProbe>>;
+      if (parsed.withTempAuth) {
+        const repoDir = parsed.repoDir ? path.resolve(ctx.cwd, parsed.repoDir) : ctx.cwd;
+        const { value } = await withEphemeralD1Auth(
+          {
+            repoDir,
+            urlOverride: parsed.targetUrl || undefined,
+            agentTokenScopes: ['read_backup'],
+            tokenLabel: 'tmp-kinloom-probe',
+            createdBy: 'kinloom probe',
+            execWrangler: pluginOptions.execWrangler,
+            backupTokenLabel: pluginOptions.backupTokenLabel,
+          },
+          async (auth) => {
+            const resolvedUrl = parsed.targetUrl || auth.baseUrl || '';
+            if (!resolvedUrl) {
+              throw new CliValidationError(
+                'Missing target URL. Pass `--url <baseUrl>` or configure `routes[0].pattern` in wrangler config.'
+              );
+            }
+            return executeProbe(resolvedUrl, auth.agentTokens.read_backup?.rawToken);
+          }
+        );
+        report = value;
+      } else {
+        report = await executeProbe(parsed.targetUrl, parsed.token);
+      }
 
       if (parsed.json) {
         ctx.io.stdout(JSON.stringify(report, null, 2));

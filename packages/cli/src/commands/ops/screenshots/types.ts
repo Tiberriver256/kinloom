@@ -1,3 +1,5 @@
+import type { WranglerExecutor } from '../shared/wrangler.js';
+
 export type ScreenshotCategory = 'page' | 'component' | 'plugin';
 
 export type ScreenshotTheme = 'light' | 'dark';
@@ -269,7 +271,7 @@ export type ScreenshotBrowserFactory = (options: {
 }) => Promise<ScreenshotBrowserHandle>;
 
 export interface ScreenshotsCommandOptions {
-  readonly url: string;
+  readonly url?: string | undefined;
   readonly outDir?: string | undefined;
   readonly viewports?: readonly ViewportSpec[] | undefined;
   readonly themes?: readonly ScreenshotTheme[] | undefined;
@@ -280,6 +282,10 @@ export interface ScreenshotsCommandOptions {
   readonly samplePlaces?: number | undefined;
   readonly authCookie?: string | undefined;
   readonly authHeaders?: readonly AuthHeader[] | undefined;
+  readonly withTempAuth?: boolean | undefined;
+  readonly repoDir?: string | undefined;
+  readonly backupTokenLabel?: string | undefined;
+  readonly execWrangler?: WranglerExecutor | undefined;
   readonly fullPage?: boolean | undefined;
   readonly waitMs?: number | undefined;
   readonly timeoutMs?: number | undefined;

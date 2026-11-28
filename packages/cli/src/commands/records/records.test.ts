@@ -98,7 +98,7 @@ describe('record command registry and discovery', () => {
     ]);
     expect(guideOnlyCommands).toEqual(['blm-glo', 'cyndis-list']);
     expect(RECORD_COMMAND_SPECS).toHaveLength(25);
-    expect(EMBEDDED_GUIDES).toHaveLength(27);
+    expect(EMBEDDED_GUIDES).toHaveLength(28);
 
     for (const spec of RECORD_COMMAND_SPECS) {
       const guide = resolveEmbeddedGuide(spec.command);
@@ -851,7 +851,7 @@ describe('native TypeScript OCR, alias routing, and ubiquitous-language parity',
     ];
 
     // Verify all 27 compiled embedded guides stay scrubbed and clean.
-    expect(EMBEDDED_GUIDES).toHaveLength(27);
+    expect(EMBEDDED_GUIDES).toHaveLength(28);
     for (const guide of EMBEDDED_GUIDES) {
       for (const { label, regex } of forbiddenPatterns) {
         expect(guide.body, `guide '${guide.id}' contains ${label}`).not.toMatch(regex);
