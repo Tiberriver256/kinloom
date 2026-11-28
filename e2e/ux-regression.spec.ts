@@ -192,8 +192,9 @@ test.describe('Wave 50B UX regression suite', () => {
     for (const vp of [VIEWPORTS[0], VIEWPORTS[1], VIEWPORTS[3]]) {
       await page.setViewportSize({ width: vp.width, height: vp.height });
       await page.goto('/time?year=1860');
-      const jumpBtn = page.locator('.time-dock-jump-btn');
-      if (await jumpBtn.isVisible()) {
+      if (vp.width <= 768) {
+        const jumpBtn = page.locator('.time-dock-jump-btn');
+        await expect(jumpBtn).toBeVisible();
         await jumpBtn.click();
       }
       const slider = page.locator('input.ink-range-slider');
