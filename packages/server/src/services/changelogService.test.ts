@@ -4,6 +4,7 @@ import {
   parseAdminChangelogsResponse,
 } from '@kinloom/core';
 import { describe, expect, it } from 'vitest';
+import { createAdminRouteHandler } from '../http/routes/adminRoutes.js';
 import { createPageVisitStatsPlugin } from '../plugins/pageVisitStats.js';
 import { createWorkersObservabilityPlugin } from '../plugins/workersObservability.js';
 import { ChangelogService } from './changelogService.js';
@@ -64,5 +65,44 @@ describe('ChangelogService & @kinloom/core changelog schemas (#56)', () => {
 
     const defaultService = new ChangelogService({ plugins: [] });
     expect(defaultService.getChangelogs().modules).toHaveLength(6);
+  });
+
+  it('enforces admin RBAC on GET /api/admin/changelogs via createAdminRouteHandler', async () => {
+    const service = new ChangelogService({ plugins: [createPageVisitStatsPlugin()] });
+    const handler = createAdminRouteHandler({} as never, undefined, undefined, service);
+
+    // Authenticated admin succeeds with 200
+    const adminRes = await handler({
+      request: new Request('https://archive.test/api/admin/changelogs'),
+      url: new URL('https://archive.test/api/admin/changelogs'),
+      method: 'GET',
+      segments: ['api', 'admin', 'changelogs'],
+      auth: {
+        authMethod: 'session',
+        bearerRejected: false,
+        principal: { kind: 'user', email: 'admin@alder.test', displayName: 'Admin', role: 'admin' },
+      },
+      telemetry: {} as never,
+    } as never);
+    expect(adminRes?.status).toBe(200);
+    const body = parseAdminChangelogsResponse(await adminRes?.json());
+    expect(body.modules).toHaveLength(6);
+    expect(body.plugins).toHaveLength(1);
+
+    // Non-admin editor is rejected
+    await expect(
+      handler({
+        request: new Request('https://archive.test/api/admin/changelogs'),
+        url: new URL('https://archive.test/api/admin/changelogs'),
+        method: 'GET',
+        segments: ['api', 'admin', 'changelogs'],
+        auth: {
+          authMethod: 'session',
+          bearerRejected: false,
+          principal: { kind: 'user', email: 'editor@alder.test', displayName: 'Editor', role: 'editor' },
+        },
+        telemetry: {} as never,
+      } as never)
+    ).rejects.toMatchObject({ status: 403 });
   });
 });
