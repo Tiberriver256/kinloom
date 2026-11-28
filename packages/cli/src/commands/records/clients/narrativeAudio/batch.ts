@@ -1,15 +1,6 @@
 import fs from 'node:fs';
 import path from 'node:path';
-import {
-  getCurrentReferenceYear,
-  type Narrative,
-  parseNarrativesYaml as parseCoreNarrativesYaml,
-  parseKinloomConfigYaml,
-  parsePeopleYaml,
-  type RawPerson,
-  resolveEffectiveLiving,
-  serializeNarrativesYaml,
-} from '@kinloom/core';
+import { serializeNarrativesYaml } from '@kinloom/core';
 import { CliValidationError } from '../../../../errors.js';
 import {
   DEFAULT_OPENAI_SPEECH_MODEL,
@@ -30,12 +21,15 @@ import {
 } from '../../runtime/types.js';
 import {
   collectArchiveLexiconHints,
-  hasExistingNarrativeAudio,
+  hasNonEmptyAudioFile,
+  loadArchiveForNarrativeAudio,
   loadImportMetaMap,
   type NarrativeBatchManifest,
   type NarrativeBatchManifestItem,
   narrativeMarkdownToSpokenScript,
+  parseBatchSlice,
   readSingleImportMeta,
+  selectNarrativeCandidates,
   withNarrativeAudioExtension,
 } from './batchPrep.js';
 import { BATCH_PARSE_SPEC, renderBatchHelp } from './batchSpec.js';
@@ -59,11 +53,8 @@ export {
   type NarrativeBatchManifest,
   type NarrativeBatchManifestItem,
   narrativeMarkdownToSpokenScript,
+  parseBatchSlice,
 };
-
-function isEnoentError(err: unknown): boolean {
-  return typeof err === 'object' && err !== null && 'code' in err && err.code === 'ENOENT';
-}
 
 export async function runBatch(
   argv: readonly string[],
@@ -75,55 +66,14 @@ export async function runBatch(
   }
 
   const repoDir = resolveUserPathFromContext(getStringOption(parsed, 'repo') ?? '.', ctx);
-  const configPath = path.join(repoDir, 'kinloom.config.yaml');
-  const peoplePath = path.join(repoDir, 'data', 'people.yaml');
-  const narrativesPath = path.join(repoDir, 'data', 'narratives.yaml');
-
-  let rawConfig: string;
-  try {
-    rawConfig = fs.readFileSync(configPath, 'utf8');
-  } catch (err: unknown) {
-    if (isEnoentError(err)) {
-      throw new CliValidationError(`Missing ${configPath} (pass --repo <archive-root>).`);
-    }
-    throw err;
-  }
-
-  let rawNarratives: string;
-  try {
-    rawNarratives = fs.readFileSync(narrativesPath, 'utf8');
-  } catch (err: unknown) {
-    if (isEnoentError(err)) {
-      throw new CliValidationError(`Missing ${narrativesPath}.`);
-    }
-    throw err;
-  }
-
-  const siteConfig = parseKinloomConfigYaml(rawConfig);
-  let people: RawPerson[] = [];
-  try {
-    people = parsePeopleYaml(fs.readFileSync(peoplePath, 'utf8'));
-  } catch (err: unknown) {
-    if (!isEnoentError(err)) {
-      throw err;
-    }
-  }
-  const allNarratives = parseCoreNarrativesYaml(rawNarratives);
-
-  const referenceYear = siteConfig.privacy.referenceYear ?? getCurrentReferenceYear();
-  const livingIds = new Set<string>();
-  for (const person of people) {
-    if (
-      person.is_living ||
-      person.full_name.trim() === 'Living' ||
-      resolveEffectiveLiving(person, siteConfig.privacy, referenceYear)
-    ) {
-      livingIds.add(person.id);
-    }
-  }
+  const archive = loadArchiveForNarrativeAudio(repoDir);
+  const { allNarratives, livingIds, lexiconHints, narrativesPath } = archive;
 
   const kindFilter = getStringOption(parsed, 'kind') ?? 'biography';
   const force = getBooleanOption(parsed, 'force');
+  const resume = getBooleanOption(parsed, 'resume');
+  const rawSlice = getStringOption(parsed, 'slice');
+  const sliceRange = rawSlice !== undefined ? parseBatchSlice(rawSlice) : undefined;
   const dryRun = getBooleanOption(parsed, 'dryRun');
   const jsonOutput = getBooleanOption(parsed, 'json');
   const exportManifestArg = getStringOption(parsed, 'exportManifest');
@@ -173,30 +123,19 @@ export async function runBatch(
   const outDirArg = getStringOption(parsed, 'outDir');
   const outDir = outDirArg ? resolveUserPathFromContext(outDirArg, ctx) : path.join(repoDir, 'media');
 
-  const lexiconHints = collectArchiveLexiconHints(repoDir, siteConfig, people);
+  const { candidates, livingSkipped, alreadyHasAudio } = selectNarrativeCandidates({
+    allNarratives,
+    livingIds,
+    kindFilter,
+    force,
+  });
 
-  let livingSkipped = 0;
-  let alreadyHasAudio = 0;
-  const candidates: Narrative[] = [];
-  for (const narrative of allNarratives) {
-    const touchesLiving =
-      (narrative.subject_person_id !== undefined && livingIds.has(narrative.subject_person_id)) ||
-      narrative.person_ids.some((pid) => livingIds.has(pid));
-    if (touchesLiving) {
-      livingSkipped += 1;
-      continue;
-    }
-    if (kindFilter && narrative.kind !== kindFilter) {
-      continue;
-    }
-    if (!force && hasExistingNarrativeAudio(narrative)) {
-      alreadyHasAudio += 1;
-      continue;
-    }
-    candidates.push(narrative);
-  }
+  const totalCandidates = candidates.length;
+  const selectedCandidates = sliceRange ? candidates.slice(sliceRange.start, sliceRange.end) : candidates;
+  const shouldSkipExisting = resume || !force;
+  const sliceMeta = rawSlice !== undefined ? { slice: rawSlice, total_candidates: totalCandidates } : {};
 
-  const manifestItems: NarrativeBatchManifestItem[] = candidates.map((narrative) => {
+  const manifestItems: NarrativeBatchManifestItem[] = selectedCandidates.map((narrative) => {
     const slug = narrative.slug || narrative.id;
     const script = narrativeMarkdownToSpokenScript(narrative.body_md, narrative.title);
     const chunks = buildSynthChunks({
@@ -222,6 +161,18 @@ export async function runBatch(
   });
 
   if (exportManifestArg) {
+    const skippedExistingIds: string[] = [];
+    const exportItems = resume
+      ? manifestItems.filter((item) => {
+          const destPath = path.join(outDir, `audio-${item.slug}.mp3`);
+          if (hasNonEmptyAudioFile(destPath)) {
+            skippedExistingIds.push(item.id);
+            return false;
+          }
+          return true;
+        })
+      : manifestItems;
+
     const manifestPath = resolveUserPathFromContext(exportManifestArg, ctx);
     const manifest: NarrativeBatchManifest = {
       version: 1,
@@ -235,7 +186,7 @@ export async function runBatch(
       section_pause: sectionPause,
       notes_pause: notesPause,
       living_skipped: livingSkipped,
-      narratives: manifestItems,
+      narratives: exportItems,
     };
     fs.mkdirSync(path.dirname(manifestPath), { recursive: true });
     fs.writeFileSync(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`, 'utf8');
@@ -243,15 +194,17 @@ export async function runBatch(
       ok: true,
       mode: 'export_manifest',
       manifest_path: manifestPath,
-      narratives: manifestItems.length,
+      narratives: exportItems.length,
       already_has_audio: alreadyHasAudio,
       living_skipped: livingSkipped,
+      ...(resume ? { resume: true, skipped_existing: skippedExistingIds.length } : {}),
+      ...sliceMeta,
     };
     const bytesOut = jsonOutput
       ? emitJsonStdout(ctx.io, summary)
       : emitStdout(
           ctx.io,
-          `Exported narrative audio manifest: ${manifestPath} (${manifestItems.length} narratives, ${alreadyHasAudio} skipped with audio, ${livingSkipped} living excluded)`
+          `Exported narrative audio manifest: ${manifestPath} (${exportItems.length} narratives, ${alreadyHasAudio} skipped with audio, ${livingSkipped} living excluded)`
         );
     return { exitCode: 0, bytesOut };
   }
@@ -282,8 +235,14 @@ export async function runBatch(
     >();
     const importedIds: string[] = [];
     const missingIds: string[] = [];
+    const skippedExistingIds: string[] = [];
 
     for (const item of manifestItems) {
+      const destPath = path.join(outDir, `audio-${item.slug}.mp3`);
+      if (resume && hasNonEmptyAudioFile(destPath)) {
+        skippedExistingIds.push(item.id);
+        continue;
+      }
       const candidateFiles = [`audio-${item.slug}.mp3`, `${item.slug}.mp3`, `${item.id}.mp3`];
       const srcPath = candidateFiles
         .map((name) => path.join(importDir, name))
@@ -292,7 +251,6 @@ export async function runBatch(
         missingIds.push(item.id);
         continue;
       }
-      const destPath = path.join(outDir, `audio-${item.slug}.mp3`);
       fs.copyFileSync(srcPath, destPath);
       const meta =
         bulkMeta.get(item.id) ?? bulkMeta.get(item.slug) ?? readSingleImportMeta(importDir, item.slug);
@@ -323,6 +281,14 @@ export async function runBatch(
       living_skipped: livingSkipped,
       imported_ids: importedIds,
       missing_ids: missingIds,
+      ...(resume
+        ? {
+            resume: true,
+            skipped_existing: skippedExistingIds.length,
+            skipped_existing_ids: skippedExistingIds,
+          }
+        : {}),
+      ...sliceMeta,
     };
     const bytesOut = jsonOutput
       ? emitJsonStdout(ctx.io, summary)
@@ -342,7 +308,7 @@ export async function runBatch(
         title: item.title,
         target: destPath,
         chunks: item.chunks.length,
-        status: !force && fs.existsSync(destPath) ? 'skipped_existing' : 'planned',
+        status: shouldSkipExisting && hasNonEmptyAudioFile(destPath) ? 'skipped_existing' : 'planned',
       };
     });
     const summary = {
@@ -353,6 +319,8 @@ export async function runBatch(
       phoneme_mode: phonemeMode,
       already_has_audio: alreadyHasAudio,
       living_skipped: livingSkipped,
+      ...(resume ? { resume: true } : {}),
+      ...sliceMeta,
       items: plan,
     };
     const bytesOut = jsonOutput
@@ -379,22 +347,36 @@ export async function runBatch(
     throw new CliValidationError('Pass both --notes-ref-audio and --notes-ref-text together.');
   }
 
-  const endpointUrl = backend === 'openai-speech' ? normalizeSpeechEndpointUrl(rawEndpoint) : '';
-  let storyRef: VoiceCloneReference | undefined;
-  let notesRef: VoiceCloneReference | undefined;
-  if (storyRefAudio && storyRefText) {
-    storyRef = loadVoiceCloneReference(resolveUserPathFromContext(storyRefAudio, ctx), storyRefText);
-  }
-  if (notesRefAudio && notesRefText) {
-    notesRef = loadVoiceCloneReference(resolveUserPathFromContext(notesRefAudio, ctx), notesRefText);
+  const pendingItems: NarrativeBatchManifestItem[] = [];
+  const skippedExistingIds: string[] = [];
+  for (const item of manifestItems) {
+    const destPath = path.join(outDir, `audio-${item.slug}.mp3`);
+    if (shouldSkipExisting && hasNonEmptyAudioFile(destPath)) {
+      skippedExistingIds.push(item.id);
+      continue;
+    }
+    pendingItems.push(item);
   }
 
-  if (ctx.execFileImpl === undefined && findExecutableOnPath('ffmpeg', ctx.env) === null) {
-    throw new RecordRuntimeError('ffmpeg not found on PATH');
+  let endpointUrl = '';
+  let storyRef: VoiceCloneReference | undefined;
+  let notesRef: VoiceCloneReference | undefined;
+
+  if (pendingItems.length > 0) {
+    endpointUrl = backend === 'openai-speech' ? normalizeSpeechEndpointUrl(rawEndpoint) : '';
+    if (storyRefAudio && storyRefText) {
+      storyRef = loadVoiceCloneReference(resolveUserPathFromContext(storyRefAudio, ctx), storyRefText);
+    }
+    if (notesRefAudio && notesRefText) {
+      notesRef = loadVoiceCloneReference(resolveUserPathFromContext(notesRefAudio, ctx), notesRefText);
+    }
+
+    if (ctx.execFileImpl === undefined && findExecutableOnPath('ffmpeg', ctx.env) === null) {
+      throw new RecordRuntimeError('ffmpeg not found on PATH');
+    }
   }
 
   const synthesizedIds: string[] = [];
-  const skippedExistingIds: string[] = [];
   const updatesById = new Map<
     string,
     {
@@ -406,12 +388,8 @@ export async function runBatch(
     }
   >();
 
-  for (const item of manifestItems) {
+  for (const item of pendingItems) {
     const destPath = path.join(outDir, `audio-${item.slug}.mp3`);
-    if (!force && fs.existsSync(destPath)) {
-      skippedExistingIds.push(item.id);
-      continue;
-    }
 
     const synthesis =
       backend === 'openai-speech'
@@ -479,6 +457,8 @@ export async function runBatch(
     yaml_updated: updateYaml && updatesById.size > 0,
     synthesized_ids: synthesizedIds,
     skipped_existing_ids: skippedExistingIds,
+    ...(resume ? { resume: true } : {}),
+    ...sliceMeta,
   };
   const bytesOut = jsonOutput
     ? emitJsonStdout(ctx.io, summary)

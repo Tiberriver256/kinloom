@@ -247,12 +247,19 @@ export function renderRootHelp(): string {
     subcommands: [
       { name: 'list', summary: 'List narratives (word count, id, title), shortest first.' },
       { name: 'extract', summary: 'Print one narrative slug, title, and body_md.' },
+      {
+        name: 'scaffold',
+        summary:
+          'Generate deterministic .script.txt and lexicon-populated .names.json files from archive YAML.',
+      },
       { name: 'check', summary: 'Lint a spoken script (and optional names file).' },
       { name: 'synth', summary: "Synthesize SCRIPT to MP3 (story voice, then editor's notes voice)." },
       {
         name: 'batch',
-        summary: 'Batch-narrate missing deceased biographies, export Colab manifest, or import MP3s.',
+        summary:
+          'Batch-narrate missing deceased biographies (--resume, --slice), export manifest, or import MP3s.',
       },
+      { name: 'qa', summary: 'Verify MP3/WAV streams, duration bounds, and silence/clipping via ffprobe.' },
       { name: 'transcribe', summary: 'Verbatim, timestamped transcript that flags audio glitches.' },
     ],
   });

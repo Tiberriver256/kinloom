@@ -173,6 +173,19 @@ export const BATCH_OPTIONS: readonly OptionSpec[] = [
     help: 'Write extensions.narrative_audio into data/narratives.yaml after live synthesis.',
   },
   {
+    key: 'resume',
+    kind: 'boolean',
+    flags: ['--resume'],
+    help: 'Skip narratives whose non-empty target MP3 already exists on disk (idempotent re-runs).',
+  },
+  {
+    key: 'slice',
+    kind: 'string',
+    flags: ['--slice'],
+    metavar: 'START:END',
+    help: 'Process only a 0-based half-open slice of candidate narratives (e.g. 0:10, 10:, :5).',
+  },
+  {
     key: 'force',
     kind: 'boolean',
     flags: ['--force'],
