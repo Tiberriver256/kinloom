@@ -2,6 +2,7 @@ import type { ArchiveEvent, CoPresenceItem, Person, Place, SourceRecord } from '
 import type React from 'react';
 import { Link } from 'react-router-dom';
 import { EmptyStateNotice } from '../../components/Atoms.js';
+import { EvidenceLegend } from '../../components/EvidenceLegend.js';
 import { MilestoneStoryCard } from '../../components/MilestoneStoryCard.js';
 import { scrollBehaviorForMotion } from '../../hooks/keyboardNav.js';
 import { cx, joinClasses } from '../../lib/cx.js';
@@ -69,14 +70,17 @@ export const PersonLifeTimelineSection: React.FC<PersonLifeTimelineSectionProps>
       className={'person-timeline-section'}
       aria-label={KINLOOM_VOCABULARY.person.lifeTimelineAria}
     >
-      <h2
-        className={joinClasses(
-          cx(controlStyles, 'section-heading'),
-          cx(personStyles, 'person-timeline-heading')
-        )}
-      >
-        Life Timeline
-      </h2>
+      <div className={cx(personStyles, 'person-timeline-header')}>
+        <h2
+          className={joinClasses(
+            cx(controlStyles, 'section-heading'),
+            cx(personStyles, 'person-timeline-heading')
+          )}
+        >
+          Life Timeline
+        </h2>
+        <EvidenceLegend showRegistryLink className={cx(personStyles, 'person-timeline-legend')} />
+      </div>
       <div className={cx(personStyles, `timeline-layout${scrubberItems.length === 0 ? ' no-spine' : ''}`)}>
         {scrubberItems.length > 0 && (
           <nav className={cx(personStyles, 'timeline-spine')} aria-label="Jump to decade">

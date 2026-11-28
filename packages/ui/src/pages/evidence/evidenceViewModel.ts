@@ -1,8 +1,16 @@
-import type { ArchivalMediaKind, ArchiveBundle, ArchiveEvent, MediaItem, SourceRecord } from '@kinloom/core';
+import type {
+  ArchivalMediaKind,
+  ArchiveBundle,
+  ArchiveEvent,
+  MediaItem,
+  Person,
+  SourceRecord,
+} from '@kinloom/core';
 import { UNVERIFIED_TREE_SOURCE_ID } from '@kinloom/core';
 import { formatArchivalEdtfDate } from '../../lib/edtfArchivalFormat.js';
 
 export type EvidenceTab = 'conflicts' | 'citations' | 'media';
+export type EvidenceFilter = 'all' | 'uncited';
 export type MediaKindFilter = 'all' | ArchivalMediaKind;
 
 export const EVIDENCE_BATCH_SIZE = 24;
@@ -37,11 +45,40 @@ export interface EvidenceCitationMetrics {
   readonly sourceUsageCounts: ReadonlyMap<string, number>;
 }
 
-export function parseInitialEvidenceTab(param: string | null): EvidenceTab {
+export function parseEvidenceFilterParam(param: string | null): EvidenceFilter {
+  return param === 'uncited' ? 'uncited' : 'all';
+}
+
+export function parseInitialEvidenceTab(
+  param: string | null,
+  filterParam: string | null = null
+): EvidenceTab {
   if (param === 'citations' || param === 'media' || param === 'conflicts') {
     return param;
   }
+  if (parseEvidenceFilterParam(filterParam) === 'uncited') {
+    return 'citations';
+  }
   return 'conflicts';
+}
+
+export function filterUnverifiedEvents(
+  events: readonly ArchiveEvent[],
+  query: string,
+  peopleById: ReadonlyMap<string, Person>
+): ArchiveEvent[] {
+  const q = query.trim().toLowerCase();
+  if (!q) {
+    return [...events];
+  }
+  return events.filter((ev) => {
+    const participantNames = ev.participants
+      .map((pt) => peopleById.get(pt.person_id)?.full_name ?? '')
+      .filter((name) => name && name !== 'Living')
+      .join(' ');
+    const hay = `${ev.title} ${ev.display_date || ''} ${ev.summary || ''} ${participantNames}`.toLowerCase();
+    return hay.includes(q);
+  });
 }
 
 export function collectConflictEvents(bundle: ArchiveBundle | null): ArchiveEvent[] {

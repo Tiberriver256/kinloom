@@ -20,6 +20,7 @@ import type {
   RevisionId,
   RevisionQuery,
   RevisionRecord,
+  StewardReviewStamp,
   TalkComment,
   UpsertPronunciationTermResult,
 } from '@kinloom/core';
@@ -48,6 +49,7 @@ import {
   parseRevisionListResponse,
   parseRevisionOnlyResponse,
   parseSessionResponse,
+  parseStewardReviewResponse,
   parseTalkCommentListResponse,
   parseTalkCommentResponse,
   parseUpsertPronunciationTermResponse,
@@ -372,6 +374,49 @@ export class HttpWikiDataSource implements ArchiveDataSource {
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify(summary ? { summary } : {}),
     });
+  }
+
+  async markRevisionReviewed(
+    revisionId: RevisionId,
+    note?: string | null
+  ): Promise<{ review: StewardReviewStamp }> {
+    return this.requestJson(`/api/revisions/${revisionId}/review`, parseStewardReviewResponse, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(note ? { note } : {}),
+    });
+  }
+
+  async clearRevisionReview(revisionId: RevisionId): Promise<void> {
+    const res = await this.fetchImpl(this.apiUrl(`/api/revisions/${revisionId}/review`), {
+      method: 'DELETE',
+      credentials: 'same-origin',
+    });
+    if (!res.ok && res.status !== 204) {
+      throw await parseErrorEnvelope(res);
+    }
+  }
+
+  async markBatchReviewed(batchId: BatchId, note?: string | null): Promise<{ review: StewardReviewStamp }> {
+    return this.requestJson(
+      `/api/batches/${encodeURIComponent(batchId)}/review`,
+      parseStewardReviewResponse,
+      {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify(note ? { note } : {}),
+      }
+    );
+  }
+
+  async clearBatchReview(batchId: BatchId): Promise<void> {
+    const res = await this.fetchImpl(this.apiUrl(`/api/batches/${encodeURIComponent(batchId)}/review`), {
+      method: 'DELETE',
+      credentials: 'same-origin',
+    });
+    if (!res.ok && res.status !== 204) {
+      throw await parseErrorEnvelope(res);
+    }
   }
 
   async uploadMedia(

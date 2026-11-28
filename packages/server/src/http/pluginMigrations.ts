@@ -29,6 +29,7 @@ export const FORBIDDEN_PLUGIN_CORE_TABLES: ReadonlySet<string> = new Set([
   'observability_cache_daily',
   'd1_migrations',
   'plugin_migrations',
+  'steward_reviews',
 ]);
 
 const FORBIDDEN_SQL_DIRECTIVES: ReadonlySet<string> = new Set([

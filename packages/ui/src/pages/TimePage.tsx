@@ -12,6 +12,7 @@ import type React from 'react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import atomStyles from '../components/Atoms.module.css';
+import { EvidenceLegend } from '../components/EvidenceLegend.js';
 import { ExplorerTopBar } from '../components/ExplorerTopBar.js';
 import { KinloomFooter } from '../components/KinloomFooter.js';
 import { useArchiveData } from '../context/ArchiveDataContext.js';
@@ -171,6 +172,10 @@ export const TimePage: React.FC = () => {
             )}
           </div>
         </header>
+
+        <div className={cx(timeStyles, 'time-legend-wrap')}>
+          <EvidenceLegend showRegistryLink />
+        </div>
 
         {yearSheetOpen && (
           <button

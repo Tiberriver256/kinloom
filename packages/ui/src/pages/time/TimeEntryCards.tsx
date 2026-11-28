@@ -1,4 +1,5 @@
 import type { ArchiveEvent, TimePersonEntry } from '@kinloom/core';
+import { resolveEpistemicTier } from '@kinloom/core';
 import type React from 'react';
 import { Link } from 'react-router-dom';
 import { PersonPortrait } from '../../components/Atoms.js';
@@ -16,10 +17,11 @@ export const TimePersonCard: React.FC<{
   const targetUrl = entry.nearestEventId
     ? `/person/${entry.person.slug}?event=${entry.nearestEventId}`
     : `/person/${entry.person.slug}`;
+  const epistemic = resolveEpistemicTier({ kind: 'time_entry', tier: entry.tier });
   let tierClass = 'tier-possible';
-  if (entry.tier === 'Confirmed') {
+  if (epistemic.tier === 'cited') {
     tierClass = 'tier-confirmed';
-  } else if (entry.tier === 'Inferred') {
+  } else if (epistemic.tier === 'inferred') {
     tierClass = 'tier-inferred';
   }
   const thumb = personThumbMap.get(entry.person.id) || entry.person.portrait_url;
@@ -45,7 +47,9 @@ export const TimePersonCard: React.FC<{
           {entry.activityTitle}
         </div>
         <p className={cx(timeStyles, 'time-person-note')}>{cleanedNote}</p>
-        <div className={cx(timeStyles, 'time-person-tier')}>{entry.tier}</div>
+        <div className={cx(timeStyles, 'time-person-tier')} title={epistemic.descriptor.readerDescription}>
+          {epistemic.compactLabel}
+        </div>
       </div>
     </Link>
   );

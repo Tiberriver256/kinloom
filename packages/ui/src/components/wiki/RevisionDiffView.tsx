@@ -1,8 +1,9 @@
-import type { EntityDiffSummary, EntityPayload, FieldDiff } from '@kinloom/core';
+import type { EntityDiffSummary, EntityPayload, FieldDiff, Person, SourceRecord } from '@kinloom/core';
 import { computeEntityDiff } from '@kinloom/core';
 import type React from 'react';
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { cx } from '../../lib/cx.js';
+import { formatFieldLabel, formatRevisionDiffValue } from '../../lib/revisionFieldFormat.js';
 import wikiPanelStyles from './WikiPanels.module.css';
 
 export interface RevisionDiffViewProps {
@@ -12,22 +13,8 @@ export interface RevisionDiffViewProps {
   beforeLabel?: string;
   afterLabel?: string;
   compact?: boolean;
-}
-
-function formatDiffValue(value: unknown): string {
-  if (value === undefined) {
-    return '—';
-  }
-  if (value === null) {
-    return 'null';
-  }
-  if (typeof value === 'string') {
-    return value;
-  }
-  if (typeof value === 'number' || typeof value === 'boolean') {
-    return String(value);
-  }
-  return JSON.stringify(value, null, 2);
+  peopleById?: ReadonlyMap<string, Person>;
+  sourcesById?: ReadonlyMap<string, SourceRecord>;
 }
 
 function symbolForKind(kind: FieldDiff['kind']): { glyph: string; label: string } {
@@ -42,7 +29,7 @@ function symbolForKind(kind: FieldDiff['kind']): { glyph: string; label: string 
 
 /**
  * Side-by-side visual field diff table using WCAG AAA/AA `--diff-add-*` and `--diff-del-*` tokens
- * with non-color prefix glyphs (`+`, `−`, `~`).
+ * with non-color prefix glyphs (`+`, `−`, `~`), human-readable field labels, and a Raw JSON toggle.
  */
 export const RevisionDiffView: React.FC<RevisionDiffViewProps> = ({
   before = null,
@@ -51,7 +38,10 @@ export const RevisionDiffView: React.FC<RevisionDiffViewProps> = ({
   beforeLabel = 'Before',
   afterLabel = 'After',
   compact = false,
+  peopleById,
+  sourcesById,
 }) => {
+  const [mode, setMode] = useState<'readable' | 'raw'>('readable');
   const summary = useMemo(
     () => providedDiff ?? computeEntityDiff(before, after),
     [providedDiff, before, after]
@@ -68,15 +58,27 @@ export const RevisionDiffView: React.FC<RevisionDiffViewProps> = ({
   return (
     <div className={cx(wikiPanelStyles, `wiki-diff-wrap${compact ? ' is-compact' : ''}`)}>
       <div className={cx(wikiPanelStyles, 'wiki-diff-summary-bar')}>
-        <span className={cx(wikiPanelStyles, 'wiki-diff-stat wiki-diff-stat-add')}>
-          +{summary.addedCount} added
-        </span>
-        <span className={cx(wikiPanelStyles, 'wiki-diff-stat wiki-diff-stat-del')}>
-          −{summary.removedCount} removed
-        </span>
-        <span className={cx(wikiPanelStyles, 'wiki-diff-stat wiki-diff-stat-chg')}>
-          ~{summary.changedCount} changed
-        </span>
+        <div className={cx(wikiPanelStyles, 'wiki-diff-stats')}>
+          <span className={cx(wikiPanelStyles, 'wiki-diff-stat wiki-diff-stat-add')}>
+            +{summary.addedCount} added
+          </span>
+          <span className={cx(wikiPanelStyles, 'wiki-diff-stat wiki-diff-stat-del')}>
+            −{summary.removedCount} removed
+          </span>
+          <span className={cx(wikiPanelStyles, 'wiki-diff-stat wiki-diff-stat-chg')}>
+            ~{summary.changedCount} changed
+          </span>
+        </div>
+        <button
+          type="button"
+          className={cx(wikiPanelStyles, 'wiki-diff-mode-btn')}
+          aria-pressed={mode === 'raw'}
+          onClick={() => {
+            setMode((prev) => (prev === 'readable' ? 'raw' : 'readable'));
+          }}
+        >
+          {mode === 'raw' ? 'Readable diff' : 'Raw JSON'}
+        </button>
       </div>
 
       <div
@@ -97,6 +99,14 @@ export const RevisionDiffView: React.FC<RevisionDiffViewProps> = ({
           <tbody>
             {summary.fields.map((field) => {
               const sym = symbolForKind(field.kind);
+              const beforeText = formatRevisionDiffValue(field.path, field.before, mode, {
+                peopleById,
+                sourcesById,
+              });
+              const afterText = formatRevisionDiffValue(field.path, field.after, mode, {
+                peopleById,
+                sourcesById,
+              });
               return (
                 <tr key={field.path} className={`wiki-diff-row kind-${field.kind}`}>
                   <th scope="row" className={cx(wikiPanelStyles, 'wiki-diff-field-cell')}>
@@ -107,7 +117,11 @@ export const RevisionDiffView: React.FC<RevisionDiffViewProps> = ({
                     >
                       {sym.glyph}
                     </span>
-                    <code>{field.path}</code>
+                    {mode === 'raw' ? (
+                      <code className={cx(wikiPanelStyles, 'wiki-diff-raw-key')}>{field.path}</code>
+                    ) : (
+                      <span>{formatFieldLabel(field.path)}</span>
+                    )}
                   </th>
                   <td
                     data-label={beforeLabel}
@@ -121,9 +135,7 @@ export const RevisionDiffView: React.FC<RevisionDiffViewProps> = ({
                         −{' '}
                       </span>
                     )}
-                    <span className={cx(wikiPanelStyles, 'wiki-diff-value')}>
-                      {formatDiffValue(field.before)}
-                    </span>
+                    <span className={cx(wikiPanelStyles, 'wiki-diff-value')}>{beforeText}</span>
                   </td>
                   <td
                     data-label={afterLabel}
@@ -137,9 +149,7 @@ export const RevisionDiffView: React.FC<RevisionDiffViewProps> = ({
                         +{' '}
                       </span>
                     )}
-                    <span className={cx(wikiPanelStyles, 'wiki-diff-value')}>
-                      {formatDiffValue(field.after)}
-                    </span>
+                    <span className={cx(wikiPanelStyles, 'wiki-diff-value')}>{afterText}</span>
                   </td>
                 </tr>
               );

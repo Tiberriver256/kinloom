@@ -8,6 +8,7 @@ import {
   EntityUpdateInputSchema,
   EntityWriteInputSchema,
   type RevisionQuery,
+  StewardReviewInputSchema,
 } from '@kinloom/core';
 import { z } from 'zod';
 import type { BundleReadService } from '../../services/bundleReadService.js';
@@ -233,6 +234,35 @@ export function createWikiRouteHandler(deps: WikiRouteHandlerDeps): HttpRouteHan
       return jsonResponse(reverted, 201);
     }
 
+    if (
+      segments.length === 4 &&
+      segments[0] === 'api' &&
+      segments[1] === 'revisions' &&
+      segments[3] === 'review'
+    ) {
+      if (method === 'POST') {
+        enforceCsrfOrigin(request, url, auth.authMethod, telemetry);
+        requireMinRole(auth.principal, 'editor', { telemetry, bearerRejected: auth.bearerRejected });
+        const revisionId = asRevisionId(parsePositiveInt(decodeSegment(segments[2]), 'revision_id'));
+        const body = StewardReviewInputSchema.parse(await readJsonBody(request));
+        const stamped = await timeSpan(telemetry, 'd1', () =>
+          wikiWriteService.markRevisionReviewed({
+            revisionId,
+            note: body.note ?? null,
+            reviewer: principalToRevisionAuthor(auth.principal),
+          })
+        );
+        return jsonResponse(stamped, 200);
+      }
+      if (method === 'DELETE') {
+        enforceCsrfOrigin(request, url, auth.authMethod, telemetry);
+        requireMinRole(auth.principal, 'editor', { telemetry, bearerRejected: auth.bearerRejected });
+        const revisionId = asRevisionId(parsePositiveInt(decodeSegment(segments[2]), 'revision_id'));
+        await timeSpan(telemetry, 'd1', () => wikiWriteService.clearRevisionReview({ revisionId }));
+        return new Response(null, { status: 204 });
+      }
+    }
+
     if (method === 'POST' && pathname === '/api/batches') {
       enforceCsrfOrigin(request, url, auth.authMethod, telemetry);
       requireMinRole(auth.principal, 'admin', {
@@ -272,6 +302,35 @@ export function createWikiRouteHandler(deps: WikiRouteHandlerDeps): HttpRouteHan
       );
       telemetry?.setBundleRevision(reverted.head_revision_id);
       return jsonResponse(reverted, 201);
+    }
+
+    if (
+      segments.length === 4 &&
+      segments[0] === 'api' &&
+      segments[1] === 'batches' &&
+      segments[3] === 'review'
+    ) {
+      if (method === 'POST') {
+        enforceCsrfOrigin(request, url, auth.authMethod, telemetry);
+        requireMinRole(auth.principal, 'editor', { telemetry, bearerRejected: auth.bearerRejected });
+        const batchId = asBatchId(decodeSegment(segments[2]));
+        const body = StewardReviewInputSchema.parse(await readJsonBody(request));
+        const stamped = await timeSpan(telemetry, 'd1', () =>
+          wikiWriteService.markBatchReviewed({
+            batchId,
+            note: body.note ?? null,
+            reviewer: principalToRevisionAuthor(auth.principal),
+          })
+        );
+        return jsonResponse(stamped, 200);
+      }
+      if (method === 'DELETE') {
+        enforceCsrfOrigin(request, url, auth.authMethod, telemetry);
+        requireMinRole(auth.principal, 'editor', { telemetry, bearerRejected: auth.bearerRejected });
+        const batchId = asBatchId(decodeSegment(segments[2]));
+        await timeSpan(telemetry, 'd1', () => wikiWriteService.clearBatchReview({ batchId }));
+        return new Response(null, { status: 204 });
+      }
     }
 
     if (method === 'GET' && pathname === '/api/export/yaml') {

@@ -38,6 +38,8 @@ import type {
   ApiErrorEnvelope,
   EntityType,
   RevisionRecord,
+  StewardReviewStamp,
+  StewardReviewTargetKind,
   TalkComment,
   UserRole,
 } from './schemas/revisions.js';
@@ -130,6 +132,15 @@ export interface RevisionLogStore {
   }>;
   getRevisionById(revisionId: RevisionId): Promise<RevisionRecord | null>;
   getRevisionsByBatch(batchId: BatchId): Promise<readonly RevisionRecord[]>;
+  upsertStewardReview(input: {
+    target_kind: StewardReviewTargetKind;
+    target_id: string;
+    reviewer_id: string;
+    reviewer_name: string;
+    note: string | null;
+    reviewed_at: string;
+  }): Promise<StewardReviewStamp>;
+  deleteStewardReview(targetKind: StewardReviewTargetKind, targetId: string): Promise<boolean>;
 }
 
 export interface TalkCommentStore {

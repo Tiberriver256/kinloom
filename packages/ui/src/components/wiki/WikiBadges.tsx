@@ -1,7 +1,8 @@
-import type { AuthorType } from '@kinloom/core';
-import { deriveCitationBadge } from '@kinloom/core';
+import type { AuthorType, EpistemicTier, StewardReviewStamp } from '@kinloom/core';
+import { deriveCitationBadge, EPISTEMIC_TIER_CATALOG } from '@kinloom/core';
 import type React from 'react';
 import { cx } from '../../lib/cx.js';
+import { formatArchivalTimestamp } from '../../lib/formatTimestamp.js';
 import wikiChromeStyles from './WikiChrome.module.css';
 
 export interface CitationBadgeProps {
@@ -96,6 +97,123 @@ export const ConflictBadge: React.FC<ConflictBadgeProps> = ({ label = 'Conflict'
     <span>{label}</span>
   </span>
 );
+
+export interface EpistemicTierBadgeProps {
+  tier: EpistemicTier;
+  label?: string;
+  title?: string;
+  className?: string;
+}
+
+/**
+ * Unified 3-tier reader epistemic badge (Cited, Family memory / Inferred, Discrepancy / Open question).
+ */
+export const EpistemicTierBadge: React.FC<EpistemicTierBadgeProps> = ({ tier, label, title, className }) => {
+  const descriptor = EPISTEMIC_TIER_CATALOG[tier];
+  let variantClass = 'wiki-badge-cited';
+  if (tier === 'inferred') {
+    variantClass = 'wiki-badge-memory';
+  } else if (tier === 'open_question') {
+    variantClass = 'wiki-badge-conflict';
+  }
+
+  return (
+    <span
+      className={cx(wikiChromeStyles, `wiki-badge ${variantClass}${className ? ` ${className}` : ''}`)}
+      title={title ?? descriptor.readerDescription}
+    >
+      <svg
+        width="13"
+        height="13"
+        viewBox="0 0 16 16"
+        fill="none"
+        aria-hidden="true"
+        className={cx(wikiChromeStyles, 'wiki-badge-icon')}
+      >
+        {tier === 'cited' && (
+          <>
+            <circle cx="8" cy="8" r="6.5" stroke="currentColor" strokeWidth="1.5" />
+            <path
+              d="M5.2 8.2L7.1 10.1L11.1 5.9"
+              stroke="currentColor"
+              strokeWidth="1.6"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            />
+          </>
+        )}
+        {tier === 'inferred' && (
+          <>
+            <path
+              d="M3 13L5.6 12.2L12.6 5.2C13.1 4.7 13.1 3.9 12.6 3.4L12.5 3.3C12 2.8 11.2 2.8 10.7 3.3L3.7 10.3L3 13Z"
+              stroke="currentColor"
+              strokeWidth="1.4"
+              strokeLinejoin="round"
+            />
+            <path d="M9.6 4.4L11.5 6.3" stroke="currentColor" strokeWidth="1.4" />
+          </>
+        )}
+        {tier === 'open_question' && (
+          <>
+            <circle cx="4.5" cy="3.5" r="1.75" stroke="currentColor" strokeWidth="1.4" />
+            <circle cx="11.5" cy="3.5" r="1.75" stroke="currentColor" strokeWidth="1.4" />
+            <circle cx="8" cy="12.5" r="1.75" stroke="currentColor" strokeWidth="1.4" />
+            <path
+              d="M4.5 5.3V7C4.5 8.1 5.4 9 6.5 9H9.5C10.6 9 11.5 8.1 11.5 7V5.3M8 9V10.7"
+              stroke="currentColor"
+              strokeWidth="1.4"
+              strokeLinecap="round"
+            />
+          </>
+        )}
+      </svg>
+      <span>{label ?? descriptor.shortLabel}</span>
+    </span>
+  );
+};
+
+export interface StewardReviewBadgeProps {
+  review: StewardReviewStamp;
+  className?: string;
+}
+
+/**
+ * Positive archival verification stamp indicating a steward has reviewed a revision or research batch.
+ */
+export const StewardReviewBadge: React.FC<StewardReviewBadgeProps> = ({ review, className }) => {
+  const formattedTime = formatArchivalTimestamp(review.reviewed_at);
+  return (
+    <span
+      className={cx(wikiChromeStyles, `wiki-badge wiki-badge-cited${className ? ` ${className}` : ''}`)}
+      title={
+        review.note
+          ? `${review.reviewer_name}: ${review.note}`
+          : `Reviewed by ${review.reviewer_name} on ${review.reviewed_at}`
+      }
+    >
+      <svg
+        width="13"
+        height="13"
+        viewBox="0 0 16 16"
+        fill="none"
+        aria-hidden="true"
+        className={cx(wikiChromeStyles, 'wiki-badge-icon')}
+      >
+        <circle cx="8" cy="8" r="6.5" stroke="currentColor" strokeWidth="1.5" />
+        <path
+          d="M5.2 8.2L7.1 10.1L11.1 5.9"
+          stroke="currentColor"
+          strokeWidth="1.6"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />
+      </svg>
+      <span>
+        Reviewed by {review.reviewer_name} · {formattedTime}
+      </span>
+    </span>
+  );
+};
 
 export interface AuthorPillProps {
   authorType: AuthorType;

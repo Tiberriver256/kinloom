@@ -1,4 +1,4 @@
-import type { Person, Place, Pronunciation, ResidenceSpan } from '@kinloom/core';
+import type { Person, PersonCompletenessSummary, Place, Pronunciation, ResidenceSpan } from '@kinloom/core';
 import { resolvePersonPronunciation } from '@kinloom/core';
 import type React from 'react';
 import { Link } from 'react-router-dom';
@@ -18,6 +18,7 @@ export interface PersonProfileHeaderProps {
   readonly person: Person;
   readonly baseUrl?: string;
   readonly branchLabel: string | null;
+  readonly completeness?: PersonCompletenessSummary | null;
   readonly routePlaceCount: number;
   readonly canEdit: boolean;
   readonly pronunciations: Readonly<Record<string, Pronunciation>>;
@@ -34,6 +35,7 @@ export const PersonProfileHeader: React.FC<PersonProfileHeaderProps> = ({
   person,
   baseUrl,
   branchLabel,
+  completeness = null,
   routePlaceCount,
   canEdit,
   pronunciations,
@@ -146,6 +148,37 @@ export const PersonProfileHeader: React.FC<PersonProfileHeaderProps> = ({
             {branchLabel && <span className={cx(personStyles, 'person-branch-badge')}>{branchLabel}</span>}
             {person.has_primary_source !== undefined && (
               <CitationBadge hasPrimarySource={person.has_primary_source} />
+            )}
+            {completeness && (
+              <span
+                className={cx(personStyles, `person-completeness-chip tier-${completeness.tier}`)}
+                title={completeness.inviteCopy ?? 'Well-documented archival profile'}
+              >
+                <svg
+                  width="24"
+                  height="8"
+                  viewBox="0 0 24 8"
+                  fill="none"
+                  aria-hidden="true"
+                  className={cx(personStyles, 'person-completeness-pips')}
+                >
+                  {[0, 1, 2].map((index) => (
+                    <circle
+                      key={index}
+                      cx={4 + index * 8}
+                      cy="4"
+                      r="2.5"
+                      fill={index < completeness.pipCount ? 'currentColor' : 'none'}
+                      stroke="currentColor"
+                      strokeWidth="1.2"
+                    />
+                  ))}
+                </svg>
+                <span className={cx(personStyles, 'visually-hidden')}>
+                  {KINLOOM_VOCABULARY.stewardship.completenessPrefix}:{' '}
+                </span>
+                <span>{completeness.label}</span>
+              </span>
             )}
           </div>
           {person.alt_names.length > 0 && (

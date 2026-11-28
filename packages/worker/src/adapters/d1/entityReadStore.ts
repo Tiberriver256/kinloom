@@ -16,6 +16,8 @@ import {
   type RevisionQuery,
   type RevisionRecord,
   resolveEffectiveLiving,
+  type StewardReviewStamp,
+  type StewardReviewTargetKind,
   type StoredEntityRecord,
   type StoredEntityRow,
 } from '@kinloom/core';
@@ -65,6 +67,42 @@ const LIVING_FULL_SQL = `SELECT entity_id,
         json_extract(data_json, '$.death_edtf') AS death_edtf
    FROM entities
    WHERE entity_type = 'person' AND deleted_at IS NULL`;
+
+const REVISION_BASE_SELECT = `SELECT revision_id, batch_id, entity_type, entity_id, parent_revision_id, action,
+                reverted_revision_id, author_id, author_name, author_type,
+                summary, has_primary_source, before_json, after_json, created_at
+         FROM revisions`;
+
+const REVISION_WITH_REVIEW_SELECT = `SELECT r.revision_id, r.batch_id, r.entity_type, r.entity_id, r.parent_revision_id, r.action,
+                r.reverted_revision_id, r.author_id, r.author_name, r.author_type,
+                r.summary, r.has_primary_source, r.before_json, r.after_json, r.created_at,
+                COALESCE(sr_rev.target_kind, sr_batch.target_kind) AS review_target_kind,
+                COALESCE(sr_rev.target_id, sr_batch.target_id) AS review_target_id,
+                COALESCE(sr_rev.reviewer_id, sr_batch.reviewer_id) AS review_reviewer_id,
+                COALESCE(sr_rev.reviewer_name, sr_batch.reviewer_name) AS review_reviewer_name,
+                CASE WHEN sr_rev.target_id IS NOT NULL THEN sr_rev.note ELSE sr_batch.note END AS review_note,
+                COALESCE(sr_rev.reviewed_at, sr_batch.reviewed_at) AS review_reviewed_at
+         FROM revisions AS r
+         LEFT JOIN steward_reviews AS sr_rev
+           ON sr_rev.target_kind = 'revision' AND sr_rev.target_id = CAST(r.revision_id AS TEXT)
+         LEFT JOIN steward_reviews AS sr_batch
+           ON sr_batch.target_kind = 'batch' AND sr_batch.target_id = r.batch_id`;
+
+function isMissingStewardReviewsTableError(error: unknown): boolean {
+  const parts: string[] = [];
+  if (error instanceof Error) {
+    parts.push(error.message);
+    if ('cause' in error && error.cause !== undefined) {
+      parts.push(error.cause instanceof Error ? error.cause.message : String(error.cause));
+    }
+  } else {
+    parts.push(String(error));
+  }
+  return parts.some((text) => {
+    const lower = text.toLowerCase();
+    return lower.includes('no such table') && lower.includes('steward_reviews');
+  });
+}
 
 export class D1EntityReadStore implements EntityReadStore, RevisionLogStore {
   private readonly clock: Clock;
@@ -490,18 +528,31 @@ export class D1EntityReadStore implements EntityReadStore, RevisionLogStore {
     }
 
     const whereSql = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
-    const res = await prepareD1Statement(
-      this.db,
-      `SELECT revision_id, batch_id, entity_type, entity_id, parent_revision_id, action,
-                reverted_revision_id, author_id, author_name, author_type,
-                summary, has_primary_source, before_json, after_json, created_at
-         FROM revisions
+    let res: { results: unknown[] };
+    try {
+      res = await prepareD1Statement(
+        this.db,
+        `${REVISION_WITH_REVIEW_SELECT}
          ${whereSql}
          ORDER BY revision_id DESC
          LIMIT ?`
-    )
-      .bind(...bindings, limit + 1)
-      .all<unknown>();
+      )
+        .bind(...bindings, limit + 1)
+        .all<unknown>();
+    } catch (error) {
+      if (!isMissingStewardReviewsTableError(error)) {
+        throw error;
+      }
+      res = await prepareD1Statement(
+        this.db,
+        `${REVISION_BASE_SELECT}
+         ${whereSql}
+         ORDER BY revision_id DESC
+         LIMIT ?`
+      )
+        .bind(...bindings, limit + 1)
+        .all<unknown>();
+    }
 
     const hasMore = res.results.length > limit;
     const sliced = hasMore ? res.results.slice(0, limit) : res.results;
@@ -515,31 +566,103 @@ export class D1EntityReadStore implements EntityReadStore, RevisionLogStore {
   }
 
   async getRevisionById(revisionId: RevisionId): Promise<RevisionRecord | null> {
-    const rawRow = await prepareD1Statement(
-      this.db,
-      `SELECT revision_id, batch_id, entity_type, entity_id, parent_revision_id, action,
-                reverted_revision_id, author_id, author_name, author_type,
-                summary, has_primary_source, before_json, after_json, created_at
-         FROM revisions
+    let rawRow: unknown;
+    try {
+      rawRow = await prepareD1Statement(
+        this.db,
+        `${REVISION_WITH_REVIEW_SELECT}
          WHERE revision_id = ?`
-    )
-      .bind(revisionId)
-      .first<unknown>();
+      )
+        .bind(revisionId)
+        .first<unknown>();
+    } catch (error) {
+      if (!isMissingStewardReviewsTableError(error)) {
+        throw error;
+      }
+      rawRow = await prepareD1Statement(
+        this.db,
+        `${REVISION_BASE_SELECT}
+         WHERE revision_id = ?`
+      )
+        .bind(revisionId)
+        .first<unknown>();
+    }
     return rawRow !== null ? mapRevisionRow(parseDbRevisionRow(rawRow)) : null;
   }
 
   async getRevisionsByBatch(batchId: BatchId): Promise<readonly RevisionRecord[]> {
-    const res = await prepareD1Statement(
-      this.db,
-      `SELECT revision_id, batch_id, entity_type, entity_id, parent_revision_id, action,
-                reverted_revision_id, author_id, author_name, author_type,
-                summary, has_primary_source, before_json, after_json, created_at
-         FROM revisions
+    let res: { results: unknown[] };
+    try {
+      res = await prepareD1Statement(
+        this.db,
+        `${REVISION_WITH_REVIEW_SELECT}
          WHERE batch_id = ? AND batch_id IS NOT NULL
          ORDER BY revision_id ASC`
-    )
-      .bind(batchId)
-      .all<unknown>();
+      )
+        .bind(batchId)
+        .all<unknown>();
+    } catch (error) {
+      if (!isMissingStewardReviewsTableError(error)) {
+        throw error;
+      }
+      res = await prepareD1Statement(
+        this.db,
+        `${REVISION_BASE_SELECT}
+         WHERE batch_id = ? AND batch_id IS NOT NULL
+         ORDER BY revision_id ASC`
+      )
+        .bind(batchId)
+        .all<unknown>();
+    }
     return res.results.map((rawRow) => mapRevisionRow(parseDbRevisionRow(rawRow)));
+  }
+
+  async upsertStewardReview(input: {
+    target_kind: StewardReviewTargetKind;
+    target_id: string;
+    reviewer_id: string;
+    reviewer_name: string;
+    note: string | null;
+    reviewed_at: string;
+  }): Promise<StewardReviewStamp> {
+    await prepareD1Statement(
+      this.db,
+      `INSERT INTO steward_reviews (target_kind, target_id, reviewer_id, reviewer_name, note, reviewed_at)
+       VALUES (?, ?, ?, ?, ?, ?)
+       ON CONFLICT(target_kind, target_id) DO UPDATE SET
+         reviewer_id = excluded.reviewer_id,
+         reviewer_name = excluded.reviewer_name,
+         note = excluded.note,
+         reviewed_at = excluded.reviewed_at`
+    )
+      .bind(
+        input.target_kind,
+        input.target_id,
+        input.reviewer_id,
+        input.reviewer_name,
+        input.note,
+        input.reviewed_at
+      )
+      .run();
+
+    return {
+      target_kind: input.target_kind,
+      target_id: input.target_id,
+      reviewer_id: input.reviewer_id,
+      reviewer_name: input.reviewer_name,
+      note: input.note,
+      reviewed_at: input.reviewed_at,
+    };
+  }
+
+  async deleteStewardReview(targetKind: StewardReviewTargetKind, targetId: string): Promise<boolean> {
+    const res = await prepareD1Statement(
+      this.db,
+      `DELETE FROM steward_reviews
+       WHERE target_kind = ? AND target_id = ?`
+    )
+      .bind(targetKind, targetId)
+      .run();
+    return (res.meta?.changes ?? 0) > 0;
   }
 }

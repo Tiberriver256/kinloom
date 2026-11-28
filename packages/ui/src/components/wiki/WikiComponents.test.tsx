@@ -27,7 +27,13 @@ import { EntityEditDrawer } from './EntityEditDrawer.js';
 import { PrivateArchiveGate } from './PrivateArchiveGate.js';
 import { RevisionDiffView } from './RevisionDiffView.js';
 import { TalkPanel } from './TalkPanel.js';
-import { AuthorPill, CitationBadge, ConflictBadge } from './WikiBadges.js';
+import {
+  AuthorPill,
+  CitationBadge,
+  ConflictBadge,
+  EpistemicTierBadge,
+  StewardReviewBadge,
+} from './WikiBadges.js';
 
 declare global {
   var IS_REACT_ACT_ENVIRONMENT: boolean | undefined;
@@ -103,7 +109,33 @@ describe('Wiki UI components and tree display polish helpers', () => {
         <CitationBadge hasPrimarySource={false} />
         <ConflictBadge />
         <AuthorPill authorType="agent" authorName="Archivist Bot" />
+        <AuthorPill authorType="agent" authorName="" className="custom-pill" />
+        <AuthorPill authorType="human" authorName="Steward Jane" />
         <AuthorPill authorType="system_seed" authorName="seed" />
+        <EpistemicTierBadge tier="cited" />
+        <EpistemicTierBadge tier="inferred" className="custom-tier" label="Memory" title="Custom hint" />
+        <EpistemicTierBadge tier="open_question" />
+        <StewardReviewBadge
+          className="custom-stamp"
+          review={{
+            target_kind: 'revision',
+            target_id: '5',
+            reviewer_id: 'steward@example.test',
+            reviewer_name: 'Archive Steward',
+            note: 'Verified scan',
+            reviewed_at: '2026-06-02T10:00:00Z',
+          }}
+        />
+        <StewardReviewBadge
+          review={{
+            target_kind: 'batch',
+            target_id: 'batch_5',
+            reviewer_id: 'steward@example.test',
+            reviewer_name: 'Batch Steward',
+            note: null,
+            reviewed_at: '2026-06-03T10:00:00Z',
+          }}
+        />
       </div>
     );
 
@@ -112,7 +144,11 @@ describe('Wiki UI components and tree display polish helpers', () => {
     expect(container.textContent).toContain('Conflict');
     expect(container.textContent).toContain('Research agent · Archivist Bot');
     expect(container.textContent).toContain('Initial seed');
-    expect(container.querySelectorAll('svg').length).toBe(3);
+    expect(container.textContent).toContain('Steward Jane');
+    expect(container.textContent).toContain('Open question');
+    expect(container.textContent).toContain('Reviewed by Archive Steward');
+    expect(container.textContent).toContain('Reviewed by Batch Steward');
+    expect(container.querySelectorAll('svg').length).toBe(8);
     unmount();
   });
 
@@ -298,7 +334,8 @@ describe('Wiki UI components and tree display polish helpers', () => {
       </MemoryRouter>
     );
 
-    expect(container.textContent).toContain('Batch wave_census_1880');
+    expect(container.textContent).toContain('Research Field Report: 1 person updated');
+    expect(container.textContent).toContain('Batch ledger reference: wave_census_1880');
     expect(container.textContent).toContain('Add family note');
 
     const agentTab = [...container.querySelectorAll<HTMLButtonElement>('button[role="tab"]')].find((b) =>
@@ -307,7 +344,8 @@ describe('Wiki UI components and tree display polish helpers', () => {
     act(() => {
       agentTab?.click();
     });
-    expect(container.textContent).toContain('Batch wave_census_1880');
+    expect(container.textContent).toContain('Research Field Report: 1 person updated');
+    expect(container.textContent).toContain('Batch ledger reference: wave_census_1880');
     expect(container.textContent).not.toContain('Add family note');
 
     const revertBatchBtn = [...container.querySelectorAll('button')].find((b) =>

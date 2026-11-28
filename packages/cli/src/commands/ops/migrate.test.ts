@@ -182,6 +182,7 @@ describe('kinloom migrate', () => {
       '0004_plugin_settings.sql',
       '0005_page_visit_stats.sql',
       '0006_plugin_migrations.sql',
+      '0007_steward_reviews.sql',
     ]);
     expect(migrations[0].requirements.isInitialSchema).toBe(true);
     expect(migrations[0].requirements.createdTables).toContain('revisions');
@@ -199,6 +200,7 @@ describe('kinloom migrate', () => {
       'observability_cache_daily',
     ]);
     expect(migrations[5].requirements.createdTables).toEqual(['plugin_migrations']);
+    expect(migrations[6].requirements.createdTables).toEqual(['steward_reviews']);
   });
 
   it('resolves D1 database binding from wrangler.jsonc, wrangler.json, and wrangler.toml', () => {
@@ -269,6 +271,7 @@ database_name = "example-toml-db" # archive database
       '0004_plugin_settings.sql',
       '0005_page_visit_stats.sql',
       '0006_plugin_migrations.sql',
+      '0007_steward_reviews.sql',
     ]);
     expect(calls.every((c) => !c.args.includes('--file'))).toBe(true);
     expect(calls.every((c) => c.args.includes('--remote'))).toBe(true);
@@ -278,6 +281,7 @@ database_name = "example-toml-db" # archive database
     expect(result.rendered).toContain('0004_plugin_settings.sql');
     expect(result.rendered).toContain('0005_page_visit_stats.sql');
     expect(result.rendered).toContain('0006_plugin_migrations.sql');
+    expect(result.rendered).toContain('0007_steward_reviews.sql');
     expect(result.pluginMigrationsDir).toBeUndefined();
   });
 
@@ -314,6 +318,7 @@ database_name = "example-toml-db" # archive database
       '0004_plugin_settings.sql',
       '0005_page_visit_stats.sql',
       '0006_plugin_migrations.sql',
+      '0007_steward_reviews.sql',
     ]);
     expect(first.applied.map((m) => [m.id, m.satisfiedBy])).toEqual([
       ['0001_initial.sql', 'schema'],
@@ -322,10 +327,11 @@ database_name = "example-toml-db" # archive database
       ['0004_plugin_settings.sql', 'applied_now'],
       ['0005_page_visit_stats.sql', 'applied_now'],
       ['0006_plugin_migrations.sql', 'applied_now'],
+      ['0007_steward_reviews.sql', 'applied_now'],
     ]);
 
     const fileExecs = calls.filter((c) => c.args.includes('--file'));
-    expect(fileExecs).toHaveLength(5);
+    expect(fileExecs).toHaveLength(6);
     expect(path.basename(fileExecs[0].args[fileExecs[0].args.indexOf('--file') + 1])).toBe(
       '0002_pronunciations.sql'
     );
@@ -341,6 +347,9 @@ database_name = "example-toml-db" # archive database
     expect(path.basename(fileExecs[4].args[fileExecs[4].args.indexOf('--file') + 1])).toBe(
       '0006_plugin_migrations.sql'
     );
+    expect(path.basename(fileExecs[5].args[fileExecs[5].args.indexOf('--file') + 1])).toBe(
+      '0007_steward_reviews.sql'
+    );
 
     // Second run converges with zero write executions
     const callCountBeforeSecond = calls.length;
@@ -354,7 +363,7 @@ database_name = "example-toml-db" # archive database
     expect(second.verified).toBe(true);
     expect(second.executed).toEqual([]);
     expect(second.pending).toEqual([]);
-    expect(second.applied).toHaveLength(6);
+    expect(second.applied).toHaveLength(7);
     const secondCalls = calls.slice(callCountBeforeSecond);
     expect(secondCalls.every((c) => !c.args.includes('--file'))).toBe(true);
   });
@@ -376,12 +385,14 @@ database_name = "example-toml-db" # archive database
         'page_visit_daily',
         'observability_cache_daily',
         'plugin_migrations',
+        'steward_reviews',
       ]),
       indexes: new Set([
         'idx_plugin_setting_secrets_plugin_id',
         'idx_page_visit_daily_day_utc',
         'idx_page_visit_daily_kind_day',
         'idx_plugin_migrations_namespace',
+        'idx_steward_reviews_reviewed_at',
       ]),
       columnsByTable: new Map([
         ['pronunciation_lexicon', new Set(['term', 'phonetic', 'source_url', 'source_label'])],
@@ -504,11 +515,13 @@ database_name = "example-toml-db" # archive database
         'plugin_setting_secrets',
         'page_visit_daily',
         'observability_cache_daily',
+        'steward_reviews',
       ]),
       indexes: new Set([
         'idx_plugin_setting_secrets_plugin_id',
         'idx_page_visit_daily_day_utc',
         'idx_page_visit_daily_kind_day',
+        'idx_steward_reviews_reviewed_at',
       ]),
       columnsByTable: new Map([
         ['pronunciation_lexicon', new Set(['source_url', 'source_label', 'region', 'variants_json'])],

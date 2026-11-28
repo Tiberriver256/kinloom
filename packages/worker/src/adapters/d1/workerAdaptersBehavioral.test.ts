@@ -1076,4 +1076,65 @@ describe('D1AccessAndTalkStore and D1EntityReadStore edge and query behaviors', 
     expect(revQueryStmt?.sql).toContain('author_type = ?');
     expect(revQueryStmt?.bindings).toEqual(['batch_oak_1', 'agent', 11]);
   });
+
+  it('falls back cleanly on pre-0007 databases missing steward_reviews and rethrows unrelated D1 errors', async () => {
+    const rawRevision = {
+      revision_id: 4,
+      batch_id: 'batch_legacy',
+      entity_type: 'person',
+      entity_id: 'per_1',
+      parent_revision_id: null,
+      action: 'create',
+      reverted_revision_id: null,
+      author_id: 'steward@example.test',
+      author_name: 'Steward',
+      author_type: 'human',
+      summary: 'Created person',
+      has_primary_source: 1,
+      before_json: null,
+      after_json: '{"id":"per_1"}',
+      created_at: NOW_ISO,
+    };
+
+    const { db } = createStubD1Database({
+      onAll: (stmt) => {
+        if (stmt.sql.includes('steward_reviews')) {
+          throw new Error('D1_ERROR: no such table: steward_reviews');
+        }
+        return makeD1Result([rawRevision]);
+      },
+      onFirst: (stmt) => {
+        if (stmt.sql.includes('steward_reviews')) {
+          throw new Error('D1_ERROR: no such table: steward_reviews');
+        }
+        return rawRevision;
+      },
+    });
+
+    const readStore = new D1EntityReadStore(db, undefined, new FixedClock(new Date(NOW_ISO)));
+    const listed = await readStore.listRevisions({ limit: 5 });
+    expect(listed.items).toHaveLength(1);
+    expect(listed.items[0].review).toBeUndefined();
+
+    const single = await readStore.getRevisionById(asRevisionId(4));
+    expect(single?.revision_id).toBe(4);
+
+    const byBatch = await readStore.getRevisionsByBatch(asBatchId('batch_legacy'));
+    expect(byBatch).toHaveLength(1);
+
+    const { db: brokenDb } = createStubD1Database({
+      onAll: () => {
+        throw new Error('D1_ERROR: disk I/O error');
+      },
+      onFirst: () => {
+        throw new Error('D1_ERROR: disk I/O error');
+      },
+    });
+    const brokenStore = new D1EntityReadStore(brokenDb, undefined, new FixedClock(new Date(NOW_ISO)));
+    await expect(brokenStore.listRevisions({})).rejects.toThrow(/disk I\/O error/);
+    await expect(brokenStore.getRevisionById(asRevisionId(4))).rejects.toThrow(/disk I\/O error/);
+    await expect(brokenStore.getRevisionsByBatch(asBatchId('batch_legacy'))).rejects.toThrow(
+      /disk I\/O error/
+    );
+  });
 });

@@ -1,5 +1,6 @@
 import type { CoPresenceItem, MediaItem } from '@kinloom/core';
 import {
+  computePersonCompleteness,
   computeRadarForEvent,
   findNearestEventForPerson,
   getEventsForPerson,
@@ -134,6 +135,20 @@ export const PersonPage: React.FC = () => {
         ? partitionPersonNarratives(bundle.narratives ?? [], person.id)
         : { biographies: [], familyStories: [] },
     [bundle, person]
+  );
+
+  const personCompleteness = useMemo(
+    () =>
+      bundle && person
+        ? computePersonCompleteness({
+            person,
+            personEvents,
+            biographyCount: personBiographies.length,
+            mediaCount: personMedia.length,
+            sourcesById,
+          })
+        : null,
+    [bundle, person, personEvents, personBiographies.length, personMedia.length, sourcesById]
   );
 
   const immediateFamily = useMemo(
@@ -290,6 +305,7 @@ export const PersonPage: React.FC = () => {
             person={person}
             baseUrl={baseUrl}
             branchLabel={branchLabel}
+            completeness={personCompleteness}
             routePlaceCount={routePlaceCount}
             canEdit={capabilities.canEdit}
             pronunciations={pronunciations}
@@ -323,6 +339,54 @@ export const PersonPage: React.FC = () => {
             }}
             entityLabel={person.full_name}
           />
+
+          {isReadingView &&
+            personCompleteness !== null &&
+            personCompleteness.inviteCopy !== null &&
+            (personCompleteness.tier === 'oral_seed' ||
+              (personCompleteness.tier === 'partially_cited' && personBiographies.length === 0)) &&
+            (capabilities.canEdit || capabilities.hasTalk) && (
+              <div className={cx(personStyles, 'person-completeness-invite print-hide')}>
+                <p className={cx(personStyles, 'person-completeness-invite-copy')}>
+                  {personCompleteness.inviteCopy}
+                </p>
+                <div className={cx(personStyles, 'person-completeness-invite-actions')}>
+                  {capabilities.canEdit ? (
+                    <>
+                      <button
+                        type="button"
+                        className={cx(controlStyles, 'pill-btn')}
+                        onClick={() => {
+                          setEditInitialSection(undefined);
+                          setWikiTab('edit');
+                        }}
+                      >
+                        Edit Profile
+                      </button>
+                      <button
+                        type="button"
+                        className={cx(controlStyles, 'pill-btn')}
+                        onClick={() => {
+                          setUploadModalOpen(true);
+                        }}
+                      >
+                        Add Photo
+                      </button>
+                    </>
+                  ) : (
+                    <button
+                      type="button"
+                      className={cx(controlStyles, 'pill-btn')}
+                      onClick={() => {
+                        setWikiTab('talk');
+                      }}
+                    >
+                      Share a Family Note
+                    </button>
+                  )}
+                </div>
+              </div>
+            )}
 
           <PluginSlot name="personDetail" person={person} />
 

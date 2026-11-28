@@ -22,6 +22,7 @@ export function buildEntityLinkMap(bundle: ArchiveBundle | null): Map<string, Re
   if (!bundle) {
     return map;
   }
+  const peopleById = new Map(bundle.people.map((p) => [p.id, p]));
   for (const p of bundle.people) {
     map.set(`person:${p.id}`, { label: p.full_name, to: `/person/${p.slug}` });
   }
@@ -34,7 +35,58 @@ export function buildEntityLinkMap(bundle: ArchiveBundle | null): Map<string, Re
       to: `/evidence?tab=citations&source=${encodeURIComponent(src.id)}`,
     });
   }
+  for (const ev of bundle.events) {
+    const primaryPerson = ev.participants
+      .map((pt) => peopleById.get(pt.person_id))
+      .find((p) => p && p.full_name !== 'Living');
+    map.set(`event:${ev.id}`, {
+      label: ev.title || ev.id,
+      to: primaryPerson ? `/person/${primaryPerson.slug}?event=${ev.id}` : null,
+    });
+  }
+  for (const narrative of bundle.narratives ?? []) {
+    const subject = narrative.person_ids
+      .map((id) => peopleById.get(id))
+      .find((p) => p && p.full_name !== 'Living');
+    map.set(`narrative:${narrative.id}`, {
+      label: narrative.title || narrative.id,
+      to: subject ? `/person/${subject.slug}` : null,
+    });
+  }
+  for (const item of bundle.media ?? []) {
+    map.set(`media:${item.id}`, {
+      label: item.caption || item.id,
+      to: '/evidence?tab=media',
+    });
+  }
   return map;
+}
+
+export function isFeedGroupReviewed(group: FeedGroup): boolean {
+  return group.revisions.length > 0 && group.revisions.every((rev) => Boolean(rev.review));
+}
+
+export function getEmptyRevisionFeedMessage(authorFilter: AuthorFilter, onlyUnreviewed: boolean): string {
+  if (onlyUnreviewed) {
+    if (authorFilter === 'all') {
+      return 'Every recorded change has been marked reviewed by a steward.';
+    }
+    return 'No unreviewed changes match the active author tab.';
+  }
+  switch (authorFilter) {
+    case 'all':
+      return 'No archival changes have been recorded yet. Family edits and research batches will appear here once contributors update records.';
+    case 'human':
+      return 'No family editor revisions have been recorded yet.';
+    case 'agent':
+      return 'No research agent batches have been submitted yet.';
+    case 'system_seed':
+      return 'No initial archive seed revisions are recorded.';
+    default: {
+      const _exhaustive: never = authorFilter;
+      return _exhaustive;
+    }
+  }
 }
 
 export function groupRevisionsByBatch(revisions: readonly RevisionRecord[]): FeedGroup[] {

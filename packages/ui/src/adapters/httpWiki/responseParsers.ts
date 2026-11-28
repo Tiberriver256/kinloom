@@ -19,6 +19,7 @@ import type {
   RevisionAction,
   RevisionId,
   RevisionRecord,
+  StewardReviewStamp,
   TalkComment,
   UpsertPronunciationTermResult,
   UserRecord,
@@ -36,6 +37,7 @@ import {
   MediaItemSchema,
   PronunciationSchema,
   RevisionActionSchema,
+  StewardReviewStampSchema,
   UserRoleSchema,
 } from '@kinloom/core';
 
@@ -131,6 +133,8 @@ function parseRevisionLike(raw: unknown, label: string): RevisionRecord {
   const authorType: AuthorType = AuthorTypeSchema.parse(rec.author_type);
   const beforeRaw = rec.before_json !== undefined ? rec.before_json : rec.before_snapshot;
   const afterRaw = rec.after_json !== undefined ? rec.after_json : rec.after_snapshot;
+  const review =
+    rec.review !== undefined && rec.review !== null ? StewardReviewStampSchema.parse(rec.review) : undefined;
   return {
     revision_id: revisionId,
     batch_id: expectNullableString(rec.batch_id, `${label}.batch_id`),
@@ -147,6 +151,14 @@ function parseRevisionLike(raw: unknown, label: string): RevisionRecord {
     before_json: parseOptionalEntityPayload(beforeRaw, `${label}.before_json`),
     after_json: parseOptionalEntityPayload(afterRaw, `${label}.after_json`),
     created_at: expectNonEmptyString(rec.created_at, `${label}.created_at`),
+    ...(review ? { review } : {}),
+  };
+}
+
+export function parseStewardReviewResponse(raw: unknown): { review: StewardReviewStamp } {
+  const obj = expectRecord(raw, 'steward review response');
+  return {
+    review: StewardReviewStampSchema.parse(obj.review),
   };
 }
 

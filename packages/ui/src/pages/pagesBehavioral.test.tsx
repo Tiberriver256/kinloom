@@ -350,8 +350,22 @@ describe('Explorer pages behavioral suite (Time, Kinship, Evidence, Places, Inde
     expect(container.textContent).toContain('1880');
     expect(container.textContent).toContain('Henry Alder');
     expect(container.textContent).toContain('Hudsonville');
-    expect(container.textContent).toContain('Confirmed');
+    expect(container.textContent).toContain('Cited');
     expect(container.textContent).toContain('Ezra Bramwell');
+
+    const legendBtn = Array.from(container.querySelectorAll('button')).find((b) =>
+      /how we weigh evidence/i.test(b.textContent || '')
+    );
+    expect(legendBtn?.getAttribute('aria-expanded')).toBe('false');
+    if (legendBtn) {
+      act(() => {
+        legendBtn.click();
+      });
+      await flushUi();
+      expect(legendBtn.getAttribute('aria-expanded')).toBe('true');
+      expect(container.textContent).toContain('Family memory / Inferred');
+      expect(container.textContent).toContain('Discrepancy / Open question');
+    }
 
     // Step year forward/backward using navigation buttons and range slider
     const buttons = Array.from(container.querySelectorAll('button'));

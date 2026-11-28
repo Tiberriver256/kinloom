@@ -22,6 +22,8 @@ import {
   type RevisionQuery,
   type RevisionRecord,
   resolveEffectiveLiving,
+  type StewardReviewStamp,
+  type StewardReviewTargetKind,
   type StoredEntityRecord,
   type StoredEntityRow,
   type StoredKinshipRow,
@@ -46,6 +48,7 @@ export class InMemoryEntityAndMutationStore
   private readonly entities = new Map<string, StoredEntityRow>();
   private readonly kinship = new Map<string, StoredKinshipRow>();
   private readonly revisions: RevisionRecord[] = [];
+  private readonly stewardReviews = new Map<string, StewardReviewStamp>();
   private readonly privacyConfig?: Partial<PrivacyConfig>;
   private readonly clock: Clock;
 
@@ -338,6 +341,17 @@ export class InMemoryEntityAndMutationStore
     };
   }
 
+  private attachStewardReview(rev: RevisionRecord): RevisionRecord {
+    const cloned = structuredClone(rev);
+    const direct = this.stewardReviews.get(`revision:${rev.revision_id}`);
+    const inherited = !direct && rev.batch_id ? this.stewardReviews.get(`batch:${rev.batch_id}`) : undefined;
+    const resolved = direct ?? inherited;
+    if (resolved) {
+      cloned.review = structuredClone(resolved);
+    }
+    return cloned;
+  }
+
   async listRevisions(query: RevisionQuery): Promise<{
     items: readonly RevisionRecord[];
     next_cursor: RevisionId | null;
@@ -361,7 +375,7 @@ export class InMemoryEntityAndMutationStore
       if (query.author_type && rev.author_type !== query.author_type) {
         continue;
       }
-      filtered.push(structuredClone(rev));
+      filtered.push(this.attachStewardReview(rev));
       if (filtered.length > limit) {
         break;
       }
@@ -378,13 +392,37 @@ export class InMemoryEntityAndMutationStore
 
   async getRevisionById(revisionId: RevisionId): Promise<RevisionRecord | null> {
     const found = this.revisions.find((r) => r.revision_id === revisionId);
-    return found ? structuredClone(found) : null;
+    return found ? this.attachStewardReview(found) : null;
   }
 
   async getRevisionsByBatch(batchId: BatchId): Promise<readonly RevisionRecord[]> {
     return this.revisions
       .filter((r) => r.batch_id === batchId)
       .toSorted((a, b) => a.revision_id - b.revision_id)
-      .map((r) => structuredClone(r));
+      .map((r) => this.attachStewardReview(r));
+  }
+
+  async upsertStewardReview(input: {
+    target_kind: StewardReviewTargetKind;
+    target_id: string;
+    reviewer_id: string;
+    reviewer_name: string;
+    note: string | null;
+    reviewed_at: string;
+  }): Promise<StewardReviewStamp> {
+    const stamp: StewardReviewStamp = {
+      target_kind: input.target_kind,
+      target_id: input.target_id,
+      reviewer_id: input.reviewer_id,
+      reviewer_name: input.reviewer_name,
+      note: input.note,
+      reviewed_at: input.reviewed_at,
+    };
+    this.stewardReviews.set(`${input.target_kind}:${input.target_id}`, structuredClone(stamp));
+    return structuredClone(stamp);
+  }
+
+  async deleteStewardReview(targetKind: StewardReviewTargetKind, targetId: string): Promise<boolean> {
+    return this.stewardReviews.delete(`${targetKind}:${targetId}`);
   }
 }

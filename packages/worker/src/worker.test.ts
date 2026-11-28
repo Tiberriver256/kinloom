@@ -54,6 +54,10 @@ const PRONUNCIATIONS_PROVENANCE_MIGRATION_SQL = readFileSync(
   resolve(THIS_DIR, '../migrations/0003_pronunciation_provenance.sql'),
   'utf8'
 );
+const STEWARD_REVIEWS_MIGRATION_SQL = readFileSync(
+  resolve(THIS_DIR, '../migrations/0007_steward_reviews.sql'),
+  'utf8'
+);
 
 interface MiniflareFixture {
   mf: Miniflare;
@@ -80,6 +84,7 @@ async function applySqlScript(db: D1Database, sqlScript: string): Promise<void> 
 }
 
 const RESET_D1_TABLES = [
+  'DELETE FROM steward_reviews',
   'DELETE FROM talk_comments',
   'DELETE FROM watchlists',
   'DELETE FROM agent_tokens',
@@ -132,6 +137,7 @@ async function ensureSharedWorkerMiniflare(): Promise<{
     sharedWorkerBucket = (await sharedWorkerMf.getR2Bucket('MEDIA_BUCKET')) as unknown as R2Bucket;
     await applySqlScript(sharedWorkerDb, INITIAL_MIGRATION_SQL);
     await applySqlScript(sharedWorkerDb, PRONUNCIATIONS_MIGRATION_SQL);
+    await applySqlScript(sharedWorkerDb, STEWARD_REVIEWS_MIGRATION_SQL);
   }
   return { mf: sharedWorkerMf, db: sharedWorkerDb, bucket: sharedWorkerBucket };
 }

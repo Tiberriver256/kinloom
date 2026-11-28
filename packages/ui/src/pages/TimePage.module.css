@@ -24,6 +24,10 @@
   white-space: nowrap;
 }
 
+.time-legend-wrap {
+  margin-bottom: 12px;
+}
+
 .handwritten-year-hero {
   font-family: var(--font-hand);
   font-size: clamp(2.4rem, 4vw, 3.25rem);
@@ -170,7 +174,7 @@
   padding: 10px 10px 10px 12px;
   text-decoration: none;
   background: transparent;
-  border-left: 2.5px solid var(--radar-copresence);
+  border-left: 2.5px solid var(--badge-cited-fg);
   transition: background-color 0.14s ease;
 }
 
@@ -182,6 +186,7 @@
 
 .time-person-item:global(.tier-inferred) {
   border-left-style: dashed;
+  border-left-color: var(--accent-primary);
 }
 
 .time-person-item:global(.tier-possible) {

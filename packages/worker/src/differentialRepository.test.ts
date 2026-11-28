@@ -29,6 +29,10 @@ import {
 
 const THIS_DIR = dirname(fileURLToPath(import.meta.url));
 const INITIAL_MIGRATION_SQL = readFileSync(resolve(THIS_DIR, '../migrations/0001_initial.sql'), 'utf8');
+const STEWARD_REVIEWS_MIGRATION_SQL = readFileSync(
+  resolve(THIS_DIR, '../migrations/0007_steward_reviews.sql'),
+  'utf8'
+);
 const REPO_DIFF_SEED = 20261128;
 
 async function applySqlScript(db: D1Database, sqlScript: string): Promise<void> {
@@ -154,6 +158,7 @@ describe('Differential: InMemoryArchiveRepository vs Cloudflare D1 + R2 (Minifla
       const db = (await mf.getD1Database('DB')) as unknown as D1Database;
       const bucket = (await mf.getR2Bucket('MEDIA_BUCKET')) as unknown as R2Bucket;
       await applySqlScript(db, INITIAL_MIGRATION_SQL);
+      await applySqlScript(db, STEWARD_REVIEWS_MIGRATION_SQL);
 
       const siteConfig = createSyntheticSiteConfig();
 
@@ -166,6 +171,7 @@ describe('Differential: InMemoryArchiveRepository vs Cloudflare D1 + R2 (Minifla
       for (const ops of sequences) {
         runCounter += 1;
         await db.batch([
+          db.prepare('DELETE FROM steward_reviews'),
           db.prepare('DELETE FROM revisions'),
           db.prepare('DELETE FROM entities'),
           db.prepare('DELETE FROM kinship_edges'),
@@ -484,9 +490,29 @@ describe('Differential: InMemoryArchiveRepository vs Cloudflare D1 + R2 (Minifla
         expect(d1Snap.entities.length).toBe(memSnap.entities.length);
         expect(d1Snap.kinship.length).toBe(memSnap.kinship.length);
 
+        // Verify identical Steward Review Stamp resolution (batch inheritance + direct override) on both backends
+        const seedBatchId = `seed_${runCounter}`;
+        await memPorts.repository.upsertStewardReview({
+          target_kind: 'batch',
+          target_id: seedBatchId,
+          reviewer_id: 'steward@example.test',
+          reviewer_name: 'Archive Steward',
+          note: 'Differential review stamp',
+          reviewed_at: clock.nowIso(),
+        });
+        await d1Repo.upsertStewardReview({
+          target_kind: 'batch',
+          target_id: seedBatchId,
+          reviewer_id: 'steward@example.test',
+          reviewer_name: 'Archive Steward',
+          note: 'Differential review stamp',
+          reviewed_at: clock.nowIso(),
+        });
+
         const memRevs = await memPorts.repository.listRevisions({ limit: 100 });
         const d1Revs = await d1Repo.listRevisions({ limit: 100 });
         expect(d1Revs.items.length).toBe(memRevs.items.length);
+        expect(d1Revs.items.map((r) => r.review ?? null)).toEqual(memRevs.items.map((r) => r.review ?? null));
 
         const memRes = await memReader.getBundle({ ifNoneMatch: null });
         const d1Res = await d1Reader.getBundle({ ifNoneMatch: null });

@@ -17,6 +17,7 @@ import {
   type RevisionId,
   type RevisionLogStore,
   type RevisionRecord,
+  type StewardReviewStamp,
   transitionEntityLifecycle,
 } from '@kinloom/core';
 import { KinloomHttpError } from '../errors.js';
@@ -480,5 +481,65 @@ export class WikiWriteService {
       head_revision_id: committed.head_revision_id,
       etag: committed.etag,
     };
+  }
+
+  async markRevisionReviewed(params: {
+    revisionId: RevisionId;
+    note?: string | null;
+    reviewer: RevisionAuthor;
+  }): Promise<{ review: StewardReviewStamp }> {
+    const targetRev = await this.repository.getRevisionById(params.revisionId);
+    if (!targetRev) {
+      throw new KinloomHttpError(404, 'REVISION_NOT_FOUND', `Revision r${params.revisionId} was not found.`);
+    }
+    const trimmedNote = params.note?.trim();
+    const review = await this.repository.upsertStewardReview({
+      target_kind: 'revision',
+      target_id: String(params.revisionId),
+      reviewer_id: params.reviewer.author_id,
+      reviewer_name: params.reviewer.author_name,
+      note: trimmedNote && trimmedNote.length > 0 ? trimmedNote : null,
+      reviewed_at: this.clock.nowIso(),
+    });
+    return { review };
+  }
+
+  async clearRevisionReview(params: { revisionId: RevisionId }): Promise<{ cleared: boolean }> {
+    const targetRev = await this.repository.getRevisionById(params.revisionId);
+    if (!targetRev) {
+      throw new KinloomHttpError(404, 'REVISION_NOT_FOUND', `Revision r${params.revisionId} was not found.`);
+    }
+    const cleared = await this.repository.deleteStewardReview('revision', String(params.revisionId));
+    return { cleared };
+  }
+
+  async markBatchReviewed(params: {
+    batchId: BatchId;
+    note?: string | null;
+    reviewer: RevisionAuthor;
+  }): Promise<{ review: StewardReviewStamp }> {
+    const batchRevisions = await this.repository.getRevisionsByBatch(params.batchId);
+    if (batchRevisions.length === 0) {
+      throw new KinloomHttpError(404, 'BATCH_NOT_FOUND', `Batch '${params.batchId}' was not found.`);
+    }
+    const trimmedNote = params.note?.trim();
+    const review = await this.repository.upsertStewardReview({
+      target_kind: 'batch',
+      target_id: params.batchId,
+      reviewer_id: params.reviewer.author_id,
+      reviewer_name: params.reviewer.author_name,
+      note: trimmedNote && trimmedNote.length > 0 ? trimmedNote : null,
+      reviewed_at: this.clock.nowIso(),
+    });
+    return { review };
+  }
+
+  async clearBatchReview(params: { batchId: BatchId }): Promise<{ cleared: boolean }> {
+    const batchRevisions = await this.repository.getRevisionsByBatch(params.batchId);
+    if (batchRevisions.length === 0) {
+      throw new KinloomHttpError(404, 'BATCH_NOT_FOUND', `Batch '${params.batchId}' was not found.`);
+    }
+    const cleared = await this.repository.deleteStewardReview('batch', params.batchId);
+    return { cleared };
   }
 }

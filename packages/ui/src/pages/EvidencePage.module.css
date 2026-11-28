@@ -1,6 +1,57 @@
 /* ==========================================================================
    Evidence, Citation Audit & Silver-Gelatin Scan Gallery (/evidence)
    ========================================================================== */
+.evidence-legend-bar {
+  margin-bottom: 14px;
+}
+
+.evidence-gap-cta {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px;
+  border: 1px solid var(--accent-primary);
+  border-radius: var(--radius-sm);
+  background: var(--badge-memory-bg);
+  color: var(--badge-memory-fg);
+  font-family: inherit;
+  font-size: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.evidence-gap-cta:hover {
+  background: var(--surface-linen);
+  border-color: var(--surface-header);
+  color: var(--surface-header);
+}
+
+.evidence-gap-cta:focus-visible {
+  outline: 2px solid var(--action-focus);
+  outline-offset: 2px;
+}
+
+.evidence-gap-cta[aria-pressed="true"] {
+  background: var(--surface-header);
+  border-color: var(--surface-header);
+  color: var(--text-inverse);
+}
+
+.evidence-uncited-banner {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+  padding: 10px 12px;
+  margin-bottom: 14px;
+  background: var(--badge-memory-bg);
+  color: var(--badge-memory-fg);
+  border: 1px solid var(--badge-memory-fg);
+  border-radius: var(--radius-sm);
+  font-size: 0.88rem;
+}
+
 .evidence-source-row {
   display: flex;
   justify-content: space-between;

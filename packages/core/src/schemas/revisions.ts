@@ -154,6 +154,21 @@ export function safeParseEntityPayload<T extends EntityType>(
   return schema.safeParse(raw) as z.ZodSafeParseResult<TypedEntityByType[T]>;
 }
 
+export const StewardReviewTargetKindSchema = z.enum(['revision', 'batch']);
+
+export const StewardReviewStampSchema = z.object({
+  target_kind: StewardReviewTargetKindSchema,
+  target_id: z.string().min(1),
+  reviewer_id: z.string().min(1),
+  reviewer_name: z.string().min(1),
+  note: z.string().max(500).nullable().default(null),
+  reviewed_at: z.string().min(1),
+});
+
+export const StewardReviewInputSchema = z.object({
+  note: z.string().trim().max(500).nullable().optional(),
+});
+
 export const RevisionRecordSchema = z.object({
   revision_id: z.number().int().positive(),
   batch_id: z.string().nullable().default(null),
@@ -170,6 +185,7 @@ export const RevisionRecordSchema = z.object({
   before_json: EntityPayloadSchema.nullable(),
   after_json: EntityPayloadSchema.nullable(),
   created_at: z.string().min(1),
+  review: StewardReviewStampSchema.nullable().optional(),
 });
 
 export const EntityPatchCreateSchema = z.object({
@@ -244,6 +260,9 @@ export type UserRole = z.infer<typeof UserRoleSchema>;
 export type EntityPayload = z.infer<typeof EntityPayloadSchema>;
 export type ApiErrorEnvelope = z.infer<typeof ApiErrorEnvelopeSchema>;
 export type RevisionRecord = z.infer<typeof RevisionRecordSchema>;
+export type StewardReviewTargetKind = z.infer<typeof StewardReviewTargetKindSchema>;
+export type StewardReviewStamp = z.infer<typeof StewardReviewStampSchema>;
+export type StewardReviewInput = z.infer<typeof StewardReviewInputSchema>;
 export type EntityPatch = z.infer<typeof EntityPatchSchema>;
 export type BatchSubmission = z.infer<typeof BatchSubmissionSchema>;
 export type TalkComment = z.infer<typeof TalkCommentSchema>;

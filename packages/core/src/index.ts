@@ -13,6 +13,8 @@ export * from './contracts.js';
 export * from './domain/archiveSearch.js';
 export * from './domain/archiveStatus.js';
 export * from './domain/citations.js';
+export * from './domain/completeness.js';
+export * from './domain/epistemicTiers.js';
 export * from './domain/geoMap.js';
 export * from './domain/kinshipFinder.js';
 export * from './domain/mapJourney.js';

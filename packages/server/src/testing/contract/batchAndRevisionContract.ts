@@ -420,4 +420,199 @@ export function registerBatchAndRevisionContractTests(withHarness: WithContractH
       expect(revertedFirst?.deleted_at).not.toBeNull();
     });
   });
+
+  it('enforces RBAC/CSRF and persists idempotent Steward Review Stamps with batch inheritance without bumping head_revision_id', async () => {
+    await withHarness(async ({ ports, server }) => {
+      const adminCookie = await seedAdminCookie(ports);
+      const person = createSyntheticHistoricalPerson({ id: 'per_review_01', slug: 'review-person' });
+
+      const batchRes = await server.fetch(
+        new Request(`${CONTRACT_TEST_ORIGIN}/api/batches`, {
+          method: 'POST',
+          headers: {
+            'content-type': 'application/json',
+            origin: CONTRACT_TEST_ORIGIN,
+            cookie: adminCookie,
+          },
+          body: JSON.stringify({
+            batch_id: 'batch_review_target',
+            summary: 'Submit batch awaiting steward review',
+            has_primary_source: true,
+            patches: [
+              {
+                action: 'create',
+                entity_type: 'person',
+                entity_id: person.id,
+                data: person,
+                summary: 'Create person in batch',
+              },
+              {
+                action: 'update',
+                entity_type: 'person',
+                entity_id: person.id,
+                data: { full_name: 'Arthur W. Alder' },
+                merge: true,
+                summary: 'Update middle initial in batch',
+              },
+            ],
+          }),
+        })
+      );
+      expect(batchRes.status).toBe(201);
+      const headBeforeReview = await ports.repository.getHeadRevisionId();
+      expect(headBeforeReview).toBe(2);
+
+      // Anonymous caller rejected (401)
+      const anonRes = await server.fetch(
+        new Request(`${CONTRACT_TEST_ORIGIN}/api/revisions/1/review`, {
+          method: 'POST',
+          headers: { 'content-type': 'application/json', origin: CONTRACT_TEST_ORIGIN },
+          body: JSON.stringify({}),
+        })
+      );
+      expect(anonRes.status).toBe(401);
+
+      // Cross-origin CSRF rejected (403)
+      const csrfRes = await server.fetch(
+        new Request(`${CONTRACT_TEST_ORIGIN}/api/revisions/1/review`, {
+          method: 'POST',
+          headers: {
+            'content-type': 'application/json',
+            origin: 'https://evil.example.test',
+            cookie: adminCookie,
+          },
+          body: JSON.stringify({}),
+        })
+      );
+      expect(csrfRes.status).toBe(403);
+
+      // Missing revision / batch returns 404
+      const missingRevRes = await server.fetch(
+        new Request(`${CONTRACT_TEST_ORIGIN}/api/revisions/999/review`, {
+          method: 'POST',
+          headers: {
+            'content-type': 'application/json',
+            origin: CONTRACT_TEST_ORIGIN,
+            cookie: adminCookie,
+          },
+          body: JSON.stringify({}),
+        })
+      );
+      expect(missingRevRes.status).toBe(404);
+
+      const missingBatchRes = await server.fetch(
+        new Request(`${CONTRACT_TEST_ORIGIN}/api/batches/batch_nonexistent/review`, {
+          method: 'POST',
+          headers: {
+            'content-type': 'application/json',
+            origin: CONTRACT_TEST_ORIGIN,
+            cookie: adminCookie,
+          },
+          body: JSON.stringify({}),
+        })
+      );
+      expect(missingBatchRes.status).toBe(404);
+
+      const missingDelRevRes = await server.fetch(
+        new Request(`${CONTRACT_TEST_ORIGIN}/api/revisions/999/review`, {
+          method: 'DELETE',
+          headers: { origin: CONTRACT_TEST_ORIGIN, cookie: adminCookie },
+        })
+      );
+      expect(missingDelRevRes.status).toBe(404);
+
+      const missingDelBatchRes = await server.fetch(
+        new Request(`${CONTRACT_TEST_ORIGIN}/api/batches/batch_nonexistent/review`, {
+          method: 'DELETE',
+          headers: { origin: CONTRACT_TEST_ORIGIN, cookie: adminCookie },
+        })
+      );
+      expect(missingDelBatchRes.status).toBe(404);
+
+      // Stamp the batch and confirm both revisions inherit the batch stamp without bumping head_revision_id
+      const batchReviewRes = await server.fetch(
+        new Request(`${CONTRACT_TEST_ORIGIN}/api/batches/batch_review_target/review`, {
+          method: 'POST',
+          headers: {
+            'content-type': 'application/json',
+            origin: CONTRACT_TEST_ORIGIN,
+            cookie: adminCookie,
+          },
+          body: JSON.stringify({ note: 'Verified against county census roll' }),
+        })
+      );
+      expect(batchReviewRes.status).toBe(200);
+      const batchReviewJson = (await batchReviewRes.json()) as {
+        review: { target_kind: string; target_id: string; note: string | null };
+      };
+      expect(batchReviewJson.review.target_kind).toBe('batch');
+      expect(batchReviewJson.review.target_id).toBe('batch_review_target');
+      expect(batchReviewJson.review.note).toBe('Verified against county census roll');
+      expect(await ports.repository.getHeadRevisionId()).toBe(headBeforeReview);
+
+      const listedAfterBatch = await ports.repository.listRevisions({ limit: 10 });
+      expect(listedAfterBatch.items.every((r) => r.review?.target_kind === 'batch')).toBe(true);
+
+      // Direct revision stamp overrides batch stamp (including explicit null note not inheriting batch note)
+      const directReviewRes = await server.fetch(
+        new Request(`${CONTRACT_TEST_ORIGIN}/api/revisions/2/review`, {
+          method: 'POST',
+          headers: {
+            'content-type': 'application/json',
+            origin: CONTRACT_TEST_ORIGIN,
+            cookie: adminCookie,
+          },
+          body: JSON.stringify({}),
+        })
+      );
+      expect(directReviewRes.status).toBe(200);
+
+      // Idempotent repeat call updates note cleanly
+      const directReviewRepeat = await server.fetch(
+        new Request(`${CONTRACT_TEST_ORIGIN}/api/revisions/2/review`, {
+          method: 'POST',
+          headers: {
+            'content-type': 'application/json',
+            origin: CONTRACT_TEST_ORIGIN,
+            cookie: adminCookie,
+          },
+          body: JSON.stringify({ note: null }),
+        })
+      );
+      expect(directReviewRepeat.status).toBe(200);
+
+      const rev2 = await ports.repository.getRevisionById(asRevisionId(2));
+      expect(rev2?.review?.target_kind).toBe('revision');
+      expect(rev2?.review?.target_id).toBe('2');
+      expect(rev2?.review?.note).toBeNull();
+
+      // Deleting direct revision stamp falls back to inherited batch stamp
+      const clearRevRes = await server.fetch(
+        new Request(`${CONTRACT_TEST_ORIGIN}/api/revisions/2/review`, {
+          method: 'DELETE',
+          headers: {
+            origin: CONTRACT_TEST_ORIGIN,
+            cookie: adminCookie,
+          },
+        })
+      );
+      expect(clearRevRes.status).toBe(204);
+      const rev2AfterClear = await ports.repository.getRevisionById(asRevisionId(2));
+      expect(rev2AfterClear?.review?.target_kind).toBe('batch');
+
+      // Deleting batch stamp clears review completely
+      const clearBatchRes = await server.fetch(
+        new Request(`${CONTRACT_TEST_ORIGIN}/api/batches/batch_review_target/review`, {
+          method: 'DELETE',
+          headers: {
+            origin: CONTRACT_TEST_ORIGIN,
+            cookie: adminCookie,
+          },
+        })
+      );
+      expect(clearBatchRes.status).toBe(204);
+      const batchAfterClear = await ports.repository.getRevisionsByBatch(asBatchId('batch_review_target'));
+      expect(batchAfterClear.every((r) => r.review === undefined)).toBe(true);
+    });
+  });
 }

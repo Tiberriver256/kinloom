@@ -215,6 +215,22 @@ export const KINLOOM_VOCABULARY = {
     uploadDialogTitle: 'Add a Photo or Document',
     uploadDialogAria: 'Upload photo or document',
   },
+  epistemic: {
+    legendTitle: 'How we weigh evidence',
+    citedLabel: 'Cited',
+    inferredLabel: 'Family memory / Inferred',
+    openQuestionLabel: 'Discrepancy / Open question',
+    inspectRegistryCta: 'Inspect full Source Registry →',
+  },
+  stewardship: {
+    completenessPrefix: 'Archival completeness',
+    markReviewed: 'Mark as Reviewed',
+    markingReviewed: 'Saving review…',
+    clearReview: 'Undo',
+    clearReviewAria: 'Clear steward review stamp',
+    needsReviewLabel: 'Needs review',
+    fieldReportsHeading: 'Research Field Reports',
+  },
 } as const;
 
 export function formatPhotoDocumentCount(count: number): string {

@@ -21,6 +21,7 @@ import type {
   EntityPayload,
   EntityType,
   RevisionRecord,
+  StewardReviewStamp,
   TalkComment,
   UserRole,
 } from './schemas/revisions.js';
@@ -210,6 +211,13 @@ export interface ArchiveDataSource {
     revisions: readonly RevisionRecord[];
     etag: string;
   }>;
+  markRevisionReviewed?(
+    revisionId: RevisionId,
+    note?: string | null
+  ): Promise<{ review: StewardReviewStamp }>;
+  clearRevisionReview?(revisionId: RevisionId): Promise<void>;
+  markBatchReviewed?(batchId: BatchId, note?: string | null): Promise<{ review: StewardReviewStamp }>;
+  clearBatchReview?(batchId: BatchId): Promise<void>;
 
   uploadMedia?(
     formData: FormData,

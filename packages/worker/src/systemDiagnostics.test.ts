@@ -32,6 +32,7 @@ const MIGRATION_0003 = readFileSync(
   resolve(THIS_DIR, '../migrations/0003_pronunciation_provenance.sql'),
   'utf8'
 );
+const MIGRATION_0007 = readFileSync(resolve(THIS_DIR, '../migrations/0007_steward_reviews.sql'), 'utf8');
 
 async function applySqlScript(db: D1Database, sqlScript: string): Promise<void> {
   const withoutComments = sqlScript
@@ -82,6 +83,9 @@ describe('Cloudflare Worker GET /api/admin/system diagnostics (Miniflare D1/R2)'
 
     await applySqlScript(emptyDb, MIGRATION_0003);
     expect(await probeD1SchemaMigrationLevel(emptyDb)).toBe('0003_pronunciation_provenance.sql');
+
+    await applySqlScript(emptyDb, MIGRATION_0007);
+    expect(await probeD1SchemaMigrationLevel(emptyDb)).toBe('0007_steward_reviews.sql');
 
     await emptyDb
       .prepare('CREATE TABLE d1_migrations (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL)')

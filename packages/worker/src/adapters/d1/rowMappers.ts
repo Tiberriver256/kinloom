@@ -16,6 +16,9 @@ import {
   type RevisionAction,
   RevisionActionSchema,
   type RevisionRecord,
+  type StewardReviewStamp,
+  type StewardReviewTargetKind,
+  StewardReviewTargetKindSchema,
   type StoredEntityRow,
   type StoredKinshipRow,
   type TalkComment,
@@ -78,6 +81,12 @@ export interface RawDbRevisionRow {
   before_json: string | null;
   after_json: string | null;
   created_at: string;
+  review_target_kind?: string | null;
+  review_target_id?: string | null;
+  review_reviewer_id?: string | null;
+  review_reviewer_name?: string | null;
+  review_note?: string | null;
+  review_reviewed_at?: string | null;
 }
 
 export interface RawDbTalkRow {
@@ -341,6 +350,12 @@ export function parseDbRevisionRow(raw: unknown): RawDbRevisionRow {
     before_json: expectNullableString(raw, 'before_json'),
     after_json: expectNullableString(raw, 'after_json'),
     created_at: expectString(raw, 'created_at'),
+    review_target_kind: expectNullableString(raw, 'review_target_kind'),
+    review_target_id: expectNullableString(raw, 'review_target_id'),
+    review_reviewer_id: expectNullableString(raw, 'review_reviewer_id'),
+    review_reviewer_name: expectNullableString(raw, 'review_reviewer_name'),
+    review_note: expectNullableString(raw, 'review_note'),
+    review_reviewed_at: expectNullableString(raw, 'review_reviewed_at'),
   };
 }
 
@@ -492,6 +507,31 @@ export function mapKinshipRow(row: RawDbKinshipRow): StoredKinshipRow {
   };
 }
 
+const STEWARD_REVIEW_TARGET_KINDS = new Set<StewardReviewTargetKind>(['revision', 'batch']);
+
+function mapJoinedStewardReview(row: RawDbRevisionRow): StewardReviewStamp | undefined {
+  if (
+    !row.review_target_kind ||
+    !row.review_target_id ||
+    !row.review_reviewer_id ||
+    !row.review_reviewer_name ||
+    !row.review_reviewed_at
+  ) {
+    return undefined;
+  }
+  const targetKind = STEWARD_REVIEW_TARGET_KINDS.has(row.review_target_kind as StewardReviewTargetKind)
+    ? (row.review_target_kind as StewardReviewTargetKind)
+    : StewardReviewTargetKindSchema.parse(row.review_target_kind);
+  return {
+    target_kind: targetKind,
+    target_id: row.review_target_id,
+    reviewer_id: row.review_reviewer_id,
+    reviewer_name: row.review_reviewer_name,
+    note: row.review_note ?? null,
+    reviewed_at: row.review_reviewed_at,
+  };
+}
+
 export function mapRevisionRow(row: RawDbRevisionRow): RevisionRecord {
   const action = REVISION_ACTIONS.has(row.action as RevisionAction)
     ? (row.action as RevisionAction)
@@ -499,6 +539,7 @@ export function mapRevisionRow(row: RawDbRevisionRow): RevisionRecord {
   const authorType = AUTHOR_TYPES.has(row.author_type as AuthorType)
     ? (row.author_type as AuthorType)
     : AuthorTypeSchema.parse(row.author_type);
+  const review = mapJoinedStewardReview(row);
   return {
     revision_id: asRevisionId(row.revision_id),
     batch_id: row.batch_id,
@@ -515,6 +556,7 @@ export function mapRevisionRow(row: RawDbRevisionRow): RevisionRecord {
     before_json: row.before_json !== null ? parseJsonObject(row.before_json) : null,
     after_json: row.after_json !== null ? parseJsonObject(row.after_json) : null,
     created_at: row.created_at,
+    ...(review ? { review } : {}),
   };
 }
 
