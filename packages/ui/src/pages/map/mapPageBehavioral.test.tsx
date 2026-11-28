@@ -493,6 +493,8 @@ describe('MapPage behavioral migration journey flows', () => {
       host.remove();
     });
 
+    const stageColorMap = new Map(eras.map((era) => [era.id, era.color]));
+
     act(() => {
       root.render(
         <MapToolbar
@@ -503,6 +505,7 @@ describe('MapPage behavioral migration journey flows', () => {
           allStopsCount={69}
           migrationEras={eras}
           eraStopCounts={counts}
+          stageColorMap={stageColorMap}
           onSelectPersonId={onSelectPersonId}
           onSelectEraId={onSelectEraId}
           onSetRouteMode={onSetRouteMode}
@@ -510,6 +513,13 @@ describe('MapPage behavioral migration journey flows', () => {
       );
     });
     await flushUi();
+
+    // Era swatches are embedded directly inside toolbar era filter buttons (no duplicate stage legend)
+    const visibleSwatches = host.querySelectorAll(
+      'fieldset[aria-label="Filter migration map by era"] [class*="map-era-swatch"]'
+    );
+    expect(visibleSwatches.length).toBeGreaterThanOrEqual(2);
+    expect(host.querySelector('[class*="map-stage-legend"]')).toBeNull();
 
     const moreBtn = host.querySelector<HTMLButtonElement>('button[aria-haspopup="menu"]');
     expect(moreBtn).not.toBeNull();
@@ -531,6 +541,7 @@ describe('MapPage behavioral migration journey flows', () => {
       'Illinois Prairie & Midwest(22)',
       'Pacific & Western Crossing(11)',
     ]);
+    expect(menu?.querySelectorAll('[class*="map-era-swatch"]')).toHaveLength(3);
 
     act(() => {
       document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
@@ -572,5 +583,79 @@ describe('MapPage behavioral migration journey flows', () => {
       modeButtons[1]?.click();
     });
     expect(onSetRouteMode).toHaveBeenCalledWith('chronological');
+
+    // Mobile Filters popover opens, closes via Escape, outside pointerdown, and Done button
+    const filtersTrigger = host.querySelector<HTMLButtonElement>(
+      'button[aria-label^="Map filters and eras"]'
+    );
+    expect(filtersTrigger).not.toBeNull();
+    expect(filtersTrigger?.getAttribute('aria-expanded')).toBe('false');
+    act(() => {
+      filtersTrigger?.click();
+    });
+    await flushUi();
+    expect(filtersTrigger?.getAttribute('aria-expanded')).toBe('true');
+    expect(host.querySelector('[data-filters-open="true"]')).not.toBeNull();
+
+    act(() => {
+      document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+    });
+    await flushUi();
+    expect(filtersTrigger?.getAttribute('aria-expanded')).toBe('false');
+
+    act(() => {
+      filtersTrigger?.click();
+    });
+    await flushUi();
+    act(() => {
+      document.body.dispatchEvent(new Event('pointerdown', { bubbles: true }));
+    });
+    await flushUi();
+    expect(filtersTrigger?.getAttribute('aria-expanded')).toBe('false');
+
+    act(() => {
+      filtersTrigger?.click();
+    });
+    await flushUi();
+    const doneBtn = host.querySelector<HTMLButtonElement>('button[aria-label="Close map filters"]');
+    act(() => {
+      doneBtn?.click();
+    });
+    await flushUi();
+    expect(filtersTrigger?.getAttribute('aria-expanded')).toBe('false');
+
+    // Filtered state renders active badge, Clear filters, and mobile active-person clear control
+    act(() => {
+      root.render(
+        <MapToolbar
+          selectablePeople={SAMPLE_BUNDLE.people}
+          selectedPersonId="per_henry"
+          selectedEraId="era_2"
+          routeMode="per-person"
+          allStopsCount={69}
+          migrationEras={eras}
+          eraStopCounts={counts}
+          stageColorMap={stageColorMap}
+          onSelectPersonId={onSelectPersonId}
+          onSelectEraId={onSelectEraId}
+          onSetRouteMode={onSetRouteMode}
+        />
+      );
+    });
+    await flushUi();
+    expect(host.querySelector('[data-active-count="2"]')).not.toBeNull();
+    const clearPersonBtn = host.querySelector<HTMLButtonElement>('button[aria-label="Show all people"]');
+    act(() => {
+      clearPersonBtn?.click();
+    });
+    expect(onSelectPersonId).toHaveBeenCalledWith('all');
+
+    const clearFiltersBtn = [...host.querySelectorAll<HTMLButtonElement>('button')].find(
+      (b) => b.textContent?.trim() === 'Clear filters'
+    );
+    act(() => {
+      clearFiltersBtn?.click();
+    });
+    expect(onSelectEraId).toHaveBeenCalledWith('all');
   });
 });

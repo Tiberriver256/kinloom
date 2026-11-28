@@ -179,26 +179,35 @@ export function useMigrationMapController(params: UseMigrationMapControllerParam
       return undefined;
     }
 
-    const syncToolbarOffset = (): void => {
+    const syncOverlayOffsets = (): void => {
       const pageEl = host?.parentElement;
-      const tbEl = toolbarRef.current;
-      if (!pageEl || !tbEl) {
+      if (!pageEl) {
         return;
       }
       const pageRect = pageEl.getBoundingClientRect();
-      const tbRect = tbEl.getBoundingClientRect();
-      if (tbRect.height > 0) {
-        const bottomOffset = Math.max(56, Math.ceil(tbRect.bottom - pageRect.top));
-        pageEl.style.setProperty('--map-toolbar-bottom', `${bottomOffset}px`);
+      const tbEl = toolbarRef.current;
+      if (tbEl) {
+        const tbRect = tbEl.getBoundingClientRect();
+        if (tbRect.height > 0) {
+          const bottomOffset = Math.max(52, Math.ceil(tbRect.bottom - pageRect.top));
+          pageEl.style.setProperty('--map-toolbar-bottom', `${bottomOffset}px`);
+        }
+      }
+      const dockEl = dockRef.current;
+      if (dockEl) {
+        const dockRect = dockEl.getBoundingClientRect();
+        if (dockRect.height > 0) {
+          pageEl.style.setProperty('--map-dock-height', `${Math.ceil(dockRect.height)}px`);
+        }
       }
     };
 
-    syncToolbarOffset();
+    syncOverlayOffsets();
     if (typeof ResizeObserver === 'undefined') {
       return undefined;
     }
     const observer = new ResizeObserver(() => {
-      syncToolbarOffset();
+      syncOverlayOffsets();
       const active = mapRef.current;
       if (active && typeof active.resize === 'function') {
         active.resize();
@@ -209,6 +218,10 @@ export function useMigrationMapController(params: UseMigrationMapControllerParam
     }
     if (toolbar) {
       observer.observe(toolbar);
+    }
+    const dock = dockRef.current;
+    if (dock) {
+      observer.observe(dock);
     }
     return (): void => {
       observer.disconnect();
@@ -231,6 +244,20 @@ export function useMigrationMapController(params: UseMigrationMapControllerParam
     lastAppliedDateRef.current = null;
     let activeMap: MapLibreMap | null = null;
 
+    const buildAttributionControl = (offline: boolean): AttributionControl =>
+      new AttributionControl({
+        compact: true,
+        customAttribution: offline
+          ? [
+              'Offline archival basemap',
+              '<a href="https://maplibre.org/" target="_blank" rel="noopener noreferrer">MapLibre</a>',
+            ]
+          : [
+              '<a href="https://www.openhistoricalmap.org/" target="_blank" rel="noopener noreferrer">OpenHistoricalMap</a>',
+              '<a href="https://maplibre.org/" target="_blank" rel="noopener noreferrer">MapLibre</a>',
+            ],
+      });
+
     const mountMap = (initialStyle: StyleSpecification, isFallback: boolean): void => {
       if (cancelled) {
         return;
@@ -251,7 +278,7 @@ export function useMigrationMapController(params: UseMigrationMapControllerParam
           pitchWithRotate: false,
           touchPitch: false,
           maxPitch: 0,
-          minZoom: 1.4,
+          minZoom: 0.6,
           maxZoom: 12,
           maxTileCacheSize: 240,
           renderWorldCopies: true,
@@ -263,16 +290,8 @@ export function useMigrationMapController(params: UseMigrationMapControllerParam
         return;
       }
       activeMap = map;
-      map.addControl(
-        new AttributionControl({
-          compact: true,
-          customAttribution: [
-            '<a href="https://www.openhistoricalmap.org/" target="_blank" rel="noopener noreferrer">OpenHistoricalMap</a>',
-            '<a href="https://maplibre.org/" target="_blank" rel="noopener noreferrer">MapLibre</a>',
-          ],
-        }),
-        'bottom-left'
-      );
+      let activeAttribution = buildAttributionControl(isFallback);
+      map.addControl(activeAttribution, 'bottom-left');
       mapRef.current = map;
       host.kinloomMigrationMap = map;
       map.getCanvas().setAttribute('aria-label', `${siteConfig.site.familyName} migration map`);
@@ -313,6 +332,11 @@ export function useMigrationMapController(params: UseMigrationMapControllerParam
         }
         historicalFailedRef.current = true;
         setHistoricalMap({ kind: 'failed' });
+        if (typeof map.removeControl === 'function') {
+          map.removeControl(activeAttribution);
+        }
+        activeAttribution = buildAttributionControl(true);
+        map.addControl(activeAttribution, 'bottom-left');
         window.setTimeout(() => {
           if (cancelled || mapRef.current !== map || styleLoadedRef.current) {
             return;

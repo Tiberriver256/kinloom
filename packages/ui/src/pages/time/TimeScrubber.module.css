@@ -186,10 +186,101 @@
   margin-bottom: 4px;
 }
 
+.time-more-years-wrap {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  margin-left: auto;
+}
+
+.time-more-years-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  min-height: 32px;
+  padding: 4px 10px;
+  border: 1px solid var(--border-control);
+  border-radius: var(--radius-md);
+  background: var(--surface-card);
+  color: var(--surface-header);
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  font-weight: 500;
+  white-space: nowrap;
+  cursor: pointer;
+  transition:
+    background-color 0.14s ease,
+    border-color 0.14s ease,
+    color 0.14s ease;
+}
+
+.time-more-years-btn:global(.active) {
+  border-color: var(--radar-copresence);
+  background: var(--surface-linen);
+  color: var(--jump-active-fg);
+}
+
+.time-more-years-btn:focus-visible,
+.time-more-year-item:focus-visible {
+  outline: 2px solid var(--action-focus);
+  outline-offset: 2px;
+}
+
+.time-more-years-popover {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  z-index: 35;
+  min-width: 224px;
+  max-width: min(320px, calc(100vw - 32px));
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 4px;
+  padding: 6px;
+  background: var(--surface-card);
+  border: 1px solid var(--border-control);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-active);
+}
+
+.time-more-year-item {
+  display: inline-flex;
+  align-items: baseline;
+  justify-content: center;
+  gap: 4px;
+  min-height: 36px;
+  padding: 5px 8px;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text-primary);
+  cursor: pointer;
+  transition:
+    background-color 0.14s ease,
+    border-color 0.14s ease,
+    color 0.14s ease;
+}
+
+.time-more-year-item:global(.active) {
+  background: var(--surface-linen);
+  border-color: var(--radar-copresence);
+  color: var(--radar-copresence);
+}
+
 @media (hover: hover) and (pointer: fine) {
   .time-anchor-btn:hover {
     color: var(--surface-header);
     border-bottom-color: var(--border-control);
+  }
+
+  .time-more-years-btn:hover {
+    background: var(--surface-linen);
+    border-color: var(--surface-header);
+  }
+
+  .time-more-year-item:hover {
+    background: var(--surface-linen);
+    border-color: var(--border-decorative);
   }
 }
 

@@ -220,7 +220,7 @@ import { AdminPage } from './AdminPage.js';
 import { EvidenceSourcesTab } from './evidence/EvidenceSourcesTab.js';
 import { IndexPage } from './IndexPage.js';
 import { KinshipPage } from './KinshipPage.js';
-import { MapStageLegend, MapStopDrawerAndDock } from './map/MapStopDrawerAndDock.js';
+import { MapStopDrawerAndDock } from './map/MapStopDrawerAndDock.js';
 import { PAPER_STYLE, setPeriodBasemap, syncFamilyOverlay } from './map/mapLibreLayers.js';
 import {
   type MigrationMapController,
@@ -3738,8 +3738,8 @@ describe('Wave 2 branch coverage: telemetry, evidence, audio plugin, popovers, m
     vi.useRealTimers();
   });
 
-  it('exercises MapStopDrawerAndDock, MapStageLegend, mapLibreLayers, MilestoneStoryCard, PlaceHistoricalProfileSection, BlankScreenWatchdog, ArchiveUiContext, RecentChangesPage, and ExplorerTopBar', async () => {
-    // 1. MapStageLegend & MapStopDrawerAndDock
+  it('exercises MapStopDrawerAndDock, mapLibreLayers, MilestoneStoryCard, PlaceHistoricalProfileSection, BlankScreenWatchdog, ArchiveUiContext, RecentChangesPage, and ExplorerTopBar', async () => {
+    // 1. MapStopDrawerAndDock
     const onClearFilters = vi.fn();
     const southernStop: MigrationStop = {
       id: 'stop-s',
@@ -3754,10 +3754,6 @@ describe('Wave 2 branch coverage: telemetry, evidence, audio plugin, popovers, m
     };
     const mapDockMount = mountEl(
       <MemoryRouter>
-        <MapStageLegend
-          migrationEras={[{ id: 'era_unmapped', label: 'Voyage', startYear: 1850, endYear: 1870 }]}
-          stageColorMap={new Map()}
-        />
         <MapStopDrawerAndDock
           dockRef={{ current: null }}
           cardRef={{ current: null }}

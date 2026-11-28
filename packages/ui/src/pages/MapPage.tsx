@@ -23,7 +23,7 @@ import { KINLOOM_VOCABULARY } from '../lib/vocabulary.js';
 import controlStyles from '../styles/Controls.module.css';
 import layoutStyles from '../styles/Layout.module.css';
 import mapStyles from './MapPage.module.css';
-import { MapStageLegend, MapStopDrawerAndDock, MapZoomControls } from './map/MapStopDrawerAndDock.js';
+import { MapStopDrawerAndDock, MapZoomControls } from './map/MapStopDrawerAndDock.js';
 import { MapToolbar } from './map/MapToolbar.js';
 import { buildFamilyOverlay, computeDefaultMapBounds } from './map/mapOverlayData.js';
 import { useMigrationMapController } from './map/useMigrationMapController.js';
@@ -245,11 +245,11 @@ export const MapPage: React.FC = () => {
         <div
           ref={controller.mapHostRef}
           className={'map-canvas'}
+          data-basemap-mode={
+            controller.historicalMap.kind === 'failed' ? 'offline' : controller.historicalMap.kind
+          }
           style={{ position: 'absolute', inset: 0 }}
         />
-        {controller.historicalMap.kind === 'failed' && (
-          <output className={cx(mapStyles, 'map-style-note')}>Showing offline paper basemap.</output>
-        )}
 
         {allStopsForPerson.length === 0 && selectedPersonId === 'all' && (
           <div className={cx(mapStyles, 'map-empty-canvas-overlay')}>
@@ -294,12 +294,11 @@ export const MapPage: React.FC = () => {
           allStopsCount={allStopsForPerson.length}
           migrationEras={migrationEras}
           eraStopCounts={eraStopCounts}
+          stageColorMap={stageColorMap}
           onSelectPersonId={setSelectedPersonId}
           onSelectEraId={setSelectedEraId}
           onSetRouteMode={setRouteMode}
         />
-
-        <MapStageLegend migrationEras={migrationEras} stageColorMap={stageColorMap} />
 
         <MapStopDrawerAndDock
           dockRef={controller.dockRef}

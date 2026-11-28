@@ -97,11 +97,17 @@ test('map toolbar prevents desktop era clipping, keeps mobile selects and route 
         };
       });
       const moreBtn = document.querySelector<HTMLButtonElement>('.map-toolbar button[aria-haspopup="menu"]');
+      const stageLegendCount = document.querySelectorAll('.map-stage-legend').length;
+      const swatchCount = document.querySelectorAll(
+        'fieldset[aria-label="Filter migration map by era"] .map-era-swatch'
+      ).length;
       return {
         docOverflow: document.documentElement.scrollWidth - window.innerWidth,
         toolbarHeight: toolbar ? Math.round(toolbar.height) : 999,
         toolbarRight: toolbar ? Math.round(toolbar.right) : 9999,
         eraButtons,
+        stageLegendCount,
+        swatchCount,
         moreBtnText: moreBtn?.textContent?.trim() ?? null,
         canvasRightGap: main && glCanvas ? Math.round(Math.abs(main.right - glCanvas.right)) : 999,
         canvasBottomGap: main && glCanvas ? Math.round(Math.abs(main.bottom - glCanvas.bottom)) : 999,
@@ -113,6 +119,11 @@ test('map toolbar prevents desktop era clipping, keeps mobile selects and route 
     expect(metrics.docOverflow, `Doc overflow at ${vp.width}px`).toBeLessThanOrEqual(0);
     expect(metrics.toolbarHeight, `Toolbar height at ${vp.width}px`).toBeLessThanOrEqual(64);
     expect(metrics.toolbarRight, `Toolbar right edge at ${vp.width}px`).toBeLessThanOrEqual(vp.width);
+    expect(metrics.stageLegendCount, `Duplicate stage legend removed at ${vp.width}px`).toBe(0);
+    expect(
+      metrics.swatchCount,
+      `Era color swatches embedded in toolbar at ${vp.width}px`
+    ).toBeGreaterThanOrEqual(1);
     expect(metrics.eraButtons.length, `Visible era buttons at ${vp.width}px`).toBeGreaterThanOrEqual(2);
     for (const btn of metrics.eraButtons) {
       expect(btn.overflowsPresets, `Button "${btn.text}" clipped at ${vp.width}px`).toBeLessThanOrEqual(1);
@@ -142,7 +153,7 @@ test('map toolbar prevents desktop era clipping, keeps mobile selects and route 
     }
   }
 
-  await page.setViewportSize({ width: 390, height: 844 });
+  await page.setViewportSize({ width: 360, height: 800 });
   await page.goto('/map');
   await expect(page.locator('.map-toolbar')).toBeVisible();
   await expect(page.locator('.maplibregl-canvas')).toBeVisible();
@@ -154,12 +165,14 @@ test('map toolbar prevents desktop era clipping, keeps mobile selects and route 
     const toolbarRect = toolbar?.getBoundingClientRect();
     const dockRect = document.querySelector('.map-bottom-dock')?.getBoundingClientRect();
     const zoomRect = document.querySelector('.map-zoom-controls')?.getBoundingClientRect();
-    const personSelect = document.querySelector<HTMLSelectElement>(
-      'select[aria-label="Filter migration map by person"]'
+    const zoomButtons = [...document.querySelectorAll<HTMLButtonElement>('.map-zoom-controls button')].map(
+      (btn) => {
+        const r = btn.getBoundingClientRect();
+        return { width: Math.round(r.width), height: Math.round(r.height) };
+      }
     );
-    const eraSelect = document.querySelector<HTMLSelectElement>(
-      'select[aria-label="Filter migration map by migration stage"]'
-    );
+    const filtersBtn = document.querySelector<HTMLButtonElement>('.map-filters-toggle-btn');
+    const filtersRect = filtersBtn?.getBoundingClientRect();
     const modeButtons = [
       ...document.querySelectorAll<HTMLButtonElement>(
         'fieldset[aria-label="Full lineage route mode"] button'
@@ -173,15 +186,19 @@ test('map toolbar prevents desktop era clipping, keeps mobile selects and route 
         height: Math.round(rect.height),
       };
     });
+    const unobstructedHeight = toolbarRect && dockRect ? Math.max(0, dockRect.top - toolbarRect.bottom) : 0;
     return {
       docOverflow: document.documentElement.scrollWidth - window.innerWidth,
       toolbarScrollDiff: toolbar ? Math.round(toolbar.scrollWidth - toolbar.clientWidth) : 999,
-      personSelectWidth: personSelect ? Math.round(personSelect.getBoundingClientRect().width) : 0,
-      personSelectHeight: personSelect ? Math.round(personSelect.getBoundingClientRect().height) : 0,
-      eraSelectWidth: eraSelect ? Math.round(eraSelect.getBoundingClientRect().width) : 0,
-      eraSelectHeight: eraSelect ? Math.round(eraSelect.getBoundingClientRect().height) : 0,
+      toolbarHeight: toolbarRect ? Math.round(toolbarRect.height) : 999,
+      filtersHeight: filtersRect ? Math.round(filtersRect.height) : 0,
       modeButtons,
-      zoomClearance: toolbarRect && zoomRect ? Math.round(zoomRect.top - toolbarRect.bottom) : -999,
+      zoomButtons,
+      zoomBottomGapToDock: zoomRect && dockRect ? Math.round(dockRect.top - zoomRect.bottom) : -999,
+      zoomMidYRatio: zoomRect ? (zoomRect.top + zoomRect.height / 2) / window.innerHeight : 0,
+      canvasYieldPct: (unobstructedHeight / window.innerHeight) * 100,
+      floatingStyleNoteCount: document.querySelectorAll('.map-style-note').length,
+      stageLegendCount: document.querySelectorAll('.map-stage-legend').length,
       canvasRightGap: main && glCanvas ? Math.round(Math.abs(main.right - glCanvas.right)) : 999,
       canvasBottomGap: main && glCanvas ? Math.round(Math.abs(main.bottom - glCanvas.bottom)) : 999,
       dockBottomGap: main && dockRect ? Math.round(Math.abs(main.bottom - dockRect.bottom)) : 999,
@@ -190,17 +207,30 @@ test('map toolbar prevents desktop era clipping, keeps mobile selects and route 
 
   expect(mobileMetrics.docOverflow).toBeLessThanOrEqual(0);
   expect(mobileMetrics.toolbarScrollDiff).toBeLessThanOrEqual(1);
-  expect(mobileMetrics.personSelectWidth).toBeGreaterThanOrEqual(165);
-  expect(mobileMetrics.personSelectHeight).toBeGreaterThanOrEqual(44);
-  expect(mobileMetrics.eraSelectWidth).toBeGreaterThanOrEqual(165);
-  expect(mobileMetrics.eraSelectHeight).toBeGreaterThanOrEqual(44);
+  expect(mobileMetrics.toolbarHeight).toBeLessThanOrEqual(64);
+  expect(mobileMetrics.filtersHeight).toBeGreaterThanOrEqual(44);
   expect(mobileMetrics.modeButtons).toHaveLength(2);
   expect(mobileMetrics.modeButtons.map((b) => b.text)).toEqual(['By person', 'Chronological']);
-  expect(mobileMetrics.modeButtons.every((b) => b.height >= 44 && b.width >= 140)).toBe(true);
-  expect(mobileMetrics.zoomClearance).toBeGreaterThanOrEqual(0);
+  expect(mobileMetrics.modeButtons.every((b) => b.height >= 44)).toBe(true);
+  expect(mobileMetrics.zoomButtons).toHaveLength(3);
+  expect(mobileMetrics.zoomButtons.every((b) => b.width >= 44 && b.height >= 44)).toBe(true);
+  expect(mobileMetrics.zoomBottomGapToDock).toBeGreaterThanOrEqual(4);
+  expect(mobileMetrics.zoomBottomGapToDock).toBeLessThanOrEqual(24);
+  expect(mobileMetrics.zoomMidYRatio).toBeGreaterThanOrEqual(0.55);
+  expect(mobileMetrics.canvasYieldPct).toBeGreaterThanOrEqual(62);
+  expect(mobileMetrics.floatingStyleNoteCount).toBe(0);
+  expect(mobileMetrics.stageLegendCount).toBe(0);
   expect(mobileMetrics.canvasRightGap).toBeLessThanOrEqual(1);
   expect(mobileMetrics.canvasBottomGap).toBeLessThanOrEqual(1);
   expect(mobileMetrics.dockBottomGap).toBeLessThanOrEqual(1);
+
+  // Open mobile Filters popover, verify person select + era swatch buttons, close cleanly
+  await page.locator('.map-filters-toggle-btn').click();
+  await expect(page.getByLabel('Filter migration map by person')).toBeVisible();
+  await expect(
+    page.locator('fieldset[aria-label="Filter migration map by era"] .map-era-swatch').first()
+  ).toBeVisible();
+  await page.getByRole('button', { name: 'Close map filters' }).click();
 
   await page.getByRole('button', { name: 'Chronological' }).click();
   await expect(page.getByRole('button', { name: 'Chronological' })).toHaveAttribute('aria-pressed', 'true');

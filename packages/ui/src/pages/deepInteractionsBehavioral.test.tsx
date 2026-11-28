@@ -374,7 +374,8 @@ describe('Deep behavioral interactions across MapPage, TimePage, PersonPage, Pla
       await flushUi();
     }
 
-    expect(container.textContent).toContain('Showing offline paper basemap');
+    expect(container.querySelector('.map-canvas')?.getAttribute('data-basemap-mode')).toBe('offline');
+    expect(container.textContent).not.toContain('Showing offline paper basemap');
   });
 
   it('exercises TimePage slider, milestone buttons, prev/next year, and EvidencePage search empty state', async () => {

@@ -192,6 +192,118 @@ describe('TimePage mobile scrubber non-occlusion, density ridgeline, blurbs, and
 
     // Focus Not Obscured scroll padding set on root element
     expect(document.documentElement.style.scrollPaddingTop).toBe('calc(var(--topbar-height) + 64px)');
+
+    // Concise H1 avoids repeating the archive family name already shown in the topbar
+    const h1 = container.querySelector('h1');
+    expect(h1?.textContent?.replace(/\s+/g, ' ').trim()).toBe('Historical Snapshot 1880');
+  });
+
+  it('caps desktop milestone chips to 6 and discloses additional anchor years behind More years popover (#101)', () => {
+    const manyAnchors = [1760, 1780, 1800, 1820, 1840, 1850, 1860, 1870, 1880, 1890].map((year) => ({
+      year,
+      label: String(year),
+    }));
+    const siteConfig = parseKinloomConfig({
+      site: { title: 'Alder Archive', familyName: 'Alder', gedcomSourceName: 'ALDER_TIME_MANY' },
+      anchorYears: manyAnchors,
+    });
+    const { bundle } = compileArchive({
+      siteConfig,
+      mode: 'public',
+      places: [
+        {
+          id: 'pl_a',
+          slug: 'albany',
+          name: 'Albany',
+          full_name: 'Albany, New York',
+          place_type: 'town',
+          parent_id: null,
+          lat: 42.65,
+          lng: -73.75,
+        },
+      ],
+      sources: [{ id: 'src_1', citation: 'Town Register', source_type: 'census', has_primary_source: true }],
+      people: [
+        {
+          id: 'per_a',
+          slug: 'clara-alder',
+          full_name: 'Clara Alder',
+          given_name: 'Clara',
+          surname: 'Alder',
+          alt_names: [],
+          sex: 'F',
+          is_living: false,
+          lineage_group: 'ancestor',
+          birth_edtf: '1755',
+          death_edtf: '1895',
+          portrait_url: null,
+        },
+      ],
+      events: manyAnchors.map((a) => ({
+        id: `evt_${a.year}`,
+        title: `Resided in Albany (${a.year})`,
+        summary: 'Town residence record.',
+        event_kind: 'residence_anchor' as const,
+        scope: 'family' as const,
+        edtf_date: String(a.year),
+        place_id: 'pl_a',
+        participants: [{ person_id: 'per_a', role: 'head' }],
+        sources: [{ source_id: 'src_1', confidence: 'high' as const }],
+      })),
+      kinship: [],
+    });
+
+    const container = mountEl(
+      <MemoryRouter initialEntries={['/time?year=1880']}>
+        <ArchiveProvider siteConfig={siteConfig} initialBundle={bundle}>
+          <TimePage />
+        </ArchiveProvider>
+      </MemoryRouter>
+    );
+
+    const flatBtns = container.querySelectorAll('button[class*="time-anchor-btn"]');
+    expect(flatBtns).toHaveLength(7);
+
+    const moreYearsBtn = container.querySelector<HTMLButtonElement>('button[class*="time-more-years-btn"]');
+    expect(moreYearsBtn).not.toBeNull();
+    expect(moreYearsBtn?.textContent).toContain('More years (3)');
+    expect(moreYearsBtn?.getAttribute('aria-expanded')).toBe('false');
+
+    act(() => {
+      moreYearsBtn?.click();
+    });
+    expect(moreYearsBtn?.getAttribute('aria-expanded')).toBe('true');
+    const popoverItems = container.querySelectorAll<HTMLButtonElement>(
+      'button[class*="time-more-year-item"]'
+    );
+    expect(popoverItems).toHaveLength(3);
+
+    // Escape closes popover; reopen and pick an overflow year (1760)
+    act(() => {
+      document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+    });
+    expect(moreYearsBtn?.getAttribute('aria-expanded')).toBe('false');
+
+    act(() => {
+      moreYearsBtn?.click();
+    });
+    act(() => {
+      document.body.dispatchEvent(new Event('pointerdown', { bubbles: true }));
+    });
+    expect(moreYearsBtn?.getAttribute('aria-expanded')).toBe('false');
+
+    act(() => {
+      moreYearsBtn?.click();
+    });
+    const year1760Btn = [
+      ...container.querySelectorAll<HTMLButtonElement>('button[class*="time-more-year-item"]'),
+    ].find((b) => b.textContent?.includes('1760'));
+    expect(year1760Btn).toBeTruthy();
+    act(() => {
+      year1760Btn?.click();
+    });
+    expect(container.querySelector('[class*="handwritten-year-hero"]')?.textContent).toBe('1760');
+    expect(container.querySelectorAll('button[class*="time-anchor-btn"]')).toHaveLength(7);
   });
 });
 

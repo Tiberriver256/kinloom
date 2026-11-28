@@ -9,7 +9,7 @@ import {
   TIME_MIN_YEAR,
 } from '@kinloom/core';
 import type React from 'react';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useId, useMemo, useRef, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { EmptyStateNotice } from '../components/Atoms.js';
 import atomStyles from '../components/Atoms.module.css';
@@ -30,6 +30,7 @@ import controlStyles from '../styles/Controls.module.css';
 import timeStyles from './TimePage.module.css';
 import { TimeChevronIcon as ChevronIcon, TimeLocalNote, TimePersonCard } from './time/TimeEntryCards.js';
 import scrubberStyles from './time/TimeScrubber.module.css';
+import { partitionDesktopAnchors } from './time/timeAnchorLayout.js';
 
 export const TimePage: React.FC = () => {
   const { siteConfig, baseUrl, bundle, placesById, capabilities, loading, error, reloadArchive } =
@@ -38,7 +39,11 @@ export const TimePage: React.FC = () => {
   const [searchParams] = useSearchParams();
   const [year, setYear] = useState<number | null>(null);
   const [yearSheetOpen, setYearSheetOpen] = useState(false);
+  const [moreYearsOpen, setMoreYearsOpen] = useState(false);
   const [worldExpanded, setWorldExpanded] = useState(false);
+  const moreYearsPanelId = useId();
+  const moreYearsWrapRef = useRef<HTMLDivElement | null>(null);
+  const moreYearsTriggerRef = useRef<HTMLButtonElement | null>(null);
   const sheetCloseBtnRef = useRef<HTMLButtonElement | null>(null);
   const yearSheetRef = useDialogFocusTrap<HTMLDivElement>({
     open: yearSheetOpen,
@@ -74,6 +79,45 @@ export const TimePage: React.FC = () => {
   }, [bundle, placesById, siteConfig.anchorYears]);
 
   const activeYear = year ?? suggestedYears[0]?.year ?? 1860;
+
+  const { primaryAnchors, overflowAnchors } = useMemo(
+    () => partitionDesktopAnchors(suggestedYears, activeYear),
+    [suggestedYears, activeYear]
+  );
+
+  const displayedAnchors = yearSheetOpen ? suggestedYears : primaryAnchors;
+
+  useEffect(() => {
+    if (!moreYearsOpen) {
+      return undefined;
+    }
+    const onPointerDown = (event: PointerEvent): void => {
+      const target = event.target;
+      if (target instanceof Node && moreYearsWrapRef.current?.contains(target)) {
+        return;
+      }
+      setMoreYearsOpen(false);
+    };
+    const onKeyDown = (event: KeyboardEvent): void => {
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        setMoreYearsOpen(false);
+        moreYearsTriggerRef.current?.focus();
+      }
+    };
+    document.addEventListener('pointerdown', onPointerDown);
+    document.addEventListener('keydown', onKeyDown);
+    return (): void => {
+      document.removeEventListener('pointerdown', onPointerDown);
+      document.removeEventListener('keydown', onKeyDown);
+    };
+  }, [moreYearsOpen]);
+
+  useEffect(() => {
+    if (overflowAnchors.length === 0 && moreYearsOpen) {
+      setMoreYearsOpen(false);
+    }
+  }, [overflowAnchors.length, moreYearsOpen]);
 
   useEffect(() => {
     if (year === null || !window.location.pathname.endsWith('/time')) {
@@ -162,7 +206,7 @@ export const TimePage: React.FC = () => {
           <div className={cx(timeStyles, 'time-header-top')}>
             <div className={'time-header-copy'}>
               <h1 className={cx(atomStyles, 'folio-title')}>
-                {siteConfig.site.familyName} in{' '}
+                Historical Snapshot{' '}
                 <span className={cx(timeStyles, 'handwritten-year-hero')} aria-live="polite">
                   {activeYear}
                 </span>
@@ -331,7 +375,7 @@ export const TimePage: React.FC = () => {
                   role="group"
                   aria-label="Jump to notable family years"
                 >
-                  {suggestedYears.map((m) => (
+                  {displayedAnchors.map((m) => (
                     <button
                       key={m.year}
                       type="button"
@@ -342,6 +386,7 @@ export const TimePage: React.FC = () => {
                       onClick={() => {
                         setYear(m.year);
                         setYearSheetOpen(false);
+                        setMoreYearsOpen(false);
                       }}
                       aria-label={`${m.label}: ${m.locatedCount} located of ${m.aliveCount} alive in ${m.year}`}
                       title={`${m.year}: ${m.locatedCount} located of ${m.aliveCount} alive in ${m.year}`}
@@ -355,6 +400,58 @@ export const TimePage: React.FC = () => {
                       </span>
                     </button>
                   ))}
+
+                  {!yearSheetOpen && overflowAnchors.length > 0 && (
+                    <div ref={moreYearsWrapRef} className={cx(scrubberStyles, 'time-more-years-wrap')}>
+                      <button
+                        ref={moreYearsTriggerRef}
+                        type="button"
+                        className={cx(scrubberStyles, `time-more-years-btn${moreYearsOpen ? ' active' : ''}`)}
+                        aria-expanded={moreYearsOpen}
+                        aria-controls={moreYearsPanelId}
+                        onClick={() => {
+                          setMoreYearsOpen((open) => !open);
+                        }}
+                      >
+                        <span>More years ({overflowAnchors.length})</span>
+                        <ChevronIcon direction={moreYearsOpen ? 'up' : 'down'} />
+                      </button>
+                      {moreYearsOpen && (
+                        <div
+                          id={moreYearsPanelId}
+                          role="group"
+                          aria-label="Additional milestone years"
+                          className={cx(scrubberStyles, 'time-more-years-popover')}
+                        >
+                          {overflowAnchors.map((m) => (
+                            <button
+                              key={m.year}
+                              type="button"
+                              className={cx(
+                                scrubberStyles,
+                                `time-more-year-item${activeYear === m.year ? ' active' : ''}`
+                              )}
+                              onClick={() => {
+                                setYear(m.year);
+                                setMoreYearsOpen(false);
+                                onboarding?.recordSignal('map_or_time_interact');
+                              }}
+                              aria-label={`${m.label}: ${m.locatedCount} located of ${m.aliveCount} alive in ${m.year}`}
+                              title={`${m.year}: ${m.locatedCount} located of ${m.aliveCount} alive in ${m.year}`}
+                            >
+                              <span className={cx(scrubberStyles, 'time-anchor-year')}>{m.label}</span>
+                              <span className={cx(scrubberStyles, 'time-anchor-sep')} aria-hidden="true">
+                                ·
+                              </span>
+                              <span className={cx(scrubberStyles, 'time-anchor-count')} aria-hidden="true">
+                                {m.locatedCount}
+                              </span>
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </div>
               </div>
             )}
