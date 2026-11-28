@@ -604,7 +604,11 @@ describe('UI >=90% behavioral completion suite across pages, drawers, and machin
     expect(nonAdminView.textContent).toContain('Administrator permissions are required');
 
     // AdminPage full confirm/cancel flows for demote, invite revoke, copy link, and token revoke
-    Object.assign(navigator, { clipboard: { writeText: vi.fn(async () => undefined) } });
+    Object.defineProperty(navigator, 'clipboard', {
+      configurable: true,
+      writable: true,
+      value: { writeText: vi.fn(async () => undefined) },
+    });
     const users: UserRecord[] = [
       {
         email: 'founder@example.test',
@@ -1030,7 +1034,11 @@ describe('UI >=90% behavioral completion suite across pages, drawers, and machin
   });
 
   it('exercises EntityEditDrawer conflict/network/saved/leave banners, CreateEntityModal all 4 tabs, SourceCitationTag & SourceReaderDrawer scan zoom, and PersonPage/PlacePage actions', async () => {
-    Object.assign(navigator, { clipboard: { writeText: vi.fn(async () => undefined) } });
+    Object.defineProperty(navigator, 'clipboard', {
+      configurable: true,
+      writable: true,
+      value: { writeText: vi.fn(async () => undefined) },
+    });
     vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {});
 
     let updatePhase: 'conflict' | 'network' | 'ok' = 'conflict';
