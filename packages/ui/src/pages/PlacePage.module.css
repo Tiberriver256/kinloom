@@ -234,7 +234,7 @@
   overflow: hidden;
   background: var(--surface-linen);
   border-bottom: 1px solid var(--border-decorative);
-  border-radius: 2px;
+  border-radius: var(--radius-sm);
 }
 
 .occupancy-decade-hairline {
@@ -254,7 +254,7 @@
   z-index: 1;
   min-width: 10px;
   background: var(--radar-copresence);
-  border-radius: 2px;
+  border-radius: var(--radius-sm);
   transition: background-color 0.14s ease;
 }
 

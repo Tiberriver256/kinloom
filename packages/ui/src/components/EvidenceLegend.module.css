@@ -63,7 +63,7 @@
 
 .evidence-legend-item {
   padding-left: 10px;
-  border-left: 2.5px solid var(--badge-cited-fg);
+  border-left: var(--border-width-emphasis) solid var(--badge-cited-fg);
 }
 
 .evidence-legend-item:global(.tier-cited) {

@@ -124,7 +124,7 @@
   margin: 0 0 18px;
   background: var(--surface-card);
   border: 1px solid var(--border-decorative);
-  border-left: 2.5px dashed var(--accent-primary);
+  border-left: var(--border-width-emphasis) dashed var(--accent-primary);
   border-radius: var(--radius-sm);
 }
 
@@ -184,7 +184,7 @@
 .scrubber-tick {
   background: transparent;
   border: 1px solid transparent;
-  border-bottom: 1.5px solid transparent;
+  border-bottom: var(--border-width-emphasis) solid transparent;
   border-radius: var(--radius-sm);
   color: var(--text-secondary);
   font-family: var(--font-hand);

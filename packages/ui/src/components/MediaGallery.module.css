@@ -54,7 +54,7 @@
   background: var(--surface-card);
   border: 1px solid var(--border-mat);
   box-shadow: var(--shadow-print);
-  border-radius: 1px;
+  border-radius: var(--radius-sm);
 }
 
 .person-media-thumb {

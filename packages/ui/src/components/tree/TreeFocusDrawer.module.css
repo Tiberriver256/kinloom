@@ -57,7 +57,7 @@ aside.tree-focus-drawer.tree-focus-drawer-diagram {
   font-size: 0.75rem;
   font-weight: 600;
   padding: 4px 8px;
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   background: var(--badge-cited-bg);
   color: var(--badge-cited-fg);
 }
@@ -67,7 +67,7 @@ aside.tree-focus-drawer.tree-focus-drawer-diagram {
   font-size: 0.72rem;
   font-weight: 600;
   padding: 3px 8px;
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   border: 1px solid var(--accent-primary);
   background: var(--surface-linen);
   color: var(--accent-primary);
@@ -142,7 +142,7 @@ aside.tree-focus-drawer.tree-focus-drawer-diagram {
   width: 46px;
   height: 54px;
   object-fit: cover;
-  border-radius: 2px;
+  border-radius: var(--radius-sm);
   border: 1px solid var(--border-control);
   flex-shrink: 0;
   aspect-ratio: 46 / 54;
@@ -151,9 +151,9 @@ aside.tree-focus-drawer.tree-focus-drawer-diagram {
 .tree-focus-monogram {
   width: 44px;
   height: 44px;
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   background: var(--surface-linen);
-  border: 1.5px solid var(--accent-primary);
+  border: var(--border-width-emphasis) solid var(--accent-primary);
   color: var(--accent-primary);
   font-family: var(--font-mono);
   font-size: 0.85rem;

@@ -17,7 +17,7 @@
 .citation-item-card {
   background: var(--surface-canvas);
   border: 1px solid var(--border-decorative);
-  border-radius: 2px;
+  border-radius: var(--radius-sm);
   padding: 11px 13px;
   display: flex;
   flex-direction: column;
@@ -111,7 +111,7 @@
   color: var(--text-primary);
   background: var(--surface-card);
   border: 1px solid var(--border-decorative);
-  border-radius: 2px;
+  border-radius: var(--radius-sm);
   padding: 5px 8px;
   margin-top: 2px;
   line-height: 1.45;
@@ -147,7 +147,7 @@
   padding: 3px 8px;
   background: var(--surface-card);
   border: 1px solid var(--border-control);
-  border-radius: 2px;
+  border-radius: var(--radius-sm);
   font-family: var(--font-ui);
   font-size: 0.75rem;
   font-weight: 600;
@@ -182,7 +182,7 @@
   padding: 10px 12px;
   background: var(--surface-canvas);
   border: 1px solid var(--border-decorative);
-  border-radius: 2px;
+  border-radius: var(--radius-sm);
   min-width: 0;
   max-width: 100%;
   box-sizing: border-box;

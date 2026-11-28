@@ -166,7 +166,7 @@
   word-break: break-word;
   background: var(--surface-canvas);
   border: 1px solid var(--border-decorative);
-  border-radius: 2px;
+  border-radius: var(--radius-sm);
   color: var(--text-secondary);
 }
 
