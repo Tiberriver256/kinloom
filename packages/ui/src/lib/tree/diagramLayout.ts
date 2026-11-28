@@ -1,3 +1,18 @@
+import { assignBrandesKopfX } from './brandesKopf.js';
+import {
+  assignBusTracksWithConstraintGraph,
+  BUS_LANE_SPACING,
+  type BusConstraintInput,
+} from './busConstraintRouting.js';
+import {
+  buildLayeredGraphWithDummyChannels,
+  DUMMY_CHANNEL_WIDTH,
+  type DummyChainEntry,
+  makeLayeredEdgeKey,
+  minimizeLayeredCrossings,
+  type UnitFootprintSize,
+} from './layeredChannels.js';
+import type { UnionPortSlot } from './layeredPorts.js';
 import {
   ARCHIVAL_EARLY_CHIP_H,
   ARCHIVAL_EARLY_CHIP_W,
@@ -8,7 +23,6 @@ import {
   ARCHIVAL_NODE_H,
   ARCHIVAL_NODE_W,
   ARCHIVAL_SPOUSE_GAP,
-  ARCHIVAL_UNIT_GAP,
   type ArchivalDiagramLayout,
   type ArchivalTreeModel,
   type DiagramBounds,
@@ -40,9 +54,8 @@ const OBSTACLE_PAD_X = 4;
 const OBSTACLE_PAD_Y = 1;
 const MIN_SAFE_CORRIDOR_X = 136;
 const Y_STRIPE_SHIFT = 7; // 128px vertical buckets
-const BUS_LANE_SPACING = 14;
-const CHANNEL_TOP_MARGIN = 18;
-const CHANNEL_BOTTOM_MARGIN = 18;
+const CHANNEL_TOP_MARGIN = 16;
+const CHANNEL_BOTTOM_MARGIN = 16;
 const LATERAL_STEM_GAP = 14;
 const EARLY_STRIP_MIN_WIDTH = 194;
 const EARLY_STRIP_PAD_X = 12;
@@ -57,20 +70,19 @@ interface EarlyLossStripMetrics {
   readonly stripHeight: number;
 }
 
-interface UnitFootprint {
-  readonly width: number;
-  readonly memberOffsetX: number;
+interface RawBusDrop {
+  readonly childId: string;
+  readonly railAttachX: number;
+  readonly childCenterX: number;
+  readonly toY: number;
+  readonly isDirect: boolean;
+  readonly dummyChain: readonly DummyChainEntry[] | undefined;
 }
 
 interface BusDraft {
   readonly union: ArchivalTreeModel['unions'][number];
   readonly hub: DiagramUnionHub;
-  readonly rawDrops: readonly {
-    readonly childId: string;
-    readonly x: number;
-    readonly toY: number;
-    readonly isDirect: boolean;
-  }[];
+  readonly rawDrops: readonly RawBusDrop[];
   readonly minChildTopY: number;
   readonly meanChildX: number;
   readonly railMinX: number;
@@ -97,76 +109,6 @@ function resolveLateralAttachmentSide(unit: TreeFamilyUnit, marriageOrder: numbe
     return 'left';
   }
   return 'right';
-}
-
-function resolveUnionHubRelativeX(
-  unit: TreeFamilyUnit,
-  primaryPartnerId: string,
-  secondaryPartnerId: string | null
-): number | null {
-  const primaryIdx = unit.orderedMemberIds.indexOf(primaryPartnerId);
-  if (primaryIdx < 0) {
-    return null;
-  }
-  const primaryX = primaryIdx * (ARCHIVAL_NODE_W + ARCHIVAL_SPOUSE_GAP);
-  if (!secondaryPartnerId) {
-    return Math.round(primaryX + ARCHIVAL_NODE_W / 2);
-  }
-  const secondaryIdx = unit.orderedMemberIds.indexOf(secondaryPartnerId);
-  if (secondaryIdx < 0) {
-    return Math.round(primaryX + ARCHIVAL_NODE_W / 2);
-  }
-  const secondaryX = secondaryIdx * (ARCHIVAL_NODE_W + ARCHIVAL_SPOUSE_GAP);
-  const leftX = Math.min(primaryX, secondaryX) + ARCHIVAL_NODE_W;
-  const rightX = Math.max(primaryX, secondaryX);
-  return Math.round((leftX + rightX) / 2);
-}
-
-function countOrderedBusPairCrossings(upper: BusDraft, lower: BusDraft): number {
-  let crossings = 0;
-  if (upper.railMaxX > upper.railMinX && lower.hub.x > upper.railMinX && lower.hub.x < upper.railMaxX) {
-    crossings += 1;
-  }
-  if (lower.railMaxX > lower.railMinX) {
-    for (let i = 0; i < upper.rawDrops.length; i += 1) {
-      const dx = upper.rawDrops[i].x;
-      if (dx > lower.railMinX && dx < lower.railMaxX) {
-        crossings += 1;
-      }
-    }
-  }
-  return crossings;
-}
-
-function orderBusesInBandToMinimizeCrossings(drafts: readonly BusDraft[]): BusDraft[] {
-  const ordered = [...drafts].toSorted((a, b) => {
-    const spanA = a.railMaxX - a.railMinX;
-    const spanB = b.railMaxX - b.railMinX;
-    if (spanA !== spanB) {
-      return spanB - spanA;
-    }
-    if (a.hub.x !== b.hub.x) {
-      return a.hub.x - b.hub.x;
-    }
-    return a.union.id.localeCompare(b.union.id);
-  });
-
-  for (let pass = 0; pass < ordered.length; pass += 1) {
-    let swapped = false;
-    for (let i = 0; i < ordered.length - 1; i += 1) {
-      const a = ordered[i];
-      const b = ordered[i + 1];
-      if (countOrderedBusPairCrossings(b, a) < countOrderedBusPairCrossings(a, b)) {
-        ordered[i] = b;
-        ordered[i + 1] = a;
-        swapped = true;
-      }
-    }
-    if (!swapped) {
-      break;
-    }
-  }
-  return ordered;
 }
 
 interface ObstacleSpatialIndex {
@@ -359,6 +301,26 @@ function hasHorizontalCollision(
   return false;
 }
 
+function polylineHitsAnyObstacle(
+  points: readonly DiagramPoint[],
+  obstacles: readonly ObstacleRect[]
+): boolean {
+  for (let i = 0; i < points.length - 1; i += 1) {
+    const a = points[i];
+    const b = points[i + 1];
+    if (a.x === b.x) {
+      if (hasBlockingObstacleOnVertical(a.x, a.y, b.y, obstacles)) {
+        return true;
+      }
+    } else if (a.y === b.y) {
+      if (hasHorizontalCollision(a.x, b.x, a.y, obstacles)) {
+        return true;
+      }
+    }
+  }
+  return false;
+}
+
 function collectCorridorCandidates(params: {
   readonly preferredX: number;
   readonly y1: number;
@@ -396,8 +358,8 @@ function collectCorridorCandidates(params: {
 
   candidates.add(MIN_SAFE_CORRIDOR_X);
   const outerRightBase = Math.round(maxContentX + 16);
-  for (let slot = 0; slot < 8; slot += 1) {
-    candidates.add(outerRightBase + slot * 8);
+  for (let slot = 0; slot < 12; slot += 1) {
+    candidates.add(outerRightBase + slot * 10);
   }
 
   return [...candidates].toSorted((a, b) => {
@@ -492,7 +454,7 @@ function routeStemAroundObstacles(params: {
   });
 
   const allCandidates = [...new Set([...primaryCandidates, ...fallbackCandidates])];
-  let chosenX = primaryCandidates[0] ?? Math.round(blockRight + 10);
+  let chosenX = Math.round(maxContentX + 24);
 
   for (let i = 0; i < allCandidates.length; i += 1) {
     const candX = allCandidates[i];
@@ -520,8 +482,68 @@ function routeStemAroundObstacles(params: {
   ]);
 }
 
+function routeMultiGenDropThroughCorridors(params: {
+  readonly busY: number;
+  readonly childCenterX: number;
+  readonly toY: number;
+  readonly childId: string;
+  readonly dummyChain: readonly DummyChainEntry[];
+  readonly itemXById: ReadonlyMap<string, number>;
+  readonly genBands: readonly DiagramGenBand[];
+  readonly spatialIndex: ObstacleSpatialIndex;
+}): DiagramPoint[] | null {
+  const { busY, childCenterX, toY, childId, dummyChain, itemXById, genBands, spatialIndex } = params;
+  const corridorXs: number[] = new Array(dummyChain.length);
+  for (let i = 0; i < dummyChain.length; i += 1) {
+    const dummyLeft = itemXById.get(dummyChain[i].dummyId);
+    if (dummyLeft === undefined) {
+      return null;
+    }
+    corridorXs[i] = Math.round(dummyLeft + DUMMY_CHANNEL_WIDTH / 2);
+  }
+
+  const obstacles = queryBandObstacles(spatialIndex, Math.min(busY, toY), Math.max(busY, toY), childId, null);
+
+  const buildPathWithEntryY = (entryY: number): DiagramPoint[] => {
+    const pts: DiagramPoint[] = [{ x: corridorXs[0], y: busY }];
+    for (let i = 0; i < corridorXs.length - 1; i += 1) {
+      if (corridorXs[i] !== corridorXs[i + 1]) {
+        const bandA = genBands[dummyChain[i].layerIndex];
+        const bandB = genBands[dummyChain[i + 1].layerIndex];
+        const midChannelY =
+          bandA && bandB
+            ? Math.round((bandA.y + bandA.height + bandB.y) / 2)
+            : Math.round((busY + entryY) / 2);
+        pts.push({ x: corridorXs[i], y: midChannelY }, { x: corridorXs[i + 1], y: midChannelY });
+      }
+    }
+    const lastX = corridorXs[corridorXs.length - 1];
+    if (lastX !== childCenterX) {
+      pts.push({ x: lastX, y: entryY }, { x: childCenterX, y: entryY });
+    }
+    pts.push({ x: childCenterX, y: toY });
+    return collapsePoints(pts);
+  };
+
+  const entryCandidates = [
+    Math.round(Math.max(busY, toY - 10)),
+    Math.round(Math.max(busY, toY - 6)),
+    Math.round(Math.max(busY, toY - 14)),
+    Math.round(Math.max(busY, toY - 4)),
+  ];
+
+  for (let i = 0; i < entryCandidates.length; i += 1) {
+    const candidate = buildPathWithEntryY(entryCandidates[i]);
+    if (!polylineHitsAnyObstacle(candidate, obstacles)) {
+      return candidate;
+    }
+  }
+  return null;
+}
+
 function routeChildDropAroundObstacles(params: {
   readonly dropX: number;
+  readonly targetX: number;
   readonly busY: number;
   readonly toY: number;
   readonly childId: string;
@@ -529,9 +551,9 @@ function routeChildDropAroundObstacles(params: {
   readonly maxContentX: number;
   readonly usedCorridorCounts: Map<number, number>;
 }): DiagramPoint[] {
-  const { dropX, busY, toY, childId, spatialIndex, maxContentX, usedCorridorCounts } = params;
+  const { dropX, targetX, busY, toY, childId, spatialIndex, maxContentX, usedCorridorCounts } = params;
 
-  if (!hasAnyVerticalBlocker(spatialIndex, dropX, busY, toY, childId, null)) {
+  if (dropX === targetX && !hasAnyVerticalBlocker(spatialIndex, dropX, busY, toY, childId, null)) {
     const rx = Math.round(dropX);
     const ry1 = Math.round(busY);
     const ry2 = Math.round(toY);
@@ -544,248 +566,77 @@ function routeChildDropAroundObstacles(params: {
   }
 
   const obstacles = queryBandObstacles(spatialIndex, Math.min(busY, toY), Math.max(busY, toY), childId, null);
-  if (!hasBlockingObstacleOnVertical(dropX, busY, toY, obstacles)) {
+  if (dropX === targetX && !hasBlockingObstacleOnVertical(dropX, busY, toY, obstacles)) {
     return collapsePoints([
       { x: dropX, y: busY },
       { x: dropX, y: toY },
     ]);
   }
 
-  const returnY = Math.round(Math.max(busY, toY - 10));
+  const returnYCandidates = [
+    Math.round(Math.max(busY, toY - 10)),
+    Math.round(Math.max(busY, toY - 6)),
+    Math.round(Math.max(busY, toY - 14)),
+    Math.round(Math.max(busY, toY - 4)),
+  ];
+
   const candidates = collectCorridorCandidates({
-    preferredX: dropX,
+    preferredX: targetX,
     y1: busY,
-    y2: returnY,
+    y2: returnYCandidates[0],
     obstacles,
     maxContentX,
     usedCorridorCounts,
   });
 
-  let chosenX = candidates[0] ?? Math.round(maxContentX + 16);
-  for (let i = 0; i < candidates.length; i += 1) {
-    const candX = candidates[i];
-    if (candX < MIN_SAFE_CORRIDOR_X) {
-      continue;
-    }
-    if (
-      !hasBlockingObstacleOnVertical(candX, busY, returnY, obstacles) &&
-      !hasHorizontalCollision(dropX, candX, busY, obstacles) &&
-      !hasHorizontalCollision(candX, dropX, returnY, obstacles)
-    ) {
-      chosenX = candX;
-      break;
+  for (let yIdx = 0; yIdx < returnYCandidates.length; yIdx += 1) {
+    const returnY = returnYCandidates[yIdx];
+    for (let i = 0; i < candidates.length; i += 1) {
+      const candX = candidates[i];
+      if (candX < MIN_SAFE_CORRIDOR_X) {
+        continue;
+      }
+      if (
+        !hasBlockingObstacleOnVertical(candX, busY, returnY, obstacles) &&
+        !hasHorizontalCollision(dropX, candX, busY, obstacles) &&
+        !hasHorizontalCollision(candX, targetX, returnY, obstacles)
+      ) {
+        usedCorridorCounts.set(candX, (usedCorridorCounts.get(candX) ?? 0) + 1);
+        return collapsePoints([
+          { x: dropX, y: busY },
+          { x: candX, y: busY },
+          { x: candX, y: returnY },
+          { x: targetX, y: returnY },
+          { x: targetX, y: toY },
+        ]);
+      }
     }
   }
 
-  usedCorridorCounts.set(chosenX, (usedCorridorCounts.get(chosenX) ?? 0) + 1);
+  // Guaranteed clear outer corridor past the rightmost obstacle in the band.
+  let maxObsRight = maxContentX;
+  for (let i = 0; i < obstacles.length; i += 1) {
+    if (obstacles[i].right > maxObsRight) {
+      maxObsRight = obstacles[i].right;
+    }
+  }
+  const outerX = Math.round(maxObsRight + 16 + (usedCorridorCounts.size % 6) * 8);
+  const safeReturnY = returnYCandidates[0];
+  usedCorridorCounts.set(outerX, (usedCorridorCounts.get(outerX) ?? 0) + 1);
   return collapsePoints([
     { x: dropX, y: busY },
-    { x: chosenX, y: busY },
-    { x: chosenX, y: returnY },
-    { x: dropX, y: returnY },
-    { x: dropX, y: toY },
+    { x: outerX, y: busY },
+    { x: outerX, y: safeReturnY },
+    { x: targetX, y: safeReturnY },
+    { x: targetX, y: toY },
   ]);
 }
 
-let scratchPosInGen: Int32Array = new Int32Array(1024);
-let scratchBary: Float64Array = new Float64Array(1024);
-let scratchPOffsets: Int32Array = new Int32Array(1025);
-let scratchCOffsets: Int32Array = new Int32Array(1025);
-let scratchPNeighbors: Int32Array = new Int32Array(4096);
-let scratchCNeighbors: Int32Array = new Int32Array(4096);
-
-function ensureUnitScratch(totalUnits: number): void {
-  if (scratchPosInGen.length < totalUnits) {
-    const cap = Math.max(totalUnits, scratchPosInGen.length * 2);
-    scratchPosInGen = new Int32Array(cap);
-    scratchBary = new Float64Array(cap);
-    scratchPOffsets = new Int32Array(cap + 1);
-    scratchCOffsets = new Int32Array(cap + 1);
-  }
-}
-
-function ensureNeighborScratch(pCount: number, cCount: number): void {
-  if (scratchPNeighbors.length < pCount) {
-    const next = new Int32Array(Math.max(pCount, scratchPNeighbors.length * 2));
-    next.set(scratchPNeighbors);
-    scratchPNeighbors = next;
-  }
-  if (scratchCNeighbors.length < cCount) {
-    const next = new Int32Array(Math.max(cCount, scratchCNeighbors.length * 2));
-    next.set(scratchCNeighbors);
-    scratchCNeighbors = next;
-  }
-}
-
-function minimizeGenerationCrossingsSlots(model: ArchivalTreeModel): TreeFamilyUnit[][] {
-  const numGens = model.generations.length;
-  let totalUnits = 0;
-  for (let gSlot = 0; gSlot < numGens; gSlot += 1) {
-    totalUnits += model.generations[gSlot].units.length;
-  }
-  ensureUnitScratch(totalUnits);
-
-  const allUnits = new Array<TreeFamilyUnit>(totalUnits);
-  const rowIndicesByGenSlot: number[][] = new Array(numGens);
-  const personToUnitIdx = new Map<string, number>();
-  const posInGen = scratchPosInGen;
-  const bary = scratchBary;
-
-  let uCursor = 0;
-  for (let gSlot = 0; gSlot < numGens; gSlot += 1) {
-    const units = model.generations[gSlot].units;
-    const rowIndices = new Array<number>(units.length);
-    for (let idx = 0; idx < units.length; idx += 1) {
-      const u = units[idx];
-      const uGlobal = uCursor;
-      uCursor += 1;
-      allUnits[uGlobal] = u;
-      rowIndices[idx] = uGlobal;
-      posInGen[uGlobal] = idx;
-      for (let m = 0; m < u.orderedMemberIds.length; m += 1) {
-        personToUnitIdx.set(u.orderedMemberIds[m], uGlobal);
-      }
-    }
-    rowIndicesByGenSlot[gSlot] = rowIndices;
-  }
-
-  const pOffsets = scratchPOffsets;
-  const cOffsets = scratchCOffsets;
-  pOffsets[0] = 0;
-  cOffsets[0] = 0;
-  let pLen = 0;
-  let cLen = 0;
-
-  for (let uIdx = 0; uIdx < totalUnits; uIdx += 1) {
-    const members = allUnits[uIdx].orderedMemberIds;
-    for (let m = 0; m < members.length; m += 1) {
-      const pid = members[m];
-      const parents = model.parentMap.get(pid);
-      if (parents) {
-        ensureNeighborScratch(pLen + parents.length, cLen);
-        for (let p = 0; p < parents.length; p += 1) {
-          const pu = personToUnitIdx.get(parents[p]);
-          if (pu !== undefined) {
-            scratchPNeighbors[pLen] = pu;
-            pLen += 1;
-          }
-        }
-      }
-      const children = model.childMap.get(pid);
-      if (children) {
-        ensureNeighborScratch(pLen, cLen + children.length);
-        for (let c = 0; c < children.length; c += 1) {
-          const cu = personToUnitIdx.get(children[c]);
-          if (cu !== undefined) {
-            scratchCNeighbors[cLen] = cu;
-            cLen += 1;
-          }
-        }
-      }
-    }
-    pOffsets[uIdx + 1] = pLen;
-    cOffsets[uIdx + 1] = cLen;
-  }
-
-  const pNeighbors = scratchPNeighbors;
-  const cNeighbors = scratchCNeighbors;
-  const byBarycenter = (a: number, b: number): number => bary[a] - bary[b];
-
-  for (let sweep = 0; sweep < 4; sweep += 1) {
-    let changed = false;
-
-    for (let gSlot = 1; gSlot < numGens; gSlot += 1) {
-      const row = rowIndicesByGenSlot[gSlot];
-      if (row.length <= 1) {
-        continue;
-      }
-      let outOfOrder = false;
-      let prevBary = Number.NEGATIVE_INFINITY;
-      for (let r = 0; r < row.length; r += 1) {
-        const uIdx = row[r];
-        const start = pOffsets[uIdx];
-        const end = pOffsets[uIdx + 1];
-        let val: number;
-        if (end > start) {
-          let sum = 0;
-          for (let k = start; k < end; k += 1) {
-            sum += posInGen[pNeighbors[k]];
-          }
-          val = sum / (end - start);
-        } else {
-          val = posInGen[uIdx];
-        }
-        bary[uIdx] = val;
-        if (val < prevBary) {
-          outOfOrder = true;
-        } else {
-          prevBary = val;
-        }
-      }
-      if (outOfOrder) {
-        row.sort(byBarycenter);
-        changed = true;
-        for (let r = 0; r < row.length; r += 1) {
-          posInGen[row[r]] = r;
-        }
-      }
-    }
-
-    for (let gSlot = numGens - 2; gSlot >= 0; gSlot -= 1) {
-      const row = rowIndicesByGenSlot[gSlot];
-      if (row.length <= 1) {
-        continue;
-      }
-      let outOfOrder = false;
-      let prevBary = Number.NEGATIVE_INFINITY;
-      for (let r = 0; r < row.length; r += 1) {
-        const uIdx = row[r];
-        const start = cOffsets[uIdx];
-        const end = cOffsets[uIdx + 1];
-        let val: number;
-        if (end > start) {
-          let sum = 0;
-          for (let k = start; k < end; k += 1) {
-            sum += posInGen[cNeighbors[k]];
-          }
-          val = sum / (end - start);
-        } else {
-          val = posInGen[uIdx];
-        }
-        bary[uIdx] = val;
-        if (val < prevBary) {
-          outOfOrder = true;
-        } else {
-          prevBary = val;
-        }
-      }
-      if (outOfOrder) {
-        row.sort(byBarycenter);
-        changed = true;
-        for (let r = 0; r < row.length; r += 1) {
-          posInGen[row[r]] = r;
-        }
-      }
-    }
-
-    if (!changed) {
-      break;
-    }
-  }
-
-  const orderedSlots: TreeFamilyUnit[][] = new Array(numGens);
-  for (let gSlot = 0; gSlot < numGens; gSlot += 1) {
-    const row = rowIndicesByGenSlot[gSlot];
-    const units = new Array<TreeFamilyUnit>(row.length);
-    for (let r = 0; r < row.length; r += 1) {
-      units[r] = allUnits[row[r]];
-    }
-    orderedSlots[gSlot] = units;
-  }
-  return orderedSlots;
-}
-
-function computeUnitFootprint(model: ArchivalTreeModel, unit: TreeFamilyUnit): UnitFootprint {
+function computeUnitFootprint(
+  model: ArchivalTreeModel,
+  unit: TreeFamilyUnit,
+  ports: ReadonlyMap<string, UnionPortSlot>
+): UnitFootprintSize {
   const memberSpan =
     unit.orderedMemberIds.length * ARCHIVAL_NODE_W +
     Math.max(0, unit.orderedMemberIds.length - 1) * ARCHIVAL_SPOUSE_GAP;
@@ -798,10 +649,11 @@ function computeUnitFootprint(model: ArchivalTreeModel, unit: TreeFamilyUnit): U
     if (!union) {
       continue;
     }
-    const hubRelX = resolveUnionHubRelativeX(unit, union.primaryPartnerId, union.secondaryPartnerId);
-    if (hubRelX === null) {
+    const portSlot = ports.get(union.id);
+    if (!portSlot) {
       continue;
     }
+    const hubRelX = portSlot.relativeX;
     const hasBusStem = union.visibleChildIds.length > 0;
     const lateralSide = resolveLateralAttachmentSide(unit, union.marriageOrder);
     const earlySide = lateralSide;
@@ -871,8 +723,20 @@ function buildOrthogonalBuses(params: {
   readonly genBandIdxByGen: ReadonlyMap<number, number>;
   readonly spatialIndex: ObstacleSpatialIndex;
   readonly maxContentX: number;
+  readonly dummyChainsByEdgeKey: ReadonlyMap<string, readonly DummyChainEntry[]>;
+  readonly itemXById: ReadonlyMap<string, number>;
 }): DiagramOrthogonalBus[] {
-  const { model, hubByUnionId, byId, genBands, genBandIdxByGen, spatialIndex, maxContentX } = params;
+  const {
+    model,
+    hubByUnionId,
+    byId,
+    genBands,
+    genBandIdxByGen,
+    spatialIndex,
+    maxContentX,
+    dummyChainsByEdgeKey,
+    itemXById,
+  } = params;
   const draftsByGen = new Map<number, BusDraft[]>();
   const orderedGens: number[] = [];
 
@@ -886,12 +750,7 @@ function buildOrthogonalBuses(params: {
       continue;
     }
 
-    const rawDrops: {
-      childId: string;
-      x: number;
-      toY: number;
-      isDirect: boolean;
-    }[] = [];
+    const rawDrops: RawBusDrop[] = [];
     let minChildTopY = Number.POSITIVE_INFINITY;
     let sumChildX = 0;
     let railMinX = hub.x;
@@ -904,17 +763,28 @@ function buildOrthogonalBuses(params: {
       if (!childNode) {
         continue;
       }
-      const dropX = Math.round(childNode.x + childNode.width / 2);
+      const childCenterX = Math.round(childNode.x + childNode.width / 2);
+      const dummyChain = dummyChainsByEdgeKey.get(makeLayeredEdgeKey(union.id, cid));
+      let railAttachX = childCenterX;
+      if (dummyChain && dummyChain.length > 0) {
+        const firstDummyLeft = itemXById.get(dummyChain[0].dummyId);
+        if (firstDummyLeft !== undefined) {
+          railAttachX = Math.round(firstDummyLeft + DUMMY_CHANNEL_WIDTH / 2);
+        }
+      }
+
       rawDrops.push({
         childId: cid,
-        x: dropX,
+        railAttachX,
+        childCenterX,
         toY: childNode.y,
         isDirect: childNode.isDirect,
+        dummyChain,
       });
-      sumChildX += dropX;
+      sumChildX += childCenterX;
       if (childNode.y < minChildTopY) minChildTopY = childNode.y;
-      if (dropX < railMinX) railMinX = dropX;
-      if (dropX > railMaxX) railMaxX = dropX;
+      if (railAttachX < railMinX) railMinX = railAttachX;
+      if (railAttachX > railMaxX) railMaxX = railAttachX;
       if (childNode.isDirect) anyDirectDrop = true;
     }
 
@@ -950,17 +820,39 @@ function buildOrthogonalBuses(params: {
       continue;
     }
 
-    const orderedDrafts = orderBusesInBandToMinimizeCrossings(drafts);
+    const draftById = new Map<string, BusDraft>();
+    const constraintInputs: BusConstraintInput[] = new Array(drafts.length);
+    for (let i = 0; i < drafts.length; i += 1) {
+      const d = drafts[i];
+      draftById.set(d.union.id, d);
+      const dropXs = new Array<number>(d.rawDrops.length);
+      for (let k = 0; k < d.rawDrops.length; k += 1) {
+        dropXs[k] = d.rawDrops[k].railAttachX;
+      }
+      constraintInputs[i] = {
+        id: d.union.id,
+        hubX: d.hub.x,
+        dropXs,
+        railMinX: d.railMinX,
+        railMaxX: d.railMaxX,
+      };
+    }
+
+    const trackAssignments = assignBusTracksWithConstraintGraph(constraintInputs);
     const genBandIdx = genBandIdxByGen.get(gen) ?? -1;
     const genBand = genBandIdx >= 0 ? genBands[genBandIdx] : undefined;
     const nextBand = genBandIdx >= 0 ? genBands[genBandIdx + 1] : undefined;
 
-    for (let laneIdx = 0; laneIdx < orderedDrafts.length; laneIdx += 1) {
-      const draft = orderedDrafts[laneIdx];
+    for (let tIdx = 0; tIdx < trackAssignments.length; tIdx += 1) {
+      const assignment = trackAssignments[tIdx];
+      const draft = draftById.get(assignment.id);
+      if (!draft) {
+        continue;
+      }
       const { union, hub, rawDrops, minChildTopY, meanChildX, railMinX, railMaxX, anyDirectDrop } = draft;
 
       const channelStartY = genBand ? genBand.y + genBand.height + CHANNEL_TOP_MARGIN : hub.y + 32;
-      const rawBusY = channelStartY + laneIdx * BUS_LANE_SPACING;
+      const rawBusY = channelStartY + assignment.trackIndex * BUS_LANE_SPACING;
       const channelCapY = nextBand
         ? Math.min(minChildTopY - CHANNEL_BOTTOM_MARGIN, nextBand.y - CHANNEL_BOTTOM_MARGIN)
         : minChildTopY - CHANNEL_BOTTOM_MARGIN;
@@ -986,20 +878,37 @@ function buildOrthogonalBuses(params: {
       for (let i = 0; i < rawDrops.length; i += 1) {
         const drop = rawDrops[i];
         childIds[i] = drop.childId;
-        childDrops[i] = {
-          childId: drop.childId,
-          x: drop.x,
-          toY: drop.toY,
-          isDirect: drop.isDirect,
-          points: routeChildDropAroundObstacles({
-            dropX: drop.x,
+        let points: DiagramPoint[] | null = null;
+        if (drop.dummyChain && drop.dummyChain.length > 0) {
+          points = routeMultiGenDropThroughCorridors({
+            busY,
+            childCenterX: drop.childCenterX,
+            toY: drop.toY,
+            childId: drop.childId,
+            dummyChain: drop.dummyChain,
+            itemXById,
+            genBands,
+            spatialIndex,
+          });
+        }
+        if (!points) {
+          points = routeChildDropAroundObstacles({
+            dropX: drop.railAttachX,
+            targetX: drop.childCenterX,
             busY,
             toY: drop.toY,
             childId: drop.childId,
             spatialIndex,
             maxContentX,
             usedCorridorCounts,
-          }),
+          });
+        }
+        childDrops[i] = {
+          childId: drop.childId,
+          x: drop.railAttachX,
+          toY: drop.toY,
+          isDirect: drop.isDirect,
+          points,
         };
       }
 
@@ -1024,7 +933,7 @@ function buildOrthogonalBuses(params: {
 
 function computeDiagramBounds(params: {
   readonly leftPad: number;
-  readonly maxRowWidth: number;
+  readonly maxRightX: number;
   readonly cursorY: number;
   readonly nodes: readonly DiagramPlacedNode[];
   readonly earlyLossStrips: readonly DiagramEarlyLossStrip[];
@@ -1032,7 +941,7 @@ function computeDiagramBounds(params: {
   readonly buses: readonly DiagramOrthogonalBus[];
 }): DiagramBounds {
   let minX = 0;
-  let maxX = params.leftPad * 2 + params.maxRowWidth;
+  let maxX = params.maxRightX + params.leftPad;
   let maxY = params.cursorY + 32;
 
   for (let i = 0; i < params.nodes.length; i += 1) {
@@ -1090,30 +999,21 @@ export function computeArchivalDiagramLayout(model: ArchivalTreeModel): Archival
     };
   }
 
-  const orderedUnitsBySlot = minimizeGenerationCrossingsSlots(model);
-  const unitFootprintsBySlot: UnitFootprint[][] = new Array(numGens);
-  const rowWidths = new Float64Array(numGens);
-
-  let maxRowWidth = 0;
-  for (let gIdx = 0; gIdx < numGens; gIdx += 1) {
-    const units = orderedUnitsBySlot[gIdx];
-    const footprints = new Array<UnitFootprint>(units.length);
-    let unitSum = 0;
-    for (let i = 0; i < units.length; i += 1) {
-      const fp = computeUnitFootprint(model, units[i]);
-      footprints[i] = fp;
-      unitSum += fp.width;
-    }
-    unitFootprintsBySlot[gIdx] = footprints;
-    const totalW = unitSum + Math.max(0, units.length - 1) * ARCHIVAL_UNIT_GAP;
-    rowWidths[gIdx] = totalW;
-    if (totalW > maxRowWidth) {
-      maxRowWidth = totalW;
-    }
-  }
-
   const leftPad = 148;
   const topPad = 48;
+
+  // 1-3: Fixed marriage ports + multi-gen dummy channels + crossing minimization + Brandes-Kopf X placement.
+  const rawGraph = buildLayeredGraphWithDummyChannels(model, computeUnitFootprint);
+  const layeredGraph = minimizeLayeredCrossings(rawGraph);
+  const itemXById = assignBrandesKopfX(layeredGraph, leftPad);
+
+  const activeBusCountByGen = new Map<number, number>();
+  for (let u = 0; u < model.unions.length; u += 1) {
+    const union = model.unions[u];
+    if (union.visibleChildIds.length > 0) {
+      activeBusCountByGen.set(union.gen, (activeBusCountByGen.get(union.gen) ?? 0) + 1);
+    }
+  }
 
   const nodes: DiagramPlacedNode[] = [];
   const byId = new Map<string, DiagramPlacedNode>();
@@ -1126,20 +1026,27 @@ export function computeArchivalDiagramLayout(model: ArchivalTreeModel): Archival
   const genBandIdxByGen = new Map<number, number>();
 
   let cursorY = topPad;
+  let maxRightX = leftPad;
 
   for (let gIdx = 0; gIdx < numGens; gIdx += 1) {
     const g = model.generations[gIdx];
-    const units = orderedUnitsBySlot[gIdx];
-    const unitFootprints = unitFootprintsBySlot[gIdx];
-    const rowW = rowWidths[gIdx];
-    let cursorX = leftPad + (maxRowWidth - rowW) / 2;
+    const layerItems = layeredGraph.layers[gIdx];
     const rowTopY = cursorY;
     let rowBottomY = rowTopY + ARCHIVAL_NODE_H;
 
-    for (let uIdx = 0; uIdx < units.length; uIdx += 1) {
-      const unit = units[uIdx];
-      const footprint = unitFootprints[uIdx];
-      const memberStartX = cursorX + footprint.memberOffsetX;
+    for (let itemIdx = 0; itemIdx < layerItems.length; itemIdx += 1) {
+      const layerItem = layerItems[itemIdx];
+      const itemLeftX = itemXById.get(layerItem.id) ?? leftPad;
+      if (itemLeftX + layerItem.width > maxRightX) {
+        maxRightX = itemLeftX + layerItem.width;
+      }
+      if (layerItem.kind === 'dummy') {
+        continue;
+      }
+
+      const unit = layerItem.unit;
+      const memberStartX = itemLeftX + layerItem.memberOffsetX;
+      const unitPorts = layeredGraph.portsByUnitId.get(unit.id);
 
       for (let idx = 0; idx < unit.orderedMemberIds.length; idx += 1) {
         const pid = unit.orderedMemberIds[idx];
@@ -1181,31 +1088,30 @@ export function computeArchivalDiagramLayout(model: ArchivalTreeModel): Archival
           continue;
         }
         const primaryNode = byId.get(union.primaryPartnerId);
-        const secondaryNode = union.secondaryPartnerId ? byId.get(union.secondaryPartnerId) : undefined;
         if (!primaryNode) {
           continue;
         }
+        const portSlot = unitPorts?.get(union.id);
+        const secondaryNode = union.secondaryPartnerId ? byId.get(union.secondaryPartnerId) : undefined;
 
         let hub: DiagramUnionHub;
-        if (secondaryNode) {
-          const leftNode = primaryNode.x <= secondaryNode.x ? primaryNode : secondaryNode;
-          const rightNode = primaryNode.x <= secondaryNode.x ? secondaryNode : primaryNode;
-          const leftX = leftNode.x + leftNode.width;
-          const rightX = rightNode.x;
-          const midX = Math.round((leftX + rightX) / 2);
+        if (portSlot?.isCouple && secondaryNode) {
+          const midX = Math.round(memberStartX + portSlot.relativeX);
           const midY = Math.round(rowTopY + ARCHIVAL_NODE_H / 2);
           hub = {
             union,
             x: midX,
             y: midY,
-            leftPartnerId: leftNode.person.id,
-            rightPartnerId: rightNode.person.id,
+            leftPartnerId: portSlot.leftPartnerId,
+            rightPartnerId: portSlot.rightPartnerId,
             connectorY: midY,
-            leftX,
-            rightX,
+            leftX: Math.round(memberStartX + portSlot.leftRelX),
+            rightX: Math.round(memberStartX + portSlot.rightRelX),
           };
         } else {
-          const midX = Math.round(primaryNode.x + primaryNode.width / 2);
+          const midX = portSlot
+            ? Math.round(memberStartX + portSlot.relativeX)
+            : Math.round(primaryNode.x + primaryNode.width / 2);
           const midY = Math.round(rowTopY + ARCHIVAL_NODE_H + 10);
           hub = {
             union,
@@ -1408,19 +1314,12 @@ export function computeArchivalDiagramLayout(model: ArchivalTreeModel): Archival
           if (maxGridY > rowBottomY) rowBottomY = maxGridY;
         }
       }
-
-      cursorX += footprint.width + ARCHIVAL_UNIT_GAP;
     }
 
-    let activeBusCount = 0;
-    for (let i = 0; i < g.unions.length; i += 1) {
-      if (g.unions[i].visibleChildIds.length > 0) {
-        activeBusCount += 1;
-      }
-    }
+    const activeBusCount = activeBusCountByGen.get(g.gen) ?? 0;
     const neededChannelHeight =
       activeBusCount > 0
-        ? CHANNEL_TOP_MARGIN + Math.max(0, activeBusCount - 1) * BUS_LANE_SPACING + CHANNEL_BOTTOM_MARGIN + 12
+        ? CHANNEL_TOP_MARGIN + Math.max(0, activeBusCount - 1) * BUS_LANE_SPACING + CHANNEL_BOTTOM_MARGIN
         : ARCHIVAL_GEN_MIN_GAP;
     const channelHeight = Math.max(ARCHIVAL_GEN_MIN_GAP, neededChannelHeight);
 
@@ -1439,7 +1338,7 @@ export function computeArchivalDiagramLayout(model: ArchivalTreeModel): Archival
 
   const totalObstacles = nodes.length + earlyLossStrips.length + siblingToggles.length;
   const allObstacles = new Array<ObstacleRect>(totalObstacles);
-  let maxContentX = leftPad + maxRowWidth;
+  let maxContentX = maxRightX;
   let maxObstacleY = cursorY;
   let oCursor = 0;
 
@@ -1505,10 +1404,12 @@ export function computeArchivalDiagramLayout(model: ArchivalTreeModel): Archival
     genBandIdxByGen,
     spatialIndex,
     maxContentX,
+    dummyChainsByEdgeKey: layeredGraph.dummyChainsByEdgeKey,
+    itemXById,
   });
   const bounds = computeDiagramBounds({
     leftPad,
-    maxRowWidth,
+    maxRightX,
     cursorY,
     nodes,
     earlyLossStrips,

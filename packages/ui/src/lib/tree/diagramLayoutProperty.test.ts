@@ -24,7 +24,8 @@ interface SyntheticDagSpec {
   readonly gen1Couples: number;
   readonly gen2ChildrenPerCouple: readonly number[];
   readonly earlyLossesPerCouple: readonly number[];
-  readonly remarryFirstFounder: boolean;
+  readonly founderExtraMarriages: number;
+  readonly includeMultiGenSpan: boolean;
   readonly includeSingleParent: boolean;
   readonly includeDisconnected: boolean;
   readonly includeRedactedLiving: boolean;
@@ -38,7 +39,8 @@ const dagSpecArb: fc.Arbitrary<SyntheticDagSpec> = fc.record({
   gen1Couples: fc.integer({ min: 1, max: 3 }),
   gen2ChildrenPerCouple: fc.array(fc.integer({ min: 0, max: 6 }), { minLength: 1, maxLength: 3 }),
   earlyLossesPerCouple: fc.array(fc.integer({ min: 0, max: 3 }), { minLength: 1, maxLength: 3 }),
-  remarryFirstFounder: fc.boolean(),
+  founderExtraMarriages: fc.integer({ min: 0, max: 2 }),
+  includeMultiGenSpan: fc.boolean(),
   includeSingleParent: fc.boolean(),
   includeDisconnected: fc.boolean(),
   includeRedactedLiving: fc.boolean(),
@@ -119,30 +121,32 @@ function buildSyntheticDag(spec: SyntheticDagSpec): {
     founderPairs.push({ a: aId, b: bId });
   }
 
-  // Optional remarriage on first founder
+  // Optional 2nd and 3rd remarriages on first founder (testing 2-3 marriage hubs)
   const firstFounder = founderPairs[0];
-  if (spec.remarryFirstFounder && firstFounder) {
-    const sp2Id = nextId('g0sp2');
-    people.push(
-      makePerson(sp2Id, 'SecondSpouse Vance', {
-        lineageGroup: 'descendant_spouse',
-        birthYear: 1802,
-        deathYear: 1875,
-      })
-    );
-    kinship.push({ from: firstFounder.a, to: sp2Id, relation: 'spouse' });
-    const halfChildId = nextId('g1half');
-    people.push(
-      makePerson(halfChildId, 'HalfChild Alder', {
-        lineageGroup: 'collateral',
-        birthYear: 1832,
-        deathYear: 1901,
-      })
-    );
-    kinship.push(
-      { from: firstFounder.a, to: halfChildId, relation: 'parent' },
-      { from: sp2Id, to: halfChildId, relation: 'parent' }
-    );
+  if (firstFounder) {
+    for (let m = 0; m < spec.founderExtraMarriages; m += 1) {
+      const spExtraId = nextId(`g0sp${m + 2}`);
+      people.push(
+        makePerson(spExtraId, `ExtraSpouse${m + 2} Vance`, {
+          lineageGroup: 'descendant_spouse',
+          birthYear: 1800 + m * 6,
+          deathYear: 1874 + m * 5,
+        })
+      );
+      kinship.push({ from: firstFounder.a, to: spExtraId, relation: 'spouse' });
+      const halfChildId = nextId(`g1half${m + 2}`);
+      people.push(
+        makePerson(halfChildId, `HalfChild${m + 2} Alder`, {
+          lineageGroup: 'collateral',
+          birthYear: 1830 + m * 6,
+          deathYear: 1900 + m * 4,
+        })
+      );
+      kinship.push(
+        { from: firstFounder.a, to: halfChildId, relation: 'parent' },
+        { from: spExtraId, to: halfChildId, relation: 'parent' }
+      );
+    }
   }
 
   // Generation 1 couples
@@ -232,6 +236,22 @@ function buildSyntheticDag(spec: SyntheticDagSpec): {
     }
   }
 
+  // Optional multi-generation spanning edge (G0 founder directly parenting a G2 descendant)
+  if (spec.includeMultiGenSpan && firstFounder && g1Couples.length > 0) {
+    const spanChildId = nextId('g2span');
+    people.push(
+      makePerson(spanChildId, 'SpanChild Alder', {
+        lineageGroup: 'collateral',
+        birthYear: 1862,
+        deathYear: 1930,
+      })
+    );
+    kinship.push(
+      { from: firstFounder.a, to: spanChildId, relation: 'parent' },
+      { from: g1Couples[0].a, to: spanChildId, relation: 'parent' }
+    );
+  }
+
   if (spec.includeDisconnected) {
     people.push(
       makePerson(nextId('iso'), 'Isolated Cousin', {
@@ -299,8 +319,45 @@ function buildSyntheticDag(spec: SyntheticDagSpec): {
   return { people, kinship, placesById, bundle };
 }
 
+interface BoxRect {
+  readonly id: string;
+  readonly kind: 'node' | 'early_strip' | 'sibling_toggle';
+  readonly left: number;
+  readonly right: number;
+  readonly top: number;
+  readonly bottom: number;
+}
+
 function boxesOverlap(a: DiagramPlacedNode, b: DiagramPlacedNode): boolean {
   return a.x < b.x + b.width && a.x + a.width > b.x && a.y < b.y + b.height && a.y + a.height > b.y;
+}
+
+function rectsOverlap(a: BoxRect, b: BoxRect): boolean {
+  return a.left < b.right && a.right > b.left && a.top < b.bottom && a.bottom > b.top;
+}
+
+function polylineIntersectsRect(
+  points: readonly { readonly x: number; readonly y: number }[],
+  rect: BoxRect
+): boolean {
+  for (let i = 0; i < points.length - 1; i += 1) {
+    const a = points[i];
+    const b = points[i + 1];
+    if (a.x === b.x) {
+      const minY = Math.min(a.y, b.y);
+      const maxY = Math.max(a.y, b.y);
+      if (a.x > rect.left && a.x < rect.right && maxY > rect.top && minY < rect.bottom) {
+        return true;
+      }
+    } else if (a.y === b.y) {
+      const minX = Math.min(a.x, b.x);
+      const maxX = Math.max(a.x, b.x);
+      if (a.y > rect.top && a.y < rect.bottom && maxX > rect.left && minX < rect.right) {
+        return true;
+      }
+    }
+  }
+  return false;
 }
 
 describe('Tree layout property-based invariants (deterministic seed)', () => {
@@ -374,10 +431,54 @@ describe('Tree layout property-based invariants (deterministic seed)', () => {
           expect(layout1.byId.get(node.person.id)).toBe(node);
         }
 
-        // 4. Pairwise non-overlapping node boxes across every rank and hanging node
-        for (let i = 0; i < layout1.nodes.length; i += 1) {
-          for (let j = i + 1; j < layout1.nodes.length; j += 1) {
-            expect(boxesOverlap(layout1.nodes[i], layout1.nodes[j])).toBe(false);
+        // 4. Pairwise non-overlapping bounding boxes across ALL nodes, Died young strips, and sibling toggles
+        const allRects: BoxRect[] = [
+          ...layout1.nodes.map((n) => ({
+            id: n.person.id,
+            kind: 'node' as const,
+            left: n.x,
+            right: n.x + n.width,
+            top: n.y,
+            bottom: n.y + n.height,
+          })),
+          ...layout1.earlyLossStrips.map((s) => ({
+            id: `strip:${s.unionId}`,
+            kind: 'early_strip' as const,
+            left: s.x,
+            right: s.x + s.width,
+            top: s.y,
+            bottom: s.y + s.height,
+          })),
+          ...layout1.siblingToggles.map((t) => ({
+            id: `toggle:${t.unionId}`,
+            kind: 'sibling_toggle' as const,
+            left: t.x,
+            right: t.x + t.width,
+            top: t.y,
+            bottom: t.y + t.height,
+          })),
+        ];
+        for (let i = 0; i < allRects.length; i += 1) {
+          for (let j = i + 1; j < allRects.length; j += 1) {
+            expect(rectsOverlap(allRects[i], allRects[j])).toBe(false);
+          }
+        }
+
+        // 4b. Zero orthogonal edge-through-card intersections (including multi-gen spans and 2-3 marriage units)
+        const nodeRects = allRects.filter((r) => r.kind === 'node');
+        for (const bus of layout1.buses) {
+          const parentSet = new Set(bus.parentIds);
+          for (const rect of nodeRects) {
+            if (!parentSet.has(rect.id)) {
+              expect(polylineIntersectsRect(bus.stemPoints, rect)).toBe(false);
+            }
+          }
+          for (const drop of bus.childDrops) {
+            for (const rect of nodeRects) {
+              if (rect.id !== drop.childId) {
+                expect(polylineIntersectsRect(drop.points, rect)).toBe(false);
+              }
+            }
           }
         }
 
@@ -426,7 +527,7 @@ describe('Tree layout property-based invariants (deterministic seed)', () => {
             expect(chip.width).toBe(expectedChipW);
           }
         }
-        // 7. Sibling horizontal buses in the same generation band maintain >= 12px vertical lane separation
+        // 7. Sibling horizontal buses in the same generation band strictly maintain >= 14px vertical lane separation
         const busesByGen = new Map<number, number[]>();
         for (const bus of layout1.buses) {
           const union = model1.unionsById.get(bus.unionId);
@@ -438,7 +539,7 @@ describe('Tree layout property-based invariants (deterministic seed)', () => {
         for (const laneYs of busesByGen.values()) {
           const sorted = [...laneYs].sort((a, b) => a - b);
           for (let i = 1; i < sorted.length; i += 1) {
-            expect(sorted[i] - sorted[i - 1]).toBeGreaterThanOrEqual(12);
+            expect(sorted[i] - sorted[i - 1]).toBeGreaterThanOrEqual(14);
           }
         }
         for (const rail of layout1.hangingRails) {
@@ -582,5 +683,120 @@ describe('Tree layout property-based invariants (deterministic seed)', () => {
       }),
       { seed: TREE_PROP_SEED + 76, numRuns: 60 }
     );
+  });
+
+  it('tightly centers parents over children with low orthogonal crossings on a wide multi-marriage tree (#83)', () => {
+    const people: Person[] = [];
+    const kinship: KinshipEdge[] = [];
+    const add = (p: Person): string => {
+      people.push(p);
+      return p.id;
+    };
+    const marry = (a: string, b: string): void => {
+      kinship.push({ from: a, to: b, relation: 'spouse' }, { from: b, to: a, relation: 'spouse' });
+    };
+    const parent = (c: string, p1: string, p2?: string): void => {
+      kinship.push({ from: p1, to: c, relation: 'parent' });
+      if (p2) kinship.push({ from: p2, to: c, relation: 'parent' });
+    };
+
+    // 3-marriage founder + 2-marriage founder + 4 generations of branching children
+    const f0 = add(makePerson('w_f0', 'Arthur Alder', { lineageGroup: 'pivot_ancestor', birthYear: 1750 }));
+    const f0s1 = add(makePerson('w_f0s1', 'Clara Mercer', { lineageGroup: 'ancestor', birthYear: 1752 }));
+    const f0s2 = add(
+      makePerson('w_f0s2', 'Beatrice Vance', { lineageGroup: 'descendant_spouse', birthYear: 1760 })
+    );
+    const f0s3 = add(
+      makePerson('w_f0s3', 'Dorothea Hale', { lineageGroup: 'descendant_spouse', birthYear: 1768 })
+    );
+    marry(f0, f0s1);
+    marry(f0, f0s2);
+    marry(f0, f0s3);
+
+    const g1Unions: [string, string][] = [];
+    const founderPairs: [string, string][] = [
+      [f0, f0s1],
+      [f0, f0s2],
+      [f0, f0s3],
+    ];
+    for (let m = 0; m < founderPairs.length; m += 1) {
+      const [pa, pb] = founderPairs[m];
+      for (let c = 0; c < 2; c += 1) {
+        const cid = add(
+          makePerson(`w_g1_${m}_${c}`, `GenOne${m}C${c} Alder`, {
+            lineageGroup: m === 0 && c === 0 ? 'descendant' : 'collateral',
+            birthYear: 1778 + m * 8 + c * 2,
+          })
+        );
+        const sp = add(
+          makePerson(`w_g1sp_${m}_${c}`, `Spouse${m}C${c} Birch`, {
+            lineageGroup: m === 0 && c === 0 ? 'descendant_spouse' : 'collateral',
+            birthYear: 1780 + m * 8 + c * 2,
+          })
+        );
+        parent(cid, pa, pb);
+        marry(cid, sp);
+        g1Unions.push([cid, sp]);
+      }
+    }
+
+    for (let u = 0; u < g1Unions.length; u += 1) {
+      const [pa, pb] = g1Unions[u];
+      for (let k = 0; k < 3; k += 1) {
+        const cid = add(
+          makePerson(`w_g2_${u}_${k}`, `GenTwo${u}K${k} Alder`, {
+            lineageGroup: u === 0 && k === 0 ? 'descendant' : 'collateral',
+            birthYear: 1808 + u * 3 + k * 2,
+          })
+        );
+        parent(cid, pa, pb);
+      }
+    }
+
+    const model = buildArchivalTreeModel({ people, kinship, mode: 'full' });
+    const layout = computeArchivalDiagramLayout(model);
+
+    // Every G1 couple sits closely centered over its 3 G2 children (Brandes-Kopf + centroid polish).
+    let g1OffsetSum = 0;
+    let g1BusCount = 0;
+    for (const bus of layout.buses) {
+      const u = model.unionsById.get(bus.unionId);
+      if (u?.gen === 1 && bus.childDrops.length > 0) {
+        const meanChildX = bus.childDrops.reduce((acc, d) => acc + d.x, 0) / bus.childDrops.length;
+        g1OffsetSum += Math.abs(bus.hubX - meanChildX);
+        g1BusCount += 1;
+      }
+    }
+    expect(g1BusCount).toBe(6);
+    expect(g1OffsetSum / g1BusCount).toBeLessThan(80);
+
+    // Zero orthogonal crossings across all buses in this clean branching multi-marriage tree.
+    const horiz: { unionId: string; y: number; x1: number; x2: number }[] = [];
+    const vert: { unionId: string; x: number; y1: number; y2: number }[] = [];
+    for (const bus of layout.buses) {
+      if (bus.railMaxX > bus.railMinX) {
+        horiz.push({ unionId: bus.unionId, y: bus.busY, x1: bus.railMinX, x2: bus.railMaxX });
+      }
+      for (const pts of [bus.stemPoints, ...bus.childDrops.map((d) => d.points)]) {
+        for (let i = 0; i < pts.length - 1; i += 1) {
+          const a = pts[i];
+          const b = pts[i + 1];
+          if (a.y === b.y && a.x !== b.x) {
+            horiz.push({ unionId: bus.unionId, y: a.y, x1: Math.min(a.x, b.x), x2: Math.max(a.x, b.x) });
+          } else if (a.x === b.x && a.y !== b.y) {
+            vert.push({ unionId: bus.unionId, x: a.x, y1: Math.min(a.y, b.y), y2: Math.max(a.y, b.y) });
+          }
+        }
+      }
+    }
+    let crossings = 0;
+    for (const h of horiz) {
+      for (const v of vert) {
+        if (h.unionId !== v.unionId && v.x > h.x1 && v.x < h.x2 && h.y > v.y1 && h.y < v.y2) {
+          crossings += 1;
+        }
+      }
+    }
+    expect(crossings).toBe(0);
   });
 });

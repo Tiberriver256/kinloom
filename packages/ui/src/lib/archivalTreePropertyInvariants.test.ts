@@ -5,6 +5,7 @@ import {
   ARCHIVAL_NODE_W,
   buildArchivalTreeModel,
   computeArchivalDiagramLayout,
+  type DiagramPoint,
   resolveInitialTreePreferences,
   resolveSemanticZoomLevel,
   searchTreePeople,
@@ -132,12 +133,102 @@ describe('UI archival tree model & diagram layout property invariants', () => {
           }).every((hit) => !hit.person.id.startsWith('per_redacted_'))
         ).toBe(true);
 
-        // 2. Diagram layout produces finite bounds and non-overlapping cards within every horizontal row
+        // 2. Diagram layout produces finite bounds, zero box overlaps (cards + strips + toggles),
+        //    zero orthogonal edge-through-card intersections, and >= 14px horizontal bus lane spacing
         const diagram = computeArchivalDiagramLayout(model);
         expect(Number.isFinite(diagram.bounds.minX)).toBe(true);
         expect(Number.isFinite(diagram.bounds.maxX)).toBe(true);
         expect(Number.isFinite(diagram.bounds.minY)).toBe(true);
         expect(Number.isFinite(diagram.bounds.maxY)).toBe(true);
+
+        const allBoxes = [
+          ...diagram.nodes.map((n) => ({
+            id: n.person.id,
+            kind: 'node' as const,
+            left: n.x,
+            right: n.x + n.width,
+            top: n.y,
+            bottom: n.y + n.height,
+          })),
+          ...diagram.earlyLossStrips.map((s) => ({
+            id: `strip:${s.unionId}`,
+            kind: 'strip' as const,
+            left: s.x,
+            right: s.x + s.width,
+            top: s.y,
+            bottom: s.y + s.height,
+          })),
+          ...diagram.siblingToggles.map((t) => ({
+            id: `toggle:${t.unionId}`,
+            kind: 'toggle' as const,
+            left: t.x,
+            right: t.x + t.width,
+            top: t.y,
+            bottom: t.y + t.height,
+          })),
+        ];
+        for (let i = 0; i < allBoxes.length; i += 1) {
+          for (let j = i + 1; j < allBoxes.length; j += 1) {
+            const a = allBoxes[i];
+            const b = allBoxes[j];
+            const overlaps = a.left < b.right && a.right > b.left && a.top < b.bottom && a.bottom > b.top;
+            expect(overlaps).toBe(false);
+          }
+        }
+
+        const polylineHitsRect = (
+          pts: readonly DiagramPoint[],
+          rect: { left: number; right: number; top: number; bottom: number }
+        ): boolean => {
+          for (let i = 0; i < pts.length - 1; i += 1) {
+            const a = pts[i];
+            const b = pts[i + 1];
+            if (a.x === b.x) {
+              const minY = Math.min(a.y, b.y);
+              const maxY = Math.max(a.y, b.y);
+              if (a.x > rect.left && a.x < rect.right && maxY > rect.top && minY < rect.bottom) {
+                return true;
+              }
+            } else if (a.y === b.y) {
+              const minX = Math.min(a.x, b.x);
+              const maxX = Math.max(a.x, b.x);
+              if (a.y > rect.top && a.y < rect.bottom && maxX > rect.left && minX < rect.right) {
+                return true;
+              }
+            }
+          }
+          return false;
+        };
+
+        const nodeBoxes = allBoxes.filter((b) => b.kind === 'node');
+        const busYsByGen = new Map<number, number[]>();
+        for (const bus of diagram.buses) {
+          const union = model.unionsById.get(bus.unionId);
+          if (union) {
+            const list = busYsByGen.get(union.gen) ?? [];
+            list.push(bus.busY);
+            busYsByGen.set(union.gen, list);
+          }
+          const parentSet = new Set(bus.parentIds);
+          for (const rect of nodeBoxes) {
+            if (!parentSet.has(rect.id)) {
+              expect(polylineHitsRect(bus.stemPoints, rect)).toBe(false);
+            }
+          }
+          for (const drop of bus.childDrops) {
+            for (const rect of nodeBoxes) {
+              if (rect.id !== drop.childId) {
+                expect(polylineHitsRect(drop.points, rect)).toBe(false);
+              }
+            }
+          }
+        }
+        for (const ys of busYsByGen.values()) {
+          const sorted = [...ys].sort((a, b) => a - b);
+          for (let i = 1; i < sorted.length; i += 1) {
+            expect(sorted[i] - sorted[i - 1]).toBeGreaterThanOrEqual(14);
+          }
+        }
 
         const rowXs = new Map<string, number[]>();
         for (const node of diagram.nodes) {
