@@ -30,18 +30,20 @@
   font-family: var(--font-mono);
   font-size: 0.76rem;
   color: var(--text-secondary);
-  text-decoration: none;
-  border-bottom: 1px dotted var(--border-control);
+  border-bottom: none;
+  text-decoration: underline dotted var(--border-control);
+  text-underline-offset: 3px;
+  text-decoration-thickness: 1px;
   padding: 2px 0;
   transition:
     color 0.14s ease,
-    border-color 0.14s ease;
+    text-decoration-color 0.14s ease;
 }
 
 @media (hover: hover) and (pointer: fine) {
   .kinloom-footer-link:hover {
     color: var(--radar-copresence);
-    border-bottom-color: var(--radar-copresence);
+    text-decoration-color: var(--radar-copresence);
   }
 }
 

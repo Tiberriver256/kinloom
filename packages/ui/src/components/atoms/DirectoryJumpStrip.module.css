@@ -167,3 +167,15 @@
 .jump-link:global(.is-active) .jump-count {
   color: var(--jump-active-fg);
 }
+
+@media (max-width: 768px) {
+  .jump-link {
+    min-height: 44px;
+    min-width: 44px;
+    justify-content: center;
+  }
+
+  .jump-strip:global(.is-az) .jump-link {
+    min-width: 44px;
+  }
+}

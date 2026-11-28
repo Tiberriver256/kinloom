@@ -640,6 +640,7 @@
   }
 
   .tree-segmented :global(.tree-seg-btn) {
+    min-width: 44px;
     min-height: 44px;
     height: 44px;
     padding: 0 7px;
@@ -748,7 +749,7 @@
   }
 
   .tree-filters-sheet-close {
-    min-height: 36px;
+    min-height: 44px;
     padding: 4px 12px;
     border-radius: var(--radius-md);
     border: 1px solid var(--border-decorative);

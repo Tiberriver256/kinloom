@@ -229,7 +229,9 @@ select.pill-btn option {
   margin-left: 8px;
   background: transparent;
   border: none;
-  border-bottom: 1px solid var(--radar-copresence);
+  text-decoration: underline solid var(--radar-copresence);
+  text-underline-offset: 3px;
+  text-decoration-thickness: 1px;
   color: var(--radar-copresence);
   padding: 0 2px;
   font-family: var(--font-ui);

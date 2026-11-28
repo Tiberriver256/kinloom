@@ -117,28 +117,29 @@
   padding: 3px 1px;
   background: transparent;
   border: none;
-  border-bottom: 1.5px solid var(--border-control);
   color: var(--surface-header);
   font-family: var(--font-serif);
   font-size: 0.94rem;
   font-weight: 600;
-  text-decoration: none;
+  text-decoration: underline solid var(--border-control);
+  text-underline-offset: 3px;
+  text-decoration-thickness: 1.5px;
   cursor: pointer;
   transition:
     color 0.14s ease,
-    border-color 0.14s ease,
+    text-decoration-color 0.14s ease,
     background-color 0.14s ease;
 }
 
 .ink-link-btn:hover {
   color: var(--radar-copresence);
-  border-bottom-color: var(--radar-copresence);
+  text-decoration-color: var(--radar-copresence);
   background: var(--surface-tint-hover);
 }
 
 .ink-link-btn:global(.active) {
   color: var(--radar-copresence);
-  border-bottom-color: var(--radar-copresence);
+  text-decoration-color: var(--radar-copresence);
 }
 
 .ink-inline-btn {

@@ -193,7 +193,7 @@ export const KINLOOM_VOCABULARY = {
   search: {
     dialogAria: 'Search archive',
     inputAria: 'Search the archive',
-    placeholder: 'Search people, places, events, or source pages…',
+    placeholder: 'Search people, places, or events…',
     emptyPrefix: 'No matching people, places, events, or source pages for',
   },
   pronunciation: {

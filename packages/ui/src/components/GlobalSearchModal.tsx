@@ -286,6 +286,19 @@ export const GlobalSearchModal: React.FC = () => {
             }}
             aria-label={KINLOOM_VOCABULARY.search.inputAria}
           />
+          {query.length > 0 && (
+            <button
+              type="button"
+              className={cx(searchModalStyles, 'global-search-clear-btn')}
+              aria-label="Clear search"
+              onClick={() => {
+                setQuery('');
+                inputRef.current?.focus();
+              }}
+            >
+              ×
+            </button>
+          )}
           <button
             type="button"
             className={joinClasses(
