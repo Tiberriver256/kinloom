@@ -369,3 +369,33 @@ Options:
   --json               Emit structured JSON output
   --guide              Show the embedded design-audit workflow guide
   -h, --help           Show this help message`;
+
+export const QUERY_HELP = `Usage: kinloom query <target> [options]
+
+Read-only schema-aware inspection of local archive YAML files and kinship traversal.
+Defaults strictly to confirmed-deceased records unless --include-living is passed on a local private repository.
+
+Targets:
+  people       Query data/people.yaml (supports living/deceased filters and bounded BFS kinship traversal)
+  places       Query data/places.yaml
+  events       Query data/events.yaml
+  narratives   Query data/narratives.yaml
+  sources      Query data/sources.yaml
+  media        Query data/media.yaml
+  schema       Report entity counts and exact key frequencies across all data/*.yaml files
+
+Options:
+  --repo <dir>             Archive repository root (default: current working directory)
+  --deceased               Restrict \`people\` to confirmed-deceased records (default)
+  --living                 Restrict \`people\` to effective-living records (requires --include-living)
+  --include-living         Include effective-living records on a local private repository
+  --descendants-of <id>    Run bounded BFS descendant traversal from person <id> with generation grouping & spouse pairing
+  --ancestors-of <id>      Run bounded BFS ancestor traversal from person <id> with generation grouping & spouse pairing
+  --depth <N>              Max BFS generation depth for traversal (non-negative integer, default: 6)
+  --match <regex>          Case-insensitive regex filter across record field values
+  --kind <k>               Filter by entity kind/type (place_type, event_kind/scope/category, narrative kind, source_type, media kind)
+  --missing <field>        Filter to records missing a field (dot-paths supported, e.g. death_edtf, pronunciation.ipa)
+  --person <id>            Filter places, events, narratives, sources, or media associated with person <id>
+  --fields <csv>           Comma-separated list of fields to project in table and JSON output
+  --json                   Emit deterministic structured JSON instead of compact text/table output
+  -h, --help               Show this help message`;

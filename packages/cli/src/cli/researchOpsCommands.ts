@@ -423,3 +423,87 @@ export async function runStatus(rest: readonly string[], ctx: CliDispatchContext
   writeRenderedOutput(ctx.io, result.rendered);
   return EXIT_OK;
 }
+
+function bindSignedQueryDepth(args: readonly string[]): string[] {
+  const bound: string[] = [];
+  for (let index = 0; index < args.length; index += 1) {
+    const arg = args[index] ?? '';
+    const next = args[index + 1];
+    if (arg === '--depth' && next !== undefined && /^-?\d+$/.test(next)) {
+      bound.push(`--depth=${next}`);
+      index += 1;
+      continue;
+    }
+    bound.push(arg);
+  }
+  return bound;
+}
+
+function parseQueryDepth(value: string | undefined): number | undefined {
+  if (value === undefined) {
+    return undefined;
+  }
+  const trimmed = value.trim();
+  if (!/^\d+$/.test(trimmed)) {
+    throw new CliValidationError('Option `--depth` must be a non-negative integer.');
+  }
+  return Number.parseInt(trimmed, 10);
+}
+
+export async function runQuery(rest: readonly string[], ctx: CliDispatchContext): Promise<CliExitCode> {
+  const [rawTarget, ...subArgs] = rest;
+  const [{ parseQueryFieldsCsv, parseQueryTarget, runQueryCommand }, { measureCommand }] = await Promise.all([
+    import('../commands/ops/query.js'),
+    import('../commands/ops/telemetry.js'),
+  ]);
+  const target = parseQueryTarget(rawTarget);
+  const { values } = safeParseArgs({
+    args: bindSignedQueryDepth(subArgs),
+    allowPositionals: false,
+    options: {
+      repo: { type: 'string' },
+      deceased: { type: 'boolean', default: false },
+      living: { type: 'boolean', default: false },
+      'include-living': { type: 'boolean', default: false },
+      'descendants-of': { type: 'string' },
+      'ancestors-of': { type: 'string' },
+      depth: { type: 'string' },
+      match: { type: 'string' },
+      kind: { type: 'string' },
+      missing: { type: 'string' },
+      person: { type: 'string' },
+      fields: { type: 'string' },
+      json: { type: 'boolean', default: false },
+    },
+  });
+  const depth = parseQueryDepth(values.depth);
+  const fields = parseQueryFieldsCsv(values.fields);
+  const result = await measureCommand(
+    {
+      subcmd: `query ${target}`,
+      extractResultMeta: (res) => ({
+        exitCode: EXIT_OK,
+        bytesOut: Buffer.byteLength(res.rendered, 'utf8'),
+      }),
+    },
+    () =>
+      runQueryCommand({
+        target,
+        repoDir: values.repo ?? ctx.cwd,
+        deceased: values.deceased,
+        living: values.living,
+        includeLiving: values['include-living'],
+        descendantsOf: values['descendants-of'],
+        ancestorsOf: values['ancestors-of'],
+        depth,
+        match: values.match,
+        kind: values.kind,
+        missing: values.missing,
+        person: values.person,
+        fields,
+        json: values.json,
+      })
+  );
+  writeRenderedOutput(ctx.io, result.rendered);
+  return EXIT_OK;
+}

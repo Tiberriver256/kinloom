@@ -7,6 +7,7 @@ import {
   MEDIA_HELP,
   MIGRATE_HELP,
   PRONOUNCE_HELP,
+  QUERY_HELP,
   SCREENSHOTS_HELP,
   STATUS_HELP,
   SYNC_HELP,
@@ -157,6 +158,12 @@ Options:
     category: 'ops',
     summary: 'Dump privacy-fenced YAML context, relatives, and leads for a person',
     help: CONTEXT_HELP,
+  },
+  {
+    name: 'query',
+    category: 'ops',
+    summary: 'Read-only schema-aware YAML inspection and bounded kinship traversal',
+    help: QUERY_HELP,
   },
   {
     name: 'integrate',
