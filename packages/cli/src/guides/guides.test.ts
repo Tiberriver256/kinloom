@@ -35,12 +35,12 @@ const SKILL_ORIGIN_GUIDE_IDS = new Set([
 ]);
 
 describe('embedded workflow guides', () => {
-  it('ships all 28 embedded guides across the 6 guide categories plus narrative-audio/script-rules', () => {
+  it('ships all 29 embedded guides across the 6 guide categories plus narrative-audio/script-rules', () => {
     expect(EMBEDDED_GUIDES).toHaveLength(29);
     expect(GUIDE_CATEGORIES).toHaveLength(6);
 
     const ids = EMBEDDED_GUIDES.map((g) => g.id);
-    expect(new Set(ids).size).toBe(28);
+    expect(new Set(ids).size).toBe(29);
 
     const byCategory = new Map<string, number>();
     for (const guide of EMBEDDED_GUIDES) {
@@ -154,7 +154,7 @@ describe('embedded workflow guides', () => {
     expect(ocr?.content).toContain('OMP_THREAD_LIMIT=1');
   });
 
-  it('formats the guides catalog with all 28 topics grouped by category and renders footers cleanly', () => {
+  it('formats the guides catalog with all 29 topics grouped by category and renders footers cleanly', () => {
     const catalog = formatGuidesCatalog();
 
     for (const category of GUIDE_CATEGORIES) {
