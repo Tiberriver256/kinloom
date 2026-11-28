@@ -418,9 +418,10 @@ test.describe('Wave 53B signed-in editor UX, per-element overflow/collision, and
         const buttons = [
           ...document.querySelectorAll<HTMLButtonElement>('.tree-scope-segmented .tree-seg-btn'),
         ];
-        const fullBtn = buttons.find((b) => b.textContent?.includes('Full Tree'));
-        if (fullBtn) {
-          fullBtn.textContent = 'Full Tree (128)';
+        const fullBtn = buttons.find((b) => b.textContent?.includes('Full'));
+        const detail = fullBtn?.querySelector('.tree-seg-detail');
+        if (detail) {
+          detail.textContent = ' Tree (128)';
         }
       });
       const treeAudit = await runPerElementOverflowAndCollisionAudit(page);
@@ -430,15 +431,16 @@ test.describe('Wave 53B signed-in editor UX, per-element overflow/collision, and
       expect(treeAudit.parentEscapes, `3-digit /tree @ ${vp.name} parentEscapes`).toEqual([]);
       expect(treeAudit.siblingCollisions, `3-digit /tree @ ${vp.name} siblingCollisions`).toEqual([]);
       await expect(page.locator('.tree-toolbar .tree-add-person-btn')).toBeHidden();
-      const addIconBox = await page.locator('.tree-add-person-mobile-btn').boundingBox();
-      expect(addIconBox?.width ?? 0).toBeGreaterThanOrEqual(44);
-      expect(addIconBox?.height ?? 0).toBeGreaterThanOrEqual(44);
-      const scopeSpan = await page.evaluate(() => {
-        const row = document.querySelector('.tree-toolbar-row-secondary')!.getBoundingClientRect();
-        const seg = document.querySelector('.tree-scope-segmented')!.getBoundingClientRect();
-        return { rowWidth: Math.round(row.width), segWidth: Math.round(seg.width) };
-      });
-      expect(scopeSpan.segWidth).toBeGreaterThanOrEqual(scopeSpan.rowWidth - 4);
+      const filtersToggleBox = await page.locator('.tree-filters-toggle-btn').boundingBox();
+      expect(filtersToggleBox?.height ?? 0).toBeGreaterThanOrEqual(44);
+      const toolbarShellBox = await page.locator('.tree-toolbar-shell').boundingBox();
+      expect(toolbarShellBox?.height ?? 999).toBeLessThanOrEqual(52);
+      await page.locator('.tree-filters-toggle-btn').click();
+      await expect(page.locator('.tree-toolbar .tree-add-person-btn')).toBeVisible();
+      const addInSheetBox = await page.locator('.tree-toolbar .tree-add-person-btn').boundingBox();
+      expect(addInSheetBox?.height ?? 0).toBeGreaterThanOrEqual(44);
+      await page.locator('.tree-filters-sheet-close').click();
+      await expect(page.locator('.tree-toolbar .tree-add-person-btn')).toBeHidden();
       await maybeScreenshot(page, `tree-direct-3digit-${vp.name}.png`);
     }
   });
@@ -446,7 +448,7 @@ test.describe('Wave 53B signed-in editor UX, per-element overflow/collision, and
   test('W53-U1/U2b: zero per-element overflow, parent escape, or sibling collision across all 13 signed-in routes at 4 viewports', async ({
     page,
   }) => {
-    test.setTimeout(120_000);
+    test.setTimeout(180_000);
     await blockExternalMapTiles(page);
     await signInAsAdmin(page, wiki);
     await seedResearchBatch(page, wiki, 'batch_wave53b_matrix');

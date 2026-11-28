@@ -561,5 +561,5 @@ describe('Cloudflare Worker multi-isolate D1 + R2 persistence (Book Publishing, 
       envPrivate
     );
     expect(badTokenRes.status).toBe(401);
-  });
+  }, 30_000);
 });

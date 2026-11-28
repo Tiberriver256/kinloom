@@ -43,12 +43,15 @@ test.describe('Wave 50B UX regression suite', () => {
           const overflow = document.documentElement.scrollWidth - window.innerWidth;
           const header = document.querySelector('header.topbar');
           const toolbar = document.querySelector('.tree-toolbar');
+          const toolbarShell = document.querySelector('.tree-toolbar-shell');
           const headerRect = header?.getBoundingClientRect();
           const toolbarRect = toolbar?.getBoundingClientRect();
+          const toolbarShellRect = toolbarShell?.getBoundingClientRect();
           const controls = [
             ...(toolbar?.querySelectorAll('.tree-search-desktop input, .tree-search-toggle-btn') ?? []),
             toolbar?.querySelector('select.tree-branch-select'),
             ...(toolbar?.querySelectorAll('button.tree-seg-btn') ?? []),
+            toolbar?.querySelector('button.tree-filters-toggle-btn'),
           ].filter((el): el is Element => {
             if (!el) {
               return false;
@@ -74,6 +77,7 @@ test.describe('Wave 50B UX regression suite', () => {
             innerWidth: window.innerWidth,
             headerBottom: headerRect ? Math.round(headerRect.bottom) : 0,
             toolbarTop: toolbarRect ? Math.round(toolbarRect.top) : 0,
+            toolbarShellHeight: toolbarShellRect ? Math.round(toolbarShellRect.height) : 0,
             toolbarScrollOverflow: toolbar ? Math.round(toolbar.scrollWidth - toolbar.clientWidth) : 0,
             controlBoxes,
           };
@@ -91,7 +95,15 @@ test.describe('Wave 50B UX regression suite', () => {
           metrics.toolbarScrollOverflow,
           `Toolbar inner scroll overflow on /tree?surface=${surfaceParam} at ${vp.name}`
         ).toBeLessThanOrEqual(2);
-        expect(metrics.controlBoxes.length).toBeGreaterThanOrEqual(6);
+        if (vp.width < 640) {
+          expect(metrics.controlBoxes.length).toBeGreaterThanOrEqual(5);
+          expect(
+            metrics.toolbarShellHeight,
+            `Mobile toolbar height > 52px on /tree?surface=${surfaceParam} at ${vp.name}`
+          ).toBeLessThanOrEqual(52);
+        } else {
+          expect(metrics.controlBoxes.length).toBeGreaterThanOrEqual(6);
+        }
 
         for (const box of metrics.controlBoxes) {
           expect(box.left, `${box.text} clipped left at ${vp.name}`).toBeGreaterThanOrEqual(0);

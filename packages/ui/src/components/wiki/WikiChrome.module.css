@@ -437,16 +437,12 @@
   :global(.wiki-modal-header) :global(.pill-btn),
   :global(.wiki-form-actions) :global(.pill-btn),
   :global(.wiki-danger-zone) :global(.pill-btn),
-  :global(.tree-toolbar) :global(.pill-btn):not(:global(.tree-add-person-btn)),
+  :global(.tree-toolbar) :global(.pill-btn),
   :global(.place-map-box) :global(.pill-btn),
   :global(.kinship-selector-card) :global(.pill-btn) {
     min-height: 44px;
     display: inline-flex;
     align-items: center;
-  }
-
-  :global(.tree-toolbar) :global(.tree-add-person-btn) {
-    display: none;
   }
 }
 
