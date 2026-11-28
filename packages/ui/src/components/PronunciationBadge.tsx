@@ -5,7 +5,7 @@ import type {
   ResolvedPersonPronunciation,
 } from '@kinloom/core';
 import type React from 'react';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useId, useRef, useState } from 'react';
 import {
   playSingleAudioUrl,
   playSpeechSynthesisFallback,
@@ -99,6 +99,8 @@ export const PronunciationBadge: React.FC<PronunciationBadgeProps> = ({
 }) => {
   const [playing, setPlaying] = useState(false);
   const [selectedVariantIdx, setSelectedVariantIdx] = useState<number | null>(null);
+  const [detailsOpen, setDetailsOpen] = useState(false);
+  const detailsId = useId();
   const stopSelfRef = useRef<(() => void) | null>(null);
 
   const variants: readonly PronunciationVariant[] =
@@ -111,9 +113,10 @@ export const PronunciationBadge: React.FC<PronunciationBadgeProps> = ({
   const activeEntry: Pronunciation | PronunciationVariant | null | undefined =
     effectiveVariantIdx !== null ? variants[effectiveVariantIdx] : pronunciation;
 
-  // biome-ignore lint/correctness/useExhaustiveDependencies: reset audio playback when pronunciation entry changes
+  // biome-ignore lint/correctness/useExhaustiveDependencies: reset audio playback and disclosure when pronunciation entry changes
   useEffect(() => {
     setSelectedVariantIdx(null);
+    setDetailsOpen(false);
   }, [pronunciation]);
 
   useEffect(() => {
@@ -196,6 +199,11 @@ export const PronunciationBadge: React.FC<PronunciationBadgeProps> = ({
     pronunciation.region?.trim() ||
     (pronunciation.language?.trim() ? `Primary (${pronunciation.language.trim()})` : 'Primary');
 
+  const hasDetails =
+    !iconOnly &&
+    !compact &&
+    Boolean(secondaryIpa || note || sourceLabel || safeSourceUrl || variants.length > 0);
+
   const effectivePrefix =
     coverage === 'full' ? undefined : (prefix ?? formatPronunciationScopePrefix(coverage));
   const prefixTitle = formatPronunciationScopeTitle(coverage, matchedPart);
@@ -204,6 +212,7 @@ export const PronunciationBadge: React.FC<PronunciationBadgeProps> = ({
     'pronunciation-badge',
     compact ? 'is-compact' : '',
     playing ? 'is-playing' : '',
+    detailsOpen ? 'is-details-open' : '',
     coverage && coverage !== 'full' ? `is-coverage-${coverage}` : '',
     className ?? '',
   ]
@@ -212,116 +221,154 @@ export const PronunciationBadge: React.FC<PronunciationBadgeProps> = ({
 
   return (
     <span className={cx(pronunciationBadgeStyles, rootClassName)} data-coverage={coverage ?? undefined}>
-      <button
-        type="button"
-        className={cx(
-          pronunciationBadgeStyles,
-          `pronunciation-play-btn print-hide${playing ? ' is-playing' : ''}`
-        )}
-        aria-label={`Listen to pronunciation of ${label}`}
-        aria-pressed={playing}
-        title={playing ? `Stop pronunciation of ${label}` : `Listen to pronunciation of ${label}`}
-        onClick={handleTogglePlay}
-      >
-        <svg
-          width={compact ? 12 : 14}
-          height={compact ? 12 : 14}
-          viewBox={compact ? '-0.5 0 20 24' : '0 0 24 24'}
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="2"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-          style={{ display: 'block' }}
-          aria-hidden="true"
-        >
-          <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5" />
-          <path d="M15.54 8.46a5 5 0 0 1 0 7.07" />
-          {!compact && <path d="M19.07 4.93a10 10 0 0 1 0 14.14" />}
-        </svg>
-      </button>
-      {!iconOnly && effectivePrefix && (
-        <span className={cx(pronunciationBadgeStyles, 'pronunciation-prefix')} title={prefixTitle}>
-          {effectivePrefix}:
-        </span>
-      )}
-      {!iconOnly && primaryGuide && (
-        <span
-          className={cx(pronunciationBadgeStyles, 'pronunciation-guide')}
-          title={secondaryIpa ? `IPA: ${secondaryIpa}` : undefined}
-        >
-          {primaryGuide}
-        </span>
-      )}
-      {!iconOnly && !compact && secondaryIpa && (
-        <span className={cx(pronunciationBadgeStyles, 'pronunciation-ipa')} title={`IPA ${secondaryIpa}`}>
-          {secondaryIpa}
-        </span>
-      )}
-      {!iconOnly && language && (
-        <span className={cx(pronunciationBadgeStyles, 'pronunciation-lang')} title={`Language: ${language}`}>
-          {language}
-        </span>
-      )}
-      {!iconOnly && !compact && note && (
-        <span className={cx(pronunciationBadgeStyles, 'pronunciation-note')}>{note}</span>
-      )}
-      {!iconOnly && !compact && (sourceLabel || safeSourceUrl) && (
-        <span className={cx(pronunciationBadgeStyles, 'pronunciation-source')}>
-          {safeSourceUrl ? (
-            <a
-              href={safeSourceUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-              className={cx(pronunciationBadgeStyles, 'pronunciation-source-link')}
-            >
-              {sourceLabel || KINLOOM_VOCABULARY.pronunciation.defaultSourceLabel}
-            </a>
-          ) : (
-            sourceLabel
+      <span className={cx(pronunciationBadgeStyles, 'pronunciation-primary-row')}>
+        <button
+          type="button"
+          className={cx(
+            pronunciationBadgeStyles,
+            `pronunciation-play-btn print-hide${playing ? ' is-playing' : ''}`
           )}
-        </span>
-      )}
-      {!iconOnly && !compact && variants.length > 0 && (
-        <span
-          className={cx(pronunciationBadgeStyles, 'pronunciation-variants print-hide')}
-          role="group"
-          aria-label={KINLOOM_VOCABULARY.pronunciation.variantsAria}
+          aria-label={`Listen to pronunciation of ${label}`}
+          aria-pressed={playing}
+          title={playing ? `Stop pronunciation of ${label}` : `Listen to pronunciation of ${label}`}
+          onClick={handleTogglePlay}
         >
+          <svg
+            width={compact ? 12 : 14}
+            height={compact ? 12 : 14}
+            viewBox={compact ? '-0.5 0 20 24' : '0 0 24 24'}
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            style={{ display: 'block' }}
+            aria-hidden="true"
+          >
+            <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5" />
+            <path d="M15.54 8.46a5 5 0 0 1 0 7.07" />
+            {!compact && <path d="M19.07 4.93a10 10 0 0 1 0 14.14" />}
+          </svg>
+        </button>
+        {!iconOnly && effectivePrefix && (
+          <span className={cx(pronunciationBadgeStyles, 'pronunciation-prefix')} title={prefixTitle}>
+            {effectivePrefix}:
+          </span>
+        )}
+        {!iconOnly && primaryGuide && (
+          <span
+            className={cx(pronunciationBadgeStyles, 'pronunciation-guide')}
+            title={secondaryIpa ? `IPA: ${secondaryIpa}` : undefined}
+          >
+            {primaryGuide}
+          </span>
+        )}
+        {!iconOnly && language && (
+          <span
+            className={cx(pronunciationBadgeStyles, 'pronunciation-lang')}
+            title={`Language: ${language}`}
+          >
+            {language}
+          </span>
+        )}
+        {hasDetails && (
           <button
             type="button"
             className={cx(
               pronunciationBadgeStyles,
-              `pronunciation-variant-btn${effectiveVariantIdx === null ? ' is-active' : ''}`
+              `pronunciation-details-toggle print-hide${detailsOpen ? ' is-open' : ''}`
             )}
-            aria-pressed={effectiveVariantIdx === null}
+            aria-expanded={detailsOpen}
+            aria-controls={detailsId}
             onClick={(e) => {
               e.stopPropagation();
-              stopActivePronunciation();
-              setSelectedVariantIdx(null);
+              setDetailsOpen((open) => !open);
             }}
           >
-            {primaryVariantLabel}
-          </button>
-          {variants.map((variant, idx) => (
-            <button
-              // biome-ignore lint/suspicious/noArrayIndexKey: variant labels may repeat across locales
-              key={`${variant.label}-${idx}`}
-              type="button"
-              className={cx(
-                pronunciationBadgeStyles,
-                `pronunciation-variant-btn${effectiveVariantIdx === idx ? ' is-active' : ''}`
-              )}
-              aria-pressed={effectiveVariantIdx === idx}
-              onClick={(e) => {
-                e.stopPropagation();
-                stopActivePronunciation();
-                setSelectedVariantIdx(idx);
-              }}
+            <span>Pronunciation details</span>
+            <span
+              className={cx(pronunciationBadgeStyles, 'pronunciation-details-chevron')}
+              aria-hidden="true"
             >
-              {variant.label}
-            </button>
-          ))}
+              {detailsOpen ? '▾' : '▸'}
+            </span>
+          </button>
+        )}
+      </span>
+
+      {hasDetails && (
+        <span
+          id={detailsId}
+          data-open={detailsOpen ? 'true' : 'false'}
+          className={cx(
+            pronunciationBadgeStyles,
+            `pronunciation-details-panel${detailsOpen ? ' is-open' : ''}`
+          )}
+        >
+          {secondaryIpa && (
+            <span className={cx(pronunciationBadgeStyles, 'pronunciation-ipa')} title={`IPA ${secondaryIpa}`}>
+              {secondaryIpa}
+            </span>
+          )}
+          {note && <span className={cx(pronunciationBadgeStyles, 'pronunciation-note')}>{note}</span>}
+          {(sourceLabel || safeSourceUrl) && (
+            <span className={cx(pronunciationBadgeStyles, 'pronunciation-source')}>
+              {safeSourceUrl ? (
+                <a
+                  href={safeSourceUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className={cx(pronunciationBadgeStyles, 'pronunciation-source-link')}
+                >
+                  {sourceLabel || KINLOOM_VOCABULARY.pronunciation.defaultSourceLabel}
+                </a>
+              ) : (
+                sourceLabel
+              )}
+            </span>
+          )}
+          {variants.length > 0 && (
+            <span
+              className={cx(pronunciationBadgeStyles, 'pronunciation-variants print-hide')}
+              role="group"
+              aria-label={KINLOOM_VOCABULARY.pronunciation.variantsAria}
+            >
+              <button
+                type="button"
+                className={cx(
+                  pronunciationBadgeStyles,
+                  `pronunciation-variant-btn${effectiveVariantIdx === null ? ' is-active' : ''}`
+                )}
+                aria-pressed={effectiveVariantIdx === null}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  stopActivePronunciation();
+                  setSelectedVariantIdx(null);
+                }}
+              >
+                {primaryVariantLabel}
+              </button>
+              {variants.map((variant, idx) => (
+                <button
+                  // biome-ignore lint/suspicious/noArrayIndexKey: variant labels may repeat across locales
+                  key={`${variant.label}-${idx}`}
+                  type="button"
+                  className={cx(
+                    pronunciationBadgeStyles,
+                    `pronunciation-variant-btn${effectiveVariantIdx === idx ? ' is-active' : ''}`
+                  )}
+                  aria-pressed={effectiveVariantIdx === idx}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    stopActivePronunciation();
+                    setSelectedVariantIdx(idx);
+                  }}
+                >
+                  {variant.label}
+                </button>
+              ))}
+            </span>
+          )}
         </span>
       )}
     </span>

@@ -7,7 +7,11 @@ import { Link, useInRouterContext } from 'react-router-dom';
 import { useOptionalArchiveData } from '../context/ArchiveDataContext.js';
 import { cx } from '../lib/cx.js';
 import markdownStyles from './ArchivalMarkdown.module.css';
-import { computeCitationPopoverPosition, type PopoverCoordinates } from './CitationPopover.js';
+import {
+  computeCitationPopoverPosition,
+  measureStickyHeaderBottom,
+  type PopoverCoordinates,
+} from './CitationPopover.js';
 import { hasPronunciationContent, PronunciationBadge } from './PronunciationBadge.js';
 import pronunciationBadgeStyles from './PronunciationBadge.module.css';
 
@@ -119,6 +123,7 @@ export const InlineEntityMention: React.FC<InlineEntityMentionProps> = (props) =
           width: window.innerWidth || 1024,
           height: window.innerHeight || 768,
         },
+        headerBottom: measureStickyHeaderBottom(),
       })
     );
   }, []);
@@ -295,16 +300,6 @@ export const InlineEntityMention: React.FC<InlineEntityMentionProps> = (props) =
         <a href={href} {...linkProps}>
           {displayText}
         </a>
-      )}
-      {showPronunciation && (
-        <PronunciationBadge
-          pronunciation={pronunciation}
-          label={pronunciationLabel}
-          baseUrl={baseUrl}
-          compact
-          iconOnly
-          className={cx(pronunciationBadgeStyles, 'inline-entity-pronunciation')}
-        />
       )}
       {popoverCard &&
         (typeof document !== 'undefined' && document.body

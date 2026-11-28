@@ -25,6 +25,21 @@ const SAFE_LINK_PATTERN = /^(https?:\/\/|\/(?!\/))/i;
 const INLINE_MARKDOWN_TOKEN_TEMPLATE =
   /(\*\*([^*]+)\*\*|__([^_]+)__|`([^`]+)`|\[\^([A-Za-z0-9._:-]+)(?:\|([A-Za-z0-9._:-]+))?\]|\[\[(person|place):([A-Za-z0-9._:-]+)(?:\|([^\]]+))?\]\]|\[([^\]]+)\]\(([^)\s]+)\)|\*([^*]+)\*|(?<!\w)_([^_]+)_(?!\w))/g;
 
+const SHORT_MONTH_NAMES = [
+  'Jan',
+  'Feb',
+  'Mar',
+  'Apr',
+  'May',
+  'Jun',
+  'Jul',
+  'Aug',
+  'Sep',
+  'Oct',
+  'Nov',
+  'Dec',
+] as const;
+
 export function createInlineMarkdownTokenRegex(): RegExp {
   return new RegExp(INLINE_MARKDOWN_TOKEN_TEMPLATE.source, 'g');
 }
@@ -218,6 +233,37 @@ export function parseMarkdownBlocks(markdown: string): MarkdownBlock[] {
   return blocks;
 }
 
+function formatSingleEdtfDate(raw: string): string {
+  const trimmed = raw.trim();
+  if (!trimmed) {
+    return '?';
+  }
+  const approx = trimmed.includes('~');
+  const cleaned = trimmed.replaceAll('~', '').replaceAll('?', '').trim();
+  const prefix = approx ? 'c. ' : '';
+
+  const ymd = /^(\d{4})-(\d{2})-(\d{2})$/.exec(cleaned);
+  if (ymd) {
+    const year = ymd[1];
+    const monthIdx = Number.parseInt(ymd[2], 10) - 1;
+    const day = Number.parseInt(ymd[3], 10);
+    if (monthIdx >= 0 && monthIdx < SHORT_MONTH_NAMES.length && day >= 1 && day <= 31) {
+      return `${prefix}${SHORT_MONTH_NAMES[monthIdx]} ${day}, ${year}`;
+    }
+  }
+
+  const ym = /^(\d{4})-(\d{2})$/.exec(cleaned);
+  if (ym) {
+    const year = ym[1];
+    const monthIdx = Number.parseInt(ym[2], 10) - 1;
+    if (monthIdx >= 0 && monthIdx < SHORT_MONTH_NAMES.length) {
+      return `${prefix}${SHORT_MONTH_NAMES[monthIdx]} ${year}`;
+    }
+  }
+
+  return `${prefix}${cleaned || '?'}`;
+}
+
 export function formatNarrativeDateSpan(dateSpan?: string | null): string | null {
   if (!dateSpan) {
     return null;
@@ -226,5 +272,14 @@ export function formatNarrativeDateSpan(dateSpan?: string | null): string | null
   if (!trimmed) {
     return null;
   }
-  return trimmed.replaceAll('/', '–').replaceAll('~', '');
+  if (trimmed.includes('/')) {
+    const [startRaw, endRaw] = trimmed.split('/', 2);
+    const start = formatSingleEdtfDate(startRaw ?? '');
+    const end = formatSingleEdtfDate(endRaw ?? '');
+    if (/^\d{4}$/.test(start) && /^\d{4}$/.test(end)) {
+      return `${start}–${end}`;
+    }
+    return `${start} — ${end}`;
+  }
+  return formatSingleEdtfDate(trimmed);
 }
