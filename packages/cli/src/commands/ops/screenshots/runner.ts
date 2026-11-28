@@ -1,14 +1,17 @@
+import crypto from 'node:crypto';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import {
   inspectLiveNavLinks,
+  inspectThemeSurface,
   inspectVisiblePluginSlots,
   navigateAndSettlePage,
   safeCloseHandle,
 } from './browser.js';
 import { prepareComponentCapture } from './components.js';
 import { classifyDiscoveredNavLinks } from './discovery.js';
-import { buildScreenshotRelativePath, sanitizeUrlForReport } from './parse.js';
+import { buildScreenshotRelativePath, resolveCaptureTimeoutPolicy, sanitizeUrlForReport } from './parse.js';
+import { buildCaptureThemeAudit } from './report.js';
 import type {
   AuthHeader,
   BundleDiscoveryResult,
@@ -19,6 +22,7 @@ import type {
   ScreenshotBrowserHandle,
   ScreenshotContextHandle,
   ScreenshotCookieSpec,
+  ScreenshotPageHandle,
   ScreenshotTheme,
   ViewportSpec,
 } from './types.js';
@@ -40,8 +44,70 @@ export interface ResolvedScreenshotRunConfig {
   readonly fullPage: boolean;
   readonly waitMs: number;
   readonly timeoutMs: number;
+  readonly heavyTimeoutMs?: number;
+  readonly mapSettleTimeoutMs?: number;
+  readonly env?: NodeJS.ProcessEnv;
   readonly concurrency: number;
   readonly json: boolean;
+}
+
+export function isMapCaptureTarget(target: CaptureTarget): boolean {
+  const pathOnly = target.route.split('?')[0].toLowerCase();
+  return (target.category === 'page' && target.isMap === true) || pathOnly === '/map';
+}
+
+export function isHeavyCaptureTarget(target: CaptureTarget): boolean {
+  const pathOnly = target.route.split('?')[0].toLowerCase();
+  return (target.category === 'page' && target.isHeavyPage === true) || pathOnly === '/evidence';
+}
+
+export function isScreenshotTimeoutError(err: unknown): boolean {
+  const message = err instanceof Error ? err.message : String(err);
+  return /timeout|timed out/i.test(message);
+}
+
+async function computeFileSha256(filePath: string): Promise<string | undefined> {
+  try {
+    const bytes = await fs.readFile(filePath);
+    return crypto.createHash('sha256').update(bytes).digest('hex');
+  } catch {
+    return undefined;
+  }
+}
+
+async function capturePageScreenshotResilient(options: {
+  readonly page: ScreenshotPageHandle;
+  readonly filePath: string;
+  readonly fullPage: boolean;
+  readonly captureTimeoutMs: number;
+  readonly fallbackTimeoutMs: number;
+}): Promise<{
+  readonly fallbackUsed?: 'viewport-after-fullpage-timeout';
+  readonly reason?: string;
+}> {
+  try {
+    await options.page.screenshot({
+      path: options.filePath,
+      fullPage: options.fullPage,
+      timeout: options.captureTimeoutMs,
+      animations: 'disabled',
+    });
+    return {};
+  } catch (err: unknown) {
+    if (!options.fullPage || !isScreenshotTimeoutError(err)) {
+      throw err;
+    }
+    await options.page.screenshot({
+      path: options.filePath,
+      fullPage: false,
+      timeout: options.fallbackTimeoutMs,
+      animations: 'disabled',
+    });
+    return {
+      fallbackUsed: 'viewport-after-fullpage-timeout',
+      reason: 'Full-page capture timed out; captured viewport fallback',
+    };
+  }
 }
 
 export function redactErrorReason(rawMessage: string, secrets: readonly string[]): string {
@@ -215,23 +281,47 @@ export async function runSingleCapture(input: {
       failedRequests.push(detail ? `${safeUrl} (${detail})` : safeUrl);
     });
 
+    const isMap = isMapCaptureTarget(target);
+    const isHeavyPage = isHeavyCaptureTarget(target);
+    const timeoutPolicy = resolveCaptureTimeoutPolicy({
+      baseTimeoutMs: config.timeoutMs,
+      isMap,
+      isHeavyPage,
+      heavyTimeoutMs: config.heavyTimeoutMs,
+      mapSettleTimeoutMs: config.mapSettleTimeoutMs,
+      env: config.env ?? process.env,
+    });
+
     await navigateAndSettlePage({
       page,
       url: `${config.targetUrl}${target.route}`,
       theme,
-      timeoutMs: config.timeoutMs,
+      timeoutMs: timeoutPolicy.captureTimeoutMs,
+      navigationTimeoutMs: timeoutPolicy.navigationTimeoutMs,
+      mapSettleTimeoutMs: timeoutPolicy.mapSettleTimeoutMs,
       waitMs: config.waitMs,
-      isMap: target.category === 'page' && target.isMap,
+      isMap,
     });
+
+    let fallbackUsed: ManifestCaptureEntry['fallbackUsed'];
+    let captureReason: string | undefined;
 
     if (target.category === 'page') {
       await fs.mkdir(path.dirname(absoluteFile), { recursive: true });
-      await page.screenshot({ path: absoluteFile, fullPage: config.fullPage, timeout: config.timeoutMs });
+      const shotResult = await capturePageScreenshotResilient({
+        page,
+        filePath: absoluteFile,
+        fullPage: isMap ? false : config.fullPage,
+        captureTimeoutMs: timeoutPolicy.captureTimeoutMs,
+        fallbackTimeoutMs: timeoutPolicy.fullPageFallbackTimeoutMs,
+      });
+      fallbackUsed = shotResult.fallbackUsed;
+      captureReason = shotResult.reason;
     } else if (target.category === 'component') {
       const prepared = await prepareComponentCapture(target, page, {
         viewport,
         searchQuery,
-        actionTimeoutMs: Math.min(4_000, config.timeoutMs),
+        actionTimeoutMs: Math.min(4_000, timeoutPolicy.captureTimeoutMs),
         settleMs: Math.max(150, Math.min(config.waitMs, 800)),
       });
       if (prepared.kind === 'skip') {
@@ -256,9 +346,18 @@ export async function runSingleCapture(input: {
       }
       await fs.mkdir(path.dirname(absoluteFile), { recursive: true });
       if (prepared.kind === 'element') {
-        await prepared.locator.screenshot({ path: absoluteFile, timeout: config.timeoutMs });
+        await prepared.locator.screenshot({
+          path: absoluteFile,
+          timeout: timeoutPolicy.captureTimeoutMs,
+          animations: 'disabled',
+        });
       } else {
-        await page.screenshot({ path: absoluteFile, fullPage: prepared.fullPage, timeout: config.timeoutMs });
+        await page.screenshot({
+          path: absoluteFile,
+          fullPage: prepared.fullPage,
+          timeout: timeoutPolicy.captureTimeoutMs,
+          animations: 'disabled',
+        });
       }
     } else if (target.slotSelector) {
       const locator = page.locator(target.slotSelector).first();
@@ -286,11 +385,29 @@ export async function runSingleCapture(input: {
         };
       }
       await fs.mkdir(path.dirname(absoluteFile), { recursive: true });
-      await locator.screenshot({ path: absoluteFile, timeout: config.timeoutMs });
+      await locator.screenshot({
+        path: absoluteFile,
+        timeout: timeoutPolicy.captureTimeoutMs,
+        animations: 'disabled',
+      });
     } else {
       await fs.mkdir(path.dirname(absoluteFile), { recursive: true });
-      await page.screenshot({ path: absoluteFile, fullPage: config.fullPage, timeout: config.timeoutMs });
+      const shotResult = await capturePageScreenshotResilient({
+        page,
+        filePath: absoluteFile,
+        fullPage: config.fullPage,
+        captureTimeoutMs: timeoutPolicy.captureTimeoutMs,
+        fallbackTimeoutMs: timeoutPolicy.fullPageFallbackTimeoutMs,
+      });
+      fallbackUsed = shotResult.fallbackUsed;
+      captureReason = shotResult.reason;
     }
+
+    const [surfaceProbe, contentSha256] = await Promise.all([
+      inspectThemeSurface(page),
+      computeFileSha256(absoluteFile),
+    ]);
+    const themeAudit = buildCaptureThemeAudit(surfaceProbe, contentSha256);
 
     return {
       category: target.category,
@@ -306,6 +423,9 @@ export async function runSingleCapture(input: {
       height: viewport.height,
       durationMs: Date.now() - startedAt,
       status: 'captured',
+      ...(captureReason ? { reason: captureReason } : {}),
+      ...(fallbackUsed ? { fallbackUsed } : {}),
+      ...(themeAudit ? { themeAudit } : {}),
       consoleErrors,
       failedRequests,
     };

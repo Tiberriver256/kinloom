@@ -1,4 +1,7 @@
 import type {
+  CaptureThemeAudit,
+  DarkThemeVerificationStatus,
+  DarkThemeVerificationSummary,
   IncludeScope,
   ManifestCaptureEntry,
   ScreenshotCategory,
@@ -7,6 +10,211 @@ import type {
   ScreenshotTheme,
   ViewportSpec,
 } from './types.js';
+
+export interface ParsedRgbColor {
+  readonly r: number;
+  readonly g: number;
+  readonly b: number;
+  readonly a: number;
+}
+
+const DARK_SURFACE_LUMINANCE_THRESHOLD = 0.25;
+
+export function parseCssRgbColor(raw: string | null | undefined): ParsedRgbColor | null {
+  if (!raw) {
+    return null;
+  }
+  const trimmed = raw.trim().toLowerCase();
+  const rgbMatch =
+    /^rgba?\(\s*(\d+(?:\.\d+)?)\s*,\s*(\d+(?:\.\d+)?)\s*,\s*(\d+(?:\.\d+)?)(?:\s*,\s*(\d+(?:\.\d+)?))?\s*\)$/.exec(
+      trimmed
+    );
+  if (rgbMatch) {
+    const r = Number(rgbMatch[1]);
+    const g = Number(rgbMatch[2]);
+    const b = Number(rgbMatch[3]);
+    const a = rgbMatch[4] === undefined ? 1 : Number(rgbMatch[4]);
+    if (
+      [r, g, b, a].some((v) => !Number.isFinite(v)) ||
+      r < 0 ||
+      r > 255 ||
+      g < 0 ||
+      g > 255 ||
+      b < 0 ||
+      b > 255 ||
+      a <= 0
+    ) {
+      return null;
+    }
+    return { r, g, b, a };
+  }
+  const hexMatch = /^#([0-9a-f]{3}|[0-9a-f]{6})$/.exec(trimmed);
+  if (hexMatch) {
+    const hex = hexMatch[1];
+    const expanded = hex.length === 3 ? hex.replace(/./g, (ch) => `${ch}${ch}`) : hex;
+    return {
+      r: Number.parseInt(expanded.slice(0, 2), 16),
+      g: Number.parseInt(expanded.slice(2, 4), 16),
+      b: Number.parseInt(expanded.slice(4, 6), 16),
+      a: 1,
+    };
+  }
+  return null;
+}
+
+export function computeRelativeLuminance(rgb: {
+  readonly r: number;
+  readonly g: number;
+  readonly b: number;
+}): number {
+  const linearize = (channel: number): number => {
+    const s = channel / 255;
+    return s <= 0.04045 ? s / 12.92 : ((s + 0.055) / 1.055) ** 2.4;
+  };
+  return 0.2126 * linearize(rgb.r) + 0.7152 * linearize(rgb.g) + 0.0722 * linearize(rgb.b);
+}
+
+export function computeContrastRatio(lumA: number, lumB: number): number {
+  const lighter = Math.max(lumA, lumB);
+  const darker = Math.min(lumA, lumB);
+  return Math.round(((lighter + 0.05) / (darker + 0.05)) * 100) / 100;
+}
+
+export function buildCaptureThemeAudit(
+  probe: {
+    readonly backgroundColor: string | null;
+    readonly textColor: string | null;
+    readonly dataTheme: string | null;
+    readonly prefersDark: boolean | null;
+  } | null,
+  contentSha256?: string
+): CaptureThemeAudit | undefined {
+  if (!probe && !contentSha256) {
+    return undefined;
+  }
+  const bgRgb = parseCssRgbColor(probe?.backgroundColor);
+  const fgRgb = parseCssRgbColor(probe?.textColor);
+  const backgroundLuminance = bgRgb ? Math.round(computeRelativeLuminance(bgRgb) * 10_000) / 10_000 : null;
+  const textLuminance = fgRgb ? computeRelativeLuminance(fgRgb) : null;
+  const contrastRatio =
+    backgroundLuminance !== null && textLuminance !== null
+      ? computeContrastRatio(backgroundLuminance, textLuminance)
+      : null;
+  const isDarkSurface =
+    backgroundLuminance !== null ? backgroundLuminance < DARK_SURFACE_LUMINANCE_THRESHOLD : null;
+
+  return {
+    backgroundColor: probe?.backgroundColor ?? null,
+    textColor: probe?.textColor ?? null,
+    backgroundLuminance,
+    contrastRatio,
+    isDarkSurface,
+    dataTheme: probe?.dataTheme ?? null,
+    prefersDark: probe?.prefersDark ?? null,
+    ...(contentSha256 ? { contentSha256 } : {}),
+  };
+}
+
+export function computeDarkThemeVerification(
+  themes: readonly ScreenshotTheme[],
+  captures: readonly ManifestCaptureEntry[]
+): DarkThemeVerificationSummary {
+  if (!themes.includes('dark')) {
+    return {
+      status: 'not-requested',
+      darkCaptureCount: 0,
+      pairedCaptureCount: 0,
+      distinctFromLightCount: 0,
+      identicalToLightCount: 0,
+      darkSurfaceVerifiedCount: 0,
+      lightCanvasInDarkModeCount: 0,
+      minDarkContrastRatio: null,
+      identicalCaptureIds: [],
+    };
+  }
+
+  const lightByKey = new Map<string, ManifestCaptureEntry>();
+  const darkCaptures: ManifestCaptureEntry[] = [];
+
+  for (const entry of captures) {
+    if (entry.status !== 'captured' || entry.slug === 'theme-toggle') {
+      continue;
+    }
+    const pairKey = `${entry.category}:${entry.slug}:${entry.state}@${entry.viewport}`;
+    if (entry.theme === 'light') {
+      lightByKey.set(pairKey, entry);
+    } else {
+      darkCaptures.push(entry);
+    }
+  }
+
+  let pairedCaptureCount = 0;
+  let distinctFromLightCount = 0;
+  let identicalToLightCount = 0;
+  let darkSurfaceVerifiedCount = 0;
+  let lightCanvasInDarkModeCount = 0;
+  let minDarkContrastRatio: number | null = null;
+  const identicalCaptureIds: string[] = [];
+
+  for (const darkEntry of darkCaptures) {
+    const pairKey = `${darkEntry.category}:${darkEntry.slug}:${darkEntry.state}@${darkEntry.viewport}`;
+    const audit = darkEntry.themeAudit;
+
+    if (audit?.isDarkSurface === true) {
+      darkSurfaceVerifiedCount += 1;
+    } else if (audit?.isDarkSurface === false) {
+      lightCanvasInDarkModeCount += 1;
+    }
+    if (typeof audit?.contrastRatio === 'number') {
+      minDarkContrastRatio =
+        minDarkContrastRatio === null
+          ? audit.contrastRatio
+          : Math.min(minDarkContrastRatio, audit.contrastRatio);
+    }
+
+    const lightEntry = lightByKey.get(pairKey);
+    const lightHash = lightEntry?.themeAudit?.contentSha256;
+    const darkHash = audit?.contentSha256;
+    if (lightEntry && lightHash && darkHash) {
+      pairedCaptureCount += 1;
+      if (lightHash === darkHash) {
+        identicalToLightCount += 1;
+        identicalCaptureIds.push(`${darkEntry.id}@${darkEntry.viewport}`);
+      } else {
+        distinctFromLightCount += 1;
+      }
+    }
+  }
+
+  let status: DarkThemeVerificationStatus;
+  if (
+    darkCaptures.length === 0 ||
+    (pairedCaptureCount === 0 && darkSurfaceVerifiedCount === 0 && lightCanvasInDarkModeCount === 0)
+  ) {
+    status = 'unverified';
+  } else if (
+    (pairedCaptureCount > 0 && distinctFromLightCount === 0) ||
+    (distinctFromLightCount === 0 && darkSurfaceVerifiedCount === 0 && lightCanvasInDarkModeCount > 0)
+  ) {
+    status = 'noop';
+  } else if (identicalToLightCount > 0 || lightCanvasInDarkModeCount > 0) {
+    status = 'partial-noop';
+  } else {
+    status = 'verified';
+  }
+
+  return {
+    status,
+    darkCaptureCount: darkCaptures.length,
+    pairedCaptureCount,
+    distinctFromLightCount,
+    identicalToLightCount,
+    darkSurfaceVerifiedCount,
+    lightCanvasInDarkModeCount,
+    minDarkContrastRatio,
+    identicalCaptureIds,
+  };
+}
 
 export function escapeHtml(raw: string): string {
   return raw
@@ -65,6 +273,7 @@ export function buildScreenshotsManifest(input: {
       consoleErrorCount,
       failedRequestCount,
     },
+    darkThemeVerification: computeDarkThemeVerification(input.themes, input.captures),
     captures: input.captures,
   };
 }
@@ -101,9 +310,13 @@ function groupCapturesForSheet(captures: readonly ManifestCaptureEntry[]): reado
   return [...map.values()];
 }
 
-function renderCardHtml(entry: ManifestCaptureEntry): string {
+function renderCardHtml(entry: ManifestCaptureEntry, identicalDarkIds: ReadonlySet<string>): string {
+  const isIdenticalDark = entry.theme === 'dark' && identicalDarkIds.has(`${entry.id}@${entry.viewport}`);
   const hasErrors =
-    entry.status === 'failed' || entry.consoleErrors.length > 0 || entry.failedRequests.length > 0;
+    entry.status === 'failed' ||
+    isIdenticalDark ||
+    entry.consoleErrors.length > 0 ||
+    entry.failedRequests.length > 0;
   const safeFile = entry.file ? escapeHtml(entry.file) : '';
   const safeLabel = escapeHtml(entry.label);
   const safeRoute = escapeHtml(entry.route);
@@ -116,6 +329,10 @@ function renderCardHtml(entry: ManifestCaptureEntry): string {
   );
 
   const errorDetails = [
+    ...(isIdenticalDark ? ['Dark capture bytes are identical to light capture (dark-theme no-op).'] : []),
+    ...(entry.fallbackUsed === 'viewport-after-fullpage-timeout'
+      ? [entry.reason ?? 'Full-page capture timed out; captured viewport fallback.']
+      : []),
     ...entry.consoleErrors.map((msg) => `Console error: ${msg}`),
     ...entry.failedRequests.map((req) => `Failed request: ${req}`),
   ];
@@ -127,6 +344,12 @@ function renderCardHtml(entry: ManifestCaptureEntry): string {
           .join('')}</ul></details>`
       : '';
 
+  const fallbackBadge =
+    entry.fallbackUsed === 'viewport-after-fullpage-timeout'
+      ? `<span class="badge badge-warn">viewport fallback</span>`
+      : '';
+  const darkNoopBadge = isIdenticalDark ? `<span class="badge badge-warn">dark no-op</span>` : '';
+
   const mediaHtml =
     entry.status === 'captured' && entry.file
       ? `<button type="button" class="thumb-btn" data-zoom-src="${safeFile}" data-zoom-title="${safeLabel} (${safeViewport} · ${safeTheme})" data-zoom-meta="${safeRoute} · ${entry.width}x${entry.height} · ${entry.durationMs}ms"><img src="${safeFile}" alt="${safeLabel} — ${safeViewport} ${safeTheme}" loading="lazy" /></button>`
@@ -137,6 +360,7 @@ function renderCardHtml(entry: ManifestCaptureEntry): string {
     <span class="badge">${safeViewport} ${entry.width}&times;${entry.height}</span>
     <span class="badge badge-theme-${safeTheme}">${safeTheme}</span>
     <span class="badge badge-status-${safeStatus}">${safeStatus}</span>
+    ${fallbackBadge}${darkNoopBadge}
     <span class="dur">${entry.durationMs}ms</span>
   </div>
   ${mediaHtml}
@@ -153,6 +377,11 @@ export function renderContactSheetHtml(manifest: ScreenshotsManifest): string {
   const groups = groupCapturesForSheet(manifest.captures);
   const safeTarget = escapeHtml(manifest.targetUrl);
   const safeTimestamp = escapeHtml(manifest.generatedAt);
+  const identicalDarkIds = new Set(manifest.darkThemeVerification?.identicalCaptureIds ?? []);
+  const darkMetaSuffix =
+    manifest.darkThemeVerification && manifest.darkThemeVerification.status !== 'not-requested'
+      ? ` &middot; dark theme: ${escapeHtml(manifest.darkThemeVerification.status)}`
+      : '';
 
   const viewportButtons = manifest.viewports
     .map(
@@ -167,7 +396,7 @@ export function renderContactSheetHtml(manifest: ScreenshotsManifest): string {
 
   const sectionsHtml = groups
     .map((group) => {
-      const cardsHtml = group.entries.map(renderCardHtml).join('\n');
+      const cardsHtml = group.entries.map((entry) => renderCardHtml(entry, identicalDarkIds)).join('\n');
       return `<section class="group" data-group-category="${group.category}">
   <header class="group-head">
     <div class="group-title-row">
@@ -253,7 +482,7 @@ export function renderContactSheetHtml(manifest: ScreenshotsManifest): string {
 <body>
 <header class="topbar">
   <h1>Kinloom UI Review Contact Sheet</h1>
-  <div class="topbar-meta">${safeTarget} &middot; ${safeTimestamp} &middot; ${manifest.summary.captured} captured / ${manifest.summary.skipped} skipped / ${manifest.summary.failed} failed</div>
+  <div class="topbar-meta">${safeTarget} &middot; ${safeTimestamp} &middot; ${manifest.summary.captured} captured / ${manifest.summary.skipped} skipped / ${manifest.summary.failed} failed${darkMetaSuffix}</div>
 </header>
 <div class="filters" role="region" aria-label="Screenshot filters">
   <div class="filter-group" role="group" aria-label="Category filter">
@@ -395,7 +624,7 @@ ${sectionsHtml}
 }
 
 export function formatScreenshotsTextReport(result: Omit<ScreenshotsCommandResult, 'rendered'>): string {
-  const { summary } = result.manifest;
+  const { summary, darkThemeVerification } = result.manifest;
   const lines = [
     `Kinloom UI Screenshots Export`,
     `  Target URL:    ${result.manifest.targetUrl}`,
@@ -408,6 +637,37 @@ export function formatScreenshotsTextReport(result: Omit<ScreenshotsCommandResul
     `  Breakdown:     pages=${summary.byCategory.page}, components=${summary.byCategory.component}, plugins=${summary.byCategory.plugin}`,
     `  Diagnostics:   ${summary.consoleErrorCount} console error(s), ${summary.failedRequestCount} failed request(s)`,
   ];
+
+  if (darkThemeVerification && darkThemeVerification.status !== 'not-requested') {
+    const parts: string[] = [darkThemeVerification.status];
+    if (darkThemeVerification.pairedCaptureCount > 0) {
+      parts.push(
+        `${darkThemeVerification.distinctFromLightCount}/${darkThemeVerification.pairedCaptureCount} distinct from light`
+      );
+    }
+    if (darkThemeVerification.darkSurfaceVerifiedCount > 0) {
+      parts.push(`${darkThemeVerification.darkSurfaceVerifiedCount} dark canvas`);
+    }
+    if (darkThemeVerification.lightCanvasInDarkModeCount > 0) {
+      parts.push(`${darkThemeVerification.lightCanvasInDarkModeCount} light canvas in dark mode`);
+    }
+    if (darkThemeVerification.minDarkContrastRatio !== null) {
+      parts.push(`min contrast ${darkThemeVerification.minDarkContrastRatio}:1`);
+    }
+    lines.push(`  Dark Theme:    ${parts.join(', ')}`);
+  }
+
+  const fallbackEntries = result.manifest.captures.filter(
+    (entry) => entry.fallbackUsed === 'viewport-after-fullpage-timeout'
+  );
+  if (fallbackEntries.length > 0) {
+    lines.push(
+      `  Fallbacks:     ${fallbackEntries.length} viewport fallback(s) after full-page timeout (${fallbackEntries
+        .slice(0, 5)
+        .map((e) => `${e.route} ${e.viewport}/${e.theme}`)
+        .join(', ')})`
+    );
+  }
 
   const failedEntries = result.manifest.captures.filter((entry) => entry.status === 'failed');
   if (failedEntries.length > 0) {

@@ -914,4 +914,170 @@ describe('kinloom screenshots CLI + hermetic HTTP archive integration', () => {
       await server.close();
     }
   });
+
+  it('discovers /data/archive.json, verifies real dark-theme contrast/diff, and falls back to viewport on /evidence full-page timeout', async () => {
+    const outDir = await makeTempDir('kinloom-shots-p2-64-');
+    const seenScreenshotCalls: Array<{
+      readonly route: string;
+      readonly theme: string;
+      readonly fullPage?: boolean;
+      readonly timeout?: number;
+      readonly animations?: string;
+    }> = [];
+    const seenEmulateThemes: string[] = [];
+
+    const staticArchiveFetch: typeof fetch = async (input) => {
+      const url = String(input);
+      if (url.endsWith('/data/archive.json')) {
+        return new Response(
+          JSON.stringify({
+            people: [{ id: 'p-abe', slug: 'abraham-lincoln', full_name: 'Abraham Lincoln' }],
+            places: [{ id: 'pl-il', slug: 'springfield-il', name: 'Springfield, Illinois' }],
+          }),
+          { status: 200, headers: { 'content-type': 'application/json' } }
+        );
+      }
+      return new Response('not found', { status: 404 });
+    };
+
+    const browserFactory: ScreenshotBrowserFactory = async () => ({
+      newContext: async (ctxOpts) => ({
+        newPage: async () => {
+          let currentRoute = '/';
+          let currentTheme = ctxOpts.colorScheme;
+          const makeLocator = (selector: string): ScreenshotLocatorHandle => {
+            const isNextBtn = selector === '[data-map-playback-bar="true"] button:has-text("Next")';
+            const handle: ScreenshotLocatorHandle = {
+              count: async () => (isNextBtn && currentRoute === '/map' ? 1 : 0),
+              first: () => handle,
+              nth: () => handle,
+              isVisible: async () => isNextBtn && currentRoute === '/map',
+              isDisabled: async () => false,
+              click: async () => undefined,
+              fill: async () => undefined,
+              screenshot: async ({ path: outPath }) => {
+                await fs.writeFile(
+                  outPath,
+                  Buffer.concat([PNG_MAGIC_BYTES, Buffer.from(`${currentRoute}:${currentTheme}`)])
+                );
+              },
+              boundingBox: async () => (isNextBtn ? { width: 90, height: 34 } : null),
+              textContent: async () => 'Next →',
+            };
+            return handle;
+          };
+
+          return {
+            emulateMedia: async (opts) => {
+              if (opts.colorScheme) {
+                currentTheme = opts.colorScheme === 'dark' ? 'dark' : 'light';
+                seenEmulateThemes.push(currentTheme);
+              }
+            },
+            goto: async (url) => {
+              currentRoute = new URL(url).pathname;
+            },
+            screenshot: async ({ path: outPath, fullPage, timeout, animations }) => {
+              seenScreenshotCalls.push({
+                route: currentRoute,
+                theme: currentTheme,
+                fullPage,
+                timeout,
+                animations,
+              });
+              if (currentRoute === '/evidence' && fullPage === true) {
+                throw new Error('page.screenshot: Timeout 40000ms exceeded.');
+              }
+              await fs.writeFile(
+                outPath,
+                Buffer.concat([PNG_MAGIC_BYTES, Buffer.from(`${currentRoute}:${currentTheme}:${fullPage}`)])
+              );
+            },
+            locator: (selector) => makeLocator(selector),
+            evaluate: async (expr) => {
+              if (expr.includes('header a[href]')) {
+                return [] as never;
+              }
+              if (expr.includes('getComputedStyle')) {
+                return (
+                  currentTheme === 'dark'
+                    ? {
+                        backgroundColor: 'rgb(23, 22, 20)',
+                        textColor: 'rgb(234, 227, 213)',
+                        dataTheme: null,
+                        colorScheme: 'dark',
+                        prefersDark: true,
+                      }
+                    : {
+                        backgroundColor: 'rgb(245, 239, 226)',
+                        textColor: 'rgb(35, 39, 46)',
+                        dataTheme: null,
+                        colorScheme: 'light',
+                        prefersDark: false,
+                      }
+                ) as never;
+              }
+              return true as never;
+            },
+            waitForTimeout: async () => undefined,
+            waitForSelector: async () => undefined,
+            keyboard: { press: async () => undefined },
+            on: () => undefined,
+            close: async () => undefined,
+          };
+        },
+        close: async () => undefined,
+      }),
+      close: async () => undefined,
+    });
+
+    const result = await runScreenshotsCommand({
+      url: 'https://static-demo.kinloom.example',
+      outDir,
+      viewports: [{ name: 'desktop', width: 1440, height: 900 }],
+      themes: ['light', 'dark'],
+      include: ['pages', 'components'],
+      waitMs: 0,
+      timeoutMs: 2_000,
+      concurrency: 2,
+      fetchImpl: staticArchiveFetch,
+      browserFactory,
+      now: () => new Date('2026-11-27T18:00:00.000Z'),
+    });
+
+    expect(result.ok).toBe(true);
+    expect(seenEmulateThemes).toContain('dark');
+    expect(seenEmulateThemes).toContain('light');
+
+    // Discovered person & place routes from /data/archive.json
+    const routes = new Set(result.manifest.captures.map((c) => c.route));
+    expect(routes.has('/person/abraham-lincoln')).toBe(true);
+    expect(routes.has('/place/springfield-il')).toBe(true);
+
+    // Verified genuine dark-theme rendering and AAA contrast
+    expect(result.manifest.darkThemeVerification?.status).toBe('verified');
+    expect(result.manifest.darkThemeVerification?.identicalToLightCount).toBe(0);
+    expect(result.manifest.darkThemeVerification?.distinctFromLightCount).toBeGreaterThan(5);
+    expect(result.manifest.darkThemeVerification?.minDarkContrastRatio).toBeGreaterThan(13.5);
+    expect(result.rendered).toContain('Dark Theme:    verified');
+
+    // /map uses viewport capture + extended 2x timeout + disabled animations, and map-stop-card succeeds
+    const mapPageShot = seenScreenshotCalls.find((call) => call.route === '/map');
+    expect(mapPageShot?.fullPage).toBe(false);
+    expect(mapPageShot?.timeout).toBe(4_000);
+    expect(mapPageShot?.animations).toBe('disabled');
+    const mapStopCardDark = result.manifest.captures.find(
+      (c) => c.id === 'component:map-stop-card:open' && c.theme === 'dark'
+    );
+    expect(mapStopCardDark?.status).toBe('captured');
+
+    // /evidence retries with viewport fallback on full-page timeout
+    const evidenceShots = seenScreenshotCalls.filter((call) => call.route === '/evidence');
+    expect(evidenceShots.some((c) => c.fullPage === true && c.timeout === 4_000)).toBe(true);
+    expect(evidenceShots.some((c) => c.fullPage === false && c.timeout === 2_000)).toBe(true);
+    const evidenceDark = result.manifest.captures.find((c) => c.id === 'page:evidence' && c.theme === 'dark');
+    expect(evidenceDark?.status).toBe('captured');
+    expect(evidenceDark?.fallbackUsed).toBe('viewport-after-fullpage-timeout');
+    expect(result.rendered).toContain('Fallbacks:     2 viewport fallback(s)');
+  });
 });

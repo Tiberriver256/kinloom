@@ -42,6 +42,7 @@ export interface PageCaptureTarget {
   readonly label: string;
   readonly route: string;
   readonly isMap?: boolean;
+  readonly isHeavyPage?: boolean;
 }
 
 export interface ComponentCaptureTarget {
@@ -111,6 +112,36 @@ export interface DiscoveredPluginSlot {
   readonly route: string;
 }
 
+export interface CaptureThemeAudit {
+  readonly backgroundColor: string | null;
+  readonly textColor: string | null;
+  readonly backgroundLuminance: number | null;
+  readonly contrastRatio: number | null;
+  readonly isDarkSurface: boolean | null;
+  readonly dataTheme: string | null;
+  readonly prefersDark: boolean | null;
+  readonly contentSha256?: string;
+}
+
+export type DarkThemeVerificationStatus =
+  | 'not-requested'
+  | 'verified'
+  | 'partial-noop'
+  | 'noop'
+  | 'unverified';
+
+export interface DarkThemeVerificationSummary {
+  readonly status: DarkThemeVerificationStatus;
+  readonly darkCaptureCount: number;
+  readonly pairedCaptureCount: number;
+  readonly distinctFromLightCount: number;
+  readonly identicalToLightCount: number;
+  readonly darkSurfaceVerifiedCount: number;
+  readonly lightCanvasInDarkModeCount: number;
+  readonly minDarkContrastRatio: number | null;
+  readonly identicalCaptureIds: readonly string[];
+}
+
 export interface ManifestCaptureEntry {
   readonly category: ScreenshotCategory;
   readonly id: string;
@@ -126,6 +157,8 @@ export interface ManifestCaptureEntry {
   readonly durationMs: number;
   readonly status: ScreenshotStatus;
   readonly reason?: string;
+  readonly fallbackUsed?: 'viewport-after-fullpage-timeout';
+  readonly themeAudit?: CaptureThemeAudit;
   readonly consoleErrors: readonly string[];
   readonly failedRequests: readonly string[];
 }
@@ -148,6 +181,7 @@ export interface ScreenshotsManifest {
   readonly themes: readonly ScreenshotTheme[];
   readonly include: readonly IncludeScope[];
   readonly summary: ScreenshotsManifestSummary;
+  readonly darkThemeVerification?: DarkThemeVerificationSummary;
   readonly captures: readonly ManifestCaptureEntry[];
 }
 
@@ -156,9 +190,14 @@ export interface ScreenshotLocatorHandle {
   first(): ScreenshotLocatorHandle;
   nth(index: number): ScreenshotLocatorHandle;
   isVisible(): Promise<boolean>;
+  isDisabled?(): Promise<boolean>;
   click(options?: { timeout?: number }): Promise<void>;
   fill(value: string, options?: { timeout?: number }): Promise<void>;
-  screenshot(options: { path: string; timeout?: number }): Promise<unknown>;
+  screenshot(options: {
+    path: string;
+    timeout?: number;
+    animations?: 'disabled' | 'allow';
+  }): Promise<unknown>;
   boundingBox(): Promise<{ width: number; height: number } | null>;
   textContent(): Promise<string | null>;
 }
@@ -168,7 +207,13 @@ export interface ScreenshotPageHandle {
     url: string,
     options?: { waitUntil?: 'load' | 'domcontentloaded' | 'commit'; timeout?: number }
   ): Promise<unknown>;
-  screenshot(options: { path: string; fullPage?: boolean; timeout?: number }): Promise<unknown>;
+  emulateMedia?(options: { readonly colorScheme?: ScreenshotTheme | 'no-preference' | null }): Promise<void>;
+  screenshot(options: {
+    path: string;
+    fullPage?: boolean;
+    timeout?: number;
+    animations?: 'disabled' | 'allow';
+  }): Promise<unknown>;
   locator(selector: string): ScreenshotLocatorHandle;
   evaluate<T>(pageFunction: string): Promise<T>;
   waitForTimeout(ms: number): Promise<void>;

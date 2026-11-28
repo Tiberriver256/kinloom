@@ -3,6 +3,7 @@ import {
   buildHeadlessEnv,
   createPlaywrightBrowserFactory,
   inspectLiveNavLinks,
+  inspectThemeSurface,
   inspectVisiblePluginSlots,
   isExecutableBinary,
   loadPlaywrightModule,
@@ -27,21 +28,29 @@ import {
   normalizeRoutePath,
   parseAuthCookieSpecs,
   parseAuthHeader,
+  parseBoundedTimeoutEnv,
   parseIncludeOption,
   parseRouteList,
   parseThemesOption,
   parseViewportsOption,
+  resolveCaptureTimeoutPolicy,
   routeToSlug,
   sanitizeSlug,
   sanitizeUrlForReport,
   validateTargetBaseUrl,
 } from './parse.js';
 import {
+  buildCaptureThemeAudit,
   buildScreenshotsManifest,
+  computeContrastRatio,
+  computeDarkThemeVerification,
+  computeRelativeLuminance,
   escapeHtml,
   formatScreenshotsTextReport,
+  parseCssRgbColor,
   renderContactSheetHtml,
 } from './report.js';
+import { isHeavyCaptureTarget, isMapCaptureTarget, isScreenshotTimeoutError } from './runner.js';
 import type {
   BundleDiscoveryResult,
   ComponentRecipeId,
@@ -955,5 +964,438 @@ describe('screenshots/report manifest and XSS-safe contact sheet', () => {
       manifest: cleanManifest,
     });
     expect(cleanReport).not.toContain('Failures:');
+  });
+
+  it('discovers static /data/archive.json before /data/bundle.json and skips non-bundle JSON payloads', async () => {
+    const archivePayload = {
+      people: [{ id: 'p-demo', slug: 'nancy-hanks', full_name: 'Nancy Hanks' }],
+      places: [{ id: 'pl-demo', slug: 'hardin-ky', name: 'Hardin County, Kentucky' }],
+    };
+    const requestedUrls: string[] = [];
+    const archiveFetch: typeof fetch = vi.fn(async (input) => {
+      const url = String(input);
+      requestedUrls.push(url);
+      if (url.endsWith('/api/bundle')) {
+        return new Response(JSON.stringify({ error: 'static site has no api' }), {
+          status: 200,
+          headers: { 'content-type': 'application/json' },
+        });
+      }
+      if (url.endsWith('/data/archive.json')) {
+        return new Response(JSON.stringify(archivePayload), {
+          status: 200,
+          headers: { 'content-type': 'application/json' },
+        });
+      }
+      return new Response('should not reach bundle.json', { status: 404 });
+    });
+
+    const fromArchiveJson = await fetchArchiveBundleForDiscovery({
+      baseUrl: 'https://static.kinloom.example',
+      samplePeople: 1,
+      samplePlaces: 1,
+      timeoutMs: 5_000,
+      fetchImpl: archiveFetch,
+    });
+    expect(fromArchiveJson.source).toBe('static-bundle');
+    expect(fromArchiveJson.people[0]?.slug).toBe('nancy-hanks');
+    expect(fromArchiveJson.places[0]?.slug).toBe('hardin-ky');
+    expect(requestedUrls).toEqual([
+      'https://static.kinloom.example/api/bundle',
+      'https://static.kinloom.example/data/archive.json',
+    ]);
+
+    const bundleFallbackUrls: string[] = [];
+    const legacyBundleFetch: typeof fetch = vi.fn(async (input) => {
+      const url = String(input);
+      bundleFallbackUrls.push(url);
+      if (url.endsWith('/data/bundle.json')) {
+        return new Response(JSON.stringify(archivePayload), {
+          status: 200,
+          headers: { 'content-type': 'application/json' },
+        });
+      }
+      return new Response('not found', { status: 404 });
+    });
+
+    const fromLegacyBundle = await fetchArchiveBundleForDiscovery({
+      baseUrl: 'https://legacy.kinloom.example',
+      samplePeople: 1,
+      samplePlaces: 1,
+      timeoutMs: 5_000,
+      fetchImpl: legacyBundleFetch,
+    });
+    expect(fromLegacyBundle.source).toBe('static-bundle');
+    expect(bundleFallbackUrls).toEqual([
+      'https://legacy.kinloom.example/api/bundle',
+      'https://legacy.kinloom.example/data/archive.json',
+      'https://legacy.kinloom.example/data/bundle.json',
+    ]);
+  });
+
+  it('resolves configurable capture timeout policies for standard, map, and heavy evidence targets', () => {
+    expect(parseBoundedTimeoutEnv(undefined, 500, 120_000)).toBeUndefined();
+    expect(parseBoundedTimeoutEnv('not-a-number', 500, 120_000)).toBeUndefined();
+    expect(parseBoundedTimeoutEnv('100', 500, 120_000)).toBeUndefined();
+    expect(parseBoundedTimeoutEnv('45000', 500, 120_000)).toBe(45_000);
+
+    expect(
+      resolveCaptureTimeoutPolicy({
+        baseTimeoutMs: 20_000,
+        isMap: false,
+        isHeavyPage: false,
+      })
+    ).toEqual({
+      navigationTimeoutMs: 20_000,
+      captureTimeoutMs: 20_000,
+      mapSettleTimeoutMs: 4_000,
+      fullPageFallbackTimeoutMs: 15_000,
+    });
+
+    expect(
+      resolveCaptureTimeoutPolicy({
+        baseTimeoutMs: 20_000,
+        isMap: true,
+        isHeavyPage: false,
+      })
+    ).toEqual({
+      navigationTimeoutMs: 10_000,
+      captureTimeoutMs: 40_000,
+      mapSettleTimeoutMs: 4_000,
+      fullPageFallbackTimeoutMs: 15_000,
+    });
+
+    expect(
+      resolveCaptureTimeoutPolicy({
+        baseTimeoutMs: 20_000,
+        isMap: false,
+        isHeavyPage: true,
+        env: {
+          KINLOOM_SCREENSHOT_HEAVY_TIMEOUT_MS: '55000',
+          KINLOOM_SCREENSHOT_MAP_SETTLE_MS: '6500',
+        },
+      })
+    ).toEqual({
+      navigationTimeoutMs: 20_000,
+      captureTimeoutMs: 55_000,
+      mapSettleTimeoutMs: 6_500,
+      fullPageFallbackTimeoutMs: 15_000,
+    });
+
+    const pageTargets = buildPageCaptureTargets({
+      discovery: { source: 'none', people: [], places: [], narratives: [] },
+      navExtraCoreRoutes: [],
+      explicitRoutes: ['/evidence?tab=media', '/map?place=springfield-il'],
+    });
+    const evidenceTarget = pageTargets.find((t) => t.route === '/evidence');
+    const evidenceQueryTarget = pageTargets.find((t) => t.route === '/evidence?tab=media');
+    const mapQueryTarget = pageTargets.find((t) => t.route === '/map?place=springfield-il');
+    expect(evidenceTarget?.isHeavyPage).toBe(true);
+    expect(evidenceQueryTarget?.isHeavyPage).toBe(true);
+    expect(mapQueryTarget?.isMap).toBe(true);
+
+    expect(isMapCaptureTarget(mapQueryTarget!)).toBe(true);
+    expect(isHeavyCaptureTarget(evidenceQueryTarget!)).toBe(true);
+    expect(isScreenshotTimeoutError(new Error('page.screenshot: Timeout 20000ms exceeded.'))).toBe(true);
+    expect(isScreenshotTimeoutError('Timed out after 500ms')).toBe(true);
+    expect(isScreenshotTimeoutError(new Error('Target closed'))).toBe(false);
+  });
+
+  it('emulates media colorScheme, settles map tiles, inspects theme surface, and prepares map-stop-card deterministically', async () => {
+    const emulateCalls: Array<{ colorScheme?: string | null }> = [];
+    const evalCalls: string[] = [];
+    const mapPage: ScreenshotPageHandle = {
+      goto: vi.fn(async () => undefined),
+      emulateMedia: vi.fn(async (opts) => {
+        emulateCalls.push(opts);
+      }),
+      screenshot: vi.fn(async () => undefined),
+      locator: vi.fn(() => {
+        throw new Error('unused');
+      }),
+      evaluate: vi.fn(async (expr) => {
+        evalCalls.push(expr);
+        if (expr.includes('getComputedStyle')) {
+          return {
+            backgroundColor: 'rgb(23, 22, 20)',
+            textColor: 'rgb(234, 227, 213)',
+            dataTheme: 'dark',
+            colorScheme: 'dark',
+            prefersDark: true,
+          } as never;
+        }
+        return true as never;
+      }),
+      waitForTimeout: vi.fn(async () => undefined),
+      waitForSelector: vi.fn(async () => undefined),
+      keyboard: { press: vi.fn(async () => undefined) },
+      on: vi.fn(),
+      close: vi.fn(async () => undefined),
+    };
+
+    await navigateAndSettlePage({
+      page: mapPage,
+      url: 'http://127.0.0.1:4173/map',
+      theme: 'dark',
+      timeoutMs: 8_000,
+      navigationTimeoutMs: 4_000,
+      mapSettleTimeoutMs: 500,
+      waitMs: 0,
+      isMap: true,
+    });
+    expect(emulateCalls).toEqual([{ colorScheme: 'dark' }]);
+    expect(evalCalls.some((expr) => expr.includes('kinloomMigrationMap'))).toBe(true);
+
+    const surface = await inspectThemeSurface(mapPage);
+    expect(surface).toEqual({
+      backgroundColor: 'rgb(23, 22, 20)',
+      textColor: 'rgb(234, 227, 213)',
+      dataTheme: 'dark',
+      colorScheme: 'dark',
+      prefersDark: true,
+    });
+
+    const failingEmulatePage: ScreenshotPageHandle = {
+      ...mapPage,
+      emulateMedia: vi.fn(async () => {
+        throw new Error('unsupported');
+      }),
+      evaluate: vi.fn(async () => ({}) as never),
+    };
+    await navigateAndSettlePage({
+      page: failingEmulatePage,
+      url: 'http://127.0.0.1:4173/',
+      theme: 'light',
+      timeoutMs: 2_000,
+      waitMs: 0,
+    });
+    expect(await inspectThemeSurface(failingEmulatePage)).toBeNull();
+
+    const mapStopTarget = buildComponentCaptureTargets({
+      source: 'none',
+      people: [],
+      places: [],
+      narratives: [],
+    }).find((t) => t.recipeId === 'map-stop-card')!;
+
+    const makeLocator = (visible: boolean, disabled = false): ScreenshotLocatorHandle => {
+      const handle: ScreenshotLocatorHandle = {
+        count: async () => (visible ? 1 : 0),
+        first: () => handle,
+        nth: () => handle,
+        isVisible: async () => visible,
+        isDisabled: async () => disabled,
+        click: vi.fn(async () => undefined),
+        fill: async () => undefined,
+        screenshot: async () => undefined,
+        boundingBox: async () => (visible ? { width: 100, height: 32 } : null),
+        textContent: async () => 'Next →',
+      };
+      return handle;
+    };
+
+    const disabledNextPage: ScreenshotPageHandle = {
+      ...mapPage,
+      locator: (selector) =>
+        makeLocator(selector === '[data-map-playback-bar="true"] button:has-text("Next")', true),
+    };
+    expect(
+      await prepareComponentCapture(mapStopTarget, disabledNextPage, {
+        viewport: { name: 'desktop', width: 1440, height: 900 },
+        searchQuery: 'Lincoln',
+        actionTimeoutMs: 500,
+        settleMs: 10,
+      })
+    ).toEqual({
+      kind: 'skip',
+      reason: 'No enabled interactive map stop control found',
+    });
+
+    const alreadyOpenPage: ScreenshotPageHandle = {
+      ...mapPage,
+      locator: (selector) => makeLocator(selector === 'section[aria-label="Selected stop details"]', false),
+    };
+    expect(
+      await prepareComponentCapture(mapStopTarget, alreadyOpenPage, {
+        viewport: { name: 'desktop', width: 1440, height: 900 },
+        searchQuery: 'Lincoln',
+        actionTimeoutMs: 500,
+        settleMs: 10,
+      })
+    ).toEqual({ kind: 'viewport', fullPage: false });
+
+    const playbackNextLocator = makeLocator(true, false);
+    const playbackNextPage: ScreenshotPageHandle = {
+      ...mapPage,
+      waitForSelector: vi.fn(async () => {
+        throw new Error('popover timeout');
+      }),
+      locator: (selector) =>
+        selector === '[data-map-playback-bar="true"] button:has-text("Next")'
+          ? playbackNextLocator
+          : makeLocator(false),
+    };
+    expect(
+      await prepareComponentCapture(mapStopTarget, playbackNextPage, {
+        viewport: { name: 'desktop', width: 1440, height: 900 },
+        searchQuery: 'Lincoln',
+        actionTimeoutMs: 500,
+        settleMs: 10,
+      })
+    ).toEqual({ kind: 'viewport', fullPage: false });
+    expect(playbackNextLocator.click).toHaveBeenCalledTimes(1);
+  });
+
+  it('computes dark-theme canvas luminance, WCAG contrast, no-op detection, and report annotations', () => {
+    expect(parseCssRgbColor('rgb(23, 22, 20)')).toEqual({ r: 23, g: 22, b: 20, a: 1 });
+    expect(parseCssRgbColor('rgba(245, 239, 226, 0.95)')).toEqual({ r: 245, g: 239, b: 226, a: 0.95 });
+    expect(parseCssRgbColor('#171614')).toEqual({ r: 23, g: 22, b: 20, a: 1 });
+    expect(parseCssRgbColor('#fff')).toEqual({ r: 255, g: 255, b: 255, a: 1 });
+    expect(parseCssRgbColor('rgba(0, 0, 0, 0)')).toBeNull();
+    expect(parseCssRgbColor('rgb(300, 0, 0)')).toBeNull();
+    expect(parseCssRgbColor('transparent')).toBeNull();
+    expect(parseCssRgbColor(null)).toBeNull();
+
+    const darkBgLum = computeRelativeLuminance({ r: 23, g: 22, b: 20 });
+    const darkFgLum = computeRelativeLuminance({ r: 234, g: 227, b: 213 });
+    expect(computeContrastRatio(darkBgLum, darkFgLum)).toBeGreaterThan(13.5);
+
+    const darkAudit = buildCaptureThemeAudit(
+      {
+        backgroundColor: 'rgb(23, 22, 20)',
+        textColor: 'rgb(234, 227, 213)',
+        dataTheme: 'dark',
+        prefersDark: true,
+      },
+      'sha-dark-home'
+    );
+    expect(darkAudit?.isDarkSurface).toBe(true);
+    expect(darkAudit?.contrastRatio).toBeGreaterThan(13.5);
+
+    const lightAudit = buildCaptureThemeAudit(
+      {
+        backgroundColor: '#f5efe2',
+        textColor: '#23272e',
+        dataTheme: 'light',
+        prefersDark: false,
+      },
+      'sha-light-home'
+    );
+    expect(lightAudit?.isDarkSurface).toBe(false);
+    expect(buildCaptureThemeAudit(null)).toBeUndefined();
+
+    const baseEntry = {
+      category: 'page' as const,
+      id: 'page:home',
+      slug: 'home',
+      label: 'Home',
+      state: 'default',
+      route: '/',
+      viewport: 'desktop',
+      file: 'pages/home/desktop-light.png',
+      width: 1440,
+      height: 900,
+      durationMs: 100,
+      status: 'captured' as const,
+      consoleErrors: [],
+      failedRequests: [],
+    };
+
+    expect(computeDarkThemeVerification(['light'], [{ ...baseEntry, theme: 'light' }]).status).toBe(
+      'not-requested'
+    );
+    expect(computeDarkThemeVerification(['dark'], []).status).toBe('unverified');
+
+    const verified = computeDarkThemeVerification(
+      ['light', 'dark'],
+      [
+        { ...baseEntry, theme: 'light', themeAudit: lightAudit },
+        { ...baseEntry, theme: 'dark', file: 'pages/home/desktop-dark.png', themeAudit: darkAudit },
+      ]
+    );
+    expect(verified).toEqual({
+      status: 'verified',
+      darkCaptureCount: 1,
+      pairedCaptureCount: 1,
+      distinctFromLightCount: 1,
+      identicalToLightCount: 0,
+      darkSurfaceVerifiedCount: 1,
+      lightCanvasInDarkModeCount: 0,
+      minDarkContrastRatio: darkAudit!.contrastRatio,
+      identicalCaptureIds: [],
+    });
+
+    const noopAudit = buildCaptureThemeAudit(
+      {
+        backgroundColor: '#f5efe2',
+        textColor: '#23272e',
+        dataTheme: null,
+        prefersDark: true,
+      },
+      'sha-light-home'
+    );
+    const noopManifest = buildScreenshotsManifest({
+      targetUrl: 'https://demo.kinloom.example',
+      generatedAt: '2026-11-27T12:00:00.000Z',
+      viewports: [{ name: 'desktop', width: 1440, height: 900 }],
+      themes: ['light', 'dark'],
+      include: ['pages'],
+      captures: [
+        { ...baseEntry, theme: 'light', themeAudit: lightAudit },
+        {
+          ...baseEntry,
+          theme: 'dark',
+          file: 'pages/home/desktop-dark.png',
+          fallbackUsed: 'viewport-after-fullpage-timeout',
+          reason: 'Full-page capture timed out; captured viewport fallback',
+          themeAudit: noopAudit,
+        },
+      ],
+    });
+    expect(noopManifest.darkThemeVerification?.status).toBe('noop');
+    expect(noopManifest.darkThemeVerification?.identicalCaptureIds).toEqual(['page:home@desktop']);
+
+    const noopHtml = renderContactSheetHtml(noopManifest);
+    expect(noopHtml).toContain('dark theme: noop');
+    expect(noopHtml).toContain('dark no-op');
+    expect(noopHtml).toContain('viewport fallback');
+
+    const noopText = formatScreenshotsTextReport({
+      ok: true,
+      outDir: '/tmp/out',
+      manifestPath: '/tmp/out/manifest.json',
+      indexHtmlPath: '/tmp/out/index.html',
+      manifest: noopManifest,
+    });
+    expect(noopText).toContain('Dark Theme:');
+    expect(noopText).toContain('0/1 distinct from light');
+    expect(noopText).toContain('1 light canvas in dark mode');
+    expect(noopText).toContain('Fallbacks:     1 viewport fallback(s)');
+
+    const partial = computeDarkThemeVerification(
+      ['light', 'dark'],
+      [
+        { ...baseEntry, theme: 'light', themeAudit: lightAudit },
+        { ...baseEntry, theme: 'dark', file: 'pages/home/desktop-dark.png', themeAudit: darkAudit },
+        {
+          ...baseEntry,
+          id: 'page:evidence',
+          slug: 'evidence',
+          route: '/evidence',
+          theme: 'light',
+          themeAudit: lightAudit,
+        },
+        {
+          ...baseEntry,
+          id: 'page:evidence',
+          slug: 'evidence',
+          route: '/evidence',
+          theme: 'dark',
+          themeAudit: noopAudit,
+        },
+      ]
+    );
+    expect(partial.status).toBe('partial-noop');
+    expect(partial.identicalCaptureIds).toEqual(['page:evidence@desktop']);
   });
 });

@@ -219,6 +219,14 @@ export async function safeCloseHandle(
   }
 }
 
+export interface RawThemeSurfaceProbe {
+  readonly backgroundColor: string | null;
+  readonly textColor: string | null;
+  readonly dataTheme: string | null;
+  readonly colorScheme: string | null;
+  readonly prefersDark: boolean | null;
+}
+
 export async function navigateAndSettlePage(options: {
   readonly page: ScreenshotPageHandle;
   readonly url: string;
@@ -226,15 +234,28 @@ export async function navigateAndSettlePage(options: {
   readonly timeoutMs: number;
   readonly waitMs: number;
   readonly isMap?: boolean;
+  readonly navigationTimeoutMs?: number;
+  readonly mapSettleTimeoutMs?: number;
 }): Promise<void> {
-  const { page, url, theme, timeoutMs, waitMs, isMap } = options;
+  const { page, url, theme, timeoutMs, waitMs, isMap, navigationTimeoutMs, mapSettleTimeoutMs } = options;
   page.setDefaultTimeout?.(timeoutMs);
   page.setDefaultNavigationTimeout?.(timeoutMs);
 
+  // Emulate prefers-color-scheme explicitly before navigation so initial paint
+  // and map basemap selection boot directly in the requested color scheme.
+  if (page.emulateMedia) {
+    try {
+      await page.emulateMedia({ colorScheme: theme });
+    } catch {
+      // Context colorScheme still applies when page-level emulateMedia is unavailable.
+    }
+  }
+
+  const navTimeout = navigationTimeoutMs ?? (isMap ? Math.min(timeoutMs, 10_000) : timeoutMs);
   try {
-    await page.goto(url, { waitUntil: 'load', timeout: timeoutMs });
+    await page.goto(url, { waitUntil: 'load', timeout: navTimeout });
   } catch {
-    await page.goto(url, { waitUntil: 'domcontentloaded', timeout: Math.min(timeoutMs, 10_000) });
+    await page.goto(url, { waitUntil: 'domcontentloaded', timeout: Math.min(navTimeout, 10_000) });
   }
 
   // Apply data-theme only if the site already declares a data-theme attribute on <html>,
@@ -271,13 +292,43 @@ export async function navigateAndSettlePage(options: {
   }
 
   if (isMap) {
+    const settleBudgetMs = Math.min(mapSettleTimeoutMs ?? 4_000, timeoutMs);
     try {
-      await page.waitForSelector('canvas', {
+      await page.waitForSelector('[data-map-playback-bar="true"], [class*="map-bottom-dock"], canvas', {
         state: 'visible',
-        timeout: Math.min(3_000, timeoutMs),
+        timeout: settleBudgetMs,
       });
     } catch {
-      // Map canvas may not render in headless software mode; continue without hanging.
+      // Map canvas or controls may not render in software headless mode; continue without hanging.
+    }
+    const tilePollMs = Math.max(100, Math.min(1_500, settleBudgetMs));
+    try {
+      await withTimeout(
+        page.evaluate(`(() => new Promise((resolve) => {
+          const deadline = Date.now() + ${tilePollMs};
+          const isReady = () => {
+            if (document.querySelector('[class*="map-style-note"]')) return true;
+            const host = document.querySelector('.map-canvas');
+            const map = host && host.kinloomMigrationMap;
+            if (!map) return false;
+            const styleReady = typeof map.isStyleLoaded === 'function' ? map.isStyleLoaded() : true;
+            const tilesReady = typeof map.areTilesLoaded === 'function' ? map.areTilesLoaded() : true;
+            return Boolean(styleReady && tilesReady);
+          };
+          const tick = () => {
+            if (isReady() || Date.now() >= deadline) {
+              resolve(true);
+              return;
+            }
+            setTimeout(tick, 75);
+          };
+          tick();
+        }))()`),
+        tilePollMs + 500,
+        'map.tileSettle'
+      );
+    } catch {
+      // Proceed with rendered paper/partial map tiles rather than blocking on remote tile servers.
     }
   }
 
@@ -320,6 +371,54 @@ const INSPECT_PLUGIN_SLOTS_EXPR = `(() => {
   }
   return found;
 })()`;
+
+const INSPECT_THEME_SURFACE_EXPR = `(() => {
+  const root = document.documentElement;
+  const body = document.body;
+  const rootStyle = root ? getComputedStyle(root) : null;
+  const bodyStyle = body ? getComputedStyle(body) : null;
+  const rawBodyBg = bodyStyle ? bodyStyle.backgroundColor : '';
+  const isTransparent = !rawBodyBg || rawBodyBg === 'transparent' || rawBodyBg === 'rgba(0, 0, 0, 0)';
+  const surfaceToken = rootStyle ? rootStyle.getPropertyValue('--surface-canvas').trim() : '';
+  const backgroundColor = !isTransparent
+    ? rawBodyBg
+    : (rootStyle && rootStyle.backgroundColor && rootStyle.backgroundColor !== 'rgba(0, 0, 0, 0)'
+        ? rootStyle.backgroundColor
+        : surfaceToken || null);
+  const textColor = (bodyStyle && bodyStyle.color) || (rootStyle && rootStyle.color) || null;
+  const dataTheme = root ? root.getAttribute('data-theme') : null;
+  const colorScheme = rootStyle ? rootStyle.colorScheme || null : null;
+  const prefersDark =
+    typeof window !== 'undefined' && typeof window.matchMedia === 'function'
+      ? Boolean(window.matchMedia('(prefers-color-scheme: dark)').matches)
+      : null;
+  return { backgroundColor, textColor, dataTheme, colorScheme, prefersDark };
+})()`;
+
+function isPlainRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+export async function inspectThemeSurface(page: ScreenshotPageHandle): Promise<RawThemeSurfaceProbe | null> {
+  try {
+    const raw: unknown = await page.evaluate<unknown>(INSPECT_THEME_SURFACE_EXPR);
+    if (!isPlainRecord(raw)) {
+      return null;
+    }
+    const backgroundColor =
+      typeof raw.backgroundColor === 'string' ? raw.backgroundColor.trim() || null : null;
+    const textColor = typeof raw.textColor === 'string' ? raw.textColor.trim() || null : null;
+    const dataTheme = typeof raw.dataTheme === 'string' ? raw.dataTheme.trim() || null : null;
+    const colorScheme = typeof raw.colorScheme === 'string' ? raw.colorScheme.trim() || null : null;
+    const prefersDark = typeof raw.prefersDark === 'boolean' ? raw.prefersDark : null;
+    if (backgroundColor === null && textColor === null && dataTheme === null && prefersDark === null) {
+      return null;
+    }
+    return { backgroundColor, textColor, dataTheme, colorScheme, prefersDark };
+  } catch {
+    return null;
+  }
+}
 
 export async function inspectLiveNavLinks(page: ScreenshotPageHandle): Promise<readonly DiscoveredNavLink[]> {
   try {

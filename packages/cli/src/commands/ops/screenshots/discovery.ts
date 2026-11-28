@@ -16,6 +16,7 @@ interface CoreRouteDefinition {
   readonly slug: string;
   readonly label: string;
   readonly isMap?: boolean;
+  readonly isHeavyPage?: boolean;
 }
 
 export const CORE_KINLOOM_PAGE_ROUTES: readonly CoreRouteDefinition[] = Object.freeze([
@@ -25,10 +26,36 @@ export const CORE_KINLOOM_PAGE_ROUTES: readonly CoreRouteDefinition[] = Object.f
   { route: '/places', slug: 'places', label: 'Places Directory' },
   { route: '/time', slug: 'time', label: 'Archive Timeline' },
   { route: '/kinship', slug: 'kinship', label: 'Kinship Finder' },
-  { route: '/evidence', slug: 'evidence', label: 'Evidence & Sources' },
+  { route: '/evidence', slug: 'evidence', label: 'Evidence & Sources', isHeavyPage: true },
   { route: '/changes', slug: 'changes', label: 'Revision History' },
   { route: '/admin', slug: 'admin', label: 'Site Administration' },
 ]);
+
+export const BUNDLE_DISCOVERY_PROBES: readonly {
+  readonly path: string;
+  readonly source: Exclude<BundleDiscoveryResult['source'], 'none'>;
+}[] = Object.freeze([
+  { path: '/api/bundle', source: 'api-bundle' },
+  { path: '/data/archive.json', source: 'static-bundle' },
+  { path: '/data/bundle.json', source: 'static-bundle' },
+]);
+
+function isHeavyRoutePath(route: string): boolean {
+  const pathOnly = route.split('?')[0].toLowerCase();
+  return pathOnly === '/evidence';
+}
+
+function isMapRoutePath(route: string): boolean {
+  const pathOnly = route.split('?')[0].toLowerCase();
+  return pathOnly === '/map';
+}
+
+function isArchiveBundlePayload(payload: unknown): payload is Record<string, unknown> {
+  return (
+    isRecord(payload) &&
+    (Array.isArray(payload.people) || Array.isArray(payload.places) || Array.isArray(payload.narratives))
+  );
+}
 
 const KNOWN_CORE_EXACT_ROUTES = new Set<string>([
   '/',
@@ -253,31 +280,17 @@ export async function fetchArchiveBundleForDiscovery(options: {
   });
   const fetchTimeout = Math.min(options.timeoutMs, 10_000);
 
-  const apiPayload = await tryFetchJson(`${options.baseUrl}/api/bundle`, fetchImpl, headers, fetchTimeout);
-  if (apiPayload !== null) {
-    return {
-      source: 'api-bundle',
-      ...extractSamplesFromBundle(apiPayload, {
-        samplePeople: options.samplePeople,
-        samplePlaces: options.samplePlaces,
-      }),
-    };
-  }
-
-  const staticPayload = await tryFetchJson(
-    `${options.baseUrl}/data/bundle.json`,
-    fetchImpl,
-    headers,
-    fetchTimeout
-  );
-  if (staticPayload !== null) {
-    return {
-      source: 'static-bundle',
-      ...extractSamplesFromBundle(staticPayload, {
-        samplePeople: options.samplePeople,
-        samplePlaces: options.samplePlaces,
-      }),
-    };
+  for (const probe of BUNDLE_DISCOVERY_PROBES) {
+    const payload = await tryFetchJson(`${options.baseUrl}${probe.path}`, fetchImpl, headers, fetchTimeout);
+    if (isArchiveBundlePayload(payload)) {
+      return {
+        source: probe.source,
+        ...extractSamplesFromBundle(payload, {
+          samplePeople: options.samplePeople,
+          samplePlaces: options.samplePlaces,
+        }),
+      };
+    }
   }
 
   return { source: 'none', people: [], places: [], narratives: [] };
@@ -365,6 +378,7 @@ export function buildPageCaptureTargets(input: {
       label: core.label,
       route: core.route,
       isMap: core.isMap,
+      isHeavyPage: core.isHeavyPage,
     });
   }
 
@@ -403,7 +417,8 @@ export function buildPageCaptureTargets(input: {
       slug,
       label: extra.label,
       route: extra.route,
-      isMap: extra.route === '/map',
+      isMap: isMapRoutePath(extra.route),
+      isHeavyPage: isHeavyRoutePath(extra.route),
     });
   }
 
@@ -430,7 +445,8 @@ export function buildPageCaptureTargets(input: {
       slug,
       label: route === '/' ? 'Archive Overview' : `Route ${route}`,
       route,
-      isMap: route === '/map',
+      isMap: isMapRoutePath(route),
+      isHeavyPage: isHeavyRoutePath(route),
     });
   }
 

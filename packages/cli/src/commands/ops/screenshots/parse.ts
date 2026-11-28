@@ -11,10 +11,20 @@ import type {
 export const DEFAULT_OUT_DIR = './kinloom-screenshots';
 export const DEFAULT_WAIT_MS = 350;
 export const DEFAULT_TIMEOUT_MS = 20_000;
+export const MAX_CAPTURE_TIMEOUT_MS = 120_000;
+export const DEFAULT_HEAVY_PAGE_TIMEOUT_MULTIPLIER = 2;
+export const DEFAULT_MAP_SETTLE_TIMEOUT_MS = 4_000;
 export const DEFAULT_CONCURRENCY = 2;
 export const MAX_CONCURRENCY = 8;
 export const DEFAULT_SAMPLE_PEOPLE = 1;
 export const DEFAULT_SAMPLE_PLACES = 1;
+
+export interface CaptureTimeoutPolicy {
+  readonly navigationTimeoutMs: number;
+  readonly captureTimeoutMs: number;
+  readonly mapSettleTimeoutMs: number;
+  readonly fullPageFallbackTimeoutMs: number;
+}
 
 export const PRESET_VIEWPORTS: Readonly<Record<string, ViewportSpec>> = Object.freeze({
   mobile: Object.freeze({ name: 'mobile', width: 390, height: 844 }),
@@ -303,4 +313,56 @@ export function buildAuthRequestHeaders(options: {
     headers.Cookie = options.authCookie.trim();
   }
   return headers;
+}
+
+export function parseBoundedTimeoutEnv(
+  raw: string | undefined,
+  minMs: number,
+  maxMs: number
+): number | undefined {
+  if (!raw?.trim()) {
+    return undefined;
+  }
+  const parsed = Number.parseInt(raw.trim(), 10);
+  if (!Number.isInteger(parsed) || parsed < minMs || parsed > maxMs) {
+    return undefined;
+  }
+  return parsed;
+}
+
+export function resolveCaptureTimeoutPolicy(input: {
+  readonly baseTimeoutMs: number;
+  readonly isMap: boolean;
+  readonly isHeavyPage: boolean;
+  readonly heavyTimeoutMs?: number;
+  readonly mapSettleTimeoutMs?: number;
+  readonly env?: NodeJS.ProcessEnv;
+}): CaptureTimeoutPolicy {
+  const baseTimeoutMs = Math.max(500, Math.min(MAX_CAPTURE_TIMEOUT_MS, Math.floor(input.baseTimeoutMs)));
+  const envHeavyMs = parseBoundedTimeoutEnv(
+    input.env?.KINLOOM_SCREENSHOT_HEAVY_TIMEOUT_MS,
+    500,
+    MAX_CAPTURE_TIMEOUT_MS
+  );
+  const envMapSettleMs = parseBoundedTimeoutEnv(input.env?.KINLOOM_SCREENSHOT_MAP_SETTLE_MS, 250, 30_000);
+
+  const effectiveHeavyTimeoutMs =
+    input.heavyTimeoutMs ??
+    envHeavyMs ??
+    Math.min(MAX_CAPTURE_TIMEOUT_MS, Math.round(baseTimeoutMs * DEFAULT_HEAVY_PAGE_TIMEOUT_MULTIPLIER));
+
+  const captureTimeoutMs =
+    input.isMap || input.isHeavyPage ? Math.max(baseTimeoutMs, effectiveHeavyTimeoutMs) : baseTimeoutMs;
+
+  const navigationTimeoutMs = input.isMap ? Math.min(baseTimeoutMs, 10_000) : baseTimeoutMs;
+  const mapSettleTimeoutMs =
+    input.mapSettleTimeoutMs ?? envMapSettleMs ?? Math.min(DEFAULT_MAP_SETTLE_TIMEOUT_MS, baseTimeoutMs);
+  const fullPageFallbackTimeoutMs = Math.min(baseTimeoutMs, 15_000);
+
+  return {
+    navigationTimeoutMs,
+    captureTimeoutMs,
+    mapSettleTimeoutMs,
+    fullPageFallbackTimeoutMs,
+  };
 }

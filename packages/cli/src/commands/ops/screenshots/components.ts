@@ -100,8 +100,10 @@ export function buildComponentCaptureTargets(
 
 async function findFirstVisible(
   page: ScreenshotPageHandle,
-  selectors: readonly string[]
+  selectors: readonly string[],
+  options?: { readonly requireEnabled?: boolean }
 ): Promise<ScreenshotLocatorHandle | null> {
+  const requireEnabled = options?.requireEnabled ?? false;
   for (const selector of selectors) {
     const locator = page.locator(selector);
     const total = await locator.count();
@@ -110,6 +112,9 @@ async function findFirstVisible(
       const candidate = locator.nth(i);
       try {
         if (await candidate.isVisible()) {
+          if (requireEnabled && candidate.isDisabled && (await candidate.isDisabled())) {
+            continue;
+          }
           const box = await candidate.boundingBox();
           if (box && box.width > 1 && box.height > 1) {
             return candidate;
@@ -291,16 +296,43 @@ async function prepareMapStopCard(
   page: ScreenshotPageHandle,
   ctx: ComponentPrepareContext
 ): Promise<PreparedComponentCapture> {
-  const nextOrStopBtn = await findFirstVisible(page, [
-    'button[aria-label*="Next stop" i]',
-    'button[aria-label*="Next" i]',
-    '[class*="map-bottom-dock"] button',
+  const alreadyOpen = await findFirstVisible(page, [
+    'section[aria-label="Selected stop details"]',
+    '[class*="map-stop-popover"]',
   ]);
+  if (alreadyOpen) {
+    return { kind: 'viewport', fullPage: false };
+  }
+
+  // Target the deterministic Next step button instead of generic dock buttons
+  // (the first dock button is Play Route, which triggers continuous animation).
+  const nextOrStopBtn = await findFirstVisible(
+    page,
+    [
+      'button[aria-label*="Next stop" i]',
+      'button[aria-label*="Next" i]',
+      '[data-map-playback-bar="true"] button:has-text("Next")',
+      '[class*="map-bottom-dock"] button:has-text("Next")',
+      'button:has-text("Next →")',
+    ],
+    { requireEnabled: true }
+  );
   if (!nextOrStopBtn) {
-    return { kind: 'skip', reason: 'No interactive map stop control found' };
+    return { kind: 'skip', reason: 'No enabled interactive map stop control found' };
   }
   await nextOrStopBtn.click({ timeout: ctx.actionTimeoutMs });
-  await page.waitForTimeout(ctx.settleMs);
+  try {
+    await page.waitForSelector(
+      'section[aria-label="Selected stop details"], [class*="map-stop-popover"], #stopCard',
+      {
+        state: 'visible',
+        timeout: Math.min(ctx.actionTimeoutMs, 2_000),
+      }
+    );
+  } catch {
+    // Allow synthetic or minimal map docks to settle without failing if selector differs.
+  }
+  await page.waitForTimeout(Math.min(ctx.settleMs, 400));
   return { kind: 'viewport', fullPage: false };
 }
 
@@ -360,12 +392,16 @@ export async function prepareComponentCapture(
     case 'global-search-results':
       return prepareGlobalSearchResults(page, ctx);
     case 'theme-toggle': {
-      const toggle = await findFirstVisible(page, [
-        '[data-testid="theme-toggle"]',
-        'button[aria-label*="theme" i]',
-        'button[aria-label*="dark mode" i]',
-        'button[aria-label*="light mode" i]',
-      ]);
+      const toggle = await findFirstVisible(
+        page,
+        [
+          '[data-testid="theme-toggle"]',
+          'button[aria-label*="theme" i]',
+          'button[aria-label*="dark mode" i]',
+          'button[aria-label*="light mode" i]',
+        ],
+        { requireEnabled: true }
+      );
       if (!toggle) {
         return { kind: 'skip', reason: 'No theme toggle control found on page' };
       }
