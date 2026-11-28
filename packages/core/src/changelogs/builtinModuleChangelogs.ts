@@ -19,6 +19,17 @@ export const BUILTIN_MODULE_CHANGELOGS: readonly BuiltinModuleChangelogRecord[] 
     name: 'Kinloom Core',
     entries: [
       {
+        version: '0.64.0',
+        date: '2026-11-28',
+        summary: 'Kinloom v0.64.0 release.',
+        changes: [
+          {
+            category: 'changed',
+            text: 'Updated module for Kinloom v0.64.0.',
+          },
+        ],
+      },
+      {
         version: '0.61.0',
         date: '2026-11-28',
         summary:
@@ -51,6 +62,17 @@ export const BUILTIN_MODULE_CHANGELOGS: readonly BuiltinModuleChangelogRecord[] 
     id: '@kinloom/server',
     name: 'Kinloom Server',
     entries: [
+      {
+        version: '0.64.0',
+        date: '2026-11-28',
+        summary: 'Kinloom v0.64.0 release.',
+        changes: [
+          {
+            category: 'changed',
+            text: 'Updated module for Kinloom v0.64.0.',
+          },
+        ],
+      },
       {
         version: '0.61.0',
         date: '2026-11-28',
@@ -88,6 +110,17 @@ export const BUILTIN_MODULE_CHANGELOGS: readonly BuiltinModuleChangelogRecord[] 
     name: 'Kinloom Cloudflare Worker',
     entries: [
       {
+        version: '0.64.0',
+        date: '2026-11-28',
+        summary: 'Kinloom v0.64.0 release.',
+        changes: [
+          {
+            category: 'changed',
+            text: 'Updated module for Kinloom v0.64.0.',
+          },
+        ],
+      },
+      {
         version: '0.61.0',
         date: '2026-11-28',
         summary: 'Cloudflare Workers D1/R2 adapter updates and built-in plugin re-exports.',
@@ -119,6 +152,17 @@ export const BUILTIN_MODULE_CHANGELOGS: readonly BuiltinModuleChangelogRecord[] 
     id: '@kinloom/ui',
     name: 'Kinloom UI',
     entries: [
+      {
+        version: '0.64.0',
+        date: '2026-11-28',
+        summary: 'Kinloom v0.64.0 release.',
+        changes: [
+          {
+            category: 'changed',
+            text: 'Updated module for Kinloom v0.64.0.',
+          },
+        ],
+      },
       {
         version: '0.61.0',
         date: '2026-11-28',
@@ -161,6 +205,17 @@ export const BUILTIN_MODULE_CHANGELOGS: readonly BuiltinModuleChangelogRecord[] 
     name: 'Kinloom CLI',
     entries: [
       {
+        version: '0.64.0',
+        date: '2026-11-28',
+        summary: 'Kinloom v0.64.0 release.',
+        changes: [
+          {
+            category: 'changed',
+            text: 'Updated module for Kinloom v0.64.0.',
+          },
+        ],
+      },
+      {
         version: '0.61.0',
         date: '2026-11-28',
         summary: 'CLI build/compile tooling and release version synchronization.',
@@ -188,6 +243,17 @@ export const BUILTIN_MODULE_CHANGELOGS: readonly BuiltinModuleChangelogRecord[] 
     id: '@kinloom/tokens',
     name: 'Kinloom Design Tokens',
     entries: [
+      {
+        version: '0.64.0',
+        date: '2026-11-28',
+        summary: 'Kinloom v0.64.0 release.',
+        changes: [
+          {
+            category: 'changed',
+            text: 'Updated module for Kinloom v0.64.0.',
+          },
+        ],
+      },
       {
         version: '0.61.0',
         date: '2026-11-28',
