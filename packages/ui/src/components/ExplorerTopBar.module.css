@@ -104,11 +104,11 @@
   align-items: center;
   justify-content: center;
   gap: 6px;
-  height: 36px;
-  min-height: 36px;
+  height: var(--control-height-md);
+  min-height: var(--control-height-md);
   padding: 0 10px;
-  border: 1px solid transparent;
-  border-radius: var(--radius-md);
+  border: var(--border-width-thin) solid transparent;
+  border-radius: var(--radius-control);
   background: transparent;
   color: var(--text-secondary);
   font-family: var(--font-ui);
@@ -151,7 +151,7 @@
 .topbar-guide-badge {
   margin-left: auto;
   padding: 1px 6px;
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   background: var(--badge-cited-bg);
   color: var(--badge-cited-fg);
   font-size: 0.7rem;
@@ -192,14 +192,14 @@
 }
 
 .person-switcher {
-  background: transparent;
+  background: var(--surface-subtle);
   color: var(--text-primary);
-  border: none;
-  border-bottom: 1px solid var(--border-control);
-  border-radius: 0;
-  padding: 3px 4px;
-  font-family: var(--font-serif);
-  font-size: 0.9rem;
+  border: var(--border-width-thin) solid var(--border-control);
+  border-radius: var(--radius-control);
+  min-height: var(--control-height-sm);
+  padding: 0 8px;
+  font-family: var(--font-ui);
+  font-size: 0.84rem;
   max-width: 210px;
   cursor: pointer;
 }
@@ -216,7 +216,7 @@
   padding: 0 8px;
   margin-right: 4px;
   border: none;
-  border-radius: var(--radius-md);
+  border-radius: var(--radius-control);
   background: var(--surface-subtle);
   font-family: var(--font-mono);
   font-variant-numeric: tabular-nums;
@@ -365,8 +365,8 @@
     font-size: 0.9rem;
     font-weight: 500;
     white-space: nowrap;
-    min-height: 44px;
-    min-width: 44px;
+    min-height: var(--control-height-touch);
+    min-width: var(--control-height-touch);
     display: inline-flex;
     align-items: center;
     justify-content: center;
@@ -402,12 +402,12 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 36px;
-  height: 36px;
-  min-width: 36px;
-  min-height: 36px;
+  width: var(--control-height-md);
+  height: var(--control-height-md);
+  min-width: var(--control-height-md);
+  min-height: var(--control-height-md);
   padding: 0;
-  border-radius: var(--radius-md);
+  border-radius: var(--radius-control);
   border: 1px solid transparent;
   background: transparent;
   color: var(--text-secondary);
@@ -435,11 +435,11 @@
 
 @media (max-width: 1023px) {
   .topbar-theme-btn {
-    width: 44px;
-    height: 44px;
-    min-width: 44px;
-    min-height: 44px;
-    border-radius: var(--radius-md);
+    width: var(--control-height-touch);
+    height: var(--control-height-touch);
+    min-width: var(--control-height-touch);
+    min-height: var(--control-height-touch);
+    border-radius: var(--radius-control);
     color: var(--surface-header);
   }
 
@@ -448,12 +448,12 @@
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    width: 44px;
-    height: 44px;
-    min-width: 44px;
-    min-height: 44px;
+    width: var(--control-height-touch);
+    height: var(--control-height-touch);
+    min-width: var(--control-height-touch);
+    min-height: var(--control-height-touch);
     padding: 0;
-    border-radius: var(--radius-md);
+    border-radius: var(--radius-control);
     border: 1px solid transparent;
     background: transparent;
     color: var(--surface-header);

@@ -20,8 +20,8 @@
   display: flex;
   flex-direction: column;
   background: var(--surface-card);
-  border: 1px solid var(--border-control);
-  border-radius: var(--radius-sm);
+  border: var(--border-width-thin) solid var(--border-control);
+  border-radius: var(--radius-control);
   box-shadow: var(--shadow-modal);
   overflow: hidden;
   transition: width 0.14s ease;
@@ -44,7 +44,7 @@
 .global-search-input {
   flex: 1 1 auto;
   min-width: 0;
-  min-height: 44px;
+  min-height: var(--control-height-touch);
   border: none;
   background: transparent;
   font-family: var(--font-serif);
@@ -102,10 +102,10 @@
   flex-direction: column;
   align-items: flex-start;
   gap: 2px;
-  min-height: 44px;
+  min-height: var(--control-height-touch);
   padding: 8px 11px;
-  border: 1px solid var(--border-control);
-  border-radius: var(--radius-sm);
+  border: var(--border-width-thin) solid var(--border-control);
+  border-radius: var(--radius-control);
   background: var(--surface-canvas);
   color: var(--text-primary);
   text-align: left;
@@ -269,10 +269,10 @@
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  min-height: 36px;
+  min-height: var(--control-height-md);
   padding: 5px 10px;
-  border: 1px solid var(--border-control);
-  border-radius: var(--radius-sm);
+  border: var(--border-width-thin) solid var(--border-control);
+  border-radius: var(--radius-control);
   background: var(--surface-card);
   color: var(--text-primary);
   font-family: var(--font-ui);
@@ -311,9 +311,10 @@
 }
 
 .global-search-suggestion-chip {
+  min-height: var(--control-height-sm);
   padding: 5px 10px;
-  border: 1px solid var(--border-control);
-  border-radius: var(--radius-sm);
+  border: var(--border-width-thin) solid var(--border-control);
+  border-radius: var(--radius-control);
   background: transparent;
   color: var(--text-primary);
   font-family: var(--font-ui);
@@ -367,14 +368,14 @@
     top: 0;
     padding: 14px;
     background: var(--surface-canvas);
-    border: 1px solid var(--border-decorative);
-    border-radius: var(--radius-sm);
+    border: var(--border-width-thin) solid var(--border-decorative);
+    border-radius: var(--radius-control);
   }
 }
 
 @media (max-width: 760px) {
   .global-search-close-btn {
-    min-height: 44px;
+    min-height: var(--control-height-touch);
     display: inline-flex;
     align-items: center;
   }
@@ -404,11 +405,11 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  min-width: 44px;
-  min-height: 44px;
+  min-width: var(--control-height-touch);
+  min-height: var(--control-height-touch);
   padding: 0;
-  border: 1px solid var(--border-decorative);
-  border-radius: var(--radius-md);
+  border: var(--border-width-thin) solid var(--border-decorative);
+  border-radius: var(--radius-control);
   background: var(--surface-subtle);
   color: var(--text-secondary);
   font-family: var(--font-ui);

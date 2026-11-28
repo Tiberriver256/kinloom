@@ -37,7 +37,7 @@
 .inspector-block {
   background: var(--surface-canvas);
   border: 1px solid var(--border-decorative);
-  border-radius: 2px;
+  border-radius: var(--radius-sm);
   padding: 12px 14px;
   display: flex;
   flex-direction: column;
@@ -79,7 +79,7 @@
   color: var(--text-primary);
   background: var(--surface-card);
   border: 1px solid var(--border-decorative);
-  border-radius: 2px;
+  border-radius: var(--radius-sm);
   padding: 7px 10px;
   min-width: 0;
   max-width: 100%;
@@ -159,7 +159,7 @@
   margin: 0;
   background: var(--surface-canvas);
   border: 1px solid var(--border-decorative);
-  border-radius: 2px;
+  border-radius: var(--radius-sm);
   padding: 10px;
 }
 
@@ -190,7 +190,7 @@
   padding: 8px 10px;
   background: var(--surface-card);
   border: 1px solid var(--border-decorative);
-  border-radius: 2px;
+  border-radius: var(--radius-sm);
   display: flex;
   flex-direction: column;
   gap: 3px;

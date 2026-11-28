@@ -125,7 +125,7 @@
 
 .time-lane-place a {
   text-decoration: none;
-  border-bottom: 1.5px solid transparent;
+  border-bottom: var(--border-width-emphasis) solid transparent;
 }
 
 @media (hover: hover) and (pointer: fine) {
@@ -174,7 +174,7 @@
   padding: 10px 10px 10px 12px;
   text-decoration: none;
   background: transparent;
-  border-left: 2.5px solid var(--badge-cited-fg);
+  border-left: var(--border-width-emphasis) solid var(--badge-cited-fg);
   transition: background-color 0.14s ease;
 }
 

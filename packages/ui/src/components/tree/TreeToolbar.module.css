@@ -28,8 +28,8 @@
   overflow: visible;
   scrollbar-width: none;
   background: var(--surface-card);
-  border: 1px solid var(--border-control);
-  border-radius: var(--radius-md);
+  border: var(--border-width-thin) solid var(--border-control);
+  border-radius: var(--radius-control);
   padding: 5px 8px;
   box-shadow: var(--shadow-print);
 }
@@ -71,9 +71,9 @@
 
 .tree-search-input {
   width: 196px;
-  min-height: 30px;
+  min-height: var(--control-height-sm);
   padding: 4px 26px 4px 30px;
-  border-radius: var(--radius-md);
+  border-radius: var(--radius-control);
   border: 1px solid var(--border-decorative);
   background: var(--surface-subtle);
   color: var(--text-primary);
@@ -127,7 +127,7 @@
 .tree-search-toggle-btn {
   display: none;
   flex-shrink: 0;
-  border-radius: var(--radius-md);
+  border-radius: var(--radius-control);
   border: 1px solid var(--border-control);
   background: var(--surface-card);
   color: var(--surface-header);
@@ -151,8 +151,8 @@
   width: 300px;
   max-width: calc(100vw - 32px);
   background: var(--surface-card);
-  border: 1px solid var(--border-control);
-  border-radius: var(--radius-md);
+  border: var(--border-width-thin) solid var(--border-control);
+  border-radius: var(--radius-control);
   box-shadow: var(--shadow-active);
   overflow: hidden;
 }
@@ -230,9 +230,9 @@
 .tree-search-mobile-input {
   flex: 1 1 auto;
   min-width: 0;
-  min-height: 44px;
+  min-height: var(--control-height-touch);
   padding: 6px 12px;
-  border-radius: var(--radius-md);
+  border-radius: var(--radius-control);
   border: 1px solid var(--border-control);
   background: var(--surface-card);
   color: var(--text-primary);
@@ -242,9 +242,9 @@
 
 .tree-search-mobile-close {
   flex-shrink: 0;
-  min-height: 44px;
+  min-height: var(--control-height-touch);
   padding: 0 12px;
-  border-radius: var(--radius-md);
+  border-radius: var(--radius-control);
   border: 1px solid var(--border-control);
   background: var(--surface-card);
   color: var(--surface-header);
@@ -256,7 +256,8 @@
   align-items: center;
   gap: 2px;
   padding: 2px;
-  border-radius: var(--radius-md);
+  min-height: var(--control-height-sm);
+  border-radius: var(--radius-control);
   background: var(--surface-subtle);
   border: 1px solid var(--border-decorative);
   flex-shrink: 0;
@@ -302,7 +303,8 @@
 }
 
 .tree-toolbar select:global(.pill-btn).tree-branch-select {
-  border-radius: var(--radius-md);
+  min-height: var(--control-height-sm);
+  border-radius: var(--radius-control);
   padding: 4px 10px;
   font-family: var(--font-ui);
   font-size: 0.78rem;
@@ -315,9 +317,10 @@
 
 .tree-toolbar :global(.tree-add-person-btn) {
   order: 6;
+  min-height: var(--control-height-sm);
   padding: 4px 11px;
-  border: 1px solid var(--accent-primary);
-  border-radius: var(--radius-md);
+  border: var(--border-width-thin) solid var(--accent-primary);
+  border-radius: var(--radius-control);
   background: var(--surface-card);
   color: var(--accent-primary);
   font-weight: 600;
@@ -344,8 +347,8 @@
 .tree-anchor-control {
   display: inline-flex;
   align-items: stretch;
-  min-height: 30px;
-  border-radius: var(--radius-md);
+  min-height: var(--control-height-sm);
+  border-radius: var(--radius-control);
   border: 1px solid var(--border-control);
   background: var(--surface-card);
   overflow: hidden;
@@ -443,9 +446,9 @@
 
 .tree-anchor-search-input {
   width: 100%;
-  min-height: 34px;
+  min-height: var(--control-height-md);
   padding: 5px 10px;
-  border-radius: var(--radius-md);
+  border-radius: var(--radius-control);
   border: 1px solid var(--border-control);
   background: var(--surface-card);
   color: var(--text-primary);
@@ -465,8 +468,8 @@
 .tree-anchor-popover-reset {
   align-self: flex-start;
   padding: 3px 10px;
-  min-height: 28px;
-  border-radius: var(--radius-md);
+  min-height: var(--control-height-sm);
+  border-radius: var(--radius-control);
   border: 1px solid var(--border-control);
   background: var(--surface-card);
   color: var(--accent-primary);
@@ -529,8 +532,8 @@
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    min-width: 44px;
-    min-height: 44px;
+    min-width: var(--control-height-touch);
+    min-height: var(--control-height-touch);
     flex: 0 0 auto;
   }
 
@@ -538,12 +541,12 @@
     flex: 1 1 140px;
     min-width: 0;
     max-width: none;
-    min-height: 44px;
+    min-height: var(--control-height-touch);
     font-size: 16px;
   }
 
   .tree-segmented :global(.tree-seg-btn) {
-    min-height: 44px;
+    min-height: var(--control-height-touch);
     display: inline-flex;
     align-items: center;
     justify-content: center;
@@ -551,7 +554,7 @@
   }
 
   .tree-toolbar :global(.tree-add-person-btn) {
-    min-height: 44px;
+    min-height: var(--control-height-touch);
     padding: 0 12px;
   }
 
@@ -576,19 +579,19 @@
 
   .tree-anchor-control {
     width: 100%;
-    min-height: 44px;
+    min-height: var(--control-height-touch);
   }
 
   .tree-anchor-trigger {
     flex: 1 1 auto;
     justify-content: space-between;
-    min-height: 44px;
+    min-height: var(--control-height-touch);
     padding: 6px 12px;
   }
 
   .tree-anchor-clear-btn {
-    min-width: 44px;
-    min-height: 44px;
+    min-width: var(--control-height-touch);
+    min-height: var(--control-height-touch);
   }
 
   .tree-anchor-popover {
@@ -599,12 +602,12 @@
   }
 
   .tree-anchor-search-input {
-    min-height: 44px;
+    min-height: var(--control-height-touch);
     font-size: 16px;
   }
 
   .tree-anchor-popover-reset {
-    min-height: 44px;
+    min-height: var(--control-height-touch);
   }
 }
 
@@ -636,13 +639,13 @@
   .tree-segmented {
     padding: 0;
     gap: 0;
-    border-radius: var(--radius-md);
+    border-radius: var(--radius-control);
   }
 
   .tree-segmented :global(.tree-seg-btn) {
-    min-width: 44px;
-    min-height: 44px;
-    height: 44px;
+    min-width: var(--control-height-touch);
+    min-height: var(--control-height-touch);
+    height: var(--control-height-touch);
     padding: 0 7px;
     font-size: 0.74rem;
     border: none;
@@ -658,10 +661,10 @@
     align-items: center;
     justify-content: center;
     gap: 4px;
-    min-height: 44px;
-    height: 44px;
+    min-height: var(--control-height-touch);
+    height: var(--control-height-touch);
     padding: 0 8px;
-    border-radius: var(--radius-md);
+    border-radius: var(--radius-control);
     border: 1px solid var(--border-decorative);
     background: var(--surface-subtle);
     color: var(--text-primary);
@@ -722,8 +725,8 @@
     z-index: 45;
     padding: 12px;
     background: var(--surface-card);
-    border: 1px solid var(--border-control);
-    border-radius: var(--radius-md);
+    border: var(--border-width-thin) solid var(--border-control);
+    border-radius: var(--radius-control);
     box-shadow: var(--shadow-active);
     max-height: calc(100dvh - 168px);
     overflow-y: auto;
@@ -749,9 +752,9 @@
   }
 
   .tree-filters-sheet-close {
-    min-height: 44px;
+    min-height: var(--control-height-touch);
     padding: 4px 12px;
-    border-radius: var(--radius-md);
+    border-radius: var(--radius-control);
     border: 1px solid var(--border-decorative);
     background: var(--surface-subtle);
     color: var(--text-primary);
@@ -779,7 +782,7 @@
 
   .tree-toolbar-filters-panel .tree-search-input {
     width: 100%;
-    min-height: 44px;
+    min-height: var(--control-height-touch);
     font-size: 16px;
   }
 

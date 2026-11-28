@@ -53,8 +53,8 @@
   text-align: left;
   color: var(--text-secondary);
   background: var(--surface-overlay-card);
-  border: 1px solid var(--border-decorative);
-  border-radius: var(--radius-sm);
+  border: var(--border-width-thin) solid var(--border-decorative);
+  border-radius: var(--radius-control);
   font-family: var(--font-mono);
   font-size: 0.74rem;
   pointer-events: none;
@@ -86,8 +86,8 @@
   gap: 8px;
   max-width: calc(100% - 36px);
   background: var(--surface-overlay-card);
-  border: 1px solid var(--border-control);
-  border-radius: var(--radius-sm);
+  border: var(--border-width-thin) solid var(--border-control);
+  border-radius: var(--radius-control);
   padding: 6px 10px;
   box-shadow: var(--shadow-print);
 }
@@ -110,6 +110,7 @@
 .map-trace-select {
   min-width: 9rem;
   max-width: 175px;
+  min-height: var(--control-height-sm);
   font-size: 0.75rem;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -164,7 +165,7 @@
 .map-era-more-btn {
   display: inline-flex;
   align-items: center;
-  min-height: 28px;
+  min-height: var(--control-height-sm);
   font-family: var(--font-serif);
   font-size: 0.78rem;
   line-height: 1.25;
@@ -190,8 +191,8 @@
   gap: 2px;
   padding: 5px;
   background: var(--surface-card);
-  border: 1px solid var(--border-control);
-  border-radius: var(--radius-sm);
+  border: var(--border-width-thin) solid var(--border-control);
+  border-radius: var(--radius-control);
   box-shadow: var(--shadow-active);
 }
 
@@ -201,10 +202,10 @@
   justify-content: space-between;
   gap: 10px;
   width: 100%;
-  min-height: 36px;
+  min-height: var(--control-height-md);
   padding: 6px 10px;
-  border: 1px solid transparent;
-  border-radius: var(--radius-sm);
+  border: var(--border-width-thin) solid transparent;
+  border-radius: var(--radius-control);
   background: transparent;
   color: var(--text-primary);
   font-family: var(--font-serif);
@@ -245,7 +246,7 @@
 .map-route-mode :global(.map-bordered-btn) {
   display: inline-flex;
   align-items: center;
-  min-height: 28px;
+  min-height: var(--control-height-sm);
   font-family: var(--font-serif);
   font-size: 0.78rem;
   padding: 3px 8px;
@@ -262,8 +263,8 @@
   gap: 6px 12px;
   padding: 5px 10px;
   background: var(--surface-overlay-card);
-  border: 1px solid var(--border-decorative);
-  border-radius: var(--radius-sm);
+  border: var(--border-width-thin) solid var(--border-decorative);
+  border-radius: var(--radius-control);
   font-family: var(--font-mono);
   font-size: 0.72rem;
   color: var(--text-secondary);
@@ -305,8 +306,8 @@
   align-items: center;
   gap: 10px 14px;
   background: var(--surface-overlay-card);
-  border: 1px solid var(--border-control);
-  border-radius: var(--radius-sm);
+  border: var(--border-width-thin) solid var(--border-control);
+  border-radius: var(--radius-control);
   padding: 8px 14px;
   box-shadow: var(--shadow-print);
 }
@@ -382,8 +383,8 @@
 }
 
 .map-close-btn {
-  min-width: 36px;
-  min-height: 36px;
+  min-width: var(--control-height-md);
+  min-height: var(--control-height-md);
   padding: 0;
   display: inline-flex;
   align-items: center;
@@ -459,7 +460,7 @@
     width: 100%;
     min-width: 0;
     max-width: none;
-    min-height: 44px;
+    min-height: var(--control-height-touch);
     font-size: 0.76rem;
     padding: 0 20px 0 8px;
   }
@@ -474,15 +475,15 @@
     width: 100%;
     gap: 4px;
     padding: 2px;
-    border: 1px solid var(--border-decorative);
-    border-left: 1px solid var(--border-decorative);
-    border-radius: var(--radius-sm);
+    border: var(--border-width-thin) solid var(--border-decorative);
+    border-left: var(--border-width-thin) solid var(--border-decorative);
+    border-radius: var(--radius-control);
     background: var(--surface-tint-subtle);
   }
 
   .map-route-mode :global(.map-bordered-btn) {
     width: 100%;
-    min-height: 44px;
+    min-height: var(--control-height-touch);
     padding: 4px 8px;
     font-size: 0.78rem;
     justify-content: center;
@@ -515,7 +516,7 @@
     flex-direction: column;
     background: var(--surface-overlay-card);
     border-top: 1px solid var(--border-control);
-    border-radius: 12px 12px 0 0;
+    border-radius: var(--radius-sheet) var(--radius-sheet) 0 0;
     padding: 6px 10px calc(8px + env(safe-area-inset-bottom));
     box-shadow: var(--shadow-dock);
     max-height: 62vh;
@@ -525,7 +526,7 @@
     display: block;
     width: 34px;
     height: 4px;
-    border-radius: 999px;
+    border-radius: var(--radius-pill);
     background: var(--border-control);
     opacity: 0.45;
     margin: 0 auto 6px;
@@ -561,16 +562,16 @@
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    min-height: 44px;
-    min-width: 44px;
+    min-height: var(--control-height-touch);
+    min-width: var(--control-height-touch);
     padding: 0 10px;
     font-size: 0.76rem;
     white-space: nowrap;
   }
 
   .map-close-btn {
-    min-width: 44px;
-    min-height: 44px;
+    min-width: var(--control-height-touch);
+    min-height: var(--control-height-touch);
   }
 
   .map-stop-popover:not(:global(.is-expanded)) :global(.map-stop-details) {
@@ -578,7 +579,7 @@
   }
 
   .map-stop-links :global(.pill-btn) {
-    min-height: 44px;
+    min-height: var(--control-height-touch);
     display: inline-flex;
     align-items: center;
     padding: 0 10px;
@@ -605,8 +606,8 @@
   }
 
   .map-playback-buttons :global(.pill-btn) {
-    min-height: 44px;
-    min-width: 44px;
+    min-height: var(--control-height-touch);
+    min-width: var(--control-height-touch);
     padding: 0 4px;
     font-size: 0.74rem;
     white-space: nowrap;
@@ -622,7 +623,7 @@
   }
 
   .map-range-input {
-    min-height: 44px;
+    min-height: var(--control-height-touch);
   }
 
   :global(.map-zoom-controls) {

@@ -194,7 +194,7 @@
   appearance: none;
   -webkit-appearance: none;
   border: 1px solid var(--border-decorative);
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   background: var(--surface-linen);
   accent-color: var(--badge-cited-fg);
   overflow: hidden;
@@ -202,17 +202,17 @@
 
 .onboarding-progress-bar::-webkit-progress-bar {
   background: var(--surface-linen);
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
 }
 
 .onboarding-progress-bar::-webkit-progress-value {
   background: var(--badge-cited-fg);
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
 }
 
 .onboarding-progress-bar::-moz-progress-bar {
   background: var(--badge-cited-fg);
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
 }
 
 .onboarding-progress-label {
@@ -270,8 +270,8 @@
   min-width: 28px;
   min-height: 28px;
   margin-top: 1px;
-  border-radius: 999px;
-  border: 1.5px solid var(--border-control);
+  border-radius: var(--radius-pill);
+  border: var(--border-width-emphasis) solid var(--border-control);
   background: var(--surface-subtle);
   color: var(--surface-header);
   font-family: var(--font-ui);

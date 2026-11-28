@@ -19,7 +19,7 @@
   background: var(--surface-card);
   border: 1px solid var(--border-mat);
   box-shadow: var(--shadow-print);
-  border-radius: 1px;
+  border-radius: var(--radius-sm);
 }
 
 .person-portrait.variant-print.size-sm {
@@ -45,7 +45,7 @@
 
 /* Circular medallion variant (Kinship nodes, Place residents, Tree roll, Avatar chips) */
 .person-portrait.variant-circle {
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   border: 1px solid var(--radar-copresence);
   background: var(--surface-linen);
 }
@@ -63,7 +63,7 @@
 .person-portrait.variant-circle.size-md {
   width: 34px;
   height: 34px;
-  border-width: 1.5px;
+  border-width: var(--border-width-emphasis);
 }
 
 .person-portrait-inner {
@@ -79,7 +79,7 @@
 }
 
 .person-portrait.variant-circle .person-portrait-inner {
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
 }
 
 .person-portrait-monogram {

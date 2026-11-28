@@ -138,7 +138,7 @@
   border: 1px solid var(--border-mat);
   box-shadow: var(--shadow-print);
   filter: sepia(0.08) contrast(1.03);
-  border-radius: 1px;
+  border-radius: var(--radius-sm);
 }
 
 @media (hover: hover) and (pointer: fine) {

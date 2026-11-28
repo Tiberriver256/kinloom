@@ -183,9 +183,9 @@
   align-self: center;
   width: 26px;
   height: 26px;
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   background: var(--surface-card);
-  border: 1.8px solid var(--accent-primary);
+  border: var(--border-width-emphasis) solid var(--accent-primary);
   color: var(--accent-primary);
   font-family: var(--font-mono);
   font-size: 0.72rem;
@@ -213,8 +213,8 @@
   gap: 10px;
   text-align: left;
   padding: 8px 10px;
-  border-radius: 4px;
-  border: 1.25px solid var(--border-control);
+  border-radius: var(--radius-control);
+  border: var(--border-width-thin) solid var(--border-control);
   background: var(--surface-canvas);
   color: var(--text-primary);
   cursor: pointer;
@@ -266,9 +266,9 @@
 .tree-roll-avatar {
   width: 34px;
   height: 34px;
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   background: var(--surface-linen);
-  border: 1.5px solid var(--accent-primary);
+  border: var(--border-width-emphasis) solid var(--accent-primary);
   color: var(--accent-primary);
   display: inline-flex;
   align-items: center;
@@ -386,7 +386,7 @@
   gap: 6px;
   min-height: 36px;
   padding: 4px 10px;
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   border: 1px solid var(--border-control);
   background: var(--surface-card);
   color: var(--text-primary);
@@ -448,7 +448,7 @@
   min-height: 38px;
   max-width: 100%;
   padding: 6px 14px;
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   border: 1px solid var(--border-decorative);
   background: var(--surface-subtle);
   color: var(--jump-active-fg);
