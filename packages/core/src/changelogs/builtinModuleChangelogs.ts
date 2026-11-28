@@ -19,6 +19,17 @@ export const BUILTIN_MODULE_CHANGELOGS: readonly BuiltinModuleChangelogRecord[] 
     name: 'Kinloom Core',
     entries: [
       {
+        version: '0.84.1',
+        date: '2026-11-28',
+        summary: 'Kinloom v0.84.1 release.',
+        changes: [
+          {
+            category: 'changed',
+            text: 'Updated module for Kinloom v0.84.1.',
+          },
+        ],
+      },
+      {
         version: '0.84.0',
         date: '2026-11-28',
         summary: 'Kinloom v0.84.0 release.',
@@ -403,6 +414,17 @@ export const BUILTIN_MODULE_CHANGELOGS: readonly BuiltinModuleChangelogRecord[] 
     id: '@kinloom/server',
     name: 'Kinloom Server',
     entries: [
+      {
+        version: '0.84.1',
+        date: '2026-11-28',
+        summary: 'Kinloom v0.84.1 release.',
+        changes: [
+          {
+            category: 'changed',
+            text: 'Updated module for Kinloom v0.84.1.',
+          },
+        ],
+      },
       {
         version: '0.84.0',
         date: '2026-11-28',
@@ -792,6 +814,17 @@ export const BUILTIN_MODULE_CHANGELOGS: readonly BuiltinModuleChangelogRecord[] 
     name: 'Kinloom Cloudflare Worker',
     entries: [
       {
+        version: '0.84.1',
+        date: '2026-11-28',
+        summary: 'Kinloom v0.84.1 release.',
+        changes: [
+          {
+            category: 'changed',
+            text: 'Updated module for Kinloom v0.84.1.',
+          },
+        ],
+      },
+      {
         version: '0.84.0',
         date: '2026-11-28',
         summary: 'Kinloom v0.84.0 release.',
@@ -1175,6 +1208,17 @@ export const BUILTIN_MODULE_CHANGELOGS: readonly BuiltinModuleChangelogRecord[] 
     id: '@kinloom/ui',
     name: 'Kinloom UI',
     entries: [
+      {
+        version: '0.84.1',
+        date: '2026-11-28',
+        summary: 'Kinloom v0.84.1 release.',
+        changes: [
+          {
+            category: 'changed',
+            text: 'Updated module for Kinloom v0.84.1.',
+          },
+        ],
+      },
       {
         version: '0.84.0',
         date: '2026-11-28',
@@ -1569,6 +1613,17 @@ export const BUILTIN_MODULE_CHANGELOGS: readonly BuiltinModuleChangelogRecord[] 
     name: 'Kinloom CLI',
     entries: [
       {
+        version: '0.84.1',
+        date: '2026-11-28',
+        summary: 'Kinloom v0.84.1 release.',
+        changes: [
+          {
+            category: 'changed',
+            text: 'Updated module for Kinloom v0.84.1.',
+          },
+        ],
+      },
+      {
         version: '0.84.0',
         date: '2026-11-28',
         summary: 'Kinloom v0.84.0 release.',
@@ -1948,6 +2003,17 @@ export const BUILTIN_MODULE_CHANGELOGS: readonly BuiltinModuleChangelogRecord[] 
     id: '@kinloom/tokens',
     name: 'Kinloom Design Tokens',
     entries: [
+      {
+        version: '0.84.1',
+        date: '2026-11-28',
+        summary: 'Kinloom v0.84.1 release.',
+        changes: [
+          {
+            category: 'changed',
+            text: 'Updated module for Kinloom v0.84.1.',
+          },
+        ],
+      },
       {
         version: '0.84.0',
         date: '2026-11-28',
