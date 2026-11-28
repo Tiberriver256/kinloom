@@ -1,6 +1,6 @@
 {
   "name": "@kinloom/tokens",
-  "version": "0.83.0",
+  "version": "0.83.1",
   "type": "module",
   "sideEffects": [
     "**/*.css"
