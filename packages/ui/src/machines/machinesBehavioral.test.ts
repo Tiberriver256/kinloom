@@ -459,7 +459,7 @@ describe('entityEditorMachine behavioral transitions', () => {
     actor.send({ type: 'ACCEPT_SERVER' });
     expect(actor.getSnapshot().matches('viewing')).toBe(true);
     expect(actor.getSnapshot().context.baseRevisionId).toBe(4);
-    expect(actor.getSnapshot().context.baseSnapshot.full_name).toBe('Clara M. Alder');
+    expect(actor.getSnapshot().context.baseSnapshot['full_name']).toBe('Clara M. Alder');
 
     actor.send({ type: 'START_EDIT' });
     actor.send({ type: 'EDIT_FIELD', draft: { ...basePerson, death_edtf: '1940' } });

@@ -363,14 +363,14 @@ export function formatRecipeIngredientLine(ingredient: UiRecipeIngredient): stri
 }
 
 export interface RecipesListQueryParams {
-  readonly q?: string;
-  readonly course?: UiRecipeCourse;
-  readonly tag?: string;
-  readonly attributed_person_id?: string;
-  readonly favorites?: boolean;
-  readonly sort?: UiRecipeSortMode;
-  readonly limit?: number;
-  readonly offset?: number;
+  readonly q?: string | undefined;
+  readonly course?: UiRecipeCourse | undefined;
+  readonly tag?: string | undefined;
+  readonly attributed_person_id?: string | undefined;
+  readonly favorites?: boolean | undefined;
+  readonly sort?: UiRecipeSortMode | undefined;
+  readonly limit?: number | undefined;
+  readonly offset?: number | undefined;
 }
 
 export function buildRecipesListQueryString(params: RecipesListQueryParams = {}): string {
@@ -639,7 +639,7 @@ export function normalizeDraftTagInput(raw: string): {
 export function addDraftTag(
   tags: readonly string[],
   raw: string
-): { readonly tags: readonly string[]; readonly error?: string } {
+): { readonly tags: readonly string[]; readonly error?: string | undefined } {
   const parsed = normalizeDraftTagInput(raw);
   if (!parsed.ok || !parsed.tag) {
     return { tags, error: parsed.error };
@@ -680,57 +680,56 @@ export function validateRecipeDraft(draft: RecipeEditorDraft): ValidateRecipeDra
 
   const title = draft.title.trim();
   if (title.length < 2) {
-    fieldErrors.title = 'Enter a recipe title of at least 2 characters.';
+    fieldErrors['title'] = 'Enter a recipe title of at least 2 characters.';
   } else if (title.length > 140) {
-    fieldErrors.title = 'Recipe title must be 140 characters or fewer.';
+    fieldErrors['title'] = 'Recipe title must be 140 characters or fewer.';
   }
 
   const slug = draft.slug.trim();
   if (slug.length > 0) {
     if (slug.length < 2 || slug.length > 96 || !RECIPE_SLUG_RE.test(slug)) {
-      fieldErrors.slug =
+      fieldErrors['slug'] =
         'Use 2 to 96 lowercase letters, numbers, and single hyphens (for example honey-biscuits).';
     }
   }
 
   const summary = draft.summary.trim();
   if (summary.length > 400) {
-    fieldErrors.summary = 'Summary must be 400 characters or fewer.';
+    fieldErrors['summary'] = 'Summary must be 400 characters or fewer.';
   }
 
   const storyMd = draft.story_md.trim();
   if (storyMd.length > 16000) {
-    fieldErrors.story_md = 'Family story must be 16,000 characters or fewer.';
+    fieldErrors['story_md'] = 'Family story must be 16,000 characters or fewer.';
   }
 
   const prepParsed = parseOptionalDurationField(draft.prep_minutes, 'Prep time');
   if (!prepParsed.ok) {
-    fieldErrors.prep_minutes = prepParsed.error;
+    fieldErrors['prep_minutes'] = prepParsed.error;
   }
 
   const cookParsed = parseOptionalDurationField(draft.cook_minutes, 'Cook time');
   if (!cookParsed.ok) {
-    fieldErrors.cook_minutes = cookParsed.error;
+    fieldErrors['cook_minutes'] = cookParsed.error;
   }
 
   const servings = draft.servings.trim();
   if (servings.length > 60) {
-    fieldErrors.servings = 'Servings must be 60 characters or fewer.';
+    fieldErrors['servings'] = 'Servings must be 60 characters or fewer.';
   }
 
   const provenanceNote = draft.provenance_note.trim();
   if (provenanceNote.length > 400) {
-    fieldErrors.provenance_note = 'Provenance note must be 400 characters or fewer.';
+    fieldErrors['provenance_note'] = 'Provenance note must be 400 characters or fewer.';
   }
 
   const sourceEra = draft.source_era.trim();
   if (sourceEra.length > 60) {
-    fieldErrors.source_era = 'Source era must be 60 characters or fewer.';
+    fieldErrors['source_era'] = 'Source era must be 60 characters or fewer.';
   }
 
   const cleanedIngredients: UiRecipeIngredient[] = [];
-  for (let i = 0; i < draft.ingredients.length; i += 1) {
-    const row = draft.ingredients[i];
+  for (const [i, row] of draft.ingredients.entries()) {
     const quantity = row.quantity.trim();
     const unit = row.unit.trim();
     const item = row.item.trim();
@@ -758,12 +757,11 @@ export function validateRecipeDraft(draft: RecipeEditorDraft): ValidateRecipeDra
     });
   }
   if (cleanedIngredients.length > 100) {
-    fieldErrors.ingredients = 'Recipes may include at most 100 ingredients.';
+    fieldErrors['ingredients'] = 'Recipes may include at most 100 ingredients.';
   }
 
   const cleanedSteps: UiRecipeStep[] = [];
-  for (let i = 0; i < draft.steps.length; i += 1) {
-    const row = draft.steps[i];
+  for (const [i, row] of draft.steps.entries()) {
     const instruction = row.instruction.trim();
     const note = row.note.trim();
     if (!instruction && !note) {
@@ -784,7 +782,7 @@ export function validateRecipeDraft(draft: RecipeEditorDraft): ValidateRecipeDra
     });
   }
   if (cleanedSteps.length > 60) {
-    fieldErrors.steps = 'Recipes may include at most 60 preparation steps.';
+    fieldErrors['steps'] = 'Recipes may include at most 60 preparation steps.';
   }
 
   const normalizedTags: string[] = [];
@@ -792,7 +790,7 @@ export function validateRecipeDraft(draft: RecipeEditorDraft): ValidateRecipeDra
   for (const rawTag of draft.tags) {
     const parsedTag = normalizeDraftTagInput(rawTag);
     if (!parsedTag.ok || !parsedTag.tag) {
-      fieldErrors.tags = parsedTag.error ?? 'Invalid tag format.';
+      fieldErrors['tags'] = parsedTag.error ?? 'Invalid tag format.';
       break;
     }
     if (!seenTags.has(parsedTag.tag)) {
@@ -801,7 +799,7 @@ export function validateRecipeDraft(draft: RecipeEditorDraft): ValidateRecipeDra
     }
   }
   if (normalizedTags.length > 20) {
-    fieldErrors.tags = 'Recipes can have at most 20 tags.';
+    fieldErrors['tags'] = 'Recipes can have at most 20 tags.';
   }
 
   const errorKeys = Object.keys(fieldErrors);
@@ -812,7 +810,8 @@ export function validateRecipeDraft(draft: RecipeEditorDraft): ValidateRecipeDra
       fieldErrors,
       summary:
         count === 1
-          ? (fieldErrors[errorKeys[0]] ?? 'Review the highlighted field before saving.')
+          ? ((errorKeys[0] ? fieldErrors[errorKeys[0]] : undefined) ??
+            'Review the highlighted field before saving.')
           : `Fix ${count} highlighted fields before saving.`,
     };
   }

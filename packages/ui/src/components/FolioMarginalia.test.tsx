@@ -228,23 +228,23 @@ describe('Folio Marginalia rail, bidirectional highlight, and Heirloom Print CSS
     expect(rows).toHaveLength(2);
 
     // Row 0 rail has [1] census; Row 1 rail has [2] journal + trailing uncited plat book
-    expect(rows[0].querySelector('.folio-marginalia-rail')?.textContent).toContain('[1]');
-    expect(rows[0].querySelector('.folio-marginalia-rail')?.textContent).toContain(
+    expect(rows[0]?.querySelector('.folio-marginalia-rail')?.textContent).toContain('[1]');
+    expect(rows[0]?.querySelector('.folio-marginalia-rail')?.textContent).toContain(
       '1880 U.S. Federal Census'
     );
-    expect(rows[1].querySelector('.folio-marginalia-rail')?.textContent).toContain('[2]');
-    expect(rows[1].querySelector('.folio-marginalia-rail')?.textContent).toContain(
+    expect(rows[1]?.querySelector('.folio-marginalia-rail')?.textContent).toContain('[2]');
+    expect(rows[1]?.querySelector('.folio-marginalia-rail')?.textContent).toContain(
       'Harriet Alder Farm Journal'
     );
-    expect(rows[1].querySelector('.folio-marginalia-rail')?.textContent).toContain(
+    expect(rows[1]?.querySelector('.folio-marginalia-rail')?.textContent).toContain(
       'Sangamon County Plat Book'
     );
 
     // Hover marginalia item -> highlights matching inline [1] footnote ref
-    const firstMarginaliaItem = rows[0].querySelector<HTMLElement>(
+    const firstMarginaliaItem = rows[0]?.querySelector<HTMLElement>(
       '[data-marginalia-source-id="src_census_1880"]'
     );
-    const firstFootnoteRef = rows[0].querySelector<HTMLButtonElement>(
+    const firstFootnoteRef = rows[0]?.querySelector<HTMLButtonElement>(
       '[data-citation-source-id="src_census_1880"]'
     );
     expect(firstMarginaliaItem).not.toBeNull();
@@ -262,7 +262,9 @@ describe('Folio Marginalia rail, bidirectional highlight, and Heirloom Print CSS
     expect(firstFootnoteRef?.classList.contains('is-marginalia-highlighted')).toBe(false);
 
     // Click Inspect and Read Source actions on row 1
-    const row1Buttons = [...rows[1].querySelectorAll<HTMLButtonElement>('.folio-marginalia-action-btn')];
+    const row1Buttons = [
+      ...(rows[1]?.querySelectorAll<HTMLButtonElement>('.folio-marginalia-action-btn') ?? []),
+    ];
     const inspectBtn = row1Buttons.find((b) => b.textContent === 'Inspect');
     const readBtn = row1Buttons.find((b) => b.textContent === 'Read Source →');
     act(() => {
@@ -337,10 +339,10 @@ describe('Folio Marginalia rail, bidirectional highlight, and Heirloom Print CSS
 
     const rails = [...container.querySelectorAll('.folio-marginalia-rail')];
     expect(rails).toHaveLength(2);
-    expect(rails[0].textContent).toContain('Township map, p. 19');
-    expect(rails[1].textContent).toContain('Charter ledger p. 19');
-    expect(rails[1].textContent).toContain('! 1');
-    expect(rails[1].textContent).toContain('Fact Discrepancy');
+    expect(rails[0]?.textContent).toContain('Township map, p. 19');
+    expect(rails[1]?.textContent).toContain('Charter ledger p. 19');
+    expect(rails[1]?.textContent).toContain('! 1');
+    expect(rails[1]?.textContent).toContain('Fact Discrepancy');
   });
 
   it('enforces book-grade @page folio margins, running page counters, 38em/33em measure, hyphenation, and responsive marginalia CSS', () => {

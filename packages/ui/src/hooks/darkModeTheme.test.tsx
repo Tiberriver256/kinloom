@@ -135,7 +135,7 @@ function mountEl(element: React.ReactElement): HTMLDivElement {
 
 beforeEach(() => {
   window.localStorage.clear();
-  delete document.documentElement.dataset.theme;
+  delete document.documentElement.dataset['theme'];
   document.head.querySelectorAll('meta[name="color-scheme"]').forEach((node) => {
     node.remove();
   });
@@ -150,7 +150,7 @@ afterEach(() => {
     cleanups.pop()?.();
   }
   window.localStorage.clear();
-  delete document.documentElement.dataset.theme;
+  delete document.documentElement.dataset['theme'];
   vi.restoreAllMocks();
 });
 
@@ -198,7 +198,7 @@ describe('ExplorerTopBar theme toggle, persistence, OS tracking, and cross-tab s
     );
 
     const meta = document.head.querySelector<HTMLMetaElement>('meta[name="color-scheme"]');
-    expect(document.documentElement.dataset.theme).toBeUndefined();
+    expect(document.documentElement.dataset['theme']).toBeUndefined();
     expect(meta?.content).toBe('light dark');
 
     const quickBtn = container.querySelector<HTMLButtonElement>('button[aria-label="Switch to dark theme"]');
@@ -209,7 +209,7 @@ describe('ExplorerTopBar theme toggle, persistence, OS tracking, and cross-tab s
       quickBtn?.click();
     });
     expect(window.localStorage.getItem(THEME_STORAGE_KEY)).toBe('dark');
-    expect(document.documentElement.dataset.theme).toBe('dark');
+    expect(document.documentElement.dataset['theme']).toBe('dark');
     expect(meta?.content).toBe('dark');
     expect(container.querySelector('button[aria-label="Switch to light theme"]')).not.toBeNull();
 
@@ -218,13 +218,13 @@ describe('ExplorerTopBar theme toggle, persistence, OS tracking, and cross-tab s
       media.setMatches(true);
     });
     expect(window.localStorage.getItem(THEME_STORAGE_KEY)).toBe('dark');
-    expect(document.documentElement.dataset.theme).toBe('dark');
+    expect(document.documentElement.dataset['theme']).toBe('dark');
 
     act(() => {
       media.setMatches(false);
     });
     expect(window.localStorage.getItem(THEME_STORAGE_KEY)).toBe('dark');
-    expect(document.documentElement.dataset.theme).toBe('dark');
+    expect(document.documentElement.dataset['theme']).toBe('dark');
 
     // 3. User clicks quick toggle again while OS is light -> reverts to system (storage cleared)
     const lightBtn = container.querySelector<HTMLButtonElement>('button[aria-label="Switch to light theme"]');
@@ -232,7 +232,7 @@ describe('ExplorerTopBar theme toggle, persistence, OS tracking, and cross-tab s
       lightBtn?.click();
     });
     expect(window.localStorage.getItem(THEME_STORAGE_KEY)).toBeNull();
-    expect(document.documentElement.dataset.theme).toBeUndefined();
+    expect(document.documentElement.dataset['theme']).toBeUndefined();
     expect(meta?.content).toBe('light dark');
   });
 
@@ -266,7 +266,7 @@ describe('ExplorerTopBar theme toggle, persistence, OS tracking, and cross-tab s
       lightOption?.click();
     });
     expect(lightOption?.getAttribute('aria-checked')).toBe('true');
-    expect(document.documentElement.dataset.theme).toBe('light');
+    expect(document.documentElement.dataset['theme']).toBe('light');
     expect(window.localStorage.getItem(THEME_STORAGE_KEY)).toBe('light');
 
     // Cross-tab storage event updates theme state and DOM immediately
@@ -285,7 +285,7 @@ describe('ExplorerTopBar theme toggle, persistence, OS tracking, and cross-tab s
       );
     });
     expect(darkOption?.getAttribute('aria-checked')).toBe('true');
-    expect(document.documentElement.dataset.theme).toBe('dark');
+    expect(document.documentElement.dataset['theme']).toBe('dark');
 
     // Storage clear (key === null) and malformed same-tab event reset cleanly to system
     act(() => {
@@ -306,7 +306,7 @@ describe('ExplorerTopBar theme toggle, persistence, OS tracking, and cross-tab s
     expect(readStoredThemePreference()).toBe('system');
 
     window.localStorage.removeItem(THEME_STORAGE_KEY);
-    document.documentElement.dataset.theme = 'light';
+    document.documentElement.dataset['theme'] = 'light';
     expect(readStoredThemePreference()).toBe('light');
     expect(readResolvedDarkMode()).toBe(false);
 
@@ -314,14 +314,14 @@ describe('ExplorerTopBar theme toggle, persistence, OS tracking, and cross-tab s
       node.remove();
     });
     applyThemeToDocument('dark');
-    expect(document.documentElement.dataset.theme).toBe('dark');
+    expect(document.documentElement.dataset['theme']).toBe('dark');
 
     Object.defineProperty(window, 'matchMedia', {
       configurable: true,
       writable: true,
       value: undefined,
     });
-    delete document.documentElement.dataset.theme;
+    delete document.documentElement.dataset['theme'];
     expect(readResolvedDarkMode()).toBe(false);
   });
 
@@ -347,7 +347,7 @@ describe('ExplorerTopBar theme toggle, persistence, OS tracking, and cross-tab s
     act(() => {
       toggleBtn?.click();
     });
-    expect(document.documentElement.dataset.theme).toBe('dark');
+    expect(document.documentElement.dataset['theme']).toBe('dark');
     expect(readStoredThemePreference()).toBe('dark');
     expect(readResolvedDarkMode()).toBe(true);
   });
@@ -486,7 +486,7 @@ describe('MapLibre and token dark-mode parity', () => {
         getSource: (id: string) => (id === 'osm_land' ? { type: 'vector' } : undefined),
         setLayoutProperty: vi.fn(),
         addLayer: (layer: { id: string }, beforeId?: string) => {
-          addedLayers.push({ id: layer.id, beforeId });
+          addedLayers.push({ id: layer.id, ...(beforeId !== undefined ? { beforeId } : {}) });
         },
       } as unknown as MapLibreMap,
       true
@@ -523,8 +523,8 @@ describe('MapLibre and token dark-mode parity', () => {
     const selectedStops: Array<string | null> = [];
     const emptyCollection = { type: 'FeatureCollection' as const, features: [] };
     syncFamilyOverlay(overlayMap, emptyCollection, (id) => selectedStops.push(id), true);
-    const labelLayer = overlayLayers.find((l) => l.id === 'migration-labels');
-    const labelPaint = labelLayer?.paint as Record<string, unknown> | undefined;
+    const labelLayer = overlayLayers.find((l) => l['id'] === 'migration-labels');
+    const labelPaint = labelLayer?.['paint'] as Record<string, unknown> | undefined;
     expect(labelPaint?.['text-halo-width']).toBe(1.6);
 
     clickHandlers[0]?.({ point: [10, 10] });
@@ -582,7 +582,7 @@ describe('MapLibre and token dark-mode parity', () => {
     const cachedLight2 = await loadArchivalOhmStyle(OVERVIEW_REFERENCE_YEAR, fetchLightAndYear, false);
     const year1850 = await loadArchivalOhmStyle('1850', fetchLightAndYear, true);
     expect(cachedLight2).toBe(cachedLight1);
-    expect(year1850.state?.maplibre_gl_dates__startDecimalYear).toEqual({ default: 1850 });
+    expect(year1850.state?.['maplibre_gl_dates__startDecimalYear']).toEqual({ default: 1850 });
     expect(fetchLightAndYear).toHaveBeenCalledTimes(1);
     resetCachedOhmStyle();
 

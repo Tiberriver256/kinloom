@@ -98,11 +98,11 @@ export function readDraftPronunciation(value: unknown): Pronunciation | null {
       out[key] = val;
     }
   }
-  const variants = parseValidVariants(value.variants);
+  const variants = parseValidVariants(value['variants']);
   if (variants.length > 0) {
     out.variants = variants;
   }
-  const matchContains = parseMatchFullNameContains(value.match_full_name_contains, false);
+  const matchContains = parseMatchFullNameContains(value['match_full_name_contains'], false);
   if (matchContains !== undefined) {
     out.match_full_name_contains = matchContains;
   }
@@ -128,12 +128,12 @@ export function cleanPronunciation(value: unknown, trimValues: boolean): Pronunc
       }
     }
   }
-  const variants = parseValidVariants(value.variants);
+  const variants = parseValidVariants(value['variants']);
   if (variants.length > 0) {
     out.variants = variants;
     hasAnyNonWhitespace = true;
   }
-  const matchContains = parseMatchFullNameContains(value.match_full_name_contains, trimValues);
+  const matchContains = parseMatchFullNameContains(value['match_full_name_contains'], trimValues);
   if (matchContains !== undefined) {
     out.match_full_name_contains = matchContains;
   }
@@ -151,7 +151,11 @@ function formatPortError(err: unknown, fallback: string): string {
 }
 
 export type SaveSharedTokenResult =
-  | { readonly ok: true; readonly pronunciations?: Record<string, Pronunciation>; readonly message: string }
+  | {
+      readonly ok: true;
+      readonly pronunciations?: Record<string, Pronunciation> | undefined;
+      readonly message: string;
+    }
   | { readonly ok: false; readonly message: string };
 
 export async function saveSharedTokenPronunciation(
@@ -209,7 +213,7 @@ export async function generatePronunciationAudio(params: {
   readonly entityId: string;
   readonly text: string;
   readonly draftPronunciation: Pronunciation | null;
-  readonly dataSource?: ArchiveDataSource;
+  readonly dataSource?: ArchiveDataSource | undefined;
 }): Promise<GenerateAudioResult> {
   if (!params.dataSource?.generatePronunciationAudio) {
     return {
@@ -222,9 +226,13 @@ export async function generatePronunciationAudio(params: {
       entity_type: params.entityType,
       entity_id: params.entityId,
       text: params.text,
-      phonetic: params.draftPronunciation?.phonetic?.trim() || undefined,
-      ipa: params.draftPronunciation?.ipa?.trim() || undefined,
-      language: params.draftPronunciation?.language?.trim() || undefined,
+      ...(params.draftPronunciation?.phonetic?.trim()
+        ? { phonetic: params.draftPronunciation.phonetic.trim() }
+        : {}),
+      ...(params.draftPronunciation?.ipa?.trim() ? { ipa: params.draftPronunciation.ipa.trim() } : {}),
+      ...(params.draftPronunciation?.language?.trim()
+        ? { language: params.draftPronunciation.language.trim() }
+        : {}),
     });
     if (!data.audio_url || typeof data.audio_url !== 'string') {
       return { ok: false, message: 'Server response did not include an audio_url.' };

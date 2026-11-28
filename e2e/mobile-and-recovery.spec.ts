@@ -335,11 +335,12 @@ test('Mobile 360px/390px Dark Mode & Desktop 1280px: zero title truncation, Trun
   const activeNavs = desktopTopbar.navLinks.filter((n) => n.active);
   const inactiveNavs = desktopTopbar.navLinks.filter((n) => !n.active);
   expect(activeNavs).toHaveLength(1);
-  expect(activeNavs[0].fontWeight).toBe('600');
+  expect(activeNavs[0]?.fontWeight).toBe('600');
   expect(inactiveNavs.length).toBeGreaterThanOrEqual(6);
+  const firstInactiveColor = inactiveNavs[0]?.color;
   for (const link of inactiveNavs) {
     expect(link.fontWeight, `Inactive nav ${link.text} weight`).toBe('500');
-    expect(link.color, `Inactive nav ${link.text} color matches peers`).toBe(inactiveNavs[0].color);
+    expect(link.color, `Inactive nav ${link.text} color matches peers`).toBe(firstInactiveColor);
   }
   expect(desktopTopbar.readingRoomFont).not.toContain('Newsreader');
   expect(desktopTopbar.readingRoomRadius).toBe('4px');

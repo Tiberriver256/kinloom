@@ -84,7 +84,7 @@ export const MilestoneStoryCard: React.FC<{
       {(event.photo_url || event.photo_placeholder_caption) && (
         <ArchivalPhotoFrame
           caption={event.photo_placeholder_caption || event.title}
-          photoUrl={event.photo_url ?? undefined}
+          photoUrl={event.photo_url ?? null}
         />
       )}
 

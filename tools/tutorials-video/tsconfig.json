@@ -8,7 +8,8 @@
     "jsx": "react-jsx",
     "noEmit": true,
     "rewriteRelativeImportExtensions": true,
-    "resolveJsonModule": true
+    "resolveJsonModule": true,
+    "types": ["node"]
   },
   "include": ["src/**/*.ts", "src/**/*.tsx"]
 }

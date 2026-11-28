@@ -486,7 +486,7 @@ export async function startLiveWikiTestServer(
         const webReq = new Request(`${origin}${req.url ?? '/'}`, {
           method,
           headers,
-          body: bodyBytes && bodyBytes.byteLength > 0 ? Buffer.from(bodyBytes) : undefined,
+          ...(bodyBytes && bodyBytes.byteLength > 0 ? { body: Buffer.from(bodyBytes) } : {}),
         });
 
         const webRes = await server.fetch(webReq);

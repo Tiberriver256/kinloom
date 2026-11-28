@@ -46,6 +46,11 @@ import {
   resolveMatchingPlaceIds,
 } from './place/placeViewModel.js';
 
+function must<T>(val: T | undefined, label = 'value'): T {
+  if (val === undefined) throw new Error(`Expected ${label}`);
+  return val;
+}
+
 function makePerson(overrides: Partial<Person> & { id: string; slug: string; full_name: string }): Person {
   return {
     given_name: overrides.full_name.split(' ')[0] ?? '',
@@ -238,7 +243,7 @@ describe('evidenceViewModel', () => {
 
     const conflicts = collectConflictEvents(bundle);
     expect(conflicts.map((e) => e.id)).toEqual(['evt_conflict']);
-    expect(collectEventDiscrepancyClaims(conflicts[0])).toHaveLength(1);
+    expect(collectEventDiscrepancyClaims(must(conflicts[0]))).toHaveLength(1);
 
     const unverified = collectUnverifiedEvents(bundle);
     expect(unverified.map((e) => e.id)).toEqual(['evt_unverified']);
@@ -290,7 +295,7 @@ describe('mapOverlayData', () => {
         personSlugs: ['clara-vance'],
       },
     ];
-    const seg = { from: stops[0], to: stops[1], distanceMiles: 3650 };
+    const seg = { from: must(stops[0]), to: must(stops[1]), distanceMiles: 3650 };
     const overlay = buildFamilyOverlay({
       stops,
       visibleStops: stops,
@@ -305,9 +310,9 @@ describe('mapOverlayData', () => {
       ]),
     });
 
-    const routeFeature = overlay.features.find((f) => f.properties?.kind === 'route');
-    expect(routeFeature?.properties?.dashed).toBe(true);
-    expect(routeFeature?.properties?.latest).toBe(true);
+    const routeFeature = overlay.features.find((f) => f.properties?.['kind'] === 'route');
+    expect(routeFeature?.properties?.['dashed']).toBe(true);
+    expect(routeFeature?.properties?.['latest']).toBe(true);
 
     const fallbackBounds = computeDefaultMapBounds([], {
       centerLng: -90,
@@ -348,7 +353,7 @@ describe('mapOverlayData', () => {
     expect(westbound[0]?.[0]).toBeCloseTo(-157.86, 4);
     expect(westbound.at(-1)?.[0]).toBeCloseTo(-220.31, 4);
     for (let i = 1; i < westbound.length; i += 1) {
-      expect(Math.abs(westbound[i][0] - westbound[i - 1][0])).toBeLessThan(3);
+      expect(Math.abs((westbound[i]?.[0] ?? 0) - (westbound[i - 1]?.[0] ?? 0))).toBeLessThan(3);
     }
     expect(westbound[16]?.[0]).toBeLessThan(-180);
 
@@ -356,7 +361,7 @@ describe('mapOverlayData', () => {
     expect(eastbound[0]?.[0]).toBeCloseTo(139.69, 4);
     expect(eastbound.at(-1)?.[0]).toBeCloseTo(202.14, 4);
     for (let i = 1; i < eastbound.length; i += 1) {
-      expect(Math.abs(eastbound[i][0] - eastbound[i - 1][0])).toBeLessThan(3);
+      expect(Math.abs((eastbound[i]?.[0] ?? 0) - (eastbound[i - 1]?.[0] ?? 0))).toBeLessThan(3);
     }
 
     const pacificStops: MigrationStop[] = [
@@ -544,7 +549,7 @@ describe('entityForms registry seam', () => {
     expect(built.ok).toBe(true);
     if (built.ok) {
       expect(built.entityId).toBe('per_clara_vance');
-      expect(built.payload.full_name).toBe('Clara Vance');
+      expect(built.payload['full_name']).toBe('Clara Vance');
     }
 
     const emptyEvent = ENTITY_CREATE_FORM_REGISTRY.event.validateAndBuild(draft, {
@@ -604,10 +609,10 @@ describe('placeViewModel', () => {
     const peopleById = new Map(extendedBundle.people.map((p) => [p.id, p]));
     const springfield = extendedBundle.places[0];
 
-    const exactIds = resolveMatchingPlaceIds(extendedBundle, springfield, 'exact', placesById);
+    const exactIds = resolveMatchingPlaceIds(extendedBundle, must(springfield), 'exact', placesById);
     expect([...exactIds]).toEqual(['pl_springfield']);
 
-    const radiusIds = resolveMatchingPlaceIds(extendedBundle, springfield, 'radius15', placesById);
+    const radiusIds = resolveMatchingPlaceIds(extendedBundle, must(springfield), 'radius15', placesById);
     expect(radiusIds.has('pl_springfield')).toBe(true);
     expect(radiusIds.has('plc_chatham')).toBe(true);
 

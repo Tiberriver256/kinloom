@@ -103,23 +103,27 @@ export function parseCliArgs(argv: readonly string[]): RenderTutorialsCliOptions
         throw new RangeError(`Unsupported --format '${value}'. Expected mp4 | webm | both.`);
       }
       format = value;
-    } else if (arg === '--out-dir' && argv[i + 1]) {
-      outDir = path.resolve(argv[++i]);
-    } else if (arg === '--cache-dir' && argv[i + 1]) {
-      cacheDir = path.resolve(argv[++i]);
-    } else if (arg === '--scripts-dir' && argv[i + 1]) {
-      scriptsDir = path.resolve(argv[++i]);
-    } else if (arg === '--demo-url' && argv[i + 1]) {
-      demoUrl = argv[++i];
+    } else if (arg === '--out-dir') {
+      const next = argv[++i];
+      if (next) outDir = path.resolve(next);
+    } else if (arg === '--cache-dir') {
+      const next = argv[++i];
+      if (next) cacheDir = path.resolve(next);
+    } else if (arg === '--scripts-dir') {
+      const next = argv[++i];
+      if (next) scriptsDir = path.resolve(next);
+    } else if (arg === '--demo-url') {
+      const next = argv[++i];
+      if (next) demoUrl = next;
     }
   }
 
   const resolvedTts: TtsBackendOption =
-    tts ?? (dryRun ? 'silent' : process.env.GEMINI_API_KEY ? 'gemini' : 'silent');
+    tts ?? (dryRun ? 'silent' : process.env['GEMINI_API_KEY'] ? 'gemini' : 'silent');
 
   return {
     dryRun,
-    chapterFilter,
+    ...(chapterFilter !== undefined ? { chapterFilter } : {}),
     tts: resolvedTts,
     format,
     outDir,
@@ -144,6 +148,9 @@ export function extractCoreChapterStepMap(sourceText: string): ReadonlyMap<strin
       continue;
     }
     const chapterId = chapterMatch[1];
+    if (!chapterId) {
+      continue;
+    }
     const stepsIdx = block.indexOf('steps:');
     if (stepsIdx === -1) {
       continue;
@@ -153,7 +160,9 @@ export function extractCoreChapterStepMap(sourceText: string): ReadonlyMap<strin
     const stepIdRe = /\bid:\s*'([^']+)'/g;
     let m: RegExpExecArray | null;
     while ((m = stepIdRe.exec(stepsBlock)) !== null) {
-      stepIds.push(m[1]);
+      if (m[1]) {
+        stepIds.push(m[1]);
+      }
     }
     map.set(chapterId, stepIds);
   }
@@ -237,16 +246,16 @@ export function createTtsProvider(backend: TtsBackendOption): TutorialTtsProvide
     return new SilentMockTutorialTtsProvider();
   }
   if (backend === 'gemini') {
-    const apiKey = process.env.GEMINI_API_KEY ?? process.env.GOOGLE_API_KEY ?? '';
+    const apiKey = process.env['GEMINI_API_KEY'] ?? process.env['GOOGLE_API_KEY'] ?? '';
     return new GeminiTutorialTtsProvider({
       apiKey,
-      model: process.env.KINLOOM_TUTORIAL_TTS_MODEL ?? DEFAULT_GEMINI_TTS_MODEL,
+      model: process.env['KINLOOM_TUTORIAL_TTS_MODEL'] ?? DEFAULT_GEMINI_TTS_MODEL,
     });
   }
-  const endpointUrl = process.env.KINLOOM_OPENAI_TTS_URL ?? 'http://127.0.0.1:8000/v1/audio/speech';
+  const endpointUrl = process.env['KINLOOM_OPENAI_TTS_URL'] ?? 'http://127.0.0.1:8000/v1/audio/speech';
   return new OpenAiSpeechTutorialTtsProvider({
     endpointUrl,
-    apiKey: process.env.KINLOOM_OPENAI_TTS_API_KEY,
+    apiKey: process.env['KINLOOM_OPENAI_TTS_API_KEY'],
   });
 }
 
@@ -288,8 +297,7 @@ export async function runTutorialsPipeline(
     let chapterDurationSeconds = 0;
     const stepsOut: Record<string, RenderedManifestStep> = {};
 
-    for (let stepIdx = 0; stepIdx < script.steps.length; stepIdx += 1) {
-      const step = script.steps[stepIdx];
+    for (const [stepIdx, step] of script.steps.entries()) {
       totalSteps += 1;
 
       const capturedFrames = await captureDemoFramesForStep({

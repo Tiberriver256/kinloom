@@ -14,6 +14,11 @@ import {
   stripTutorialQueryParam,
 } from './tutorialModel.js';
 
+function must<T>(val: T | undefined, label = 'value'): T {
+  if (val === undefined) throw new Error(`Expected ${label}`);
+  return val;
+}
+
 const SITE_CONFIG = parseKinloomConfig({
   site: {
     title: 'Synthetic Tutorial Model Archive',
@@ -159,7 +164,7 @@ describe('coreTutorialChapters and tutorialModel pure logic', () => {
     expect(resolveTutorialAssetUrl('/tutorials/a.mp4', '/media', '/')).toBe('/media/tutorials/a.mp4');
     expect(resolveTutorialAssetUrl('/media/tutorials/a.mp4', '/media', '/')).toBe('/media/tutorials/a.mp4');
 
-    const baseStep = CORE_TUTORIAL_CHAPTERS[2].steps[0];
+    const baseStep = must(CORE_TUTORIAL_CHAPTERS[2]?.steps[0], 'baseStep');
     expect(
       resolveTutorialMediaMode({
         step: baseStep,

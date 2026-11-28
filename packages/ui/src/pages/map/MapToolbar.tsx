@@ -44,8 +44,8 @@ export function computeEraOverflowLayout(params: {
   const visibleIndices: number[] = [];
   let usedWidth = 0;
 
-  for (let i = 0; i < eras.length; i += 1) {
-    const needed = gapPx + eras[i].width;
+  for (const [i, era] of eras.entries()) {
+    const needed = gapPx + era.width;
     if (usedWidth + needed <= availableForEras) {
       visibleIndices.push(i);
       usedWidth += needed;
@@ -54,12 +54,13 @@ export function computeEraOverflowLayout(params: {
     }
   }
 
-  if (selectedIndex >= 0 && !visibleIndices.includes(selectedIndex)) {
-    const selectedNeeded = gapPx + eras[selectedIndex].width;
+  const selectedEra = selectedIndex >= 0 ? eras[selectedIndex] : undefined;
+  if (selectedEra && !visibleIndices.includes(selectedIndex)) {
+    const selectedNeeded = gapPx + selectedEra.width;
     while (visibleIndices.length > 0 && usedWidth + selectedNeeded > availableForEras) {
       const removed = visibleIndices.pop();
       if (removed !== undefined) {
-        usedWidth -= gapPx + eras[removed].width;
+        usedWidth -= gapPx + (eras[removed]?.width ?? 0);
       }
     }
     if (usedWidth + selectedNeeded <= availableForEras) {
@@ -70,11 +71,11 @@ export function computeEraOverflowLayout(params: {
   const visibleSet = new Set(visibleIndices);
   const visibleEraIds: string[] = [];
   const overflowEraIds: string[] = [];
-  for (let i = 0; i < eras.length; i += 1) {
+  for (const [i, era] of eras.entries()) {
     if (visibleSet.has(i)) {
-      visibleEraIds.push(eras[i].id);
+      visibleEraIds.push(era.id);
     } else {
-      overflowEraIds.push(eras[i].id);
+      overflowEraIds.push(era.id);
     }
   }
 
@@ -170,7 +171,7 @@ export const MapToolbar: React.FC<MapToolbarProps> = ({
 
     const widthsByKey = new Map<string, number>();
     for (const el of measureRow.querySelectorAll<HTMLElement>('[data-measure-era]')) {
-      const key = el.dataset.measureEra;
+      const key = el.dataset['measureEra'];
       if (key) {
         widthsByKey.set(key, Math.ceil(el.getBoundingClientRect().width));
       }

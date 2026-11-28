@@ -34,8 +34,8 @@ function computeFocalDirectSpineIds(params: {
 }): Set<string> {
   const { branchPeople, peopleById, parentMap, childMap, spouseMap, earlyLossIds, directPersonIds } = params;
   let descendantCount = 0;
-  for (let i = 0; i < branchPeople.length; i += 1) {
-    if (branchPeople[i].lineage_group === 'descendant') {
+  for (const p of branchPeople) {
+    if (p.lineage_group === 'descendant') {
       descendantCount += 1;
     }
   }
@@ -47,8 +47,7 @@ function computeFocalDirectSpineIds(params: {
 
   const focal = new Set<string>();
   const upQueue: string[] = [];
-  for (let i = 0; i < branchPeople.length; i += 1) {
-    const p = branchPeople[i];
+  for (const p of branchPeople) {
     if (isDirectAncestorOrPivot(p)) {
       focal.add(p.id);
       upQueue.push(p.id);
@@ -59,12 +58,14 @@ function computeFocalDirectSpineIds(params: {
   while (upHead < upQueue.length) {
     const cur = upQueue[upHead];
     upHead += 1;
+    if (cur === undefined) {
+      continue;
+    }
     const parents = parentMap.get(cur);
     if (!parents) {
       continue;
     }
-    for (let i = 0; i < parents.length; i += 1) {
-      const pid = parents[i];
+    for (const pid of parents) {
       if (!focal.has(pid) && directPersonIds.has(pid)) {
         focal.add(pid);
         upQueue.push(pid);
@@ -86,8 +87,7 @@ function computeFocalDirectSpineIds(params: {
     let best = 0;
     const children = childMap.get(id);
     if (children) {
-      for (let i = 0; i < children.length; i += 1) {
-        const cid = children[i];
+      for (const cid of children) {
         if (!earlyLossIds.has(cid) && directPersonIds.has(cid)) {
           const d = 1 + subtreeDepth(cid);
           if (d > best) {
@@ -139,8 +139,7 @@ function computeFocalDirectSpineIds(params: {
       continue;
     }
     const directChildren: string[] = [];
-    for (let i = 0; i < children.length; i += 1) {
-      const cid = children[i];
+    for (const cid of children) {
       if (!earlyLossIds.has(cid) && directPersonIds.has(cid) && !focal.has(cid)) {
         directChildren.push(cid);
       }
@@ -170,12 +169,14 @@ function computeAnchoredAncestorSpineIds(
   while (head < queue.length) {
     const cur = queue[head];
     head += 1;
+    if (cur === undefined) {
+      continue;
+    }
     const parents = parentMap.get(cur);
     if (!parents) {
       continue;
     }
-    for (let i = 0; i < parents.length; i += 1) {
-      const parentId = parents[i];
+    for (const parentId of parents) {
       if (peopleById.has(parentId) && !focal.has(parentId)) {
         focal.add(parentId);
         queue.push(parentId);
@@ -246,8 +247,7 @@ function getPrecomputedBranchTopology(
   const branchPeople: Person[] = [];
   const branchIds = new Set<string>();
   const peopleById = new Map<string, Person>();
-  for (let i = 0; i < people.length; i += 1) {
-    const p = people[i];
+  for (const p of people) {
     if (isRedactedLivingPlaceholder(p)) {
       continue;
     }
@@ -266,8 +266,7 @@ function getPrecomputedBranchTopology(
   const childMap = new Map<string, string[]>();
   const spouseMap = new Map<string, string[]>();
 
-  for (let i = 0; i < kinship.length; i += 1) {
-    const edge = kinship[i];
+  for (const edge of kinship) {
     if (!branchIds.has(edge.from) || !branchIds.has(edge.to)) {
       continue;
     }
@@ -291,8 +290,7 @@ function getPrecomputedBranchTopology(
   let fallbackAncestorId: string | null = null;
   const rawGenMap = new Map<number, Person[]>();
 
-  for (let i = 0; i < branchPeople.length; i += 1) {
-    const p = branchPeople[i];
+  for (const p of branchPeople) {
     if (isDirectSpinePerson(p)) {
       directPersonIds.add(p.id);
     }
@@ -334,8 +332,8 @@ function getPrecomputedBranchTopology(
   for (const pid of focalSpineIds) {
     const spouses = spouseMap.get(pid);
     if (spouses) {
-      for (let i = 0; i < spouses.length; i += 1) {
-        spinePartnerIds.add(spouses[i]);
+      for (const spouseId of spouses) {
+        spinePartnerIds.add(spouseId);
       }
     }
   }
@@ -345,15 +343,15 @@ function getPrecomputedBranchTopology(
       continue;
     }
     let hasFocalParent = false;
-    for (let i = 0; i < parents.length; i += 1) {
-      if (focalSpineIds.has(parents[i])) {
+    for (const parentId of parents) {
+      if (focalSpineIds.has(parentId)) {
         hasFocalParent = true;
         break;
       }
     }
     if (hasFocalParent) {
-      for (let i = 0; i < parents.length; i += 1) {
-        spinePartnerIds.add(parents[i]);
+      for (const parentId of parents) {
+        spinePartnerIds.add(parentId);
       }
     }
   }
@@ -432,8 +430,8 @@ function getPreparedModeData(
     }
 
     const sortedChildren: Person[] = [];
-    for (let i = 0; i < draft.childIds.length; i += 1) {
-      const c = topo.peopleById.get(draft.childIds[i]);
+    for (const childId of draft.childIds) {
+      const c = topo.peopleById.get(childId);
       if (c !== undefined) {
         sortedChildren.push(c);
       }
@@ -442,12 +440,11 @@ function getPreparedModeData(
       sortedChildren.sort(sortPeopleChronologically);
     }
 
-    const allChildIds = new Array<string>(sortedChildren.length);
+    const allChildIds: string[] = [];
     const earlyLossChildIds: string[] = [];
     const survivingChildren: Person[] = [];
-    for (let i = 0; i < sortedChildren.length; i += 1) {
-      const child = sortedChildren[i];
-      allChildIds[i] = child.id;
+    for (const child of sortedChildren) {
+      allChildIds.push(child.id);
       if (topo.earlyLossIds.has(child.id)) {
         earlyLossChildIds.push(child.id);
       } else {
@@ -461,8 +458,8 @@ function getPreparedModeData(
     if (effectiveMode === 'spine') {
       alwaysVisibleChildIds = [];
       collapsibleIds = [];
-      for (let i = 0; i < survivingChildren.length; i += 1) {
-        const cid = survivingChildren[i].id;
+      for (const child of survivingChildren) {
+        const cid = child.id;
         if (topo.spinePartnerIds.has(cid)) {
           alwaysVisibleChildIds.push(cid);
         } else {
@@ -472,8 +469,8 @@ function getPreparedModeData(
     } else {
       const anchorOrBranching: string[] = [];
       const collateralLeaves: string[] = [];
-      for (let i = 0; i < survivingChildren.length; i += 1) {
-        const cid = survivingChildren[i].id;
+      for (const child of survivingChildren) {
+        const cid = child.id;
         const hasDescendants = (topo.childMap.get(cid)?.length ?? 0) > 0;
         const hasSpouse = (topo.spouseMap.get(cid)?.length ?? 0) > 0;
         const isDirect = modeDirectIds.has(cid);
@@ -556,8 +553,7 @@ export function buildArchivalTreeModel({
   const unions: TreeUnion[] = [];
   const excludedFromRank = new Set<string>();
 
-  for (let uIdx = 0; uIdx < modeData.preparedUnions.length; uIdx += 1) {
-    const prep = modeData.preparedUnions[uIdx];
+  for (const prep of modeData.preparedUnions) {
     const isExpanded = hasExpandedUnions && expandedUnionIds.has(prep.draft.id);
     const visibleChildIds = prep.alwaysVisibleChildIds;
     let hangingChildIds: string[] = [];
@@ -569,15 +565,15 @@ export function buildArchivalTreeModel({
       } else {
         collapsedSiblingIds = prep.collapsibleIds;
       }
-      for (let i = 0; i < prep.collapsibleIds.length; i += 1) {
-        excludedFromRank.add(prep.collapsibleIds[i]);
+      for (const cid of prep.collapsibleIds) {
+        excludedFromRank.add(cid);
       }
     }
 
     let isDirectUnion = prep.baseDirect;
     if (!isDirectUnion) {
-      for (let i = 0; i < visibleChildIds.length; i += 1) {
-        if (topo.focalSpineIds.has(visibleChildIds[i])) {
+      for (const cid of visibleChildIds) {
+        if (topo.focalSpineIds.has(cid)) {
           isDirectUnion = true;
           break;
         }
@@ -607,11 +603,9 @@ export function buildArchivalTreeModel({
   const rankPeople: Person[] = [];
   const rankPersonIdSet = new Set<string>();
 
-  for (let b = 0; b < modeData.sortedGenBuckets.length; b += 1) {
-    const bucket = modeData.sortedGenBuckets[b];
+  for (const bucket of modeData.sortedGenBuckets) {
     const filtered: Person[] = [];
-    for (let i = 0; i < bucket.members.length; i += 1) {
-      const p = bucket.members[i];
+    for (const p of bucket.members) {
       if (excludedFromRank.has(p.id)) {
         continue;
       }
@@ -626,11 +620,10 @@ export function buildArchivalTreeModel({
 
   const activeUnions: TreeUnion[] = [];
   const activeUnionsById = new Map<string, TreeUnion>();
-  for (let i = 0; i < unions.length; i += 1) {
-    const u = unions[i];
+  for (const u of unions) {
     let allActive = true;
-    for (let p = 0; p < u.partnerIds.length; p += 1) {
-      if (!rankPersonIdSet.has(u.partnerIds[p])) {
+    for (const pid of u.partnerIds) {
+      if (!rankPersonIdSet.has(pid)) {
         allActive = false;
         break;
       }

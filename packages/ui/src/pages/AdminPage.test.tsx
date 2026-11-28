@@ -69,8 +69,11 @@ describe('AdminPage AdminDataSource capability seam', () => {
       updateUserRole: async (email, input) => {
         roleUpdates.push({ email, role: input.role });
         const idx = users.findIndex((u) => u.email === email);
-        users[idx] = { ...users[idx], role: input.role };
-        return users[idx];
+        const existing = users[idx];
+        if (!existing) throw new Error('User not found');
+        const updated = { ...existing, role: input.role };
+        users[idx] = updated;
+        return updated;
       },
       listInvites: async () => [...invites],
       createInvite: async (input) => {

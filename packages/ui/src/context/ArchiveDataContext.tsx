@@ -35,13 +35,13 @@ export { createStaticArchiveLoader };
 
 export interface ArchiveDataProviderProps {
   siteConfig: KinloomSiteConfig;
-  loader?: ArchiveDataLoader;
-  dataSource?: ArchiveDataSource;
-  baseUrl?: string;
-  initialBundle?: ArchiveBundle | null;
-  initialReadings?: ReadingsBundle | null;
-  session?: ArchiveSession | null;
-  capabilities?: Partial<ArchiveCapabilities>;
+  loader?: ArchiveDataLoader | undefined;
+  dataSource?: ArchiveDataSource | undefined;
+  baseUrl?: string | undefined;
+  initialBundle?: ArchiveBundle | null | undefined;
+  initialReadings?: ReadingsBundle | null | undefined;
+  session?: ArchiveSession | null | undefined;
+  capabilities?: Partial<ArchiveCapabilities> | undefined;
   children: React.ReactNode;
 }
 
@@ -254,7 +254,7 @@ const ArchiveDataProviderInner: React.FC<ArchiveDataProviderInnerProps> = ({
     }
     setError(null);
     resolvedDataSource
-      .loadArchive({ ifNoneMatch: etagRef.current ?? undefined })
+      .loadArchive(etagRef.current ? { ifNoneMatch: etagRef.current } : {})
       .then((result) => {
         if (cancelled) {
           return;

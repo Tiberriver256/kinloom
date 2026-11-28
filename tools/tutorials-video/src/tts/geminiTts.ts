@@ -99,7 +99,7 @@ export class GeminiTutorialTtsProvider implements TutorialTtsProvider {
       }
 
       const rateMatch = /rate=(\d+)/.exec(inlineData.mimeType);
-      const sampleRate = rateMatch
+      const sampleRate = rateMatch?.[1]
         ? Number.parseInt(rateMatch[1], 10)
         : (request.sampleRate ?? DEFAULT_SAMPLE_RATE);
       return {
@@ -113,24 +113,24 @@ export class GeminiTutorialTtsProvider implements TutorialTtsProvider {
 }
 
 function extractInlineAudioData(parsed: unknown): { readonly data: string; readonly mimeType: string } | null {
-  if (!isPlainObject(parsed) || !Array.isArray(parsed.candidates)) {
+  if (!isPlainObject(parsed) || !Array.isArray(parsed['candidates'])) {
     return null;
   }
-  const firstCandidate = parsed.candidates[0];
-  if (!isPlainObject(firstCandidate) || !isPlainObject(firstCandidate.content)) {
+  const firstCandidate = parsed['candidates'][0];
+  if (!isPlainObject(firstCandidate) || !isPlainObject(firstCandidate['content'])) {
     return null;
   }
-  const parts = firstCandidate.content.parts;
+  const parts = firstCandidate['content']['parts'];
   if (!Array.isArray(parts)) {
     return null;
   }
   for (const part of parts) {
-    if (!isPlainObject(part) || !isPlainObject(part.inlineData)) {
+    if (!isPlainObject(part) || !isPlainObject(part['inlineData'])) {
       continue;
     }
-    const data = part.inlineData.data;
+    const data = part['inlineData']['data'];
     if (typeof data === 'string' && data.length > 0) {
-      const mimeType = typeof part.inlineData.mimeType === 'string' ? part.inlineData.mimeType : 'audio/pcm';
+      const mimeType = typeof part['inlineData']['mimeType'] === 'string' ? part['inlineData']['mimeType'] : 'audio/pcm';
       return { data, mimeType };
     }
   }

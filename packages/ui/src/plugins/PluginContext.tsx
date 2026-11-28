@@ -99,8 +99,8 @@ const KinloomPluginContext = createContext<KinloomPluginContextValue>({
 });
 
 export interface KinloomPluginProviderProps {
-  plugins?: readonly KinloomUiPlugin[];
-  apiClient?: PluginApiClient;
+  plugins?: readonly KinloomUiPlugin[] | undefined;
+  apiClient?: PluginApiClient | undefined;
   children: React.ReactNode;
 }
 
@@ -241,11 +241,11 @@ export function useKinloomPluginContext(): KinloomPluginRuntimeContext {
 
 export interface PluginSlotProps {
   name: KinloomUiPluginSlotName;
-  person?: Person;
-  place?: Place;
-  narrative?: Narrative;
-  className?: string;
-  as?: 'div' | 'fragment';
+  person?: Person | undefined;
+  place?: Place | undefined;
+  narrative?: Narrative | undefined;
+  className?: string | undefined;
+  as?: 'div' | 'fragment' | undefined;
 }
 
 /**

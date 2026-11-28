@@ -43,7 +43,7 @@ describe('DirectoryJumpStrip shared primitive (#85)', () => {
   it('tracks scroll-spy via IntersectionObserver, marks active aria-current="location", centers active link, and supports click lock + keyboard traversal', () => {
     const callbacks: Array<{
       cb: IntersectionObserverCallback;
-      options?: IntersectionObserverInit;
+      options?: IntersectionObserverInit | undefined;
       targets: Element[];
     }> = [];
 
@@ -54,7 +54,7 @@ describe('DirectoryJumpStrip shared primitive (#85)', () => {
       readonly thresholds = [0];
       private readonly record: {
         cb: IntersectionObserverCallback;
-        options?: IntersectionObserverInit;
+        options?: IntersectionObserverInit | undefined;
         targets: Element[];
       };
 
@@ -248,7 +248,7 @@ describe('DirectoryJumpStrip shared primitive (#85)', () => {
       });
       const eraNav = container.querySelector('nav') as HTMLElement;
       expect(eraNav).not.toBeNull();
-      expect(eraNav.dataset.overflowing).toBe('false');
+      expect(eraNav.dataset['overflowing']).toBe('false');
 
       let mockScrollWidth = 477;
       let mockClientWidth = 358;
@@ -258,7 +258,7 @@ describe('DirectoryJumpStrip shared primitive (#85)', () => {
       act(() => {
         resizeCallbacks.at(-1)?.([], {} as ResizeObserver);
       });
-      expect(eraNav.dataset.overflowing).toBe('true');
+      expect(eraNav.dataset['overflowing']).toBe('true');
 
       // Re-rendering with the same view/items preserves the nav element and active keyboard focus.
       const firstLink = eraNav.querySelector('a') as HTMLAnchorElement;
@@ -275,7 +275,7 @@ describe('DirectoryJumpStrip shared primitive (#85)', () => {
       act(() => {
         resizeCallbacks.at(-1)?.([], {} as ResizeObserver);
       });
-      expect(eraNav.dataset.overflowing).toBe('false');
+      expect(eraNav.dataset['overflowing']).toBe('false');
 
       // Switching to A–Z mounts a fresh nav node and disconnects the prior ResizeObserver.
       act(() => {
@@ -290,7 +290,7 @@ describe('DirectoryJumpStrip shared primitive (#85)', () => {
       });
       const azNav = container.querySelector('nav') as HTMLElement;
       expect(azNav).not.toBe(eraNav);
-      expect(azNav.dataset.overflowing).toBe('false');
+      expect(azNav.dataset['overflowing']).toBe('false');
       expect(disconnectSpy).toHaveBeenCalledTimes(1);
 
       // Also verify graceful no-op when ResizeObserver is unavailable.

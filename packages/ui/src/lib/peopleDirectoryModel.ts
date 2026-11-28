@@ -165,13 +165,13 @@ export interface ArchiveFrontispieceLink {
 }
 
 export interface ArchiveFrontispieceConfig {
-  readonly kicker?: string;
-  readonly headline?: string;
+  readonly kicker?: string | undefined;
+  readonly headline?: string | undefined;
   readonly intro: string;
-  readonly image?: string;
-  readonly imageAlt?: string;
-  readonly imageCaption?: string;
-  readonly featuredLinks?: readonly ArchiveFrontispieceLink[];
+  readonly image?: string | undefined;
+  readonly imageAlt?: string | undefined;
+  readonly imageCaption?: string | undefined;
+  readonly featuredLinks?: readonly ArchiveFrontispieceLink[] | undefined;
 }
 
 export interface ResolvedArchiveFrontispiece {
@@ -820,22 +820,22 @@ function parseFrontispieceExtension(raw: unknown): ArchiveFrontispieceConfig | n
   if (!isRecord(raw)) {
     return null;
   }
-  const intro = readNonEmptyString(raw.intro);
+  const intro = readNonEmptyString(raw['intro']);
   if (!intro) {
     return null;
   }
 
   const featuredLinks: ArchiveFrontispieceLink[] = [];
-  if (Array.isArray(raw.featuredLinks)) {
-    for (const item of raw.featuredLinks) {
+  if (Array.isArray(raw['featuredLinks'])) {
+    for (const item of raw['featuredLinks']) {
       if (featuredLinks.length >= FRONTISPIECE_MAX_LINKS) {
         break;
       }
       if (!isRecord(item)) {
         continue;
       }
-      const label = readNonEmptyString(item.label);
-      const to = readNonEmptyString(item.to);
+      const label = readNonEmptyString(item['label']);
+      const to = readNonEmptyString(item['to']);
       if (label && to && isSafeInternalRoute(to)) {
         featuredLinks.push({ label, to });
       }
@@ -843,12 +843,12 @@ function parseFrontispieceExtension(raw: unknown): ArchiveFrontispieceConfig | n
   }
 
   return {
-    kicker: readNonEmptyString(raw.kicker),
-    headline: readNonEmptyString(raw.headline),
+    kicker: readNonEmptyString(raw['kicker']),
+    headline: readNonEmptyString(raw['headline']),
     intro,
-    image: readNonEmptyString(raw.image),
-    imageAlt: readNonEmptyString(raw.imageAlt),
-    imageCaption: readNonEmptyString(raw.imageCaption),
+    image: readNonEmptyString(raw['image']),
+    imageAlt: readNonEmptyString(raw['imageAlt']),
+    imageCaption: readNonEmptyString(raw['imageCaption']),
     featuredLinks,
   };
 }
@@ -892,7 +892,7 @@ export function resolveArchiveFrontispiece(
   siteConfig: KinloomSiteConfig,
   bundle: ArchiveBundle | null
 ): ResolvedArchiveFrontispiece {
-  const custom = parseFrontispieceExtension(siteConfig.extensions?.frontispiece);
+  const custom = parseFrontispieceExtension(siteConfig.extensions?.['frontispiece']);
   const computedSummary = buildArchiveSummaryLine(bundle);
   const metadataLine = readNonEmptyString(siteConfig.brand?.metadataLine) ?? computedSummary;
 

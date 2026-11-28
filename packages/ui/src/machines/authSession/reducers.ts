@@ -106,24 +106,24 @@ export function deriveSessionFromAuthSnapshot(
     session = {
       authenticated: true,
       principal_kind: 'user',
-      email: snapshot.context.email ?? undefined,
-      displayName: snapshot.context.displayName ?? undefined,
+      ...(snapshot.context.email ? { email: snapshot.context.email } : {}),
+      ...(snapshot.context.displayName ? { displayName: snapshot.context.displayName } : {}),
       role: 'admin',
     };
   } else if (snapshot.matches({ authenticated: 'editor' })) {
     session = {
       authenticated: true,
       principal_kind: 'user',
-      email: snapshot.context.email ?? undefined,
-      displayName: snapshot.context.displayName ?? undefined,
+      ...(snapshot.context.email ? { email: snapshot.context.email } : {}),
+      ...(snapshot.context.displayName ? { displayName: snapshot.context.displayName } : {}),
       role: 'editor',
     };
   } else if (snapshot.matches('signingOut') && snapshot.context.role !== null) {
     session = {
       authenticated: true,
       principal_kind: 'user',
-      email: snapshot.context.email ?? undefined,
-      displayName: snapshot.context.displayName ?? undefined,
+      ...(snapshot.context.email ? { email: snapshot.context.email } : {}),
+      ...(snapshot.context.displayName ? { displayName: snapshot.context.displayName } : {}),
       role: snapshot.context.role,
     };
   } else if (
@@ -135,7 +135,7 @@ export function deriveSessionFromAuthSnapshot(
       authenticated: false,
       principal_kind: 'invite_viewer',
       role: 'viewer',
-      inviteLabel: snapshot.context.inviteLabel ?? undefined,
+      ...(snapshot.context.inviteLabel ? { inviteLabel: snapshot.context.inviteLabel } : {}),
     };
   } else {
     session = {

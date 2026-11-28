@@ -35,6 +35,11 @@ import {
   StewardReviewBadge,
 } from './WikiBadges.js';
 
+function must<T>(val: T | undefined, label = 'value'): T {
+  if (val === undefined) throw new Error(`Expected ${label}`);
+  return val;
+}
+
 declare global {
   var IS_REACT_ACT_ENVIRONMENT: boolean | undefined;
 }
@@ -229,7 +234,7 @@ describe('Wiki UI components and tree display polish helpers', () => {
           entityType="person"
           entityId="p_clara"
           revisionId={1}
-          initialData={testBundle.people[0]}
+          initialData={must(testBundle.people[0])}
           title="Clara Barton"
           onClose={() => {}}
         />
@@ -240,15 +245,16 @@ describe('Wiki UI components and tree display polish helpers', () => {
     const fullNameInput = inputs[0];
     const summaryInput = inputs[inputs.length - 1];
 
-    const setReactInput = (el: HTMLInputElement, value: string): void => {
+    const setReactInput = (el: HTMLInputElement | undefined, value: string): void => {
+      if (!el) throw new Error('Expected input element');
       const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set;
       setter?.call(el, value);
       el.dispatchEvent(new Event('input', { bubbles: true }));
     };
 
     act(() => {
-      setReactInput(fullNameInput, 'Clara H. Barton');
-      setReactInput(summaryInput, 'Add middle initial from vital register');
+      setReactInput(must(fullNameInput), 'Clara H. Barton');
+      setReactInput(must(summaryInput), 'Add middle initial from vital register');
     });
 
     const form = container.querySelector('form');
@@ -642,12 +648,14 @@ describe('Wiki UI components and tree display polish helpers', () => {
       },
     };
 
-    const setInput = (el: HTMLInputElement, value: string): void => {
+    const setInput = (el: HTMLInputElement | undefined, value: string): void => {
+      if (!el) throw new Error('Expected input element');
       const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set;
       setter?.call(el, value);
       el.dispatchEvent(new Event('input', { bubbles: true }));
     };
-    const setSelect = (el: HTMLSelectElement, value: string): void => {
+    const setSelect = (el: HTMLSelectElement | undefined, value: string): void => {
+      if (!el) throw new Error('Expected select element');
       const setter = Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, 'value')?.set;
       setter?.call(el, value);
       el.dispatchEvent(new Event('change', { bubbles: true }));
@@ -672,7 +680,7 @@ describe('Wiki UI components and tree display polish helpers', () => {
     expect(container.querySelector('h2')?.textContent).toBe('Add parent of Clara Barton');
     const selects = [...container.querySelectorAll<HTMLSelectElement>('select')];
     const sexSelect = selects[0];
-    const lineageSelect = selects[1];
+    const lineageSelect = must(selects[1], 'lineageSelect');
     expect(lineageSelect.value).toBe('ancestor');
 
     const textInputs = [...container.querySelectorAll<HTMLInputElement>('input[type="text"]')];
@@ -793,7 +801,7 @@ describe('Wiki UI components and tree display polish helpers', () => {
       </ArchiveProvider>
     );
     const childSelects = [...childRender.container.querySelectorAll<HTMLSelectElement>('select')];
-    expect(childSelects[1].value).toBe('descendant');
+    expect(childSelects[1]?.value).toBe('descendant');
     const childInputs = [...childRender.container.querySelectorAll<HTMLInputElement>('input[type="text"]')];
     act(() => {
       setInput(childInputs[0], 'Sally');
@@ -843,8 +851,8 @@ describe('Wiki UI components and tree display polish helpers', () => {
       await new Promise((r) => setTimeout(r, 20));
     });
     expect(createdCalls).toHaveLength(1);
-    expect(createdCalls[0].entityId).toBe('per_david_barton');
-    expect(createdCalls[0].data).toMatchObject({
+    expect(createdCalls[0]?.entityId).toBe('per_david_barton');
+    expect(createdCalls[0]?.data).toMatchObject({
       sex: 'M',
       lineage_group: 'collateral',
     });

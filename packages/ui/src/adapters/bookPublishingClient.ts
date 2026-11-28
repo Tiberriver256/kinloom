@@ -24,9 +24,9 @@ export interface BookPublishingClient {
 }
 
 export interface HttpBookPublishingClientOptions {
-  readonly apiBaseUrl?: string;
-  readonly fetchImpl?: typeof fetch;
-  readonly credentials?: RequestCredentials;
+  readonly apiBaseUrl?: string | undefined;
+  readonly fetchImpl?: typeof fetch | undefined;
+  readonly credentials?: RequestCredentials | undefined;
 }
 
 /**
@@ -54,7 +54,7 @@ export function createHttpBookPublishingClient(
       const res = await fetchImpl(apiUrl('/api/plugins/book-publishing/status'), {
         credentials,
         headers: { accept: 'application/json' },
-        signal: reqOptions?.signal,
+        ...(reqOptions?.signal ? { signal: reqOptions.signal } : {}),
       });
       if (res.status === 404) {
         return null;

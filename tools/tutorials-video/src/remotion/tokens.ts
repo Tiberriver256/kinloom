@@ -32,8 +32,12 @@ function resolveRef(val: string, doc: RawTokensDocument): string {
   if (!match) {
     return val;
   }
+  const key = match[2];
+  if (!key) {
+    return val;
+  }
   const bucket = match[1] === 'primitive' ? doc.color.primitive : doc.color.primitiveDark;
-  return bucket[match[2]]?.$value ?? val;
+  return bucket[key]?.$value ?? val;
 }
 
 const DEFAULT_TOKENS_PATH = path.resolve(

@@ -80,7 +80,7 @@ export const BookPublishingAdminPanel: React.FC = () => {
       setLoading(true);
       setLoadError(null);
       try {
-        const result = await client.getStatus({ signal });
+        const result = await client.getStatus(signal ? { signal } : {});
         if (signal?.aborted) {
           return;
         }

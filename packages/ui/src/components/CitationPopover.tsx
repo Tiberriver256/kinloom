@@ -81,8 +81,8 @@ export interface CitationPopoverProps {
   onMouseLeave: () => void;
   onBlur: (event: React.FocusEvent<HTMLDivElement>) => void;
   onClose: () => void;
-  onInspectSource?: (sourceId: string) => void;
-  onOpenMedia?: (media: MediaItem) => void;
+  onInspectSource?: ((sourceId: string) => void) | undefined;
+  onOpenMedia?: ((media: MediaItem) => void) | undefined;
 }
 
 const useIsoLayoutEffect = typeof window !== 'undefined' ? useLayoutEffect : useEffect;

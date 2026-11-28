@@ -12,12 +12,12 @@ export interface PendingEntityTarget {
   entityId: string;
   revisionId: number;
   snapshot: EntityPayload;
-  hasPrimarySource?: boolean;
+  hasPrimarySource?: boolean | undefined;
 }
 
 export interface EntityEditorConflict extends ConflictPayload {
-  diff?: OptimisticConflictError['diff'];
-  serverDeletedAt?: string | null;
+  diff?: OptimisticConflictError['diff'] | undefined;
+  serverDeletedAt?: string | null | undefined;
 }
 
 export interface SaveEntityInput {
@@ -29,7 +29,7 @@ export interface SaveEntityInput {
   hasPrimarySource: boolean;
   sourceIds: readonly string[];
   reqGen: number;
-  dataSource?: ArchiveDataSource;
+  dataSource?: ArchiveDataSource | undefined;
 }
 
 export type SaveEntityResult =
@@ -51,7 +51,7 @@ export type SaveEntityResult =
 export interface LoadLatestEntityInput {
   entityType: EntityType;
   entityId: string;
-  dataSource?: ArchiveDataSource;
+  dataSource?: ArchiveDataSource | undefined;
 }
 
 export interface LoadLatestEntityResult {
@@ -65,7 +65,7 @@ export interface DeleteEntityInput {
   entityId: string;
   expectedParentRevisionId: number;
   summary: string;
-  dataSource?: ArchiveDataSource;
+  dataSource?: ArchiveDataSource | undefined;
 }
 
 export interface EntityEditorInput {
@@ -73,8 +73,8 @@ export interface EntityEditorInput {
   entityId: string;
   revisionId: number;
   snapshot: EntityPayload;
-  hasPrimarySource?: boolean;
-  dataSource?: ArchiveDataSource;
+  hasPrimarySource?: boolean | undefined;
+  dataSource?: ArchiveDataSource | undefined;
 }
 
 export interface EntityEditorContext {
@@ -97,17 +97,17 @@ export interface EntityEditorContext {
   pendingEntityChange: PendingEntityTarget | null;
   deleteSummary: string;
   deleteError: string | null;
-  dataSource?: ArchiveDataSource;
+  dataSource?: ArchiveDataSource | undefined;
 }
 
 export type EntityEditorEvent =
   | {
       type: 'OPEN_EDIT';
-      entityType?: EntityType;
-      entityId?: string;
-      revisionId?: number;
-      snapshot?: EntityPayload;
-      hasPrimarySource?: boolean;
+      entityType?: EntityType | undefined;
+      entityId?: string | undefined;
+      revisionId?: number | undefined;
+      snapshot?: EntityPayload | undefined;
+      hasPrimarySource?: boolean | undefined;
     }
   | { type: 'START_EDIT' }
   | { type: 'EDIT_FIELD'; draft: EntityPayload }
@@ -123,7 +123,7 @@ export type EntityEditorEvent =
       entityId: string;
       revisionId: number;
       snapshot: EntityPayload;
-      hasPrimarySource?: boolean;
+      hasPrimarySource?: boolean | undefined;
     }
   | { type: 'CONFIRM_LEAVE' }
   | { type: 'STAY_EDITING' }

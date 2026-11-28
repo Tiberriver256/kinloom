@@ -12,9 +12,9 @@ import wikiFormStyles from './WikiForms.module.css';
 export interface SignInModalProps {
   open: boolean;
   onClose: () => void;
-  inviteLabel?: string;
-  initialUrlError?: AuthUrlError | null;
-  onNavigateToInvite?: (invitePath: string) => void;
+  inviteLabel?: string | undefined;
+  initialUrlError?: AuthUrlError | null | undefined;
+  onNavigateToInvite?: ((invitePath: string) => void) | undefined;
 }
 
 export const SignInModal: React.FC<SignInModalProps> = ({

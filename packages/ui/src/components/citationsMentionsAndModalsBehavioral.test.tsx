@@ -31,6 +31,11 @@ import { CreateEntityModal } from './wiki/CreateEntityModal.js';
 import { EntityEditDrawer } from './wiki/EntityEditDrawer.js';
 import { MediaUploaderModal } from './wiki/MediaUploaderModal.js';
 
+function must<T>(val: T | undefined, label = 'value'): T {
+  if (val === undefined) throw new Error(`Expected ${label}`);
+  return val;
+}
+
 declare global {
   var IS_REACT_ACT_ENVIRONMENT: boolean | undefined;
 }
@@ -296,7 +301,7 @@ describe('Citations, Source Reader/Inspector, Markdown Popovers, and Wiki Modals
     };
 
     const sourcesMap = new Map(TEST_BUNDLE.sources.map((s) => [s.id, s]));
-    const zeePlace = TEST_BUNDLE.places[0];
+    const zeePlace = must(TEST_BUNDLE.places[0]);
 
     const container = mountEl(
       <MemoryRouter initialEntries={['/person/henry-alder']}>
@@ -612,7 +617,7 @@ describe('Citations, Source Reader/Inspector, Markdown Popovers, and Wiki Modals
 
     const footnoteButtons = container.querySelectorAll<HTMLButtonElement>('sup button');
     expect(footnoteButtons.length).toBeGreaterThanOrEqual(2);
-    const firstFootnote = footnoteButtons[0];
+    const firstFootnote = must(footnoteButtons[0], 'firstFootnote');
 
     // Hover open -> leave delayed close
     act(() => {
@@ -646,7 +651,7 @@ describe('Citations, Source Reader/Inspector, Markdown Popovers, and Wiki Modals
     const popButtons = popDialog?.querySelectorAll<HTMLButtonElement>('button') ?? [];
     if (popButtons[0]) {
       act(() => {
-        popButtons[0].focus();
+        popButtons[0]?.focus();
         window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
       });
     }
@@ -662,36 +667,36 @@ describe('Citations, Source Reader/Inspector, Markdown Popovers, and Wiki Modals
       <div>
         <InlineEntityMention
           kind="person"
-          person={TEST_BUNDLE.people[0]}
+          person={must(TEST_BUNDLE.people[0])}
           displayText="Henry Alder"
           pronunciations={SITE_CONFIG.pronunciations}
         />
         <InlineEntityMention
           kind="place"
-          place={TEST_BUNDLE.places[0]}
+          place={must(TEST_BUNDLE.places[0])}
           displayText="Zeeland"
           pronunciations={SITE_CONFIG.pronunciations}
         />
-        <InlineEntityMention kind="person" person={TEST_BUNDLE.people[2]} displayText="Secret Living" />
+        <InlineEntityMention kind="person" person={must(TEST_BUNDLE.people[2])} displayText="Secret Living" />
       </div>
     );
     expect(standalone.textContent).not.toContain('Secret Living');
     const anchors = standalone.querySelectorAll<HTMLAnchorElement>('a');
     expect(anchors.length).toBe(2);
     act(() => {
-      anchors[0].dispatchEvent(new MouseEvent('mouseover', { bubbles: true }));
+      anchors[0]?.dispatchEvent(new MouseEvent('mouseover', { bubbles: true }));
     });
     expect(document.body.textContent).toContain('Henry Alder');
     act(() => {
       window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
     });
     act(() => {
-      anchors[1].focus();
-      anchors[1].dispatchEvent(new FocusEvent('focusin', { bubbles: true }));
+      anchors[1]?.focus();
+      anchors[1]?.dispatchEvent(new FocusEvent('focusin', { bubbles: true }));
     });
     expect(document.body.textContent).toContain('Town');
     act(() => {
-      anchors[1].dispatchEvent(new MouseEvent('mouseout', { bubbles: true }));
+      anchors[1]?.dispatchEvent(new MouseEvent('mouseout', { bubbles: true }));
       vi.advanceTimersByTime(200);
     });
   });
@@ -711,7 +716,7 @@ describe('Citations, Source Reader/Inspector, Markdown Popovers, and Wiki Modals
         has_primary_source: true,
         deleted_at: null,
         updated_at: '2026-05-01T00:00:00Z',
-        entity: TEST_BUNDLE.people[0] as unknown as EntityPayload,
+        entity: must(TEST_BUNDLE.people[0]) as unknown as EntityPayload,
       }),
       updateEntity: async (_type, _id, input) => ({
         ok: true as const,
@@ -840,7 +845,7 @@ describe('Citations, Source Reader/Inspector, Markdown Popovers, and Wiki Modals
               entityType="person"
               entityId="per_henry"
               revisionId={2}
-              initialData={TEST_BUNDLE.people[0] as unknown as EntityPayload}
+              initialData={must(TEST_BUNDLE.people[0]) as unknown as EntityPayload}
               title="Henry Alder"
               onClose={onCloseEdit}
               onDeleted={onDeleted}
@@ -850,7 +855,7 @@ describe('Citations, Source Reader/Inspector, Markdown Popovers, and Wiki Modals
               entityType="place"
               entityId="pl_zee"
               revisionId={1}
-              initialData={TEST_BUNDLE.places[0] as unknown as EntityPayload}
+              initialData={must(TEST_BUNDLE.places[0]) as unknown as EntityPayload}
               onClose={() => {}}
             />
             <EntityEditDrawer
@@ -904,16 +909,16 @@ describe('Citations, Source Reader/Inspector, Markdown Popovers, and Wiki Modals
     }
 
     // Citation radio mode toggle + source select + soft delete error then success on first drawer
-    const firstDialog = container.querySelectorAll('dialog')[0];
+    const firstDialog = must(container.querySelectorAll('dialog')[0], 'firstDialog');
     const radios = firstDialog.querySelectorAll<HTMLInputElement>('input[type="radio"]');
     if (radios[1]) {
       act(() => {
-        radios[1].click();
+        radios[1]?.click();
       });
     }
     if (radios[0]) {
       act(() => {
-        radios[0].click();
+        radios[0]?.click();
       });
     }
     const srcSelect = firstDialog.querySelector<HTMLSelectElement>('fieldset select');
@@ -969,7 +974,7 @@ describe('Citations, Source Reader/Inspector, Markdown Popovers, and Wiki Modals
     );
     await flushUi();
 
-    const createDialog = modalContainer.querySelectorAll('dialog')[0];
+    const createDialog = must(modalContainer.querySelectorAll('dialog')[0], 'createDialog');
     const nameInputs = createDialog.querySelectorAll<HTMLInputElement>('input[type="text"]');
     if (nameInputs[0]) {
       setFieldValue(nameInputs[0], 'Martha Vance');
@@ -1000,7 +1005,7 @@ describe('Citations, Source Reader/Inspector, Markdown Popovers, and Wiki Modals
     await flushUi();
 
     // MediaUploaderModal: living warning shown; switch to deceased person, select video/audio/jpeg, retry & complete
-    const uploadDialog = modalContainer.querySelectorAll('dialog')[1];
+    const uploadDialog = must(modalContainer.querySelectorAll('dialog')[1], 'uploadDialog');
     expect(uploadDialog.textContent).toContain('cannot be attached to living people');
     const selects = uploadDialog.querySelectorAll<HTMLSelectElement>('select');
     if (selects[1]) {

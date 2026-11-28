@@ -46,7 +46,7 @@ async function blockExternalMapTiles(page: Page): Promise<void> {
 }
 
 async function maybeScreenshot(page: Page, filename: string): Promise<void> {
-  const dir = process.env.KINLOOM_SCREENSHOT_DIR;
+  const dir = process.env['KINLOOM_SCREENSHOT_DIR'];
   if (!dir) {
     return;
   }
@@ -260,7 +260,7 @@ async function runPerElementOverflowAndCollisionAudit(page: Page): Promise<Overf
           for (let j = i + 1; j < controls.length; j += 1) {
             const a = controls[i];
             const b = controls[j];
-            if (a.contains(b) || b.contains(a)) {
+            if (!a || !b || a.contains(b) || b.contains(a)) {
               continue;
             }
             const ra = a.getBoundingClientRect();
@@ -650,7 +650,7 @@ test.describe('Wave 53B signed-in editor UX, per-element overflow/collision, and
         (btn) => {
           const r = btn.getBoundingClientRect();
           return {
-            token: btn.dataset.pronunciationToken ?? '',
+            token: btn.dataset['pronunciationToken'] ?? '',
             top: Math.round(r.top),
             bottom: Math.round(r.bottom),
             height: Math.round(r.height),

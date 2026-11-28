@@ -11,6 +11,11 @@ import {
   validateSingleDraftField,
 } from './pluginSettingsForm.js';
 
+function must<T>(val: T | undefined, label = 'value'): T {
+  if (val === undefined) throw new Error(`Expected ${label}`);
+  return val;
+}
+
 const SAMPLE_SNAPSHOT: PluginSettingsSnapshot = {
   plugin_id: 'kinloom-pronunciation',
   plugin_name: 'Pronunciation & TTS',
@@ -116,9 +121,9 @@ describe('pluginSettingsForm pure view-model helpers', () => {
 
   it('validates single fields on blur, blocks invalid submits, and extracts structured 422 field errors', () => {
     const initial = createPluginSettingsDraft(SAMPLE_SNAPSHOT);
-    const readonlyField = SAMPLE_SNAPSHOT.schema.sections[0].fields[0];
-    const secretField = SAMPLE_SNAPSHOT.schema.sections[1].fields[3];
-    const reqSecretField = SAMPLE_SNAPSHOT.schema.sections[1].fields[4];
+    const readonlyField = must(SAMPLE_SNAPSHOT.schema.sections[0]?.fields[0]);
+    const secretField = must(SAMPLE_SNAPSHOT.schema.sections[1]?.fields[3]);
+    const reqSecretField = must(SAMPLE_SNAPSHOT.schema.sections[1]?.fields[4]);
 
     expect(validateSingleDraftField(initial, readonlyField)).toBeNull();
     expect(validateSingleDraftField(initial, secretField)).toBeNull();

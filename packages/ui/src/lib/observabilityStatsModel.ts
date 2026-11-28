@@ -122,16 +122,16 @@ function parseTopVisitedPage(raw: unknown, field: string): UiTopVisitedPage {
   if (!isRecord(raw)) {
     throw new Error(`Expected object for ${field}`);
   }
-  const slug = raw.entity_slug;
+  const slug = raw['entity_slug'];
   if (slug !== null && (typeof slug !== 'string' || slug.length === 0)) {
     throw new Error(`Invalid entity_slug for ${field}`);
   }
   return {
-    route_key: expectNonEmptyString(raw.route_key, `${field}.route_key`),
-    entity_kind: parseEntityKind(raw.entity_kind, `${field}.entity_kind`),
+    route_key: expectNonEmptyString(raw['route_key'], `${field}.route_key`),
+    entity_kind: parseEntityKind(raw['entity_kind'], `${field}.entity_kind`),
     entity_slug: slug,
-    title: expectNonEmptyString(raw.title, `${field}.title`),
-    views: expectNonNegativeInt(raw.views, `${field}.views`),
+    title: expectNonEmptyString(raw['title'], `${field}.title`),
+    views: expectNonNegativeInt(raw['views'], `${field}.views`),
   };
 }
 
@@ -150,13 +150,13 @@ function parseDailyTrend(raw: unknown): readonly UiDailyVisitPoint[] {
     if (!isRecord(item)) {
       throw new Error(`Expected object for daily_trend[${idx}]`);
     }
-    const dayUtc = expectNonEmptyString(item.day_utc, `daily_trend[${idx}].day_utc`);
+    const dayUtc = expectNonEmptyString(item['day_utc'], `daily_trend[${idx}].day_utc`);
     if (!UTC_DAY_PATTERN.test(dayUtc)) {
       throw new Error(`Expected YYYY-MM-DD for daily_trend[${idx}].day_utc`);
     }
     return {
       day_utc: dayUtc,
-      views: expectNonNegativeInt(item.views, `daily_trend[${idx}].views`),
+      views: expectNonNegativeInt(item['views'], `daily_trend[${idx}].views`),
     };
   });
 }
@@ -165,24 +165,24 @@ export function parseAdminObservabilityStats(raw: unknown): UiAdminObservability
   if (!isRecord(raw)) {
     throw new Error('Expected JSON object for admin observability stats');
   }
-  const win = raw.window;
+  const win = raw['window'];
   if (win !== '7d' && win !== '30d' && win !== 'all') {
     throw new Error('Invalid stats window');
   }
-  if (raw.privacy_mode !== 'aggregate-cookie-free') {
+  if (raw['privacy_mode'] !== 'aggregate-cookie-free') {
     throw new Error('Invalid privacy_mode');
   }
-  if (!isRecord(raw.totals)) {
+  if (!isRecord(raw['totals'])) {
     throw new Error('Expected totals object');
   }
-  if (!isRecord(raw.cache)) {
+  if (!isRecord(raw['cache'])) {
     throw new Error('Expected cache object');
   }
-  if (!isRecord(raw.top_by_kind)) {
+  if (!isRecord(raw['top_by_kind'])) {
     throw new Error('Expected top_by_kind object');
   }
 
-  const rawRatio = raw.cache.hit_ratio;
+  const rawRatio = raw['cache']['hit_ratio'];
   if (
     rawRatio !== null &&
     (typeof rawRatio !== 'number' || !Number.isFinite(rawRatio) || rawRatio < 0 || rawRatio > 1)
@@ -191,33 +191,33 @@ export function parseAdminObservabilityStats(raw: unknown): UiAdminObservability
   }
 
   return {
-    generated_at: expectNonEmptyString(raw.generated_at, 'generated_at'),
+    generated_at: expectNonEmptyString(raw['generated_at'], 'generated_at'),
     window: win,
     privacy_mode: 'aggregate-cookie-free',
-    public_badges_enabled: expectBoolean(raw.public_badges_enabled, 'public_badges_enabled'),
-    bundle_revision: expectNonNegativeInt(raw.bundle_revision, 'bundle_revision'),
+    public_badges_enabled: expectBoolean(raw['public_badges_enabled'], 'public_badges_enabled'),
+    bundle_revision: expectNonNegativeInt(raw['bundle_revision'], 'bundle_revision'),
     workers_observability_paired: expectBoolean(
-      raw.workers_observability_paired,
+      raw['workers_observability_paired'],
       'workers_observability_paired'
     ),
     totals: {
-      views_7d: expectNonNegativeInt(raw.totals.views_7d, 'totals.views_7d'),
-      views_30d: expectNonNegativeInt(raw.totals.views_30d, 'totals.views_30d'),
-      views_all_time: expectNonNegativeInt(raw.totals.views_all_time, 'totals.views_all_time'),
+      views_7d: expectNonNegativeInt(raw['totals']['views_7d'], 'totals.views_7d'),
+      views_30d: expectNonNegativeInt(raw['totals']['views_30d'], 'totals.views_30d'),
+      views_all_time: expectNonNegativeInt(raw['totals']['views_all_time'], 'totals.views_all_time'),
     },
     cache: {
-      hits: expectNonNegativeInt(raw.cache.hits, 'cache.hits'),
-      misses: expectNonNegativeInt(raw.cache.misses, 'cache.misses'),
-      not_modified: expectNonNegativeInt(raw.cache.not_modified, 'cache.not_modified'),
-      total_requests: expectNonNegativeInt(raw.cache.total_requests, 'cache.total_requests'),
+      hits: expectNonNegativeInt(raw['cache']['hits'], 'cache.hits'),
+      misses: expectNonNegativeInt(raw['cache']['misses'], 'cache.misses'),
+      not_modified: expectNonNegativeInt(raw['cache']['not_modified'], 'cache.not_modified'),
+      total_requests: expectNonNegativeInt(raw['cache']['total_requests'], 'cache.total_requests'),
       hit_ratio: rawRatio,
     },
-    daily_trend: parseDailyTrend(raw.daily_trend),
-    top_pages: parseTopVisitedPageList(raw.top_pages, 'top_pages'),
+    daily_trend: parseDailyTrend(raw['daily_trend']),
+    top_pages: parseTopVisitedPageList(raw['top_pages'], 'top_pages'),
     top_by_kind: {
-      people: parseTopVisitedPageList(raw.top_by_kind.people, 'top_by_kind.people'),
-      places: parseTopVisitedPageList(raw.top_by_kind.places, 'top_by_kind.places'),
-      narratives: parseTopVisitedPageList(raw.top_by_kind.narratives, 'top_by_kind.narratives'),
+      people: parseTopVisitedPageList(raw['top_by_kind']['people'], 'top_by_kind.people'),
+      places: parseTopVisitedPageList(raw['top_by_kind']['places'], 'top_by_kind.places'),
+      narratives: parseTopVisitedPageList(raw['top_by_kind']['narratives'], 'top_by_kind.narratives'),
     },
   };
 }
@@ -226,26 +226,26 @@ export function parsePublicPageVisitCount(raw: unknown): UiPublicPageVisitCount 
   if (!isRecord(raw)) {
     return null;
   }
-  const kind = raw.entity_kind;
+  const kind = raw['entity_kind'];
   if (kind !== 'person' && kind !== 'place' && kind !== 'narrative') {
     return null;
   }
   if (
-    typeof raw.route_key !== 'string' ||
-    raw.route_key.length === 0 ||
-    typeof raw.entity_slug !== 'string' ||
-    raw.entity_slug.length === 0 ||
-    typeof raw.total_views !== 'number' ||
-    !Number.isInteger(raw.total_views) ||
-    raw.total_views < 0
+    typeof raw['route_key'] !== 'string' ||
+    raw['route_key'].length === 0 ||
+    typeof raw['entity_slug'] !== 'string' ||
+    raw['entity_slug'].length === 0 ||
+    typeof raw['total_views'] !== 'number' ||
+    !Number.isInteger(raw['total_views']) ||
+    raw['total_views'] < 0
   ) {
     return null;
   }
   return {
-    route_key: raw.route_key,
+    route_key: raw['route_key'],
     entity_kind: kind,
-    entity_slug: raw.entity_slug,
-    total_views: raw.total_views,
+    entity_slug: raw['entity_slug'],
+    total_views: raw['total_views'],
   };
 }
 
@@ -253,13 +253,13 @@ export function parsePublicObservabilityConfig(raw: unknown): UiPublicObservabil
   if (!isRecord(raw)) {
     return null;
   }
-  if (typeof raw.public_badges_enabled !== 'boolean') {
+  if (typeof raw['public_badges_enabled'] !== 'boolean') {
     return null;
   }
   return {
-    enabled: typeof raw.enabled === 'boolean' ? raw.enabled : true,
-    public_badges_enabled: raw.public_badges_enabled,
-    record_spa_beacons: typeof raw.record_spa_beacons === 'boolean' ? raw.record_spa_beacons : true,
+    enabled: typeof raw['enabled'] === 'boolean' ? raw['enabled'] : true,
+    public_badges_enabled: raw['public_badges_enabled'],
+    record_spa_beacons: typeof raw['record_spa_beacons'] === 'boolean' ? raw['record_spa_beacons'] : true,
   };
 }
 

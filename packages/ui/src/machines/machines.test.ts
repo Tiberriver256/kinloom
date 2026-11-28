@@ -74,7 +74,7 @@ describe('entityEditorMachine', () => {
 
     const saved = await waitFor(actor, (s) => s.matches('saved'));
     expect(saved.context.baseRevisionId).toBe(5);
-    expect(saved.context.baseSnapshot.full_name).toBe('Clarissa Harlowe Barton');
+    expect(saved.context.baseSnapshot['full_name']).toBe('Clarissa Harlowe Barton');
     expect(saved.context.dirty).toBe(false);
     actor.stop();
   });
@@ -222,8 +222,8 @@ describe('entityEditorMachine', () => {
     actor.send({ type: 'REBASE_AND_RETRY' });
     const saved = await waitFor(actor, (s) => s.matches('saved'));
     expect(saved.context.baseRevisionId).toBe(13);
-    expect(saved.context.baseSnapshot.alt_names).toEqual(['Angel of the Battlefield']);
-    expect(saved.context.baseSnapshot.death_edtf).toBe('1912-04-12');
+    expect(saved.context.baseSnapshot['alt_names']).toEqual(['Angel of the Battlefield']);
+    expect(saved.context.baseSnapshot['death_edtf']).toBe('1912-04-12');
     actor.stop();
   });
 
@@ -280,7 +280,7 @@ describe('entityEditorMachine', () => {
     });
     const synced = await waitFor(actor, (s) => s.matches({ editing: 'clean' }));
     expect(synced.context.baseRevisionId).toBe(15);
-    expect(synced.context.draft.alt_names).toEqual(['Angel of the Battlefield']);
+    expect(synced.context.draft['alt_names']).toEqual(['Angel of the Battlefield']);
 
     // Dirty edit, request delete, cancel delete -> must preserve dirty state
     actor.send({ type: 'EDIT_FIELD', draft: { ...synced.context.draft, surname: 'Barton-Updated' } });
@@ -328,7 +328,7 @@ describe('authSessionMachine', () => {
         ),
         requestMagicLink: fromPromise<
           void,
-          { email: string; inviteToken: string | null; dataSource?: ArchiveDataSource }
+          { email: string; inviteToken: string | null; dataSource?: ArchiveDataSource | undefined }
         >(async () => {}),
       },
     });

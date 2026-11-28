@@ -33,15 +33,13 @@ export function buildUnionDrafts(params: {
   const { branchPeople, genByPersonId, parentMap, spouseMap, directPersonIds } = params;
   const unionDrafts = new Map<string, UnionDraft>();
 
-  for (let pIdx = 0; pIdx < branchPeople.length; pIdx += 1) {
-    const p = branchPeople[pIdx];
+  for (const p of branchPeople) {
     const pGen = genByPersonId.get(p.id) ?? 0;
     const spouses = spouseMap.get(p.id);
     if (!spouses) {
       continue;
     }
-    for (let i = 0; i < spouses.length; i += 1) {
-      const spId = spouses[i];
+    for (const spId of spouses) {
       if ((genByPersonId.get(spId) ?? 0) !== pGen) {
         continue;
       }
@@ -74,8 +72,7 @@ export function buildUnionDrafts(params: {
     }
   }
 
-  for (let cIdx = 0; cIdx < branchPeople.length; cIdx += 1) {
-    const child = branchPeople[cIdx];
+  for (const child of branchPeople) {
     const pids = parentMap.get(child.id);
     if (!pids || pids.length === 0) {
       continue;
@@ -83,8 +80,12 @@ export function buildUnionDrafts(params: {
     let targetKey: string | null = null;
     if (pids.length >= 2) {
       for (let i = 0; i < pids.length && !targetKey; i += 1) {
+        const pi = pids[i];
+        if (!pi) continue;
         for (let j = i + 1; j < pids.length && !targetKey; j += 1) {
-          const candidate = pickUnionPairKey(pids[i], pids[j]);
+          const pj = pids[j];
+          if (!pj) continue;
+          const candidate = pickUnionPairKey(pi, pj);
           if (unionDrafts.has(candidate)) {
             targetKey = candidate;
           }
@@ -92,32 +93,35 @@ export function buildUnionDrafts(params: {
       }
       if (!targetKey) {
         const [p0, p1] = pids;
-        const g0 = genByPersonId.get(p0) ?? 0;
-        const g1 = genByPersonId.get(p1) ?? 0;
-        if (g0 === g1) {
-          const key = pickUnionPairKey(p0, p1);
-          const p0Direct = directPersonIds.has(p0);
-          const p1Direct = directPersonIds.has(p1);
-          unionDrafts.set(key, {
-            id: key,
-            kind: 'couple',
-            aId: !p0Direct && p1Direct ? p1 : p0,
-            bId: !p0Direct && p1Direct ? p0 : p1,
-            gen: g0,
-            childIds: [],
-          });
-          targetKey = key;
+        if (p0 && p1) {
+          const g0 = genByPersonId.get(p0) ?? 0;
+          const g1 = genByPersonId.get(p1) ?? 0;
+          if (g0 === g1) {
+            const key = pickUnionPairKey(p0, p1);
+            const p0Direct = directPersonIds.has(p0);
+            const p1Direct = directPersonIds.has(p1);
+            unionDrafts.set(key, {
+              id: key,
+              kind: 'couple',
+              aId: !p0Direct && p1Direct ? p1 : p0,
+              bId: !p0Direct && p1Direct ? p0 : p1,
+              gen: g0,
+              childIds: [],
+            });
+            targetKey = key;
+          }
         }
       }
     }
     if (!targetKey) {
       let parentId = pids[0];
-      for (let i = 0; i < pids.length; i += 1) {
-        if (directPersonIds.has(pids[i])) {
-          parentId = pids[i];
+      for (const pid of pids) {
+        if (directPersonIds.has(pid)) {
+          parentId = pid;
           break;
         }
       }
+      if (!parentId) continue;
       const key = pickUnionPairKey(parentId, null);
       if (!unionDrafts.has(key)) {
         unionDrafts.set(key, {
@@ -142,8 +146,8 @@ export function buildUnionDrafts(params: {
 
 function minChildBirthYear(cids: readonly string[], peopleById: ReadonlyMap<string, Person>): number {
   let min = 9999;
-  for (let i = 0; i < cids.length; i += 1) {
-    const yr = peopleById.get(cids[i])?.birth_year;
+  for (const cid of cids) {
+    const yr = peopleById.get(cid)?.birth_year;
     if (yr !== null && yr !== undefined && yr < min) {
       min = yr;
     }
@@ -184,7 +188,10 @@ export function computeMarriageOrderByUnionId(
   const marriageOrderByUnionId = new Map<string, { order: number; total: number }>();
   for (const [anchorId, list] of coupleDraftsByAnchor.entries()) {
     if (list.length === 1) {
-      marriageOrderByUnionId.set(list[0].id, { order: 1, total: 1 });
+      const only = list[0];
+      if (only) {
+        marriageOrderByUnionId.set(only.id, { order: 1, total: 1 });
+      }
       continue;
     }
     list.sort((u1, u2) => {
@@ -199,8 +206,8 @@ export function computeMarriageOrderByUnionId(
       const sp2 = other2 ? (peopleById.get(other2)?.birth_year ?? 9999) : 9999;
       return sp1 - sp2;
     });
-    for (let idx = 0; idx < list.length; idx += 1) {
-      marriageOrderByUnionId.set(list[idx].id, { order: idx + 1, total: list.length });
+    for (const [idx, item] of list.entries()) {
+      marriageOrderByUnionId.set(item.id, { order: idx + 1, total: list.length });
     }
   }
   return marriageOrderByUnionId;
@@ -243,8 +250,7 @@ export function buildGenerationGroups(params: {
     rankByGen = preSortedRankByGen;
   } else {
     const mutableRankByGen = new Map<number, Person[]>();
-    for (let i = 0; i < rankPeople.length; i += 1) {
-      const p = rankPeople[i];
+    for (const p of rankPeople) {
       const g = genByPersonId.get(p.id) ?? 0;
       const list = mutableRankByGen.get(g);
       if (list) {
@@ -260,8 +266,7 @@ export function buildGenerationGroups(params: {
   const allGenNums = [...rankByGen.keys()].toSorted((a, b) => a - b);
 
   const unionsByGen = new Map<number, TreeUnion[]>();
-  for (let i = 0; i < unions.length; i += 1) {
-    const u = unions[i];
+  for (const u of unions) {
     const list = unionsByGen.get(u.gen);
     if (list) {
       list.push(u);
@@ -273,8 +278,7 @@ export function buildGenerationGroups(params: {
   const unitsById = new Map<string, TreeFamilyUnit>();
   const generations: TreeGenerationGroup[] = [];
 
-  for (let gIdx = 0; gIdx < allGenNums.length; gIdx += 1) {
-    const g = allGenNums[gIdx];
+  for (const g of allGenNums) {
     const rawMembers = rankByGen.get(g) ?? [];
     const genMembers = preSortedRankByGen
       ? rawMembers
@@ -284,13 +288,12 @@ export function buildGenerationGroups(params: {
     }
 
     const genMemberIds = new Set<string>();
-    const personIds = new Array<string>(genMembers.length);
+    const personIds: string[] = [];
     let minYear = Number.POSITIVE_INFINITY;
     let maxYear = Number.NEGATIVE_INFINITY;
-    for (let i = 0; i < genMembers.length; i += 1) {
-      const m = genMembers[i];
+    for (const m of genMembers) {
       genMemberIds.add(m.id);
-      personIds[i] = m.id;
+      personIds.push(m.id);
       if (m.birth_year !== null) {
         if (m.birth_year < minYear) minYear = m.birth_year;
         if (m.birth_year > maxYear) maxYear = m.birth_year;
@@ -303,11 +306,10 @@ export function buildGenerationGroups(params: {
     const unionsByPrimaryPartner = new Map<string, TreeUnion[]>();
 
     if (rawGenUnions) {
-      for (let i = 0; i < rawGenUnions.length; i += 1) {
-        const u = rawGenUnions[i];
+      for (const u of rawGenUnions) {
         let allInGen = true;
-        for (let p = 0; p < u.partnerIds.length; p += 1) {
-          if (!genMemberIds.has(u.partnerIds[p])) {
+        for (const pid of u.partnerIds) {
+          if (!genMemberIds.has(pid)) {
             allInGen = false;
             break;
           }
@@ -343,8 +345,7 @@ export function buildGenerationGroups(params: {
     const placedInUnit = new Set<string>();
     const genUnits: TreeFamilyUnit[] = [];
 
-    for (let aIdx = 0; aIdx < genMembers.length; aIdx += 1) {
-      const anchor = genMembers[aIdx];
+    for (const anchor of genMembers) {
       if (placedInUnit.has(anchor.id)) {
         continue;
       }
@@ -355,8 +356,7 @@ export function buildGenerationGroups(params: {
           : (rawAnchorCouples ?? []);
 
       const availableSpouseIds: string[] = [];
-      for (let i = 0; i < anchorCoupleUnions.length; i += 1) {
-        const u = anchorCoupleUnions[i];
+      for (const u of anchorCoupleUnions) {
         const otherId = u.primaryPartnerId === anchor.id ? u.secondaryPartnerId : u.primaryPartnerId;
         if (otherId && !placedInUnit.has(otherId) && genMemberIds.has(otherId)) {
           availableSpouseIds.push(otherId);
@@ -364,17 +364,18 @@ export function buildGenerationGroups(params: {
       }
 
       placedInUnit.add(anchor.id);
-      for (let i = 0; i < availableSpouseIds.length; i += 1) {
-        placedInUnit.add(availableSpouseIds[i]);
+      for (const spId of availableSpouseIds) {
+        placedInUnit.add(spId);
       }
 
       let orderedMemberIds: string[];
-      if (availableSpouseIds.length === 2) {
-        orderedMemberIds = [availableSpouseIds[0], anchor.id, availableSpouseIds[1]];
+      const [firstSpouse, secondSpouse] = availableSpouseIds;
+      if (availableSpouseIds.length === 2 && firstSpouse && secondSpouse) {
+        orderedMemberIds = [firstSpouse, anchor.id, secondSpouse];
       } else if (availableSpouseIds.length === 0) {
         orderedMemberIds = [anchor.id];
-      } else if (availableSpouseIds.length === 1) {
-        orderedMemberIds = [anchor.id, availableSpouseIds[0]];
+      } else if (availableSpouseIds.length === 1 && firstSpouse) {
+        orderedMemberIds = [anchor.id, firstSpouse];
       } else {
         orderedMemberIds = [anchor.id, ...availableSpouseIds];
       }
@@ -386,8 +387,7 @@ export function buildGenerationGroups(params: {
           unitUnionIds = [];
         } else {
           const matched: TreeUnion[] = [];
-          for (let i = 0; i < singleCandidates.length; i += 1) {
-            const u = singleCandidates[i];
+          for (const u of singleCandidates) {
             if (u.partnerIds.length === 1 && u.partnerIds[0] === anchor.id) {
               matched.push(u);
             }
@@ -401,13 +401,12 @@ export function buildGenerationGroups(params: {
         const memberSet = new Set(orderedMemberIds);
         const matched: TreeUnion[] = [];
         const seenUnionIds = new Set<string>();
-        for (let m = 0; m < orderedMemberIds.length; m += 1) {
-          const candidates = unionsByPrimaryPartner.get(orderedMemberIds[m]);
+        for (const memberId of orderedMemberIds) {
+          const candidates = unionsByPrimaryPartner.get(memberId);
           if (!candidates) {
             continue;
           }
-          for (let c = 0; c < candidates.length; c += 1) {
-            const u = candidates[c];
+          for (const u of candidates) {
             if (seenUnionIds.has(u.id)) {
               continue;
             }
@@ -424,19 +423,14 @@ export function buildGenerationGroups(params: {
       }
 
       let isDirect = false;
-      for (let i = 0; i < orderedMemberIds.length; i += 1) {
-        if (directPersonIds.has(orderedMemberIds[i])) {
+      for (const memberId of orderedMemberIds) {
+        if (directPersonIds.has(memberId)) {
           isDirect = true;
           break;
         }
       }
 
-      const unitId =
-        orderedMemberIds.length === 1
-          ? orderedMemberIds[0]
-          : orderedMemberIds.length === 2
-            ? `${orderedMemberIds[0]}+${orderedMemberIds[1]}`
-            : orderedMemberIds.join('+');
+      const unitId = orderedMemberIds.join('+');
 
       const unit: TreeFamilyUnit = {
         id: unitId,

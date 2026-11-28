@@ -11,10 +11,10 @@ import mediaGalleryStyles from './MediaGallery.module.css';
 
 export interface MediaPlayerProps {
   media: MediaItem;
-  baseUrl?: string;
+  baseUrl?: string | undefined;
   /** Render compact card preview (poster/thumbnail) vs full interactive player. */
-  variant?: 'preview' | 'full';
-  className?: string;
+  variant?: 'preview' | 'full' | undefined;
+  className?: string | undefined;
 }
 
 const VIDEO_EXTENSIONS: ReadonlySet<string> = new Set(['mp4', 'webm', 'mov', 'm4v']);

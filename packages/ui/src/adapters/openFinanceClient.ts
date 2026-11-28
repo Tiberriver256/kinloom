@@ -10,19 +10,19 @@ import { resolvePluginRequestCredentials } from './pluginApiClient.js';
 
 export interface OpenFinanceClient {
   getPublicSummary(options?: {
-    readonly signal?: AbortSignal;
-    readonly cache?: RequestCache;
+    readonly signal?: AbortSignal | undefined;
+    readonly cache?: RequestCache | undefined;
   }): Promise<UiOpenFinancePublicSummary | null>;
   getAdminConfig(options?: {
-    readonly signal?: AbortSignal;
+    readonly signal?: AbortSignal | undefined;
   }): Promise<UiOpenFinanceAdminConfigPayload | null>;
   saveAdminConfig(input: UiOpenFinanceConfigInput): Promise<UiOpenFinanceAdminConfigPayload>;
 }
 
 export interface HttpOpenFinanceClientOptions {
-  readonly apiBaseUrl?: string;
-  readonly fetchImpl?: typeof fetch;
-  readonly credentials?: RequestCredentials;
+  readonly apiBaseUrl?: string | undefined;
+  readonly fetchImpl?: typeof fetch | undefined;
+  readonly credentials?: RequestCredentials | undefined;
 }
 
 /**
@@ -38,13 +38,13 @@ export function createHttpOpenFinanceClient(options: HttpOpenFinanceClientOption
 
   return {
     async getPublicSummary(reqOptions?: {
-      readonly signal?: AbortSignal;
-      readonly cache?: RequestCache;
+      readonly signal?: AbortSignal | undefined;
+      readonly cache?: RequestCache | undefined;
     }): Promise<UiOpenFinancePublicSummary | null> {
       const res = await fetchImpl(apiUrl('/api/open-finance/summary'), {
         credentials,
         headers: { accept: 'application/json' },
-        signal: reqOptions?.signal,
+        ...(reqOptions?.signal ? { signal: reqOptions.signal } : {}),
         ...(reqOptions?.cache ? { cache: reqOptions.cache } : {}),
       });
       if (res.status === 404) {
@@ -66,12 +66,12 @@ export function createHttpOpenFinanceClient(options: HttpOpenFinanceClientOption
     },
 
     async getAdminConfig(reqOptions?: {
-      readonly signal?: AbortSignal;
+      readonly signal?: AbortSignal | undefined;
     }): Promise<UiOpenFinanceAdminConfigPayload | null> {
       const res = await fetchImpl(apiUrl('/api/admin/open-finance/config'), {
         credentials,
         headers: { accept: 'application/json' },
-        signal: reqOptions?.signal,
+        ...(reqOptions?.signal ? { signal: reqOptions.signal } : {}),
       });
       if (res.status === 404) {
         return null;

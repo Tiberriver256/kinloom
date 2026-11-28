@@ -28,6 +28,11 @@ import { PlacePage } from './PlacePage.js';
 import { PlacesIndexPage } from './PlacesIndexPage.js';
 import { computeOccupancyDecadeTicks } from './place/placeViewModel.js';
 
+function must<T>(val: T | undefined, label = 'value'): T {
+  if (val === undefined) throw new Error(`Expected ${label}`);
+  return val;
+}
+
 declare global {
   var IS_REACT_ACT_ENVIRONMENT: boolean | undefined;
 }
@@ -246,6 +251,7 @@ describe('surveyMapLayout adaptive scale, edge badges, and collision-free labels
     // Pairwise zero overlap between all placed labels
     for (let i = 0; i < placedList.length; i += 1) {
       const a = placedList[i];
+      if (!a) continue;
       expect(a.box.x1).toBeGreaterThanOrEqual(8);
       expect(a.box.x2).toBeLessThanOrEqual(width - 8);
       expect(a.box.y1).toBeGreaterThanOrEqual(8);
@@ -258,7 +264,7 @@ describe('surveyMapLayout adaptive scale, edge badges, and collision-free labels
         expect(boxesOverlap(a.box, dotBox)).toBe(false);
       }
       for (let j = i + 1; j < placedList.length; j += 1) {
-        expect(boxesOverlap(a.box, placedList[j].box)).toBe(false);
+        expect(boxesOverlap(a.box, must(placedList[j]).box)).toBe(false);
       }
     }
   });

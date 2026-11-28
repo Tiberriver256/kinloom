@@ -6,10 +6,10 @@ import styles from './DirectoryJumpStrip.module.css';
 export interface DirectoryJumpStripItem {
   readonly id: string;
   readonly label: string;
-  readonly count?: number;
-  readonly ariaLabel?: string;
-  readonly title?: string;
-  readonly onSelect?: () => void;
+  readonly count?: number | undefined;
+  readonly ariaLabel?: string | undefined;
+  readonly title?: string | undefined;
+  readonly onSelect?: (() => void) | undefined;
 }
 
 export interface DirectoryJumpStripProps {
@@ -69,7 +69,7 @@ export const DirectoryJumpStrip: React.FC<DirectoryJumpStripProps> = ({
       CSS.supports('animation-timeline', 'scroll()');
     if (supportsScrollTimeline) {
       const syncOverflow = (): void => {
-        scroller.dataset.overflowing = scroller.scrollWidth > scroller.clientWidth + 1 ? 'true' : 'false';
+        scroller.dataset['overflowing'] = scroller.scrollWidth > scroller.clientWidth + 1 ? 'true' : 'false';
       };
       syncOverflow();
       if (typeof ResizeObserver !== 'function') {

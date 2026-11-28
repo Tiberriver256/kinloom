@@ -10,7 +10,7 @@ import type { HydrateOutcome } from './types.js';
 
 export function hydrateOutcomeFromSession(
   session: ArchiveSessionState,
-  extra?: { capabilities?: ArchiveCapabilities; authProviders?: ArchiveAuthProviders }
+  extra?: { capabilities?: ArchiveCapabilities | undefined; authProviders?: ArchiveAuthProviders | undefined }
 ): HydrateOutcome {
   if (session.authenticated && session.principal_kind === 'user') {
     const role: AuthMemberRole = session.role === 'admin' ? 'admin' : 'editor';
@@ -55,21 +55,22 @@ export function readHydrateOutput(event: unknown): HydrateOutcome | null {
 }
 
 export const authSessionActors = {
-  hydrateSession: fromPromise<HydrateOutcome, { inviteToken: string | null; dataSource?: ArchiveDataSource }>(
-    async ({ input }) => {
-      if (!input.dataSource?.getSession) {
-        return { kind: 'anonymous' };
-      }
-      const res = await input.dataSource.getSession();
-      return hydrateOutcomeFromSession(res.session, {
-        capabilities: res.capabilities,
-        authProviders: res.authProviders,
-      });
+  hydrateSession: fromPromise<
+    HydrateOutcome,
+    { inviteToken: string | null; dataSource?: ArchiveDataSource | undefined }
+  >(async ({ input }) => {
+    if (!input.dataSource?.getSession) {
+      return { kind: 'anonymous' };
     }
-  ),
+    const res = await input.dataSource.getSession();
+    return hydrateOutcomeFromSession(res.session, {
+      capabilities: res.capabilities,
+      authProviders: res.authProviders,
+    });
+  }),
   requestMagicLink: fromPromise<
     void,
-    { email: string; inviteToken: string | null; dataSource?: ArchiveDataSource }
+    { email: string; inviteToken: string | null; dataSource?: ArchiveDataSource | undefined }
   >(async ({ input }) => {
     if (!input.dataSource?.requestMagicLink) {
       throw {
@@ -80,7 +81,7 @@ export const authSessionActors = {
     }
     await input.dataSource.requestMagicLink(input.email);
   }),
-  signOutSession: fromPromise<void, { dataSource?: ArchiveDataSource }>(async ({ input }) => {
+  signOutSession: fromPromise<void, { dataSource?: ArchiveDataSource | undefined }>(async ({ input }) => {
     if (input.dataSource?.logout) {
       await input.dataSource.logout();
     }

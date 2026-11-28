@@ -18,17 +18,20 @@ function sortedUnique(items: readonly string[] | undefined): string[] {
     return [];
   }
   if (items.length === 1) {
-    return [items[0]];
+    return items[0] !== undefined ? [items[0]] : [];
   }
   return [...new Set(items)].toSorted(fastLocaleCompare);
 }
 
 function medianOf(values: readonly number[]): number {
+  if (values.length === 0) {
+    return 0;
+  }
   if (values.length === 1) {
-    return values[0];
+    return values[0] ?? 0;
   }
   const sorted = [...values].toSorted((a, b) => a - b);
-  return sorted[Math.floor(sorted.length / 2)];
+  return sorted[Math.floor(sorted.length / 2)] ?? 0;
 }
 
 function buildSpouseClusters(
@@ -39,8 +42,7 @@ function buildSpouseClusters(
   const visited = new Set<string>();
   const clusters: string[][] = [];
 
-  for (let i = 0; i < componentIds.length; i += 1) {
-    const id = componentIds[i];
+  for (const id of componentIds) {
     if (visited.has(id)) {
       continue;
     }
@@ -51,11 +53,11 @@ function buildSpouseClusters(
     while (qHead < queue.length) {
       const cur = queue[qHead];
       qHead += 1;
+      if (cur === undefined) continue;
       cluster.push(cur);
       const spouses = sortedSpouseById.get(cur);
       if (spouses) {
-        for (let s = 0; s < spouses.length; s += 1) {
-          const spId = spouses[s];
+        for (const spId of spouses) {
           if (compSet.has(spId) && !visited.has(spId)) {
             visited.add(spId);
             queue.push(spId);
@@ -74,24 +76,23 @@ function pickComponentSeed(
   peopleById: ReadonlyMap<string, Person>,
   parentMap: ReadonlyMap<string, readonly string[]>
 ): string {
-  for (let i = 0; i < componentIds.length; i += 1) {
-    const id = componentIds[i];
+  for (const id of componentIds) {
     if (peopleById.get(id)?.lineage_group === 'pivot_ancestor') {
       return id;
     }
   }
   const roots: string[] = [];
-  for (let i = 0; i < componentIds.length; i += 1) {
-    const id = componentIds[i];
+  for (const id of componentIds) {
     if ((parentMap.get(id)?.length ?? 0) === 0) {
       roots.push(id);
     }
   }
   const pool = roots.length > 0 ? roots : componentIds;
-  let best = pool[0];
+  let best = pool[0] ?? '';
   let bestYear = peopleById.get(best)?.birth_year ?? Number.POSITIVE_INFINITY;
   for (let i = 1; i < pool.length; i += 1) {
     const id = pool[i];
+    if (id === undefined) continue;
     const year = peopleById.get(id)?.birth_year ?? Number.POSITIVE_INFINITY;
     if (year < bestYear) {
       best = id;
@@ -131,12 +132,12 @@ function assignComponentGenerations(params: {
   while (qHead < queue.length) {
     const cur = queue[qHead];
     qHead += 1;
+    if (cur === undefined) continue;
     const curGen = localGen.get(cur) ?? 0;
 
     const children = sortedChildById.get(cur);
     if (children) {
-      for (let i = 0; i < children.length; i += 1) {
-        const childId = children[i];
+      for (const childId of children) {
         if (compSet.has(childId) && !localGen.has(childId)) {
           localGen.set(childId, curGen + 1);
           queue.push(childId);
@@ -145,8 +146,7 @@ function assignComponentGenerations(params: {
     }
     const parents = sortedParentById.get(cur);
     if (parents) {
-      for (let i = 0; i < parents.length; i += 1) {
-        const parentId = parents[i];
+      for (const parentId of parents) {
         if (compSet.has(parentId) && !localGen.has(parentId)) {
           localGen.set(parentId, curGen - 1);
           queue.push(parentId);
@@ -155,8 +155,7 @@ function assignComponentGenerations(params: {
     }
     const spouses = sortedSpouseById.get(cur);
     if (spouses) {
-      for (let i = 0; i < spouses.length; i += 1) {
-        const spId = spouses[i];
+      for (const spId of spouses) {
         if (compSet.has(spId) && !localGen.has(spId)) {
           localGen.set(spId, curGen);
           queue.push(spId);
@@ -173,8 +172,7 @@ function assignComponentGenerations(params: {
       }
     }
     if (Number.isFinite(minVal) && minVal !== 0) {
-      for (let i = 0; i < componentIds.length; i += 1) {
-        const id = componentIds[i];
+      for (const id of componentIds) {
         localGen.set(id, (localGen.get(id) ?? 0) - minVal);
       }
     }
@@ -185,13 +183,12 @@ function assignComponentGenerations(params: {
   const maxForwardIter = Math.min(64, componentIds.length * 2 + 8);
   for (let iter = 0; iter < maxForwardIter; iter += 1) {
     let changed = false;
-    for (let i = 0; i < componentIds.length; i += 1) {
-      const id = componentIds[i];
+    for (const id of componentIds) {
       const parents = parentMap.get(id);
       if (parents && parents.length > 0) {
         let maxParent = Number.NEGATIVE_INFINITY;
-        for (let p = 0; p < parents.length; p += 1) {
-          const pg = localGen.get(parents[p]) ?? 0;
+        for (const parentId of parents) {
+          const pg = localGen.get(parentId) ?? 0;
           if (pg > maxParent) {
             maxParent = pg;
           }
@@ -203,14 +200,12 @@ function assignComponentGenerations(params: {
         }
       }
     }
-    for (let i = 0; i < componentIds.length; i += 1) {
-      const id = componentIds[i];
+    for (const id of componentIds) {
       const spouses = spouseMap.get(id);
       if (!spouses) {
         continue;
       }
-      for (let s = 0; s < spouses.length; s += 1) {
-        const spId = spouses[s];
+      for (const spId of spouses) {
         if (!compSet.has(spId)) {
           continue;
         }
@@ -233,12 +228,10 @@ function assignComponentGenerations(params: {
   const maxPullIter = Math.min(32, componentIds.length + 4);
   for (let iter = 0; iter < maxPullIter; iter += 1) {
     let changed = false;
-    for (let cIdx = 0; cIdx < spouseClusters.length; cIdx += 1) {
-      const cluster = spouseClusters[cIdx];
+    for (const cluster of spouseClusters) {
       let minChildGen = Number.POSITIVE_INFINITY;
       let curGen = 0;
-      for (let m = 0; m < cluster.length; m += 1) {
-        const id = cluster[m];
+      for (const [m, id] of cluster.entries()) {
         const mg = localGen.get(id) ?? 0;
         if (m === 0 || mg > curGen) {
           curGen = mg;
@@ -247,8 +240,7 @@ function assignComponentGenerations(params: {
         if (!children) {
           continue;
         }
-        for (let k = 0; k < children.length; k += 1) {
-          const cid = children[k];
+        for (const cid of children) {
           if (!compSet.has(cid)) {
             continue;
           }
@@ -263,8 +255,8 @@ function assignComponentGenerations(params: {
       }
       const targetGen = minChildGen - 1;
       if (targetGen > curGen) {
-        for (let m = 0; m < cluster.length; m += 1) {
-          localGen.set(cluster[m], targetGen);
+        for (const id of cluster) {
+          localGen.set(id, targetGen);
         }
         changed = true;
       }
@@ -315,11 +307,10 @@ export function inferGenerations(
   }
 
   const peopleById = new Map<string, Person>();
-  const sortedIds = new Array<string>(people.length);
-  for (let i = 0; i < people.length; i += 1) {
-    const p = people[i];
+  const sortedIds: string[] = [];
+  for (const p of people) {
     peopleById.set(p.id, p);
-    sortedIds[i] = p.id;
+    sortedIds.push(p.id);
   }
   sortedIds.sort(fastLocaleCompare);
   const visIds = new Set(sortedIds);
@@ -327,8 +318,7 @@ export function inferGenerations(
   const sortedParentById = new Map<string, string[]>();
   const sortedChildById = new Map<string, string[]>();
   const sortedSpouseById = new Map<string, string[]>();
-  for (let i = 0; i < sortedIds.length; i += 1) {
-    const id = sortedIds[i];
+  for (const id of sortedIds) {
     const pList = parentMap.get(id);
     if (pList && pList.length > 0) {
       sortedParentById.set(id, sortedUnique(pList));
@@ -347,8 +337,7 @@ export function inferGenerations(
   const connectedComponents: string[][] = [];
   const isolatedIds: string[] = [];
 
-  for (let i = 0; i < sortedIds.length; i += 1) {
-    const id = sortedIds[i];
+  for (const id of sortedIds) {
     const isConnected = sortedParentById.has(id) || sortedChildById.has(id) || sortedSpouseById.has(id);
     if (!isConnected) {
       isolatedIds.push(id);
@@ -364,11 +353,11 @@ export function inferGenerations(
     while (qHead < queue.length) {
       const cur = queue[qHead];
       qHead += 1;
+      if (cur === undefined) continue;
       comp.push(cur);
       const pNbr = sortedParentById.get(cur);
       if (pNbr) {
-        for (let k = 0; k < pNbr.length; k += 1) {
-          const nextId = pNbr[k];
+        for (const nextId of pNbr) {
           if (visIds.has(nextId) && !visited.has(nextId)) {
             visited.add(nextId);
             queue.push(nextId);
@@ -377,8 +366,7 @@ export function inferGenerations(
       }
       const cNbr = sortedChildById.get(cur);
       if (cNbr) {
-        for (let k = 0; k < cNbr.length; k += 1) {
-          const nextId = cNbr[k];
+        for (const nextId of cNbr) {
           if (visIds.has(nextId) && !visited.has(nextId)) {
             visited.add(nextId);
             queue.push(nextId);
@@ -387,8 +375,7 @@ export function inferGenerations(
       }
       const sNbr = sortedSpouseById.get(cur);
       if (sNbr) {
-        for (let k = 0; k < sNbr.length; k += 1) {
-          const nextId = sNbr[k];
+        for (const nextId of sNbr) {
           if (visIds.has(nextId) && !visited.has(nextId)) {
             visited.add(nextId);
             queue.push(nextId);
@@ -404,13 +391,12 @@ export function inferGenerations(
     if (b.length !== a.length) {
       return b.length - a.length;
     }
-    return fastLocaleCompare(a[0], b[0]);
+    return fastLocaleCompare(a[0] ?? '', b[0] ?? '');
   });
 
   const connectedYearsByGen = new Map<number, number[]>();
   const recordComponentYears = (comp: readonly string[]): void => {
-    for (let i = 0; i < comp.length; i += 1) {
-      const id = comp[i];
+    for (const id of comp) {
       const birthYear = peopleById.get(id)?.birth_year;
       if (birthYear !== null && birthYear !== undefined) {
         const g = gen.get(id) ?? 0;
@@ -424,8 +410,7 @@ export function inferGenerations(
     }
   };
 
-  for (let compIdx = 0; compIdx < connectedComponents.length; compIdx += 1) {
-    const comp = connectedComponents[compIdx];
+  for (const [compIdx, comp] of connectedComponents.entries()) {
     const localGen = assignComponentGenerations({
       componentIds: comp,
       peopleById,
@@ -440,8 +425,7 @@ export function inferGenerations(
     let delta = 0;
     if (compIdx > 0 && connectedYearsByGen.size > 0) {
       const dated: { g: number; birthYear: number }[] = [];
-      for (let i = 0; i < comp.length; i += 1) {
-        const id = comp[i];
+      for (const id of comp) {
         const birthYear = peopleById.get(id)?.birth_year;
         if (birthYear !== null && birthYear !== undefined) {
           dated.push({ g: localGen.get(id) ?? 0, birthYear });
@@ -467,8 +451,7 @@ export function inferGenerations(
         let bestErr = Number.POSITIVE_INFINITY;
         for (let cand = minDelta; cand <= maxDelta; cand += 1) {
           let err = 0;
-          for (let d = 0; d < dated.length; d += 1) {
-            const item = dated[d];
+          for (const item of dated) {
             const expected = estimateRefYearForGen(item.g + cand, refMedians);
             if (expected !== null) {
               err += Math.abs(item.birthYear - expected);
@@ -483,8 +466,7 @@ export function inferGenerations(
       }
     }
 
-    for (let i = 0; i < comp.length; i += 1) {
-      const id = comp[i];
+    for (const id of comp) {
       gen.set(id, (localGen.get(id) ?? 0) + delta);
     }
     recordComponentYears(comp);
@@ -500,8 +482,8 @@ export function inferGenerations(
         gen.set(id, g - minConnected);
       }
       connectedYearsByGen.clear();
-      for (let i = 0; i < connectedComponents.length; i += 1) {
-        recordComponentYears(connectedComponents[i]);
+      for (const comp of connectedComponents) {
+        recordComponentYears(comp);
       }
     }
   }
@@ -509,8 +491,7 @@ export function inferGenerations(
   if (isolatedIds.length > 0) {
     const fullParentMap = new Map<string, string[]>();
     const fullSpouseMap = new Map<string, string[]>();
-    for (let i = 0; i < kinship.length; i += 1) {
-      const edge = kinship[i];
+    for (const edge of kinship) {
       if (edge.relation === 'parent') {
         addUnique(fullParentMap, edge.to, edge.from);
       } else if (edge.relation === 'child') {
@@ -526,23 +507,21 @@ export function inferGenerations(
       isolatedMedians.set(g, medianOf(yrs));
     }
 
-    for (let i = 0; i < isolatedIds.length; i += 1) {
-      const id = isolatedIds[i];
+    for (const id of isolatedIds) {
       const p = peopleById.get(id);
       if (!p) {
         continue;
       }
       let inferred: number | null = null;
       const hiddenSpouses = sortedUnique(fullSpouseMap.get(id));
-      for (let s = 0; s < hiddenSpouses.length; s += 1) {
-        const spParents = fullParentMap.get(hiddenSpouses[s]);
+      for (const spId of hiddenSpouses) {
+        const spParents = fullParentMap.get(spId);
         if (!spParents) {
           continue;
         }
         let foundVis = false;
         let maxParentGen = 0;
-        for (let k = 0; k < spParents.length; k += 1) {
-          const pid = spParents[k];
+        for (const pid of spParents) {
           if (visIds.has(pid)) {
             const pg = gen.get(pid) ?? 0;
             if (!foundVis || pg > maxParentGen) {
@@ -573,16 +552,15 @@ export function inferGenerations(
   }
 
   const genSet = new Set<number>();
-  for (let i = 0; i < sortedIds.length; i += 1) {
-    genSet.add(gen.get(sortedIds[i]) ?? 0);
+  for (const id of sortedIds) {
+    genSet.add(gen.get(id) ?? 0);
   }
   const uniqueGens = [...genSet].toSorted((a, b) => a - b);
   const remap = new Map<number, number>();
-  for (let idx = 0; idx < uniqueGens.length; idx += 1) {
-    remap.set(uniqueGens[idx], idx);
+  for (const [idx, gVal] of uniqueGens.entries()) {
+    remap.set(gVal, idx);
   }
-  for (let i = 0; i < sortedIds.length; i += 1) {
-    const id = sortedIds[i];
+  for (const id of sortedIds) {
     gen.set(id, remap.get(gen.get(id) ?? 0) ?? 0);
   }
   return gen;

@@ -49,10 +49,10 @@ function parsePositiveThreshold(envValue: string | undefined, fallback: number):
 }
 
 const CWV_THRESHOLDS: CwvThresholds = {
-  maxLcpMs: parsePositiveThreshold(process.env.KINLOOM_CWV_MAX_LCP_MS, 2500),
-  maxFcpMs: parsePositiveThreshold(process.env.KINLOOM_CWV_MAX_FCP_MS, 1800),
-  maxCls: parsePositiveThreshold(process.env.KINLOOM_CWV_MAX_CLS, 0.1),
-  maxInteractionMs: parsePositiveThreshold(process.env.KINLOOM_CWV_MAX_INTERACTION_MS, 200),
+  maxLcpMs: parsePositiveThreshold(process.env['KINLOOM_CWV_MAX_LCP_MS'], 2500),
+  maxFcpMs: parsePositiveThreshold(process.env['KINLOOM_CWV_MAX_FCP_MS'], 1800),
+  maxCls: parsePositiveThreshold(process.env['KINLOOM_CWV_MAX_CLS'], 0.1),
+  maxInteractionMs: parsePositiveThreshold(process.env['KINLOOM_CWV_MAX_INTERACTION_MS'], 200),
 };
 
 async function installCwvObservers(page: Page): Promise<void> {

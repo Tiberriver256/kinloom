@@ -19,17 +19,17 @@ export function pickActiveTimelineEventId(
     return null;
   }
   if (cards.length === 1) {
-    return cards[0].id;
+    return cards[0]?.id ?? null;
   }
 
   const edgeThreshold = options.edgeThresholdPx ?? 8;
 
   if (options.scrollY <= edgeThreshold) {
-    return cards[0].id;
+    return cards[0]?.id ?? null;
   }
 
   if (options.maxScrollY > edgeThreshold && options.scrollY >= options.maxScrollY - edgeThreshold) {
-    return cards.at(-1)?.id ?? cards[0].id;
+    return cards.at(-1)?.id ?? cards[0]?.id ?? null;
   }
 
   for (const card of cards) {
@@ -47,7 +47,7 @@ export function pickActiveTimelineEventId(
     }
   }
 
-  return lastPassed ? lastPassed.id : cards[0].id;
+  return lastPassed ? lastPassed.id : (cards[0]?.id ?? null);
 }
 
 export function shouldRunInitialEventScroll(params: {

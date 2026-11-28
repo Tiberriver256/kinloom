@@ -138,11 +138,11 @@ export interface UiOpenFinancePlatformConfig {
 
 export interface UiOpenFinancePlatformInput {
   readonly platform: UiDonationPlatformId;
-  readonly url?: string;
-  readonly handle?: string;
-  readonly label?: string;
-  readonly description?: string;
-  readonly enabled?: boolean;
+  readonly url?: string | undefined;
+  readonly handle?: string | undefined;
+  readonly label?: string | undefined;
+  readonly description?: string | undefined;
+  readonly enabled?: boolean | undefined;
 }
 
 export interface UiOpenFinanceCostItem {
@@ -708,244 +708,265 @@ export function parseUiOpenFinanceSummary(raw: unknown): UiOpenFinancePublicSumm
   if (!isRecord(raw)) {
     throw new Error('Expected JSON object for open-finance summary');
   }
-  if (!isUiOpenFinanceCurrency(raw.currency)) {
+  if (!isUiOpenFinanceCurrency(raw['currency'])) {
     throw new Error('Invalid currency in open-finance summary');
   }
-  if (!isRecord(raw.visibility)) {
+  if (!isRecord(raw['visibility'])) {
     throw new Error('Expected visibility object');
   }
-  if (!isRecord(raw.totals)) {
+  if (!isRecord(raw['totals'])) {
     throw new Error('Expected totals object');
   }
-  if (!Array.isArray(raw.platforms)) {
+  if (!Array.isArray(raw['platforms'])) {
     throw new Error('Expected platforms array');
   }
-  if (!Array.isArray(raw.cost_items)) {
+  if (!Array.isArray(raw['cost_items'])) {
     throw new Error('Expected cost_items array');
   }
 
-  const platforms: UiOpenFinancePublicPlatform[] = raw.platforms.map((entry, idx) => {
-    if (!isRecord(entry) || !isUiDonationPlatformId(entry.platform)) {
+  const platforms: UiOpenFinancePublicPlatform[] = raw['platforms'].map((entry, idx) => {
+    if (!isRecord(entry) || !isUiDonationPlatformId(entry['platform'])) {
       throw new Error(`Invalid platform at platforms[${idx}]`);
     }
-    const rawUrl = expectNonEmptyString(entry.url, `platforms[${idx}].url`);
-    const urlCheck = validateUiDonationPlatformUrl(entry.platform, rawUrl);
+    const rawUrl = expectNonEmptyString(entry['url'], `platforms[${idx}].url`);
+    const urlCheck = validateUiDonationPlatformUrl(entry['platform'], rawUrl);
     if (!urlCheck.ok) {
       throw new Error(`Unsafe donation URL at platforms[${idx}]: ${urlCheck.error}`);
     }
-    const spec = UI_DONATION_PLATFORM_REGISTRY[entry.platform];
+    const spec = UI_DONATION_PLATFORM_REGISTRY[entry['platform']];
     return {
-      platform: entry.platform,
+      platform: entry['platform'],
       name: spec.name,
       url: urlCheck.url,
       host: urlCheck.host,
       handle: urlCheck.handle,
       label:
-        typeof entry.label === 'string' && entry.label.trim() ? entry.label.trim() : spec.defaultCtaLabel,
-      ...(typeof entry.description === 'string' && entry.description.trim()
-        ? { description: entry.description.trim() }
+        typeof entry['label'] === 'string' && entry['label'].trim()
+          ? entry['label'].trim()
+          : spec.defaultCtaLabel,
+      ...(typeof entry['description'] === 'string' && entry['description'].trim()
+        ? { description: entry['description'].trim() }
         : {}),
-      is_primary: expectBoolean(entry.is_primary, `platforms[${idx}].is_primary`),
+      is_primary: expectBoolean(entry['is_primary'], `platforms[${idx}].is_primary`),
     };
   });
 
-  const costItems: UiOpenFinancePublicCostItem[] = raw.cost_items.map((entry, idx) => {
+  const costItems: UiOpenFinancePublicCostItem[] = raw['cost_items'].map((entry, idx) => {
     if (!isRecord(entry)) {
       throw new Error(`Expected object at cost_items[${idx}]`);
     }
-    if (!isUiOpenFinanceCostCategory(entry.category)) {
+    if (!isUiOpenFinanceCostCategory(entry['category'])) {
       throw new Error(`Invalid category at cost_items[${idx}]`);
     }
-    if (!isUiOpenFinanceCostCadence(entry.cadence)) {
+    if (!isUiOpenFinanceCostCadence(entry['cadence'])) {
       throw new Error(`Invalid cadence at cost_items[${idx}]`);
     }
     return {
-      id: expectNonEmptyString(entry.id, `cost_items[${idx}].id`),
-      label: expectNonEmptyString(entry.label, `cost_items[${idx}].label`),
-      category: entry.category,
-      cadence: entry.cadence,
-      amount_cents: expectNonNegativeInt(entry.amount_cents, `cost_items[${idx}].amount_cents`),
+      id: expectNonEmptyString(entry['id'], `cost_items[${idx}].id`),
+      label: expectNonEmptyString(entry['label'], `cost_items[${idx}].label`),
+      category: entry['category'],
+      cadence: entry['cadence'],
+      amount_cents: expectNonNegativeInt(entry['amount_cents'], `cost_items[${idx}].amount_cents`),
       monthly_equivalent_cents: expectNonNegativeInt(
-        entry.monthly_equivalent_cents,
+        entry['monthly_equivalent_cents'],
         `cost_items[${idx}].monthly_equivalent_cents`
       ),
       annual_equivalent_cents: expectNonNegativeInt(
-        entry.annual_equivalent_cents,
+        entry['annual_equivalent_cents'],
         `cost_items[${idx}].annual_equivalent_cents`
       ),
-      ...(typeof entry.vendor === 'string' && entry.vendor.trim() ? { vendor: entry.vendor.trim() } : {}),
-      ...(typeof entry.notes === 'string' && entry.notes.trim() ? { notes: entry.notes.trim() } : {}),
+      ...(typeof entry['vendor'] === 'string' && entry['vendor'].trim()
+        ? { vendor: entry['vendor'].trim() }
+        : {}),
+      ...(typeof entry['notes'] === 'string' && entry['notes'].trim()
+        ? { notes: entry['notes'].trim() }
+        : {}),
     };
   });
 
   let fundingGoal: UiOpenFinanceFundingGoalSummary | null = null;
-  if (raw.funding_goal !== null && raw.funding_goal !== undefined) {
-    if (!isRecord(raw.funding_goal)) {
+  if (raw['funding_goal'] !== null && raw['funding_goal'] !== undefined) {
+    if (!isRecord(raw['funding_goal'])) {
       throw new Error('Invalid funding_goal object');
     }
-    const period = raw.funding_goal.period;
+    const period = raw['funding_goal']['period'];
     if (period !== 'monthly' && period !== 'annual') {
       throw new Error('Invalid funding_goal.period');
     }
     fundingGoal = {
       period,
-      target_cents: expectNonNegativeInt(raw.funding_goal.target_cents, 'funding_goal.target_cents'),
-      received_cents: expectNonNegativeInt(raw.funding_goal.received_cents, 'funding_goal.received_cents'),
-      remaining_cents: expectNonNegativeInt(raw.funding_goal.remaining_cents, 'funding_goal.remaining_cents'),
+      target_cents: expectNonNegativeInt(raw['funding_goal']['target_cents'], 'funding_goal.target_cents'),
+      received_cents: expectNonNegativeInt(
+        raw['funding_goal']['received_cents'],
+        'funding_goal.received_cents'
+      ),
+      remaining_cents: expectNonNegativeInt(
+        raw['funding_goal']['remaining_cents'],
+        'funding_goal.remaining_cents'
+      ),
       progress_percent: expectNonNegativeInt(
-        raw.funding_goal.progress_percent,
+        raw['funding_goal']['progress_percent'],
         'funding_goal.progress_percent'
       ),
-      raw_percent: expectNonNegativeInt(raw.funding_goal.raw_percent, 'funding_goal.raw_percent'),
-      ...(typeof raw.funding_goal.label === 'string' && raw.funding_goal.label.trim()
-        ? { label: raw.funding_goal.label.trim() }
+      raw_percent: expectNonNegativeInt(raw['funding_goal']['raw_percent'], 'funding_goal.raw_percent'),
+      ...(typeof raw['funding_goal']['label'] === 'string' && raw['funding_goal']['label'].trim()
+        ? { label: raw['funding_goal']['label'].trim() }
         : {}),
-      ...(typeof raw.funding_goal.as_of_date === 'string' && raw.funding_goal.as_of_date.trim()
-        ? { as_of_date: raw.funding_goal.as_of_date.trim() }
+      ...(typeof raw['funding_goal']['as_of_date'] === 'string' && raw['funding_goal']['as_of_date'].trim()
+        ? { as_of_date: raw['funding_goal']['as_of_date'].trim() }
         : {}),
     };
   }
 
   return {
-    page_title: expectNonEmptyString(raw.page_title, 'page_title'),
-    nav_label: expectNonEmptyString(raw.nav_label, 'nav_label'),
-    supporter_message: typeof raw.supporter_message === 'string' ? raw.supporter_message : '',
-    currency: raw.currency,
+    page_title: expectNonEmptyString(raw['page_title'], 'page_title'),
+    nav_label: expectNonEmptyString(raw['nav_label'], 'nav_label'),
+    supporter_message: typeof raw['supporter_message'] === 'string' ? raw['supporter_message'] : '',
+    currency: raw['currency'],
     visibility: {
-      show_support_page: expectBoolean(raw.visibility.show_support_page, 'visibility.show_support_page'),
-      show_in_nav: expectBoolean(raw.visibility.show_in_nav, 'visibility.show_in_nav'),
-      show_in_footer: expectBoolean(raw.visibility.show_in_footer, 'visibility.show_in_footer'),
+      show_support_page: expectBoolean(
+        raw['visibility']['show_support_page'],
+        'visibility.show_support_page'
+      ),
+      show_in_nav: expectBoolean(raw['visibility']['show_in_nav'], 'visibility.show_in_nav'),
+      show_in_footer: expectBoolean(raw['visibility']['show_in_footer'], 'visibility.show_in_footer'),
     },
     platforms,
     cost_items: costItems,
     totals: {
       recurring_monthly_direct_cents: expectNonNegativeInt(
-        raw.totals.recurring_monthly_direct_cents,
+        raw['totals']['recurring_monthly_direct_cents'],
         'totals.recurring_monthly_direct_cents'
       ),
       recurring_annual_direct_cents: expectNonNegativeInt(
-        raw.totals.recurring_annual_direct_cents,
+        raw['totals']['recurring_annual_direct_cents'],
         'totals.recurring_annual_direct_cents'
       ),
       monthly_operating_cents: expectNonNegativeInt(
-        raw.totals.monthly_operating_cents,
+        raw['totals']['monthly_operating_cents'],
         'totals.monthly_operating_cents'
       ),
       annual_operating_cents: expectNonNegativeInt(
-        raw.totals.annual_operating_cents,
+        raw['totals']['annual_operating_cents'],
         'totals.annual_operating_cents'
       ),
-      one_time_cents: expectNonNegativeInt(raw.totals.one_time_cents, 'totals.one_time_cents'),
+      one_time_cents: expectNonNegativeInt(raw['totals']['one_time_cents'], 'totals.one_time_cents'),
       first_year_total_cents: expectNonNegativeInt(
-        raw.totals.first_year_total_cents,
+        raw['totals']['first_year_total_cents'],
         'totals.first_year_total_cents'
       ),
-      active_item_count: expectNonNegativeInt(raw.totals.active_item_count, 'totals.active_item_count'),
+      active_item_count: expectNonNegativeInt(raw['totals']['active_item_count'], 'totals.active_item_count'),
     },
     funding_goal: fundingGoal,
-    updated_at: typeof raw.updated_at === 'string' && raw.updated_at ? raw.updated_at : null,
+    updated_at: typeof raw['updated_at'] === 'string' && raw['updated_at'] ? raw['updated_at'] : null,
   };
 }
 
 export function parseUiOpenFinanceAdminConfig(raw: unknown): UiOpenFinanceAdminConfigPayload {
-  if (!isRecord(raw) || !isRecord(raw.config)) {
+  if (!isRecord(raw) || !isRecord(raw['config'])) {
     throw new Error('Expected JSON object with config for admin open-finance payload');
   }
-  const summary = parseUiOpenFinanceSummary(raw.summary);
-  const rawCfg = raw.config;
-  if (!isUiOpenFinanceCurrency(rawCfg.currency)) {
+  const summary = parseUiOpenFinanceSummary(raw['summary']);
+  const rawCfg = raw['config'];
+  if (!isUiOpenFinanceCurrency(rawCfg['currency'])) {
     throw new Error('Invalid config.currency');
   }
-  if (!isRecord(rawCfg.visibility)) {
+  if (!isRecord(rawCfg['visibility'])) {
     throw new Error('Expected config.visibility');
   }
-  if (!Array.isArray(rawCfg.platforms) || !Array.isArray(rawCfg.cost_items)) {
+  if (!Array.isArray(rawCfg['platforms']) || !Array.isArray(rawCfg['cost_items'])) {
     throw new Error('Expected config.platforms and config.cost_items arrays');
   }
 
-  const platforms: UiOpenFinancePlatformInput[] = rawCfg.platforms.map((p, idx) => {
-    if (!isRecord(p) || !isUiDonationPlatformId(p.platform)) {
+  const platforms: UiOpenFinancePlatformInput[] = rawCfg['platforms'].map((p, idx) => {
+    if (!isRecord(p) || !isUiDonationPlatformId(p['platform'])) {
       throw new Error(`Invalid config.platforms[${idx}]`);
     }
     return {
-      platform: p.platform,
-      url: expectNonEmptyString(p.url, `config.platforms[${idx}].url`),
-      label: typeof p.label === 'string' ? p.label : undefined,
-      description: typeof p.description === 'string' ? p.description : undefined,
-      enabled: typeof p.enabled === 'boolean' ? p.enabled : true,
+      platform: p['platform'],
+      url: expectNonEmptyString(p['url'], `config.platforms[${idx}].url`),
+      label: typeof p['label'] === 'string' ? p['label'] : undefined,
+      description: typeof p['description'] === 'string' ? p['description'] : undefined,
+      enabled: typeof p['enabled'] === 'boolean' ? p['enabled'] : true,
     };
   });
 
-  const costItems: UiOpenFinanceCostItem[] = rawCfg.cost_items.map((item, idx) => {
+  const costItems: UiOpenFinanceCostItem[] = rawCfg['cost_items'].map((item, idx) => {
     if (
       !isRecord(item) ||
-      !isUiOpenFinanceCostCategory(item.category) ||
-      !isUiOpenFinanceCostCadence(item.cadence)
+      !isUiOpenFinanceCostCategory(item['category']) ||
+      !isUiOpenFinanceCostCadence(item['cadence'])
     ) {
       throw new Error(`Invalid config.cost_items[${idx}]`);
     }
     return {
-      id: expectNonEmptyString(item.id, `config.cost_items[${idx}].id`),
-      label: expectNonEmptyString(item.label, `config.cost_items[${idx}].label`),
-      category: item.category,
-      cadence: item.cadence,
-      amount_cents: expectNonNegativeInt(item.amount_cents, `config.cost_items[${idx}].amount_cents`),
-      ...(typeof item.vendor === 'string' && item.vendor.trim() ? { vendor: item.vendor.trim() } : {}),
-      ...(typeof item.notes === 'string' && item.notes.trim() ? { notes: item.notes.trim() } : {}),
-      active: typeof item.active === 'boolean' ? item.active : true,
+      id: expectNonEmptyString(item['id'], `config.cost_items[${idx}].id`),
+      label: expectNonEmptyString(item['label'], `config.cost_items[${idx}].label`),
+      category: item['category'],
+      cadence: item['cadence'],
+      amount_cents: expectNonNegativeInt(item['amount_cents'], `config.cost_items[${idx}].amount_cents`),
+      ...(typeof item['vendor'] === 'string' && item['vendor'].trim()
+        ? { vendor: item['vendor'].trim() }
+        : {}),
+      ...(typeof item['notes'] === 'string' && item['notes'].trim() ? { notes: item['notes'].trim() } : {}),
+      active: typeof item['active'] === 'boolean' ? item['active'] : true,
     };
   });
 
   let fundingGoal: UiOpenFinanceFundingGoal | null = null;
-  if (rawCfg.funding_goal !== null && rawCfg.funding_goal !== undefined) {
-    if (!isRecord(rawCfg.funding_goal)) {
+  if (rawCfg['funding_goal'] !== null && rawCfg['funding_goal'] !== undefined) {
+    if (!isRecord(rawCfg['funding_goal'])) {
       throw new Error('Invalid config.funding_goal');
     }
-    const period = rawCfg.funding_goal.period;
+    const period = rawCfg['funding_goal']['period'];
     if (period !== 'monthly' && period !== 'annual') {
       throw new Error('Invalid config.funding_goal.period');
     }
     fundingGoal = {
-      enabled: expectBoolean(rawCfg.funding_goal.enabled, 'config.funding_goal.enabled'),
+      enabled: expectBoolean(rawCfg['funding_goal']['enabled'], 'config.funding_goal.enabled'),
       period,
       target_cents: expectNonNegativeInt(
-        rawCfg.funding_goal.target_cents,
+        rawCfg['funding_goal']['target_cents'],
         'config.funding_goal.target_cents'
       ),
       received_cents: expectNonNegativeInt(
-        rawCfg.funding_goal.received_cents,
+        rawCfg['funding_goal']['received_cents'],
         'config.funding_goal.received_cents'
       ),
-      ...(typeof rawCfg.funding_goal.label === 'string' && rawCfg.funding_goal.label.trim()
-        ? { label: rawCfg.funding_goal.label.trim() }
+      ...(typeof rawCfg['funding_goal']['label'] === 'string' && rawCfg['funding_goal']['label'].trim()
+        ? { label: rawCfg['funding_goal']['label'].trim() }
         : {}),
-      ...(typeof rawCfg.funding_goal.as_of_date === 'string' && rawCfg.funding_goal.as_of_date.trim()
-        ? { as_of_date: rawCfg.funding_goal.as_of_date.trim() }
+      ...(typeof rawCfg['funding_goal']['as_of_date'] === 'string' &&
+      rawCfg['funding_goal']['as_of_date'].trim()
+        ? { as_of_date: rawCfg['funding_goal']['as_of_date'].trim() }
         : {}),
     };
   }
 
   const primaryPlatform =
-    rawCfg.primary_platform === null || rawCfg.primary_platform === undefined
+    rawCfg['primary_platform'] === null || rawCfg['primary_platform'] === undefined
       ? null
-      : isUiDonationPlatformId(rawCfg.primary_platform)
-        ? rawCfg.primary_platform
+      : isUiDonationPlatformId(rawCfg['primary_platform'])
+        ? rawCfg['primary_platform']
         : (() => {
             throw new Error('Invalid config.primary_platform');
           })();
 
   const config = normalizeUiOpenFinanceConfig({
-    page_title: expectNonEmptyString(rawCfg.page_title, 'config.page_title'),
-    nav_label: expectNonEmptyString(rawCfg.nav_label, 'config.nav_label'),
-    supporter_message: typeof rawCfg.supporter_message === 'string' ? rawCfg.supporter_message : '',
-    currency: rawCfg.currency,
+    page_title: expectNonEmptyString(rawCfg['page_title'], 'config.page_title'),
+    nav_label: expectNonEmptyString(rawCfg['nav_label'], 'config.nav_label'),
+    supporter_message: typeof rawCfg['supporter_message'] === 'string' ? rawCfg['supporter_message'] : '',
+    currency: rawCfg['currency'],
     visibility: {
       show_support_page: expectBoolean(
-        rawCfg.visibility.show_support_page,
+        rawCfg['visibility']['show_support_page'],
         'config.visibility.show_support_page'
       ),
-      show_in_nav: expectBoolean(rawCfg.visibility.show_in_nav, 'config.visibility.show_in_nav'),
-      show_in_footer: expectBoolean(rawCfg.visibility.show_in_footer, 'config.visibility.show_in_footer'),
+      show_in_nav: expectBoolean(rawCfg['visibility']['show_in_nav'], 'config.visibility.show_in_nav'),
+      show_in_footer: expectBoolean(
+        rawCfg['visibility']['show_in_footer'],
+        'config.visibility.show_in_footer'
+      ),
     },
     primary_platform: primaryPlatform,
     platforms,
@@ -956,8 +977,9 @@ export function parseUiOpenFinanceAdminConfig(raw: unknown): UiOpenFinanceAdminC
   return {
     config,
     summary,
-    updated_at: typeof raw.updated_at === 'string' && raw.updated_at ? raw.updated_at : null,
-    updated_by: typeof raw.updated_by === 'string' && raw.updated_by ? raw.updated_by : null,
-    persistence_available: typeof raw.persistence_available === 'boolean' ? raw.persistence_available : true,
+    updated_at: typeof raw['updated_at'] === 'string' && raw['updated_at'] ? raw['updated_at'] : null,
+    updated_by: typeof raw['updated_by'] === 'string' && raw['updated_by'] ? raw['updated_by'] : null,
+    persistence_available:
+      typeof raw['persistence_available'] === 'boolean' ? raw['persistence_available'] : true,
   };
 }

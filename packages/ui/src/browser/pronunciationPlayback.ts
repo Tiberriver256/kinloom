@@ -206,7 +206,8 @@ export function playTokenAudioUrls(
     return false;
   }
   if (urls.length === 1) {
-    return playSingleAudioUrl(urls[0], onStopped);
+    const firstUrl = urls[0];
+    return firstUrl ? playSingleAudioUrl(firstUrl, onStopped) : false;
   }
 
   const AudioCtx = getAudioContextConstructor();
@@ -288,7 +289,7 @@ export function playTokenAudioUrls(
         return;
       }
 
-      const sampleRate = ctx.sampleRate || decoded[0].sampleRate || 24000;
+      const sampleRate = ctx.sampleRate || decoded[0]?.sampleRate || 24000;
       const gapSeconds = (options?.gapMs ?? DEFAULT_TOKEN_GAP_MS) / 1000;
       const gapSamples = Math.max(0, Math.round(sampleRate * gapSeconds));
       const channels = Math.max(1, ...decoded.map((buf) => buf.numberOfChannels));

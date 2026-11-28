@@ -59,10 +59,9 @@ export async function captureDemoFramesForStep(
       reducedMotion: 'reduce',
       locale: 'en-US',
       colorScheme: step.theme,
-      extraHTTPHeaders:
-        step.authRole === 'editor' || step.authRole === 'admin'
-          ? { 'x-kinloom-tutorial-actor': SYNTHETIC_CAPTURE_EMAILS[step.authRole] }
-          : undefined,
+      ...(step.authRole === 'editor' || step.authRole === 'admin'
+        ? { extraHTTPHeaders: { 'x-kinloom-tutorial-actor': SYNTHETIC_CAPTURE_EMAILS[step.authRole] } }
+        : {}),
     });
     const page = await context.newPage();
     const targetUrl = resolveCaptureRouteUrl(demoUrl, step.demoRoute);

@@ -35,12 +35,12 @@ export async function parseErrorEnvelope(res: Response): Promise<ApiClientError>
     ) {
       const errObj = body.error as Record<string, unknown>;
       if (
-        typeof errObj.code === 'string' &&
-        errObj.code.length > 0 &&
-        typeof errObj.message === 'string' &&
-        errObj.message.length > 0
+        typeof errObj['code'] === 'string' &&
+        errObj['code'].length > 0 &&
+        typeof errObj['message'] === 'string' &&
+        errObj['message'].length > 0
       ) {
-        return new ApiClientError(res.status, errObj.code, errObj.message, errObj.details);
+        return new ApiClientError(res.status, errObj['code'], errObj['message'], errObj['details']);
       }
     }
   } catch {

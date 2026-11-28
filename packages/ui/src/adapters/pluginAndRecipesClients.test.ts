@@ -55,7 +55,7 @@ describe('createHttpPluginApiClient', () => {
     const calls: Array<{ url: string; init?: RequestInit }> = [];
     const fetchImpl: typeof fetch = async (input, init) => {
       const url = typeof input === 'string' ? input : input.toString();
-      calls.push({ url, init });
+      calls.push({ url, ...(init !== undefined ? { init } : {}) });
       if (url.endsWith('/ok')) {
         return new Response(JSON.stringify({ value: 42 }), {
           status: 200,
@@ -89,7 +89,7 @@ describe('createHttpPluginApiClient', () => {
 
     const ok = await client.requestJson('/ok', (raw) => raw as { value: number });
     expect(ok).toEqual({ value: 42 });
-    expect(calls[0].init?.credentials).toBe('same-origin');
+    expect(calls[0]?.init?.credentials).toBe('same-origin');
 
     const form = new FormData();
     form.set('caption', 'Front');
@@ -315,7 +315,7 @@ describe('createHttpRecipesClient and createStaticRecipesClient', () => {
       const url = typeof input === 'string' ? input : input.toString();
       const method = init?.method ?? 'GET';
       const body = typeof init?.body === 'string' ? init.body : undefined;
-      requests.push({ url, method, body });
+      requests.push({ url, method, ...(body !== undefined ? { body } : {}) });
       if (method === 'POST' && url === '/api/plugins/recipes') {
         return new Response(JSON.stringify({ recipe: SAMPLE_RECIPE }), {
           status: 201,
@@ -482,7 +482,7 @@ describe('createHttpRecipesClient and createStaticRecipesClient', () => {
       const url = typeof input === 'string' ? input : input.toString();
       const method = init?.method ?? 'GET';
       const body = typeof init?.body === 'string' ? init.body : undefined;
-      requests.push({ url, method, body });
+      requests.push({ url, method, ...(body !== undefined ? { body } : {}) });
 
       if (method === 'GET' && url === '/api/plugins/recipes/sourdough-boule/comments') {
         return new Response(

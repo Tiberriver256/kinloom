@@ -13,6 +13,11 @@ import { PersonPage } from './PersonPage.js';
 import { PlacePage } from './PlacePage.js';
 import { TreePage } from './TreePage.js';
 
+function must<T>(val: T | undefined, label = 'value'): T {
+  if (val === undefined) throw new Error(`Expected ${label}`);
+  return val;
+}
+
 declare global {
   var IS_REACT_ACT_ENVIRONMENT: boolean | undefined;
 }
@@ -431,9 +436,17 @@ describe('PersonPage, IndexPage, PlacePage, LocalSurveyMap, and TreePage behavio
 
     const survey = mountEl(
       <MemoryRouter>
-        <LocalSurveyMap center={RICH_BUNDLE.places[0]} allPlaces={RICH_BUNDLE.places} scopeMode="exact" />
-        <LocalSurveyMap center={RICH_BUNDLE.places[0]} allPlaces={RICH_BUNDLE.places} scopeMode="county" />
-        <LocalSurveyMap center={RICH_BUNDLE.places[0]} allPlaces={RICH_BUNDLE.places} compact={true} />
+        <LocalSurveyMap
+          center={must(RICH_BUNDLE.places[0])}
+          allPlaces={RICH_BUNDLE.places}
+          scopeMode="exact"
+        />
+        <LocalSurveyMap
+          center={must(RICH_BUNDLE.places[0])}
+          allPlaces={RICH_BUNDLE.places}
+          scopeMode="county"
+        />
+        <LocalSurveyMap center={must(RICH_BUNDLE.places[0])} allPlaces={RICH_BUNDLE.places} compact={true} />
       </MemoryRouter>
     );
     await flushUi();

@@ -15,8 +15,8 @@ export interface ClientEnvironmentSnapshot {
 export interface UiPluginDiagnosticInput {
   readonly id: string;
   readonly name: string;
-  readonly version?: string;
-  readonly status?: PluginRuntimeStatus;
+  readonly version?: string | undefined;
+  readonly status?: PluginRuntimeStatus | undefined;
   readonly routeCount: number;
   readonly hooks: readonly string[];
 }
@@ -232,7 +232,7 @@ export function buildGitHubBugReportUrl(params: {
   readonly report: AdminDiagnosticsReport;
   readonly client: ClientEnvironmentSnapshot;
   readonly markdown: string;
-  readonly maxUrlLength?: number;
+  readonly maxUrlLength?: number | undefined;
 }): GitHubBugReportLinkResult {
   const maxUrlLength = params.maxUrlLength ?? DEFAULT_MAX_GITHUB_ISSUE_URL_LENGTH;
   const { report, client, markdown } = params;

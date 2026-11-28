@@ -42,11 +42,11 @@ export function isServiceWorkerSupportedOrigin(
 
 function isVitestRuntime(): boolean {
   const env = (globalThis as { process?: { env?: Record<string, string | undefined> } }).process?.env;
-  if (env?.VITEST) {
+  if (env?.['VITEST']) {
     return true;
   }
   const metaEnv = (import.meta as { env?: Record<string, unknown> }).env;
-  return Boolean(metaEnv?.VITEST) || metaEnv?.MODE === 'test';
+  return Boolean(metaEnv?.['VITEST']) || metaEnv?.['MODE'] === 'test';
 }
 
 /**

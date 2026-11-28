@@ -141,7 +141,7 @@ export function partitionKinshipTopology(
   let validV = true;
 
   for (let i = 0; i < steps.length; i += 1) {
-    const rel = steps[i].relation;
+    const rel = steps[i]?.relation;
     if (rel === 'child') {
       if (seenParent) {
         validV = false;
@@ -166,7 +166,7 @@ export function partitionKinshipTopology(
     const orderedNodes: KinshipTopologyNode[] = personIds.map((personId, index) => ({
       personId,
       index,
-      edgeFromPrev: index > 0 ? steps[index - 1].relation : null,
+      edgeFromPrev: index > 0 ? (steps[index - 1]?.relation ?? null) : null,
       role: index === 0 || index === personIds.length - 1 ? 'endpoint' : 'linear',
     }));
     return { topology: 'linear', ascending: [], apex: null, descending: [], orderedNodes };
@@ -184,15 +184,19 @@ export function partitionKinshipTopology(
     return {
       personId,
       index,
-      edgeFromPrev: index > 0 ? steps[index - 1].relation : null,
+      edgeFromPrev: index > 0 ? (steps[index - 1]?.relation ?? null) : null,
       role,
     };
   });
 
+  const apexNode = orderedNodes[apexIndex] ?? orderedNodes[0];
+  if (!apexNode) {
+    throw new Error('Expected kinship path node');
+  }
   return {
     topology: 'v',
     ascending: orderedNodes.slice(0, apexIndex),
-    apex: orderedNodes[apexIndex],
+    apex: apexNode,
     descending: orderedNodes.slice(apexIndex + 1),
     orderedNodes,
   };

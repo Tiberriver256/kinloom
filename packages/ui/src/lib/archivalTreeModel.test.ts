@@ -14,6 +14,11 @@ import {
   searchTreePeople,
 } from './archivalTreeModel.js';
 
+function must<T>(val: T | undefined, label = 'value'): T {
+  if (val === undefined) throw new Error(`Expected ${label}`);
+  return val;
+}
+
 function makePerson(overrides: Partial<Person> & Pick<Person, 'id' | 'slug' | 'full_name'>): Person {
   const parts = overrides.full_name.split(' ');
   return {
@@ -299,21 +304,21 @@ describe('archivalTreeModel', () => {
       .filter((u) => u.primaryPartnerId === 'p_arthur')
       .toSorted((a, b) => a.marriageOrder - b.marriageOrder);
     expect(arthurUnions).toHaveLength(2);
-    expect(arthurUnions[0].secondaryPartnerId).toBe('p_clara');
-    expect(arthurUnions[0].marriageOrder).toBe(1);
-    expect(arthurUnions[0].totalMarriagesForPrimary).toBe(2);
-    expect(arthurUnions[1].secondaryPartnerId).toBe('p_nora');
-    expect(arthurUnions[1].marriageOrder).toBe(2);
+    expect(arthurUnions[0]?.secondaryPartnerId).toBe('p_clara');
+    expect(arthurUnions[0]?.marriageOrder).toBe(1);
+    expect(arthurUnions[0]?.totalMarriagesForPrimary).toBe(2);
+    expect(arthurUnions[1]?.secondaryPartnerId).toBe('p_nora');
+    expect(arthurUnions[1]?.marriageOrder).toBe(2);
 
     const layout = computeArchivalDiagramLayout(model);
     const arthurHubs = layout.hubs.filter((h) => h.union.primaryPartnerId === 'p_arthur');
     expect(arthurHubs).toHaveLength(2);
-    expect(arthurHubs[0].x).toBeLessThan(arthurHubs[1].x);
+    expect(must(arthurHubs[0]).x).toBeLessThan(must(arthurHubs[1]).x);
 
     // Distinct unions in the same generation get staggered busY tracks so rails never fuse
     const arthurBuses = layout.buses.filter((b) => b.parentIds.includes('p_arthur'));
     expect(arthurBuses).toHaveLength(2);
-    expect(arthurBuses[0].busY).not.toBe(arthurBuses[1].busY);
+    expect(arthurBuses[0]?.busY).not.toBe(arthurBuses[1]?.busY);
 
     // Same-generation rank nodes never overlap horizontally
     const byGen = new Map<number, (typeof layout.nodes)[number][]>();
@@ -328,7 +333,7 @@ describe('archivalTreeModel', () => {
     for (const row of byGen.values()) {
       const sorted = row.toSorted((a, b) => a.x - b.x);
       for (let i = 1; i < sorted.length; i += 1) {
-        expect(sorted[i].x - sorted[i - 1].x).toBeGreaterThanOrEqual(ARCHIVAL_NODE_W);
+        expect(must(sorted[i]).x - must(sorted[i - 1]).x).toBeGreaterThanOrEqual(ARCHIVAL_NODE_W);
       }
     }
   });
@@ -358,7 +363,7 @@ describe('archivalTreeModel', () => {
     const layout = computeArchivalDiagramLayout(model);
     expect(layout.byId.has('p_infant_1')).toBe(false);
     expect(layout.earlyLossStrips).toHaveLength(1);
-    expect(layout.earlyLossStrips[0].chips.map((c) => c.person.id)).toEqual(['p_infant_1', 'p_infant_2']);
+    expect(layout.earlyLossStrips[0]?.chips.map((c) => c.person.id)).toEqual(['p_infant_1', 'p_infant_2']);
   });
 
   it('collapses large collateral sibling sets behind progressive disclosure and expands into a 2-column hanging grid', () => {
@@ -379,7 +384,7 @@ describe('archivalTreeModel', () => {
 
     const collapsedLayout = computeArchivalDiagramLayout(collapsedModel);
     expect(collapsedLayout.siblingToggles).toHaveLength(1);
-    expect(collapsedLayout.siblingToggles[0].hiddenCount).toBe(4);
+    expect(collapsedLayout.siblingToggles[0]?.hiddenCount).toBe(4);
     expect(collapsedLayout.hangingRails).toHaveLength(0);
 
     // Expanding the union unfolds the 4 siblings into a 2-column hanging grid
@@ -393,7 +398,7 @@ describe('archivalTreeModel', () => {
     });
     const expandedLayout = computeArchivalDiagramLayout(expandedModel);
     expect(expandedLayout.hangingRails).toHaveLength(1);
-    expect(expandedLayout.hangingRails[0].ticks).toHaveLength(4);
+    expect(expandedLayout.hangingRails[0]?.ticks).toHaveLength(4);
 
     const hangingNodes = expandedLayout.nodes.filter((n) => n.placement === 'hanging');
     expect(hangingNodes).toHaveLength(4);
@@ -477,11 +482,11 @@ describe('archivalTreeModel', () => {
       branchLabelsById,
     });
     expect(marthaResults).toHaveLength(1);
-    expect(marthaResults[0].person.id).toBe('p_sib_1');
-    expect(marthaResults[0].isCollapsed).toBe(true);
+    expect(marthaResults[0]?.person.id).toBe('p_sib_1');
+    expect(marthaResults[0]?.isCollapsed).toBe(true);
 
     const marthaPlan = resolveTreeFocusPlan({
-      person: marthaResults[0].person,
+      person: must(marthaResults[0]).person,
       model,
       currentBranchFilter: 'hale_line',
       defaultBranchId: 'hale_line',
@@ -502,9 +507,9 @@ describe('archivalTreeModel', () => {
       branchLabelsById,
     });
     expect(vanceResults).toHaveLength(1);
-    expect(vanceResults[0].isOutsideCurrentBranch).toBe(true);
+    expect(vanceResults[0]?.isOutsideCurrentBranch).toBe(true);
     const vancePlan = resolveTreeFocusPlan({
-      person: vanceResults[0].person,
+      person: must(vanceResults[0]).person,
       model,
       currentBranchFilter: 'hale_line',
       defaultBranchId: 'hale_line',
@@ -866,22 +871,23 @@ describe('Multi-component generation alignment and orthogonal obstacle detour ro
       .toSorted((a, b) => a.busY - b.busY);
     expect(gen0Buses).toHaveLength(3);
     for (let i = 1; i < gen0Buses.length; i += 1) {
-      expect(gen0Buses[i].busY - gen0Buses[i - 1].busY).toBeGreaterThanOrEqual(12);
+      expect(must(gen0Buses[i]).busY - must(gen0Buses[i - 1]).busY).toBeGreaterThanOrEqual(12);
     }
 
     // 2. Died-young strip sits laterally clear of union A's vertical stem -> straight 2-point stem (0 U-bends)
     expect(layout.earlyLossStrips).toHaveLength(1);
     const strip = layout.earlyLossStrips[0];
-    const unionABus = layout.buses.find((b) => b.unionId === strip.unionId);
+    const stripVal = must(strip);
+    const unionABus = layout.buses.find((b) => b.unionId === stripVal.unionId);
     expect(unionABus).toBeDefined();
-    expect(strip.x).toBeGreaterThanOrEqual((unionABus?.hubX ?? 0) + 12);
+    expect(stripVal.x).toBeGreaterThanOrEqual((unionABus?.hubX ?? 0) + 12);
     expect(unionABus?.stemPoints).toHaveLength(2);
-    expect(unionABus?.stemPoints[0].x).toBe(unionABus?.stemPoints[1].x);
+    expect(unionABus?.stemPoints[0]?.x).toBe(unionABus?.stemPoints[1]?.x);
 
     // 3. Single chip inside Died-young strip spans full inner box width (170px inside 194px strip)
-    expect(strip.chips).toHaveLength(1);
-    const chip = strip.chips[0];
-    expect(chip.width).toBe(strip.width - 24);
+    expect(stripVal.chips).toHaveLength(1);
+    const chip = must(stripVal.chips[0]);
+    expect(chip.width).toBe(stripVal.width - 24);
     expect(chip.width).toBeGreaterThanOrEqual(170);
   });
 });

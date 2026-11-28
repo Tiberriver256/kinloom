@@ -7,14 +7,14 @@ import { formatFieldLabel, formatRevisionDiffValue } from '../../lib/revisionFie
 import wikiPanelStyles from './WikiPanels.module.css';
 
 export interface RevisionDiffViewProps {
-  before?: EntityPayload | null;
-  after?: EntityPayload | null;
-  diff?: EntityDiffSummary;
-  beforeLabel?: string;
-  afterLabel?: string;
-  compact?: boolean;
-  peopleById?: ReadonlyMap<string, Person>;
-  sourcesById?: ReadonlyMap<string, SourceRecord>;
+  before?: EntityPayload | null | undefined;
+  after?: EntityPayload | null | undefined;
+  diff?: EntityDiffSummary | undefined;
+  beforeLabel?: string | undefined;
+  afterLabel?: string | undefined;
+  compact?: boolean | undefined;
+  peopleById?: ReadonlyMap<string, Person> | undefined;
+  sourcesById?: ReadonlyMap<string, SourceRecord> | undefined;
 }
 
 function symbolForKind(kind: FieldDiff['kind']): { glyph: string; label: string } {

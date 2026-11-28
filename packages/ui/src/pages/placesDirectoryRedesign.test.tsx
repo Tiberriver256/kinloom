@@ -218,9 +218,9 @@ describe('placesDirectoryModel pure helpers (#78)', () => {
     ];
 
     const counts = computeStageCounts(entries, eras);
-    expect(counts.all).toBe(4);
-    expect(counts.europe).toBe(1);
-    expect(counts.midwest).toBe(2);
+    expect(counts['all']).toBe(4);
+    expect(counts['europe']).toBe(1);
+    expect(counts['midwest']).toBe(2);
 
     expect(filterPlacesDirectory({ directory: entries, stage: 'midwest', query: '' })).toHaveLength(2);
     expect(filterPlacesDirectory({ directory: entries, stage: 'all', query: 'Hingham' })).toHaveLength(1);

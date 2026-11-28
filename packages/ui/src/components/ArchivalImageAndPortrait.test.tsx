@@ -13,6 +13,11 @@ import { PlacePage } from '../pages/PlacePage.js';
 import { ArchivalImage, PersonPortrait } from './Atoms.js';
 import { DiagramNodeCard } from './tree/TreeNodesLayer.js';
 
+function must<T>(val: T | undefined, label = 'value'): T {
+  if (val === undefined) throw new Error(`Expected ${label}`);
+  return val;
+}
+
 declare global {
   var IS_REACT_ACT_ENVIRONMENT: boolean | undefined;
 }
@@ -439,7 +444,7 @@ describe('PersonPortrait integration across Kinship, Place residents, and Tree S
   });
 
   it('falls back SVG <image> in DiagramNodeCard to initials monogram on error and resets when thumbUrl changes', () => {
-    const person: Person = TEST_BUNDLE.people[0];
+    const person: Person = must(TEST_BUNDLE.people[0]);
     const node: DiagramPlacedNode = {
       person,
       x: 0,

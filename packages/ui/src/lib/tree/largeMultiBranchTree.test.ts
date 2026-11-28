@@ -10,6 +10,11 @@ import {
 } from '../archivalTreeModel.js';
 import { estimateTreeLabelWidthPx, fitTreeCardNameToWidth } from '../treeNodeDisplay.js';
 
+function must<T>(val: T | undefined, label = 'value'): T {
+  if (val === undefined) throw new Error(`Expected ${label}`);
+  return val;
+}
+
 interface BoxRect {
   readonly left: number;
   readonly right: number;
@@ -121,7 +126,7 @@ export function buildSynthetic145PersonArchive(): {
       addSpouse(hId, wId);
     }
     if (g > 0) {
-      addParents(hId, mainLineHusbands[g - 1], mainLineWives[g - 1]);
+      addParents(hId, must(mainLineHusbands[g - 1]), must(mainLineWives[g - 1]));
     }
   }
   // 15 people so far (b1_g0..6 pairs = 14, plus b1_g7_h pivot = 15)
@@ -201,7 +206,7 @@ export function buildSynthetic145PersonArchive(): {
     })
   );
   addParents(b2g7bride, b2g6h, b2g6w);
-  const pivotId = mainLineHusbands[7];
+  const pivotId = must(mainLineHusbands[7]);
   addSpouse(pivotId, b2g7bride);
 
   // Marriage II wife of Pivot (remarriage with collapsed children + early loss)
@@ -278,7 +283,7 @@ export function buildSynthetic145PersonArchive(): {
     );
     b3Chain.push(pId);
     if (idx > 0) {
-      addParents(pId, b3Chain[idx - 1]);
+      addParents(pId, must(b3Chain[idx - 1]));
     }
   }
   // 34 people so far (note b3_n0..n2 are collateral parents of descendant_spouse b3_n3, testing ghost-gen prevention!)
@@ -335,7 +340,7 @@ export function buildSynthetic145PersonArchive(): {
     addParents(childId, pivotId, b2g7bride);
     const spId =
       i === 0
-        ? b3Chain[3]
+        ? must(b3Chain[3])
         : addPerson(
             makeSyntheticPerson(`b1_g8_sp${i}`, `SpouseG8N${i} Quarry`, {
               lineageGroup: 'descendant_spouse',
@@ -363,7 +368,7 @@ export function buildSynthetic145PersonArchive(): {
           eventCount: idx === 0 ? 6 : 1,
         })
       );
-      addParents(cId, g8Couples[i].parent, g8Couples[i].spouse);
+      addParents(cId, must(g8Couples[i]).parent, must(g8Couples[i]).spouse);
       if (j < 2) {
         const spId = addPerson(
           makeSyntheticPerson(`b1_g9_sp${idx}`, `SpouseG9N${idx} Finch`, {
@@ -395,7 +400,7 @@ export function buildSynthetic145PersonArchive(): {
           eventCount: idx === 0 ? 5 : 1,
         })
       );
-      addParents(cId, g9Couples[i].parent, g9Couples[i].spouse);
+      addParents(cId, must(g9Couples[i]).parent, must(g9Couples[i]).spouse);
       if (j === 0) {
         const spId = addPerson(
           makeSyntheticPerson(`b1_g10_sp${idx}`, `SpouseG10N${idx} Brent`, {
@@ -423,6 +428,7 @@ export function buildSynthetic145PersonArchive(): {
         deathYear: null,
       })
     );
+    if (!couple) continue;
     addParents(cId, couple.parent, couple.spouse);
   }
 
@@ -466,6 +472,7 @@ function polylineIntersectsRect(points: readonly DiagramPoint[], rect: BoxRect):
   for (let i = 0; i < points.length - 1; i += 1) {
     const a = points[i];
     const b = points[i + 1];
+    if (!a || !b) continue;
     if (a.x === b.x) {
       const minY = Math.min(a.y, b.y);
       const maxY = Math.max(a.y, b.y);
@@ -738,8 +745,14 @@ describe('Large 145-person 12-generation 4-branch asymmetric archive invariants'
           const a = layout.nodes[i];
           for (let j = i + 1; j < layout.nodes.length; j += 1) {
             const b = layout.nodes[j];
-            const overlaps =
-              a.x < b.x + b.width && a.x + a.width > b.x && a.y < b.y + b.height && a.y + a.height > b.y;
+            const overlaps = Boolean(
+              a &&
+                b &&
+                a.x < b.x + b.width &&
+                a.x + a.width > b.x &&
+                a.y < b.y + b.height &&
+                a.y + a.height > b.y
+            );
             expect(overlaps).toBe(false);
           }
         }

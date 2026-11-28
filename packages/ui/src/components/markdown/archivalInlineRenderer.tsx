@@ -20,16 +20,16 @@ export interface InlineCitationPayload {
 }
 
 export interface InlineCitationRenderContext {
-  sourcesById?: ReadonlyMap<string, SourceRecord>;
+  sourcesById?: ReadonlyMap<string, SourceRecord> | undefined;
   numberBySourceId: ReadonlyMap<string, number>;
-  mediaItems?: readonly MediaItem[];
-  events?: readonly ArchiveEvent[];
-  subjectPersonId?: string;
+  mediaItems?: readonly MediaItem[] | undefined;
+  events?: readonly ArchiveEvent[] | undefined;
+  subjectPersonId?: string | undefined;
   resolveMediaUrl: (media: MediaItem) => string | null;
   activeKey: string | null;
-  highlightedSourceId?: string | null;
+  highlightedSourceId?: string | null | undefined;
   popoverId: string;
-  onHoverSourceId?: (sourceId: string | null) => void;
+  onHoverSourceId?: ((sourceId: string | null) => void) | undefined;
   onTriggerHover: (payload: InlineCitationPayload, anchorEl: HTMLButtonElement) => void;
   onTriggerLeave: (occurrenceKey: string) => void;
   onTriggerFocus: (payload: InlineCitationPayload, anchorEl: HTMLButtonElement) => void;
@@ -63,6 +63,7 @@ function renderPlainProseWithEntities(
       out.push(slice.slice(lastIndex, match.index));
     }
     const matchedText = match[1];
+    if (!matchedText) continue;
     const target = entityCtx.autoTargetsByText.get(matchedText);
     if (target && !seenAutoEntities?.has(target.key)) {
       seenAutoEntities?.add(target.key);

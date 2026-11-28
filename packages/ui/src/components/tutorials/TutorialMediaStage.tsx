@@ -11,8 +11,8 @@ export interface TutorialMediaStageProps {
   readonly stepIndex: number;
   readonly totalSteps: number;
   readonly baseUrl: string;
-  readonly mediaBaseUrl?: string;
-  readonly reducedMotionOverride?: boolean;
+  readonly mediaBaseUrl?: string | undefined;
+  readonly reducedMotionOverride?: boolean | undefined;
 }
 
 export const TutorialMediaStage: React.FC<TutorialMediaStageProps> = ({

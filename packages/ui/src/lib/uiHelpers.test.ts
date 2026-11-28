@@ -69,9 +69,12 @@ describe('ohmStyle', () => {
     assert.deepEqual(layerIds, ['bg', PAPER_LAND_LAYER_ID, 'place_label']);
     assert.equal(PAPER_LAND_LAYER_ID, 'kinloom-paper-land');
     const labelLayer = styled.layers[2];
+    assert.ok(labelLayer);
     assert.equal(labelLayer.type, 'symbol');
-    assert.deepEqual(labelLayer.layout?.['text-field'], ['coalesce', ['get', 'name_en'], ['get', 'name']]);
-    assert.deepEqual(labelLayer.layout?.['text-font'], ['OpenHistorical']);
+    if (labelLayer.type === 'symbol') {
+      assert.deepEqual(labelLayer.layout?.['text-field'], ['coalesce', ['get', 'name_en'], ['get', 'name']]);
+      assert.deepEqual(labelLayer.layout?.['text-font'], ['OpenHistorical']);
+    }
   });
 
   test('loadArchivalOhmStyle rejects malformed style JSON and clears failed cache entries', async () => {
@@ -265,7 +268,7 @@ describe('clientTelemetry', () => {
       { transport: (payload) => received.push(payload) }
     );
     assert.equal(received.length, 1);
-    assert.ok(received[0].includes('Opt-in test error'));
+    assert.ok(received[0]?.includes('Opt-in test error'));
   });
 });
 

@@ -17,6 +17,11 @@ import { buildArchivalTreeModel } from '../lib/archivalTreeModel.js';
 import { PersonPage } from './PersonPage.js';
 import { PlacePage } from './PlacePage.js';
 
+function must<T>(val: T | undefined, label = 'value'): T {
+  if (val === undefined) throw new Error(`Expected ${label}`);
+  return val;
+}
+
 declare global {
   var IS_REACT_ACT_ENVIRONMENT: boolean | undefined;
 }
@@ -239,7 +244,7 @@ describe('Issue #66: IA topbar grouping, semantic disclosure, cross-object links
     const drawerEl = mountEl(
       <MemoryRouter>
         <TreeFocusDrawer
-          person={TEST_BUNDLE.people[0]}
+          person={must(TEST_BUNDLE.people[0])}
           model={model}
           spotlight={null}
           placesById={new Map(TEST_BUNDLE.places.map((p) => [p.id, p]))}

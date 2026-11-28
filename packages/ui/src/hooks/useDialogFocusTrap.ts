@@ -91,7 +91,7 @@ export function useDialogFocusTrap<T extends HTMLElement = HTMLDialogElement>({
       }
       const focusables = getFocusableElements(container);
       if (focusables.length > 0) {
-        focusables[0].focus();
+        focusables[0]?.focus();
       } else {
         if (!container.hasAttribute('tabindex')) {
           container.setAttribute('tabindex', '-1');
@@ -128,11 +128,11 @@ export function useDialogFocusTrap<T extends HTMLElement = HTMLDialogElement>({
         if (event.shiftKey) {
           if (!active || !container.contains(active) || active === first) {
             event.preventDefault();
-            last.focus();
+            last?.focus();
           }
         } else if (!active || !container.contains(active) || active === last) {
           event.preventDefault();
-          first.focus();
+          first?.focus();
         }
       }
     };

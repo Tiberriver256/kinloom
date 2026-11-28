@@ -140,7 +140,7 @@ export const IndexRecipesWidget: React.FC = () => {
         return;
       }
       try {
-        const res = await client.listRecipes({ sort: 'most_starred', limit: 4 }, { signal });
+        const res = await client.listRecipes({ sort: 'most_starred', limit: 4 }, signal ? { signal } : {});
         if (signal?.aborted) {
           return;
         }
@@ -166,7 +166,7 @@ export const IndexRecipesWidget: React.FC = () => {
 
   useEffect(() => {
     return subscribePluginSettings(RECIPES_SERVER_PLUGIN_ID, (evt) => {
-      const nextShow = evt.snapshot?.values.show_home_widget;
+      const nextShow = evt.snapshot?.values['show_home_widget'];
       if (typeof nextShow === 'boolean') {
         setAllowedByServer(nextShow);
         if (!nextShow) {

@@ -110,13 +110,13 @@ function formatDiscrepancyCategory(category: 'date' | 'place' | 'fact'): string 
 
 export interface FolioMarginaliaRailProps {
   readonly items: readonly FolioMarginaliaItem[];
-  readonly ariaLabel?: string;
-  readonly highlightedSourceId?: string | null;
-  readonly onHoverSourceId?: (sourceId: string | null) => void;
-  readonly onInspectCitation?: (item: FolioMarginaliaCitation) => void;
+  readonly ariaLabel?: string | undefined;
+  readonly highlightedSourceId?: string | null | undefined;
+  readonly onHoverSourceId?: ((sourceId: string | null) => void) | undefined;
+  readonly onInspectCitation?: ((item: FolioMarginaliaCitation) => void) | undefined;
   readonly onInspectDiscrepancy?: (item: Extract<FolioMarginaliaItem, { kind: 'discrepancy' }>) => void;
-  readonly onReadSource?: (sourceId: string) => void;
-  readonly onOpenScan?: (item: FolioMarginaliaCitation) => void;
+  readonly onReadSource?: ((sourceId: string) => void) | undefined;
+  readonly onOpenScan?: ((item: FolioMarginaliaCitation) => void) | undefined;
 }
 
 export const FolioMarginaliaRail: React.FC<FolioMarginaliaRailProps> = ({

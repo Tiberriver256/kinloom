@@ -11,7 +11,7 @@ const VIEWPORTS = [
   { name: '1280x800', width: 1280, height: 800 },
 ] as const;
 
-const SCREENSHOT_DIR = process.env.KINLOOM_UX_SCREENSHOT_DIR || '';
+const SCREENSHOT_DIR = process.env['KINLOOM_UX_SCREENSHOT_DIR'] || '';
 
 async function maybeScreenshot(page: Page, filename: string): Promise<void> {
   if (!SCREENSHOT_DIR) {
@@ -218,7 +218,8 @@ test.describe('Wave 50B UX regression suite', () => {
         const cardWidths = await page.evaluate(() =>
           [...document.querySelectorAll('.time-lane')].flatMap((lane) => {
             const cards = lane.querySelectorAll('.time-person-item');
-            return cards.length === 1 ? [Math.round(cards[0].getBoundingClientRect().width)] : [];
+            const firstCard = cards.length === 1 ? cards[0] : undefined;
+            return firstCard ? [Math.round(firstCard.getBoundingClientRect().width)] : [];
           })
         );
         if (cardWidths.length > 0) {
@@ -393,11 +394,11 @@ test.describe('Wave 50B UX regression suite', () => {
         return [Number(m?.[0] ?? 0), Number(m?.[1] ?? 0), Number(m?.[2] ?? 0)];
       };
       const lum = ([r, g, b]: [number, number, number]): number => {
-        const lin = [r, g, b].map((c) => {
+        const [lr = 0, lg = 0, lb = 0] = [r, g, b].map((c) => {
           const s = c / 255;
           return s <= 0.03928 ? s / 12.92 : ((s + 0.055) / 1.055) ** 2.4;
         });
-        return 0.2126 * lin[0] + 0.7152 * lin[1] + 0.0722 * lin[2];
+        return 0.2126 * lr + 0.7152 * lg + 0.0722 * lb;
       };
       const fg = parseRgb(window.getComputedStyle(sep).color);
       const bg = parseRgb(window.getComputedStyle(crumb).backgroundColor);

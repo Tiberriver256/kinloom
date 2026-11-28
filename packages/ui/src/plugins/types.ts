@@ -77,15 +77,15 @@ export interface KinloomOnboardingStep {
 
 export interface KinloomUiPluginRoute {
   readonly path: string;
-  readonly navLabel?: string;
+  readonly navLabel?: string | undefined;
   /** Prefix used to keep the top-bar nav pill active across nested sub-routes (for example '/recipes'). */
-  readonly navMatchPrefix?: string;
+  readonly navMatchPrefix?: string | undefined;
   /** Optional short aria-hidden icon rendered next to navLabel. */
-  readonly navIcon?: React.ReactNode;
+  readonly navIcon?: React.ReactNode | undefined;
   /** Optional numeric sort order among plugin nav items (ascending, ties preserve registration order). */
-  readonly navOrder?: number;
+  readonly navOrder?: number | undefined;
   /** Optional minimum visibility role for showing this link in navigation chrome. Defaults to 'public'. */
-  readonly navMinRole?: KinloomUiPluginNavMinRole;
+  readonly navMinRole?: KinloomUiPluginNavMinRole | undefined;
   readonly component: React.ComponentType;
 }
 
@@ -95,9 +95,9 @@ export interface KinloomUiPluginSlotContext {
   readonly baseUrl: string;
   readonly session: ArchiveSessionState | null;
   readonly capabilities: ArchiveCapabilities;
-  readonly person?: Person;
-  readonly place?: Place;
-  readonly narrative?: Narrative;
+  readonly person?: Person | undefined;
+  readonly place?: Place | undefined;
+  readonly narrative?: Narrative | undefined;
 }
 
 export type KinloomUiPluginSlotRenderer = (ctx: KinloomUiPluginSlotContext) => React.ReactNode;

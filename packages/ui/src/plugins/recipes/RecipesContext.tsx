@@ -45,10 +45,10 @@ export const RecipesPluginProvider: React.FC<RecipesPluginProviderProps> = ({
 
 export interface BindRecipesProviderOptions {
   readonly client: RecipesClient;
-  readonly basePath?: string;
-  readonly showIndexWidget?: boolean;
-  readonly pageTitle?: string;
-  readonly pageDescription?: string;
+  readonly basePath?: string | undefined;
+  readonly showIndexWidget?: boolean | undefined;
+  readonly pageTitle?: string | undefined;
+  readonly pageDescription?: string | undefined;
 }
 
 function trimTrailingSlashes(value: string): string {

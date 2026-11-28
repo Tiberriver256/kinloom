@@ -12,10 +12,10 @@ export type AutoEntityTarget =
   | { kind: 'place'; key: string; place: Place };
 
 export interface InlineEntityRenderContext {
-  peopleById?: ReadonlyMap<string, Person>;
-  placesById?: ReadonlyMap<string, Place>;
-  pronunciations?: Readonly<Record<string, Pronunciation>>;
-  baseUrl?: string;
+  peopleById?: ReadonlyMap<string, Person> | undefined;
+  placesById?: ReadonlyMap<string, Place> | undefined;
+  pronunciations?: Readonly<Record<string, Pronunciation>> | undefined;
+  baseUrl?: string | undefined;
   autoRegex: RegExp | null;
   autoTargetsByText: ReadonlyMap<string, AutoEntityTarget>;
 }
@@ -38,13 +38,13 @@ function escapeRegExp(value: string): string {
 }
 
 export function buildEntityRenderContext(params: {
-  peopleById?: ReadonlyMap<string, Person>;
-  placesById?: ReadonlyMap<string, Place>;
-  pronunciations?: Readonly<Record<string, Pronunciation>>;
-  linkedPersonIds?: readonly string[];
-  linkedPlaceIds?: readonly string[];
-  subjectPersonId?: string;
-  baseUrl?: string;
+  peopleById?: ReadonlyMap<string, Person> | undefined;
+  placesById?: ReadonlyMap<string, Place> | undefined;
+  pronunciations?: Readonly<Record<string, Pronunciation>> | undefined;
+  linkedPersonIds?: readonly string[] | undefined;
+  linkedPlaceIds?: readonly string[] | undefined;
+  subjectPersonId?: string | undefined;
+  baseUrl?: string | undefined;
   hasPronunciation: (entry: Pronunciation | null) => boolean;
 }): InlineEntityRenderContext | undefined {
   const {
@@ -139,7 +139,7 @@ export function parseMarkdownBlocks(markdown: string): MarkdownBlock[] {
   let i = 0;
 
   while (i < lines.length) {
-    const rawLine = lines[i];
+    const rawLine = lines[i] ?? '';
     const trimmed = rawLine.trim();
 
     if (!trimmed) {
@@ -148,7 +148,7 @@ export function parseMarkdownBlocks(markdown: string): MarkdownBlock[] {
     }
 
     const headingMatch = /^(#{1,6})\s+(.+)$/.exec(trimmed);
-    if (headingMatch) {
+    if (headingMatch && headingMatch[1] && headingMatch[2]) {
       const level = headingMatch[1].length <= 2 ? 3 : 4;
       blocks.push({ kind: 'heading', level, text: headingMatch[2].trim() });
       i += 1;
@@ -157,8 +157,8 @@ export function parseMarkdownBlocks(markdown: string): MarkdownBlock[] {
 
     if (trimmed.startsWith('>')) {
       const quoteLines: string[] = [];
-      while (i < lines.length && lines[i].trim().startsWith('>')) {
-        quoteLines.push(lines[i].trim().replace(/^>\s?/, ''));
+      while (i < lines.length && (lines[i] ?? '').trim().startsWith('>')) {
+        quoteLines.push((lines[i] ?? '').trim().replace(/^>\s?/, ''));
         i += 1;
       }
       blocks.push({ kind: 'blockquote', text: quoteLines.join(' ').trim() });
@@ -169,8 +169,8 @@ export function parseMarkdownBlocks(markdown: string): MarkdownBlock[] {
     if (unorderedMatch) {
       const items: string[] = [];
       while (i < lines.length) {
-        const itemMatch = /^[-*]\s+(.+)$/.exec(lines[i].trim());
-        if (!itemMatch) {
+        const itemMatch = /^[-*]\s+(.+)$/.exec((lines[i] ?? '').trim());
+        if (!itemMatch || !itemMatch[1]) {
           break;
         }
         items.push(itemMatch[1].trim());
@@ -184,8 +184,8 @@ export function parseMarkdownBlocks(markdown: string): MarkdownBlock[] {
     if (orderedMatch) {
       const items: string[] = [];
       while (i < lines.length) {
-        const itemMatch = /^\d+\.\s+(.+)$/.exec(lines[i].trim());
-        if (!itemMatch) {
+        const itemMatch = /^\d+\.\s+(.+)$/.exec((lines[i] ?? '').trim());
+        if (!itemMatch || !itemMatch[1]) {
           break;
         }
         items.push(itemMatch[1].trim());
@@ -197,7 +197,7 @@ export function parseMarkdownBlocks(markdown: string): MarkdownBlock[] {
 
     const paragraphLines: string[] = [];
     while (i < lines.length) {
-      const line = lines[i].trim();
+      const line = (lines[i] ?? '').trim();
       if (
         !line ||
         /^(#{1,6})\s+/.test(line) ||
