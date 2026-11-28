@@ -522,6 +522,20 @@ export function useTreeViewportTransform(params: {
         if (panY < minPanYForG1) {
           panY = minPanYForG1;
         }
+      } else if (!isNarrow && diagramLayout.genBands.length > 0) {
+        // Prevent any partially visible ancestor band from sitting behind the desktop floating toolbar.
+        const overlappingBand = diagramLayout.genBands.find((band) => {
+          const renderedTop = band.y * targetZoom + panY;
+          const renderedBottom = (band.y + ARCHIVAL_NODE_H) * targetZoom + panY;
+          return renderedTop < insets.top && renderedBottom > 0;
+        });
+        if (overlappingBand) {
+          const shift = Math.ceil(insets.top - (overlappingBand.y * targetZoom + panY));
+          const shiftedFocalBottom = (focalNode.y + focalNode.height) * targetZoom + (panY + shift);
+          if (shift > 0 && shiftedFocalBottom <= insets.viewportHeight - insets.bottom) {
+            panY += shift;
+          }
+        }
       }
 
       return clampTransform({

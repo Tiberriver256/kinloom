@@ -16,24 +16,25 @@
 }
 
 .tree-focus-gen-tag {
-  font-family: var(--font-mono);
-  font-size: 0.7rem;
+  font-family: var(--font-ui);
+  font-size: 0.72rem;
   font-weight: 700;
-  padding: 1px 6px;
-  border-radius: 2px;
-  background: var(--surface-header);
-  color: var(--text-inverse);
+  padding: 2px 6px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border-decorative);
+  background: var(--surface-subtle);
+  color: var(--jump-active-fg);
 }
 
 .tree-focus-role-label {
-  font-family: var(--font-mono);
+  font-family: var(--font-ui);
   font-size: 0.75rem;
   font-weight: 600;
   color: var(--accent-primary);
 }
 
 .tree-focus-living-pill {
-  font-family: var(--font-mono);
+  font-family: var(--font-ui);
   font-size: 0.75rem;
   font-weight: 600;
   padding: 4px 8px;
@@ -43,7 +44,7 @@
 }
 
 .tree-focus-anchor-pill {
-  font-family: var(--font-mono);
+  font-family: var(--font-ui);
   font-size: 0.72rem;
   font-weight: 600;
   padding: 3px 8px;
@@ -71,8 +72,8 @@
   margin-bottom: 8px;
   padding: 4px 7px;
   border-radius: var(--radius-sm);
-  background: var(--surface-linen);
-  font-family: var(--font-mono);
+  background: var(--surface-subtle);
+  font-family: var(--font-ui);
   font-size: 0.75rem;
   color: var(--text-secondary);
 }
@@ -86,8 +87,8 @@
   border: none;
   padding: 2px 3px;
   color: var(--accent-primary);
-  font-family: var(--font-mono);
-  font-size: 0.72rem;
+  font-family: var(--font-ui);
+  font-size: 0.74rem;
   font-weight: 600;
   cursor: pointer;
   text-decoration: underline dotted;
@@ -177,13 +178,13 @@
 }
 
 .tree-focus-kin-summary {
-  font-family: var(--font-mono);
+  font-family: var(--font-ui);
   font-size: 0.74rem;
   color: var(--surface-header);
 }
 
 .tree-focus-media-count {
-  font-family: var(--font-mono);
+  font-family: var(--font-ui);
   font-size: 0.72rem;
   color: var(--text-secondary);
 }

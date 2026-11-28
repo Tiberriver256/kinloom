@@ -74,10 +74,10 @@
   min-height: 30px;
   padding: 4px 26px 4px 30px;
   border-radius: var(--radius-md);
-  border: 1px solid var(--border-control);
-  background: var(--surface-card);
+  border: 1px solid var(--border-decorative);
+  background: var(--surface-subtle);
   color: var(--text-primary);
-  font-family: var(--font-mono);
+  font-family: var(--font-ui);
   font-size: 0.78rem;
   line-height: 1.25;
   transition: border-color 0.14s ease;
@@ -138,9 +138,9 @@
 }
 
 .tree-search-toggle-btn:global(.active) {
-  background: var(--surface-header);
-  color: var(--text-inverse);
-  border-color: var(--surface-header);
+  background: var(--surface-card);
+  color: var(--jump-active-fg);
+  border-color: var(--accent-primary);
 }
 
 .tree-search-popover {
@@ -213,7 +213,7 @@
 
 .tree-search-empty {
   padding: 12px 12px;
-  font-family: var(--font-mono);
+  font-family: var(--font-ui);
   font-size: 0.78rem;
   color: var(--text-secondary);
 }
@@ -257,7 +257,7 @@
   gap: 2px;
   padding: 2px;
   border-radius: var(--radius-md);
-  background: var(--surface-linen);
+  background: var(--surface-subtle);
   border: 1px solid var(--border-decorative);
   flex-shrink: 0;
 }
@@ -273,6 +273,7 @@
 .tree-segmented :global(.tree-seg-btn) {
   border-radius: var(--radius-sm);
   padding: 4px 11px;
+  font-family: var(--font-ui);
   font-size: 0.78rem;
   line-height: 1.25;
   white-space: nowrap;
@@ -288,9 +289,10 @@
 }
 
 .tree-segmented :global(.tree-seg-btn):global(.active) {
-  background: var(--surface-header);
-  color: var(--text-inverse);
-  border-color: var(--surface-header);
+  background: var(--surface-card);
+  color: var(--jump-active-fg);
+  border-color: var(--border-decorative);
+  box-shadow: var(--shadow-card);
   font-weight: 600;
 }
 
@@ -302,9 +304,10 @@
 .tree-toolbar select:global(.pill-btn).tree-branch-select {
   border-radius: var(--radius-md);
   padding: 4px 10px;
+  font-family: var(--font-ui);
   font-size: 0.78rem;
-  border: 1px solid var(--border-control);
-  background: var(--surface-card);
+  border: 1px solid var(--border-decorative);
+  background: var(--surface-subtle);
   color: var(--text-primary);
   max-width: 196px;
   flex-shrink: 0;
@@ -370,7 +373,7 @@
   border-radius: 0;
   background: transparent;
   color: var(--text-primary);
-  font-family: var(--font-mono);
+  font-family: var(--font-ui);
   font-size: 0.76rem;
   line-height: 1.25;
   white-space: nowrap;
@@ -412,7 +415,7 @@
   border-radius: 0;
   background: transparent;
   color: var(--text-secondary);
-  font-family: var(--font-mono);
+  font-family: var(--font-ui);
   font-size: 0.92rem;
   font-weight: 700;
   line-height: 1;
@@ -446,7 +449,7 @@
   border: 1px solid var(--border-control);
   background: var(--surface-card);
   color: var(--text-primary);
-  font-family: var(--font-mono);
+  font-family: var(--font-ui);
   font-size: 0.78rem;
 }
 
@@ -467,7 +470,7 @@
   border: 1px solid var(--border-control);
   background: var(--surface-card);
   color: var(--accent-primary);
-  font-family: var(--font-mono);
+  font-family: var(--font-ui);
   font-size: 0.74rem;
   font-weight: 600;
   cursor: pointer;
@@ -658,10 +661,10 @@
     height: 44px;
     padding: 0 8px;
     border-radius: var(--radius-md);
-    border: 1px solid var(--border-control);
-    background: var(--surface-card);
-    color: var(--surface-header);
-    font-family: var(--font-mono);
+    border: 1px solid var(--border-decorative);
+    background: var(--surface-subtle);
+    color: var(--text-primary);
+    font-family: var(--font-ui);
     font-size: 0.74rem;
     font-weight: 600;
     white-space: nowrap;
@@ -676,9 +679,9 @@
   }
 
   .tree-filters-toggle-btn:global(.active) {
-    background: var(--surface-header);
-    color: var(--text-inverse);
-    border-color: var(--surface-header);
+    background: var(--surface-card);
+    color: var(--jump-active-fg);
+    border-color: var(--accent-primary);
   }
 
   .tree-filters-badge {
@@ -698,8 +701,8 @@
   }
 
   .tree-filters-toggle-btn:global(.active) .tree-filters-badge {
-    background: var(--surface-card);
-    color: var(--surface-header);
+    background: var(--accent-primary);
+    color: var(--text-inverse);
   }
 
   .tree-toolbar-filters-panel {
@@ -736,7 +739,7 @@
   }
 
   .tree-filters-sheet-title {
-    font-family: var(--font-mono);
+    font-family: var(--font-ui);
     font-size: 0.76rem;
     font-weight: 700;
     letter-spacing: 0.03em;
@@ -748,10 +751,10 @@
     min-height: 36px;
     padding: 4px 12px;
     border-radius: var(--radius-md);
-    border: 1px solid var(--border-control);
-    background: var(--surface-linen);
-    color: var(--surface-header);
-    font-family: var(--font-mono);
+    border: 1px solid var(--border-decorative);
+    background: var(--surface-subtle);
+    color: var(--text-primary);
+    font-family: var(--font-ui);
     font-size: 0.76rem;
     font-weight: 600;
     cursor: pointer;

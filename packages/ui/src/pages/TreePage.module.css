@@ -131,7 +131,7 @@ html.tree-viewport-lock body {
 }
 
 .tree-minimap-title {
-  font-family: var(--font-mono);
+  font-family: var(--font-ui);
   font-size: 0.72rem;
   font-weight: 600;
   color: var(--text-secondary);
@@ -146,7 +146,7 @@ html.tree-viewport-lock body {
   min-width: 44px;
   min-height: 24px;
   padding: 2px 8px;
-  font-family: var(--font-mono);
+  font-family: var(--font-ui);
   font-size: 0.72rem;
   font-weight: 600;
   border: 1px solid var(--border-control);
