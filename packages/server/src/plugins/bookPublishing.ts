@@ -30,6 +30,16 @@ export {
   SPINE_TEXT_MIN_WIDTH_IN,
 } from './bookPublishing/geometry.js';
 export {
+  BOOK_PUBLISHING_DATABASE_NAMESPACE,
+  BOOK_PUBLISHING_INITIAL_MIGRATION_SQL,
+  BOOK_PUBLISHING_PLUGIN_MIGRATIONS,
+  type BookPublishingJobsStore,
+  InMemoryBookPublishingJobsStore,
+  isMissingBookPublishingTableError,
+  SqlBookPublishingJobsStore,
+  type StoredBookJobRow,
+} from './bookPublishing/jobsStore.js';
+export {
   type CloudflareBrowserPdfRendererOptions,
   createCloudflareBrowserPdfRenderer,
   createDeterministicPdfRenderer,

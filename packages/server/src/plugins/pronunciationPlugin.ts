@@ -1,12 +1,29 @@
-import type { PluginSettingScalarValue, PluginSettingsSchema } from '@kinloom/core';
+import type {
+  KinloomServerPluginStatusContext,
+  PluginSettingScalarValue,
+  PluginSettingsSchema,
+  PronunciationPhonemeMode,
+} from '@kinloom/core';
 import type { KinloomServerPlugin } from '../http/pluginLifecycle.js';
+import {
+  DEFAULT_PRONUNCIATION_RUNTIME_CONFIG,
+  loadPersistedPronunciationConfig,
+  PRONUNCIATION_PLUGIN_ID,
+  type PronunciationFallbackBackend,
+  type PronunciationPluginRuntimeConfig,
+  type PronunciationTtsBackend,
+  parsePronunciationRuntimeConfig,
+  resolveActivePronunciationGeneratorLabel,
+} from '../services/pronunciationRuntime.js';
 import { KINLOOM_SERVER_VERSION } from '../version.js';
 
-export const PRONUNCIATION_PLUGIN_ID = 'kinloom-pronunciation';
-
-export type PronunciationTtsBackend = 'gemini' | 'openai-speech' | 'chirp3-hd' | 'disabled';
-export type PronunciationFallbackBackend = 'none' | 'gemini' | 'openai-speech' | 'chirp3-hd';
-export type PronunciationPhonemeMode = 'ipa' | 'arpabet' | 'plain';
+export {
+  PRONUNCIATION_PLUGIN_ID,
+  type PronunciationFallbackBackend,
+  type PronunciationPhonemeMode,
+  type PronunciationPluginRuntimeConfig,
+  type PronunciationTtsBackend,
+};
 
 export interface PronunciationPluginOptions {
   readonly defaultPrimaryBackend?: PronunciationTtsBackend;
@@ -17,32 +34,6 @@ export interface PronunciationPluginOptions {
   readonly defaultPhonemeMode?: PronunciationPhonemeMode;
   readonly defaultAutoGenerateOnSave?: boolean;
 }
-
-export interface PronunciationPluginRuntimeConfig {
-  readonly primaryBackend: PronunciationTtsBackend;
-  readonly fallbackBackend: PronunciationFallbackBackend;
-  readonly openAiBaseUrl: string;
-  readonly defaultModel: string;
-  readonly defaultVoice: string;
-  readonly phonemeMode: PronunciationPhonemeMode;
-  readonly autoGenerateOnSave: boolean;
-}
-
-const VALID_PRIMARY_BACKENDS = new Set<PronunciationTtsBackend>([
-  'gemini',
-  'openai-speech',
-  'chirp3-hd',
-  'disabled',
-]);
-
-const VALID_FALLBACK_BACKENDS = new Set<PronunciationFallbackBackend>([
-  'none',
-  'gemini',
-  'openai-speech',
-  'chirp3-hd',
-]);
-
-const VALID_PHONEME_MODES = new Set<PronunciationPhonemeMode>(['ipa', 'arpabet', 'plain']);
 
 function buildPronunciationSettingsSchema(options: PronunciationPluginOptions): PluginSettingsSchema {
   return {
@@ -86,12 +77,12 @@ function buildPronunciationSettingsSchema(options: PronunciationPluginOptions): 
             label: 'Primary TTS Backend',
             type: 'select',
             required: true,
-            defaultValue: options.defaultPrimaryBackend ?? 'gemini',
+            defaultValue:
+              options.defaultPrimaryBackend ?? DEFAULT_PRONUNCIATION_RUNTIME_CONFIG.primaryBackend,
             helpText: 'Primary text-to-speech provider used when synthesizing pronunciation audio.',
             options: [
               { value: 'gemini', label: 'Google Gemini TTS' },
               { value: 'openai-speech', label: 'OpenAI-Compatible Speech API' },
-              { value: 'chirp3-hd', label: 'Google Cloud Chirp 3 HD' },
               { value: 'disabled', label: 'Disabled (Lexicon Text Only)' },
             ],
           },
@@ -100,13 +91,13 @@ function buildPronunciationSettingsSchema(options: PronunciationPluginOptions): 
             label: 'Fallback TTS Backend',
             type: 'select',
             required: true,
-            defaultValue: options.defaultFallbackBackend ?? 'none',
+            defaultValue:
+              options.defaultFallbackBackend ?? DEFAULT_PRONUNCIATION_RUNTIME_CONFIG.fallbackBackend,
             helpText: 'Optional secondary backend tried if the primary provider is unavailable.',
             options: [
               { value: 'none', label: 'None' },
               { value: 'gemini', label: 'Google Gemini TTS' },
               { value: 'openai-speech', label: 'OpenAI-Compatible Speech API' },
-              { value: 'chirp3-hd', label: 'Google Cloud Chirp 3 HD' },
             ],
             validate: (val, all) => {
               if (typeof val === 'string' && val !== 'none' && val === all.primary_backend) {
@@ -119,7 +110,7 @@ function buildPronunciationSettingsSchema(options: PronunciationPluginOptions): 
             key: 'openai_base_url',
             label: 'OpenAI-Compatible Endpoint URL',
             type: 'url',
-            defaultValue: options.defaultOpenAiBaseUrl ?? '',
+            defaultValue: options.defaultOpenAiBaseUrl ?? DEFAULT_PRONUNCIATION_RUNTIME_CONFIG.openAiBaseUrl,
             placeholder: 'https://api.openai.com/v1',
             allowedProtocols: ['https:', 'http:'],
             helpText:
@@ -138,7 +129,7 @@ function buildPronunciationSettingsSchema(options: PronunciationPluginOptions): 
             label: 'Default TTS Model',
             type: 'string',
             required: true,
-            defaultValue: options.defaultModel ?? 'gemini-3.8-flash-tts',
+            defaultValue: options.defaultModel ?? DEFAULT_PRONUNCIATION_RUNTIME_CONFIG.defaultModel,
             minLength: 2,
             maxLength: 120,
             helpText: 'Model identifier passed to the active TTS backend.',
@@ -148,7 +139,7 @@ function buildPronunciationSettingsSchema(options: PronunciationPluginOptions): 
             label: 'Default Voice',
             type: 'string',
             required: true,
-            defaultValue: options.defaultVoice ?? 'Charon',
+            defaultValue: options.defaultVoice ?? DEFAULT_PRONUNCIATION_RUNTIME_CONFIG.defaultVoice,
             minLength: 1,
             maxLength: 80,
             helpText: 'Speaker voice used when an entity entry does not specify a custom voice.',
@@ -158,7 +149,7 @@ function buildPronunciationSettingsSchema(options: PronunciationPluginOptions): 
             label: 'Phoneme Mode',
             type: 'select',
             required: true,
-            defaultValue: options.defaultPhonemeMode ?? 'ipa',
+            defaultValue: options.defaultPhonemeMode ?? DEFAULT_PRONUNCIATION_RUNTIME_CONFIG.phonemeMode,
             helpText: 'Preferred phonetic hint representation sent to TTS prompts.',
             options: [
               { value: 'ipa', label: 'IPA (International Phonetic Alphabet)' },
@@ -170,7 +161,8 @@ function buildPronunciationSettingsSchema(options: PronunciationPluginOptions): 
             key: 'auto_generate_on_save',
             label: 'Auto-generate audio on lexicon save',
             type: 'boolean',
-            defaultValue: options.defaultAutoGenerateOnSave ?? true,
+            defaultValue:
+              options.defaultAutoGenerateOnSave ?? DEFAULT_PRONUNCIATION_RUNTIME_CONFIG.autoGenerateOnSave,
             helpText: 'Synthesize audio clips automatically when an editor saves a shared lexicon term.',
           },
         ],
@@ -194,21 +186,11 @@ function buildPronunciationSettingsSchema(options: PronunciationPluginOptions): 
           {
             key: 'openai_api_key',
             label: 'OpenAI-Compatible API Key',
-            type: 'string',
-            secret: true,
+            type: 'secret',
             placeholder: 'Enter OpenAI-compatible API key',
             minLength: 8,
             maxLength: 512,
             helpText: 'Write-only bearer token for OpenAI-compatible speech endpoints.',
-          },
-          {
-            key: 'chirp3_api_key',
-            label: 'Chirp 3 HD API Key',
-            type: 'secret',
-            placeholder: 'Enter Google Cloud Chirp 3 HD API key',
-            minLength: 8,
-            maxLength: 512,
-            helpText: 'Write-only credential for Google Cloud Chirp 3 HD synthesis.',
           },
         ],
       },
@@ -245,15 +227,18 @@ export function createPronunciationPlugin(
 ): KinloomServerPlugin & { readonly getRuntimeConfig: () => PronunciationPluginRuntimeConfig } {
   const settingsSchema = buildPronunciationSettingsSchema(options);
 
-  let runtimeConfig: PronunciationPluginRuntimeConfig = {
-    primaryBackend: options.defaultPrimaryBackend ?? 'gemini',
-    fallbackBackend: options.defaultFallbackBackend ?? 'none',
-    openAiBaseUrl: options.defaultOpenAiBaseUrl ?? '',
-    defaultModel: options.defaultModel ?? 'gemini-3.8-flash-tts',
-    defaultVoice: options.defaultVoice ?? 'Charon',
-    phonemeMode: options.defaultPhonemeMode ?? 'ipa',
-    autoGenerateOnSave: options.defaultAutoGenerateOnSave ?? true,
+  const initialConfig: PronunciationPluginRuntimeConfig = {
+    primaryBackend: options.defaultPrimaryBackend ?? DEFAULT_PRONUNCIATION_RUNTIME_CONFIG.primaryBackend,
+    fallbackBackend: options.defaultFallbackBackend ?? DEFAULT_PRONUNCIATION_RUNTIME_CONFIG.fallbackBackend,
+    openAiBaseUrl: options.defaultOpenAiBaseUrl ?? DEFAULT_PRONUNCIATION_RUNTIME_CONFIG.openAiBaseUrl,
+    defaultModel: options.defaultModel ?? DEFAULT_PRONUNCIATION_RUNTIME_CONFIG.defaultModel,
+    defaultVoice: options.defaultVoice ?? DEFAULT_PRONUNCIATION_RUNTIME_CONFIG.defaultVoice,
+    phonemeMode: options.defaultPhonemeMode ?? DEFAULT_PRONUNCIATION_RUNTIME_CONFIG.phonemeMode,
+    autoGenerateOnSave:
+      options.defaultAutoGenerateOnSave ?? DEFAULT_PRONUNCIATION_RUNTIME_CONFIG.autoGenerateOnSave,
   };
+
+  let runtimeConfig: PronunciationPluginRuntimeConfig = { ...initialConfig };
 
   return {
     id: PRONUNCIATION_PLUGIN_ID,
@@ -273,11 +258,19 @@ export function createPronunciationPlugin(
     status: runtimeConfig.primaryBackend === 'disabled' ? 'disabled' : 'active',
     settingsSchema,
     getRuntimeConfig: () => ({ ...runtimeConfig }),
-    getStatus: () => ({
-      status: runtimeConfig.primaryBackend === 'disabled' ? 'disabled' : 'active',
-      detail: `primary=${runtimeConfig.primaryBackend}, phoneme=${runtimeConfig.phonemeMode}`,
-    }),
+    getStatus: async (ctx?: KinloomServerPluginStatusContext) => {
+      const { config } = await loadPersistedPronunciationConfig(
+        ctx?.ports.pluginSettingsStore,
+        runtimeConfig
+      );
+      runtimeConfig = config;
+      return {
+        status: config.primaryBackend === 'disabled' ? 'disabled' : 'active',
+        detail: `primary=${config.primaryBackend}, phoneme=${config.phonemeMode}`,
+      };
+    },
     getReadonlySettings: (ctx): Readonly<Record<string, PluginSettingScalarValue>> => {
+      const effectiveConfig = parsePronunciationRuntimeConfig(ctx.values, initialConfig);
       const configuredProviders: string[] = [];
       if (ctx.configuredSecrets.gemini_api_key) {
         configuredProviders.push('gemini');
@@ -285,13 +278,14 @@ export function createPronunciationPlugin(
       if (ctx.configuredSecrets.openai_api_key) {
         configuredProviders.push('openai-speech');
       }
-      if (ctx.configuredSecrets.chirp3_api_key) {
-        configuredProviders.push('chirp3-hd');
-      }
+      const activeGenerator = resolveActivePronunciationGeneratorLabel({
+        config: effectiveConfig,
+        configuredSecrets: ctx.configuredSecrets,
+        injectedGenerator: ctx.ports.pronunciationGenerator,
+        envDefaults: ctx.ports.pronunciationEnv,
+      });
       return {
-        active_generator: ctx.ports.pronunciationGenerator
-          ? (ctx.ports.pronunciationGenerator.adapterKind ?? 'custom')
-          : 'none',
+        active_generator: activeGenerator,
         lexicon_store: ctx.ports.pronunciationLexiconStore
           ? (ctx.ports.pronunciationLexiconStore.adapterKind ?? 'custom')
           : 'none',
@@ -300,41 +294,7 @@ export function createPronunciationPlugin(
       };
     },
     onSettingsUpdated: (event) => {
-      const nextPrimary = event.values.primary_backend;
-      const nextFallback = event.values.fallback_backend;
-      const nextPhoneme = event.values.phoneme_mode;
-      runtimeConfig = {
-        primaryBackend:
-          typeof nextPrimary === 'string' &&
-          VALID_PRIMARY_BACKENDS.has(nextPrimary as PronunciationTtsBackend)
-            ? (nextPrimary as PronunciationTtsBackend)
-            : runtimeConfig.primaryBackend,
-        fallbackBackend:
-          typeof nextFallback === 'string' &&
-          VALID_FALLBACK_BACKENDS.has(nextFallback as PronunciationFallbackBackend)
-            ? (nextFallback as PronunciationFallbackBackend)
-            : runtimeConfig.fallbackBackend,
-        openAiBaseUrl:
-          typeof event.values.openai_base_url === 'string'
-            ? event.values.openai_base_url
-            : runtimeConfig.openAiBaseUrl,
-        defaultModel:
-          typeof event.values.default_model === 'string' && event.values.default_model.length > 0
-            ? event.values.default_model
-            : runtimeConfig.defaultModel,
-        defaultVoice:
-          typeof event.values.default_voice === 'string' && event.values.default_voice.length > 0
-            ? event.values.default_voice
-            : runtimeConfig.defaultVoice,
-        phonemeMode:
-          typeof nextPhoneme === 'string' && VALID_PHONEME_MODES.has(nextPhoneme as PronunciationPhonemeMode)
-            ? (nextPhoneme as PronunciationPhonemeMode)
-            : runtimeConfig.phonemeMode,
-        autoGenerateOnSave:
-          typeof event.values.auto_generate_on_save === 'boolean'
-            ? event.values.auto_generate_on_save
-            : runtimeConfig.autoGenerateOnSave,
-      };
+      runtimeConfig = parsePronunciationRuntimeConfig(event.values, initialConfig);
     },
   };
 }

@@ -25,7 +25,6 @@ import { D1PluginDatabaseFactory } from './adapters/d1PluginDatabase.js';
 import { D1PluginSettingsStore } from './adapters/d1PluginSettingsStore.js';
 import { D1PronunciationLexiconStore } from './adapters/d1PronunciationLexiconStore.js';
 import { createD1ArchiveRepository } from './adapters/d1Repository.js';
-import { GeminiPronunciationAudioGenerator } from './adapters/geminiPronunciationGenerator.js';
 import { R2IncrementalPatchBundleCache } from './adapters/r2BundleCache.js';
 import { R2MediaStore } from './adapters/r2MediaStore.js';
 import type { ExecutionContext, ExportedHandler, KinloomWorkerEnv } from './types.js';
@@ -44,9 +43,12 @@ export {
   BOOK_PUBLISHER_PROVIDER_IDS,
   BOOK_PUBLISHING_ARTIFACTS_ROUTE,
   BOOK_PUBLISHING_COMPILE_ROUTE,
+  BOOK_PUBLISHING_DATABASE_NAMESPACE,
   BOOK_PUBLISHING_ESTIMATE_ROUTE,
+  BOOK_PUBLISHING_INITIAL_MIGRATION_SQL,
   BOOK_PUBLISHING_JOBS_ROUTE,
   BOOK_PUBLISHING_PLUGIN_ID,
+  BOOK_PUBLISHING_PLUGIN_MIGRATIONS,
   BOOK_PUBLISHING_ROUTE_PREFIX,
   BOOK_PUBLISHING_STATUS_ROUTE,
   BOOK_PUBLISHING_WEBHOOK_LULU_ROUTE,
@@ -228,8 +230,12 @@ export {
   buildPronunciationPrompt,
   DEFAULT_GEMINI_TTS_MODEL,
   DEFAULT_GEMINI_TTS_VOICE,
+  DEFAULT_OPENAI_TTS_MODEL,
+  DEFAULT_OPENAI_TTS_VOICE,
   GeminiPronunciationAudioGenerator,
   type GeminiPronunciationAudioGeneratorOptions,
+  OpenAiSpeechPronunciationGenerator,
+  type OpenAiSpeechPronunciationGeneratorOptions,
   wrapPcmAsWav,
 } from './adapters/geminiPronunciationGenerator.js';
 export {
@@ -270,6 +276,7 @@ export interface CreateCloudflareWorkerOptions {
   emailSender?: EmailSender;
   authProvider?: AuthProvider;
   pronunciationGenerator?: PronunciationAudioGenerator;
+  pronunciationFetch?: typeof fetch;
   pronunciationLexiconStore?: PronunciationLexiconStore;
   pluginSettingsStore?: PluginSettingsStore;
   pluginDatabaseFactory?: PluginDatabaseFactory;
@@ -324,14 +331,15 @@ export function createCloudflareWorker(
             })
           : undefined);
       const assetHandler = createCloudflareAssetHandler(env.ASSETS);
-      const pronunciationGenerator =
-        options.pronunciationGenerator ??
-        (env.GEMINI_API_KEY
-          ? new GeminiPronunciationAudioGenerator({
-              apiKey: env.GEMINI_API_KEY,
-              model: env.GEMINI_TTS_MODEL,
-            })
-          : undefined);
+      const pronunciationGenerator = options.pronunciationGenerator;
+      const pronunciationEnv =
+        env.GEMINI_API_KEY || env.GEMINI_TTS_MODEL || options.pronunciationFetch
+          ? {
+              geminiApiKey: env.GEMINI_API_KEY,
+              geminiModel: env.GEMINI_TTS_MODEL,
+              fetchImpl: options.pronunciationFetch,
+            }
+          : undefined;
       const pronunciationLexiconStore =
         options.pronunciationLexiconStore ?? new D1PronunciationLexiconStore(env.DB);
       const pluginSettingsStore = options.pluginSettingsStore ?? new D1PluginSettingsStore(env.DB);
@@ -364,6 +372,7 @@ export function createCloudflareWorker(
           clock,
           assetHandler,
           pronunciationGenerator,
+          pronunciationEnv,
           pronunciationLexiconStore,
           pluginSettingsStore,
           pluginDatabaseFactory,

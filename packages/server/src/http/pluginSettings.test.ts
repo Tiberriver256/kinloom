@@ -177,13 +177,11 @@ describe('Declarative Plugin Settings API, RBAC/CSRF, write-only secrets, and re
     expect(pronInitial?.secrets).toEqual({
       gemini_api_key: { configured: false, updated_at: null },
       openai_api_key: { configured: false, updated_at: null },
-      chirp3_api_key: { configured: false, updated_at: null },
     });
 
     // Save non-secret fields + write-only API keys (string+secret:true and secret).
     const geminiSecret = 'AIzaSySyntheticGeminiKey_99887766';
     const openaiSecret = 'sk-synthetic-openai-speech-key-554433';
-    const chirpSecret = 'chirp3-synthetic-secret-221100';
 
     const saveSecretsRes = await server.fetch(
       new Request(`${ORIGIN}/api/admin/plugin-settings/${PRONUNCIATION_PLUGIN_ID}`, {
@@ -204,14 +202,13 @@ describe('Declarative Plugin Settings API, RBAC/CSRF, write-only secrets, and re
           secrets: {
             gemini_api_key: { action: 'set', value: geminiSecret },
             openai_api_key: { action: 'set', value: openaiSecret },
-            chirp3_api_key: { action: 'set', value: chirpSecret },
           },
         }),
       })
     );
     expect(saveSecretsRes.status).toBe(200);
     const saveSecretsText = await saveSecretsRes.text();
-    for (const secret of [geminiSecret, openaiSecret, chirpSecret]) {
+    for (const secret of [geminiSecret, openaiSecret]) {
       expect(saveSecretsText).not.toContain(secret);
     }
 
@@ -219,11 +216,9 @@ describe('Declarative Plugin Settings API, RBAC/CSRF, write-only secrets, and re
     expect(updatedAfterSecrets.plugin.secrets).toEqual({
       gemini_api_key: { configured: true, updated_at: '2026-11-27T12:00:00.000Z' },
       openai_api_key: { configured: true, updated_at: '2026-11-27T12:00:00.000Z' },
-      chirp3_api_key: { configured: true, updated_at: '2026-11-27T12:00:00.000Z' },
     });
-    expect(updatedAfterSecrets.plugin.readonly_values.configured_credentials).toBe(
-      'gemini, openai-speech, chirp3-hd'
-    );
+    expect(updatedAfterSecrets.plugin.readonly_values.configured_credentials).toBe('gemini, openai-speech');
+    expect(updatedAfterSecrets.plugin.readonly_values.active_generator).toBe('openai-speech');
     expect(pronunciationPlugin.getRuntimeConfig()).toMatchObject({
       primaryBackend: 'openai-speech',
       fallbackBackend: 'gemini',
@@ -321,7 +316,7 @@ describe('Declarative Plugin Settings API, RBAC/CSRF, write-only secrets, and re
     const combinedSurface = [listText, diagText, bundleText, privacyText, JSON.stringify(telemetryLogs)].join(
       '\n'
     );
-    for (const secret of [geminiSecret, openaiSecret, chirpSecret]) {
+    for (const secret of [geminiSecret, openaiSecret]) {
       expect(combinedSurface).not.toContain(secret);
     }
 
@@ -351,6 +346,10 @@ describe('Declarative Plugin Settings API, RBAC/CSRF, write-only secrets, and re
 
     const disabledObs = createWorkersObservabilityPlugin({ enabled: false });
     expect(disabledObs.settingsSchema).toBeDefined();
+    expect(disabledObs.settingsSchema?.sections.map((s) => s.id)).toEqual(['runtime_status']);
+    expect(
+      disabledObs.settingsSchema?.sections.flatMap((s) => s.fields).every((f) => f.type === 'readonly')
+    ).toBe(true);
 
     const activeObs = createWorkersObservabilityPlugin({
       clock,

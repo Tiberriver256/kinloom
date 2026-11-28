@@ -2517,4 +2517,138 @@ describe('createRecipesServerPlugin (Issue #51 threaded comments, RBAC moderatio
       securityEvents.some((ev) => ev.type === 'auth.write.forbidden' && ev.reason === 'talk_disabled')
     ).toBe(true);
   });
+
+  it('defaults readMinRole to archive_read, maps missing plugin_recipes_* tables to 503 PLUGIN_MIGRATION_REQUIRED + degraded diagnostics, and survives settings store errors', async () => {
+    const ports = createInMemoryServerPorts(SITE_CONFIG, { initialIso: '2026-11-27T12:00:00.000Z' });
+    await ports.repository.upsertUser({
+      email: 'admin@archive.example.test',
+      display_name: 'Archive Admin',
+      role: 'admin',
+      added_at: ports.clock.nowIso(),
+      added_by: 'bootstrap',
+      last_login_at: null,
+    });
+    const adminToken = await signSessionToken({
+      secret: SESSION_SECRET,
+      clock: ports.clock,
+      ttlSeconds: 3600,
+      payload: {
+        kind: 'user',
+        email: 'admin@archive.example.test',
+        display_name: 'Archive Admin',
+        role: 'admin',
+      },
+    });
+    const adminCookie = `${getSessionCookieName(false)}=${adminToken}`;
+
+    const repo = new InMemoryRecipesRepository();
+
+    // 1. Default readMinRole ('archive_read') allows anonymous GET on mode='public' and rejects on mode='private'
+    const publicServer = createKinloomServer({
+      siteConfig: SITE_CONFIG,
+      mode: 'public',
+      ports: { ...ports, plugins: [createRecipesServerPlugin({ repository: repo })] },
+      sessionSecret: SESSION_SECRET,
+    });
+    const pubAnonRes = await publicServer.fetch(new Request('http://localhost/api/plugins/recipes'));
+    expect(pubAnonRes.status).toBe(200);
+
+    const privateServer = createKinloomServer({
+      siteConfig: SITE_CONFIG,
+      mode: 'private',
+      ports: { ...ports, plugins: [createRecipesServerPlugin({ repository: repo })] },
+      sessionSecret: SESSION_SECRET,
+    });
+    const privAnonRes = await privateServer.fetch(new Request('http://localhost/api/plugins/recipes'));
+    expect(privAnonRes.status).toBe(401);
+
+    // 2. Missing plugin_recipes_* tables map cleanly to 503 PLUGIN_MIGRATION_REQUIRED and degraded diagnostics
+    const missingTableError = new Error('D1_ERROR: no such table: plugin_recipes_items: SQLITE_ERROR');
+    const missingDbPort = {
+      adapterKind: 'd1',
+      namespace: 'recipes',
+      query: async () => {
+        throw missingTableError;
+      },
+      first: async () => {
+        throw missingTableError;
+      },
+      run: async () => {
+        throw missingTableError;
+      },
+      batch: async () => {
+        throw missingTableError;
+      },
+    };
+    const throwingSettingsStore = {
+      adapterKind: 'in-memory',
+      getSettings: async () => {
+        throw new Error('settings store temporarily unavailable');
+      },
+      getSecretMetadata: ports.pluginSettingsStore.getSecretMetadata.bind(ports.pluginSettingsStore),
+      savePluginSettings: ports.pluginSettingsStore.savePluginSettings.bind(ports.pluginSettingsStore),
+    };
+
+    const unmigratedServer = createKinloomServer({
+      siteConfig: SITE_CONFIG,
+      mode: 'public',
+      ports: {
+        ...ports,
+        pluginDatabaseFactory: {
+          adapterKind: 'd1',
+          forPlugin: () => missingDbPort,
+        },
+        plugins: [createRecipesServerPlugin()],
+      },
+      sessionSecret: SESSION_SECRET,
+    });
+
+    const missingListRes = await unmigratedServer.fetch(new Request('http://localhost/api/plugins/recipes'));
+    expect(missingListRes.status).toBe(503);
+    const missingListJson = (await missingListRes.json()) as { error: { code: string; message: string } };
+    expect(missingListJson.error.code).toBe('PLUGIN_MIGRATION_REQUIRED');
+    expect(missingListJson.error.message).toContain('0001_recipes_initial');
+
+    const diagRes = await unmigratedServer.fetch(
+      new Request('http://localhost/api/admin/system', { headers: { cookie: adminCookie } })
+    );
+    expect(diagRes.status).toBe(200);
+    const diagJson = (await diagRes.json()) as {
+      plugins: Array<{ id: string; status: string; detail: string | null }>;
+    };
+    const recipesDiag = diagJson.plugins.find((p) => p.id === RECIPES_PLUGIN_ID);
+    expect(recipesDiag?.status).toBe('degraded');
+    expect(recipesDiag?.detail).toContain('0001_recipes_initial');
+
+    // Readonly settings also surface degraded migration status instead of silently reporting 0 recipes.
+    const settingsRes = await unmigratedServer.fetch(
+      new Request('http://localhost/api/admin/plugin-settings', { headers: { cookie: adminCookie } })
+    );
+    expect(settingsRes.status).toBe(200);
+    const settingsJson = (await settingsRes.json()) as {
+      plugins: Array<{
+        plugin_id: string;
+        status: string;
+        readonly_values: { storage_adapter: string; recipe_count: string | number };
+      }>;
+    };
+    const recipesSettings = settingsJson.plugins.find((p) => p.plugin_id === RECIPES_PLUGIN_ID);
+    expect(recipesSettings?.status).toBe('degraded');
+    expect(recipesSettings?.readonly_values.storage_adapter).toContain('migration required');
+    expect(recipesSettings?.readonly_values.recipe_count).toBe('migration required');
+
+    // 3. Throwing pluginSettingsStore does not break GET /api/plugins/recipes
+    const resilientServer = createKinloomServer({
+      siteConfig: SITE_CONFIG,
+      mode: 'public',
+      ports: {
+        ...ports,
+        pluginSettingsStore: throwingSettingsStore,
+        plugins: [createRecipesServerPlugin({ repository: repo })],
+      },
+      sessionSecret: SESSION_SECRET,
+    });
+    const resilientRes = await resilientServer.fetch(new Request('http://localhost/api/plugins/recipes'));
+    expect(resilientRes.status).toBe(200);
+  });
 });

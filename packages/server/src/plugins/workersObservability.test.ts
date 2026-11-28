@@ -601,4 +601,138 @@ describe('Workers Observability plugin and lifecycle seam', () => {
     expect(sanitizeObservabilityErrorCode('Failed for alice@example.test')).toBe('INTERNAL_ERROR');
     expect(sanitizeObservabilityErrorCode(null)).toBeNull();
   });
+
+  it('hydrates persisted settings lazily across cold isolates with TTL caching and keeps diagnostics and readonly settings in sync', async () => {
+    const siteConfig = createSyntheticSiteConfig();
+    const ports = createInMemoryServerPorts(siteConfig, { initialIso: '2026-06-15T12:00:00.000Z' });
+    const clock = ports.clock;
+    await ports.repository.upsertUser({
+      email: 'archivist@example.test',
+      display_name: 'Archive Admin',
+      role: 'admin',
+      added_at: clock.nowIso(),
+      added_by: 'bootstrap',
+      last_login_at: null,
+    });
+    const adminCookie = await createAdminCookie(clock);
+
+    const isolateARecords: WorkersObservabilityLogRecord[] = [];
+    const isolateA = createKinloomServer({
+      siteConfig,
+      ports: {
+        ...ports,
+        plugins: [
+          createWorkersObservabilityPlugin({
+            clock,
+            settingsCacheTtlMs: 10_000,
+            sink: (r) => {
+              isolateARecords.push(r);
+            },
+          }),
+        ],
+      },
+      sessionSecret: SECRET,
+    });
+
+    // Save disabled telemetry toggles on Isolate A.
+    const saveRes = await isolateA.fetch(
+      new Request(`${ORIGIN}/api/admin/plugin-settings/${WORKERS_OBSERVABILITY_PLUGIN_ID}`, {
+        method: 'PUT',
+        headers: {
+          'content-type': 'application/json',
+          origin: ORIGIN,
+          cookie: adminCookie,
+        },
+        body: JSON.stringify({
+          values: {
+            emit_server_timing: false,
+            include_request_id_header: false,
+            log_level_threshold: 'error',
+          },
+        }),
+      })
+    );
+    expect(saveRes.status).toBe(200);
+
+    // Cold Isolate B shares ONLY pluginSettingsStore (brand-new plugin closure!).
+    const getSettingsSpy = vi.spyOn(ports.pluginSettingsStore, 'getSettings');
+    const isolateBRecords: WorkersObservabilityLogRecord[] = [];
+    const isolateBPlugin = createWorkersObservabilityPlugin({
+      clock,
+      settingsCacheTtlMs: 10_000,
+      sink: (r) => {
+        isolateBRecords.push(r);
+      },
+    });
+    const isolateB = createKinloomServer({
+      siteConfig,
+      ports: {
+        ...ports,
+        plugins: [isolateBPlugin],
+      },
+      sessionSecret: SECRET,
+    });
+
+    // First request on cold Isolate B hydrates from store -> omits headers and skips info logs!
+    const res1 = await isolateB.fetch(new Request(`${ORIGIN}/api/auth/me`));
+    expect(res1.status).toBe(200);
+    expect(res1.headers.get('server-timing')).toBeNull();
+    expect(res1.headers.get('x-request-id')).toBeNull();
+    expect(isolateBRecords).toHaveLength(0);
+    expect(getSettingsSpy).toHaveBeenCalledTimes(1);
+
+    // Second request within TTL reuses cached settings without hitting store again!
+    clock.advanceMs(5_000);
+    const res2 = await isolateB.fetch(new Request(`${ORIGIN}/api/auth/me`));
+    expect(res2.status).toBe(200);
+    expect(res2.headers.get('server-timing')).toBeNull();
+    expect(getSettingsSpy).toHaveBeenCalledTimes(1);
+
+    // Cold Isolate B getReadonlySettings honors ctx.values.emit_server_timing directly.
+    const settingsGet = await isolateB.fetch(
+      new Request(`${ORIGIN}/api/admin/plugin-settings`, { headers: { cookie: adminCookie } })
+    );
+    const settingsJson = (await settingsGet.json()) as {
+      plugins: Array<{ plugin_id: string; readonly_values: { server_timing_status: string } }>;
+    };
+    expect(
+      settingsJson.plugins.find((p) => p.plugin_id === WORKERS_OBSERVABILITY_PLUGIN_ID)?.readonly_values
+        .server_timing_status
+    ).toBe('disabled');
+
+    // Cold Isolate B /api/admin/system reports hydrated server_timing === false!
+    const diagRes = await isolateB.fetch(
+      new Request(`${ORIGIN}/api/admin/system`, { headers: { cookie: adminCookie } })
+    );
+    const diagJson = (await diagRes.json()) as {
+      config: { observability: { enabled: boolean; server_timing: boolean } };
+    };
+    expect(diagJson.config.observability.enabled).toBe(true);
+    expect(diagJson.config.observability.server_timing).toBe(false);
+
+    // Re-enable server timing on Isolate A; after TTL expires on Isolate B, Isolate B picks up the change!
+    await isolateA.fetch(
+      new Request(`${ORIGIN}/api/admin/plugin-settings/${WORKERS_OBSERVABILITY_PLUGIN_ID}`, {
+        method: 'PUT',
+        headers: {
+          'content-type': 'application/json',
+          origin: ORIGIN,
+          cookie: adminCookie,
+        },
+        body: JSON.stringify({
+          values: {
+            emit_server_timing: true,
+            include_request_id_header: true,
+            log_level_threshold: 'info',
+          },
+        }),
+      })
+    );
+    clock.advanceMs(15_000);
+    const res3 = await isolateB.fetch(new Request(`${ORIGIN}/api/auth/me`));
+    expect(res3.headers.get('server-timing')).toMatch(/total;dur=/);
+    expect(res3.headers.get('x-request-id')).toMatch(/.+/);
+    expect(isolateBRecords).toHaveLength(1);
+    getSettingsSpy.mockRestore();
+  });
 });

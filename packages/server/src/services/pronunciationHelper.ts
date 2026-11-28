@@ -1,4 +1,4 @@
-import type { MediaStore, PronunciationAudioGenerator } from '@kinloom/core';
+import type { MediaStore, PronunciationAudioGenerator, PronunciationPhonemeMode } from '@kinloom/core';
 import { sha256Hex } from '../crypto.js';
 
 export interface StoredPronunciationAudio {
@@ -11,7 +11,7 @@ export interface StoredPronunciationAudio {
 /**
  * Build a deterministic, case-normalized cache key for a pronunciation request
  * so shared surnames, given names, and places reuse one R2 clip without
- * calling Gemini TTS more than once.
+ * calling TTS more than once.
  */
 export async function computePronunciationPromptHash(params: {
   text: string;
@@ -19,6 +19,7 @@ export async function computePronunciationPromptHash(params: {
   ipa?: string;
   language?: string;
   voice?: string;
+  phonemeMode?: PronunciationPhonemeMode;
 }): Promise<string> {
   const text = params.text.trim().toLowerCase();
   const phonetic = (params.phonetic ?? '').trim().toLowerCase();
@@ -28,8 +29,9 @@ export async function computePronunciationPromptHash(params: {
     .trim();
   const lang = (params.language ?? '').trim().toLowerCase();
   const voice = (params.voice ?? 'Charon').trim().toLowerCase();
+  const modeSuffix = params.phonemeMode && params.phonemeMode !== 'ipa' ? `|mode:${params.phonemeMode}` : '';
   const raw = new TextEncoder().encode(
-    `v2|text:${text}|phonetic:${phonetic}|ipa:${ipa}|lang:${lang}|voice:${voice}`
+    `v2|text:${text}|phonetic:${phonetic}|ipa:${ipa}|lang:${lang}|voice:${voice}${modeSuffix}`
   );
   return sha256Hex(raw);
 }
@@ -43,6 +45,7 @@ export async function generateAndStorePronunciationAudio(params: {
   ipa?: string;
   language?: string;
   voice?: string;
+  phonemeMode?: PronunciationPhonemeMode;
   force?: boolean;
 }): Promise<StoredPronunciationAudio> {
   const promptHash = await computePronunciationPromptHash(params);
@@ -70,6 +73,7 @@ export async function generateAndStorePronunciationAudio(params: {
     ipa: params.ipa,
     language: params.language,
     voice: params.voice,
+    ...(params.phonemeMode !== undefined ? { phonemeMode: params.phonemeMode } : {}),
   });
 
   const sha256 = await sha256Hex(result.bytes);

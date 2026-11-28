@@ -4,6 +4,7 @@ import {
   type KinloomSiteConfig,
   validatePluginDocumentation,
 } from '@kinloom/core';
+import { hmacSignBase64Url } from '../crypto.js';
 import { KinloomHttpError, toErrorResponseData } from '../errors.js';
 import { AdminDocsService } from '../services/adminDocsService.js';
 import { AdminService } from '../services/adminService.js';
@@ -256,6 +257,8 @@ export function createKinloomServer(config: KinloomServerConfig): KinloomServer 
     siteConfig: config.siteConfig,
     mediaStore: config.ports.mediaStore,
     pronunciationGenerator: config.ports.pronunciationGenerator,
+    pronunciationEnv: config.ports.pronunciationEnv,
+    pluginSettingsStore: config.ports.pluginSettingsStore,
     plugins,
     onPluginError: config.onPluginError,
   });
@@ -314,7 +317,9 @@ export function createKinloomServer(config: KinloomServerConfig): KinloomServer 
     clock: config.ports.clock,
     siteConfig: config.siteConfig,
     pronunciationGenerator: config.ports.pronunciationGenerator,
+    pronunciationEnv: config.ports.pronunciationEnv,
     pronunciationLexiconStore: config.ports.pronunciationLexiconStore,
+    pluginSettingsStore: config.ports.pluginSettingsStore,
   });
 
   const handlePublicPrivacyOrOg = createPrivacyAndOgRouteHandler({
@@ -422,6 +427,8 @@ export function createKinloomServer(config: KinloomServerConfig): KinloomServer 
         siteConfig: config.siteConfig,
         ports: config.ports,
         mode,
+        derivePluginSigningKey: (purpose = 'default') =>
+          hmacSignBase64Url(config.sessionSecret, `kinloom-plugin-signing-key:v1:${pluginId}:${purpose}`),
         ...(pluginDb ? { pluginDb } : {}),
         ...(telemetry ? { emitSecurityEvent: (payload) => telemetry.queueSecurityEvent(payload) } : {}),
       };

@@ -15,6 +15,7 @@ import {
 } from '../adapters/bookPublishingClient.js';
 import { ArchiveProvider } from '../context/ArchiveProvider.js';
 import {
+  BOOK_PUBLISHING_SERVER_PLUGIN_ID,
   formatBookByteSize,
   formatBookCurrencyCents,
   formatBookJobStatusLabel,
@@ -30,13 +31,24 @@ import {
 } from '../lib/bookPublishingModel.js';
 import { AdminSettingsShell } from '../pages/admin/AdminSettingsShell.js';
 import { BOOK_PUBLISHING_UI_PLUGIN_ID, createBookPublishingPlugin } from './bookPublishingPlugin.js';
-import { KinloomPluginProvider } from './PluginContext.js';
+import { KinloomPluginProvider, useKinloomPlugins } from './PluginContext.js';
 
 declare global {
   var IS_REACT_ACT_ENVIRONMENT: boolean | undefined;
 }
 
 globalThis.IS_REACT_ACT_ENVIRONMENT = true;
+
+const BookBusTrigger: React.FC<{ onBind: (fn: () => void) => void }> = ({ onBind }) => {
+  const { notifyPluginSettingsUpdated } = useKinloomPlugins();
+  onBind(() => {
+    notifyPluginSettingsUpdated({
+      pluginId: BOOK_PUBLISHING_SERVER_PLUGIN_ID,
+      source: 'plugin-settings-section',
+    });
+  });
+  return null;
+};
 
 const siteConfig: KinloomSiteConfig = parseKinloomConfig({
   site: {
@@ -505,5 +517,88 @@ describe('createBookPublishingPlugin Admin UI isolation and interactive flows', 
       'paid production print order'
     );
     await prodMounted.unmount();
+  });
+
+  it('reloads BookPublishingAdminPanel status immediately when PluginSettingsBus emits a save event', async () => {
+    let statusCalls = 0;
+    const dynamicClient: BookPublishingClient = {
+      getStatus: async () => {
+        statusCalls += 1;
+        if (statusCalls === 1) {
+          return SAMPLE_STATUS;
+        }
+        return {
+          ...SAMPLE_STATUS,
+          active_publisher: 'lulu-production',
+          publisher_provider: 'lulu',
+          environment: 'production',
+          lulu_credentials_configured: true,
+        };
+      },
+      compileBook: async () => SAMPLE_COMPILED,
+      estimateCost: async () => SAMPLE_ESTIMATE,
+      submitPrintJob: async () => ({ job: SAMPLE_JOB }),
+      getJobStatus: async () => SAMPLE_JOB,
+    };
+
+    let triggerBus: (() => void) | null = null;
+    const container = document.createElement('div');
+    document.body.appendChild(container);
+    const root = createRoot(container);
+    const plugin = createBookPublishingPlugin({ client: dynamicClient });
+
+    await act(async () => {
+      root.render(
+        <MemoryRouter>
+          <ArchiveProvider
+            siteConfig={siteConfig}
+            initialBundle={testBundle}
+            initialReadings={{ version: 1, documents: {}, event_page_map: {} }}
+            capabilities={{
+              canEdit: true,
+              canUploadMedia: true,
+              hasRevisionHistory: true,
+              hasTalk: true,
+              canManageSite: true,
+            }}
+          >
+            <KinloomPluginProvider plugins={[plugin]}>
+              <BookBusTrigger
+                onBind={(fn) => {
+                  triggerBus = fn;
+                }}
+              />
+              <AdminSettingsShell
+                diagnostics={null}
+                diagnosticsLoading={false}
+                diagnosticsError={null}
+                diagnosticsSupported={false}
+                onRefreshDiagnostics={async () => {}}
+              />
+            </KinloomPluginProvider>
+          </ArchiveProvider>
+        </MemoryRouter>
+      );
+    });
+
+    expect(container.querySelector('[data-testid="bp-active-publisher"]')?.textContent).toBe('mock');
+    expect(statusCalls).toBe(1);
+
+    await act(async () => {
+      triggerBus?.();
+    });
+
+    expect(statusCalls).toBe(2);
+    expect(container.querySelector('[data-testid="bp-active-publisher"]')?.textContent).toBe(
+      'lulu-production'
+    );
+    expect(container.querySelector('[data-testid="bp-submit-job-btn"]')?.textContent).toBe(
+      'Submit Paid Print Order'
+    );
+
+    await act(async () => {
+      root.unmount();
+    });
+    container.remove();
   });
 });

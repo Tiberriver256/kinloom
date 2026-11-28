@@ -3,6 +3,7 @@ import type {
   EntityReadStore,
   KinloomServerPluginContext,
   KinloomServerPluginReadonlySettingsContext,
+  KinloomServerPluginStatusContext,
   PluginRouteMinRole,
   PluginSettingScalarValue,
   PluginSettingsSchema,
@@ -147,8 +148,8 @@ export interface RecipesServerPluginOptions {
    * such as hermetic tests or in-memory development servers).
    */
   readonly repository?: RecipesRepository;
-  /** Optional minimum role for read routes. Defaults to 'viewer'. */
-  readonly readMinRole?: Extract<PluginRouteMinRole, 'public' | 'viewer'>;
+  /** Optional minimum role for read routes. Defaults to 'archive_read' ('public' in public mode, 'viewer' in private mode). */
+  readonly readMinRole?: Extract<PluginRouteMinRole, 'public' | 'archive_read' | 'viewer'>;
   /** Optional initial runtime settings overriding defaults before admin saves settings. */
   readonly initialSettings?: Partial<RecipesRuntimeSettings>;
 }
@@ -855,6 +856,40 @@ function splitRecipesRouteSegments(pathname: string): readonly string[] {
   return rest ? rest.split('/').filter(Boolean) : [];
 }
 
+function isMissingRecipesTableError(error: unknown): boolean {
+  const messages: string[] = [];
+  if (error instanceof Error) {
+    messages.push(error.message);
+    if (error.cause instanceof Error) {
+      messages.push(error.cause.message);
+    } else if (typeof error.cause === 'string') {
+      messages.push(error.cause);
+    }
+  } else if (typeof error === 'string') {
+    messages.push(error);
+  }
+  return messages.some((msg) => /no such table:\s*plugin_recipes_/i.test(msg));
+}
+
+function wrapRecipesRouteHandler(
+  handler: (ctx: KinloomServerPluginContext) => Promise<Response>
+): (ctx: KinloomServerPluginContext) => Promise<Response> {
+  return async (ctx: KinloomServerPluginContext): Promise<Response> => {
+    try {
+      return await handler(ctx);
+    } catch (err) {
+      if (isMissingRecipesTableError(err)) {
+        throw new KinloomHttpError(
+          503,
+          'PLUGIN_MIGRATION_REQUIRED',
+          'Family Recipe Sharing database tables (plugin_recipes_*) are missing. Apply plugin migration 0001_recipes_initial before using this endpoint.'
+        );
+      }
+      throw err;
+    }
+  };
+}
+
 /**
  * Opt-in Kinloom server plugin for Family Recipe Sharing (strictly off by default).
  * Registers `/api/plugins/recipes*` read and photo endpoints, `#44` declarative admin settings,
@@ -895,11 +930,13 @@ export function createRecipesServerPlugin(options: RecipesServerPluginOptions = 
   }
 
   const fallbackRepo: RecipesRepository = options.repository ?? new InMemoryRecipesRepository();
-  const readMinRole: Extract<PluginRouteMinRole, 'public' | 'viewer'> = options.readMinRole ?? 'viewer';
-  let cachedSettings: RecipesRuntimeSettings = {
+  const readMinRole: Extract<PluginRouteMinRole, 'public' | 'archive_read' | 'viewer'> =
+    options.readMinRole ?? 'archive_read';
+  const initialSettings: RecipesRuntimeSettings = {
     ...DEFAULT_RECIPES_RUNTIME_SETTINGS,
     ...options.initialSettings,
   };
+  let cachedSettings: RecipesRuntimeSettings = { ...initialSettings };
 
   function resolveRepository(ctx: Pick<KinloomServerPluginContext, 'pluginDb'>): RecipesRepository {
     if (ctx.pluginDb) {
@@ -914,11 +951,15 @@ export function createRecipesServerPlugin(options: RecipesServerPluginOptions = 
     if (!ports.pluginSettingsStore) {
       return cachedSettings;
     }
-    const stored = await ports.pluginSettingsStore.getSettings(pluginId);
-    if (!stored) {
+    try {
+      const stored = await ports.pluginSettingsStore.getSettings(pluginId);
+      if (!stored) {
+        return cachedSettings;
+      }
+      return mergeRecipesSettings(initialSettings, stored.values);
+    } catch {
       return cachedSettings;
     }
-    return mergeRecipesSettings(cachedSettings, stored.values);
   }
 
   async function servePhotoByRecord(
@@ -1775,33 +1816,58 @@ export function createRecipesServerPlugin(options: RecipesServerPluginOptions = 
         method: 'GET',
         pathPrefix: RECIPES_API_PREFIX,
         minRole: readMinRole,
-        handle: handleGetRequest,
+        handle: wrapRecipesRouteHandler(handleGetRequest),
       },
       {
         method: 'POST',
         pathPrefix: RECIPES_API_PREFIX,
         minRole: 'public',
-        handle: handlePostRequest,
+        handle: wrapRecipesRouteHandler(handlePostRequest),
       },
       {
         method: 'PUT',
         pathPrefix: RECIPES_API_PREFIX,
         minRole: 'editor',
-        handle: handlePutRequest,
+        handle: wrapRecipesRouteHandler(handlePutRequest),
       },
       {
         method: 'PATCH',
         pathPrefix: RECIPES_API_PREFIX,
         minRole: 'editor',
-        handle: handlePatchRequest,
+        handle: wrapRecipesRouteHandler(handlePatchRequest),
       },
       {
         method: 'DELETE',
         pathPrefix: RECIPES_API_PREFIX,
         minRole: 'public',
-        handle: handleDeleteRequest,
+        handle: wrapRecipesRouteHandler(handleDeleteRequest),
       },
     ],
+    async getStatus(ctx?: KinloomServerPluginStatusContext) {
+      const repo = ctx?.ports.pluginDatabaseFactory
+        ? new SqlRecipesRepository(
+            ctx.ports.pluginDatabaseFactory.forPlugin(pluginId, RECIPES_DATABASE_NAMESPACE)
+          )
+        : fallbackRepo;
+      try {
+        const count = await repo.countActiveRecipes();
+        return {
+          status: 'active' as const,
+          detail: `storage=${repo.adapterKind}, recipes=${count}`,
+        };
+      } catch (err) {
+        if (isMissingRecipesTableError(err)) {
+          return {
+            status: 'degraded' as const,
+            detail: 'Pending plugin migration 0001_recipes_initial (plugin_recipes_* tables missing)',
+          };
+        }
+        return {
+          status: 'degraded' as const,
+          detail: `storage=${repo.adapterKind} probe failed`,
+        };
+      }
+    },
     async getReadonlySettings(
       ctx: KinloomServerPluginReadonlySettingsContext
     ): Promise<Readonly<Record<string, PluginSettingScalarValue>>> {
@@ -1810,19 +1876,27 @@ export function createRecipesServerPlugin(options: RecipesServerPluginOptions = 
             ctx.ports.pluginDatabaseFactory.forPlugin(pluginId, RECIPES_DATABASE_NAMESPACE)
           )
         : fallbackRepo;
-      let recipeCount = 0;
       try {
-        recipeCount = await repo.countActiveRecipes();
-      } catch {
-        recipeCount = 0;
+        const recipeCount = await repo.countActiveRecipes();
+        return {
+          storage_adapter: repo.adapterKind,
+          recipe_count: recipeCount,
+        };
+      } catch (err) {
+        if (isMissingRecipesTableError(err)) {
+          return {
+            storage_adapter: `${repo.adapterKind} (migration required: 0001_recipes_initial)`,
+            recipe_count: 'migration required',
+          };
+        }
+        return {
+          storage_adapter: repo.adapterKind,
+          recipe_count: 0,
+        };
       }
-      return {
-        storage_adapter: repo.adapterKind,
-        recipe_count: recipeCount,
-      };
     },
     onSettingsUpdated(event) {
-      cachedSettings = mergeRecipesSettings(cachedSettings, event.values);
+      cachedSettings = mergeRecipesSettings(initialSettings, event.values);
     },
   };
 }

@@ -138,6 +138,18 @@ export function createHttpRecipesClient(options: HttpRecipesClientOptions = {}):
       credentials: options.credentials,
     });
 
+  const resolveMediaUrl = (url: string): string => (/^https?:\/\//i.test(url) ? url : api.resolveUrl(url));
+  const resolveOptionalMediaUrl = (url: string | null): string | null =>
+    url === null ? null : resolveMediaUrl(url);
+  const resolvePhotoUrls = (photo: UiRecipePhoto): UiRecipePhoto => ({
+    ...photo,
+    url: resolveMediaUrl(photo.url),
+  });
+  const resolveRecipeSummaryUrls = <T extends { readonly cover_photo_url: string | null }>(recipe: T): T => ({
+    ...recipe,
+    cover_photo_url: resolveOptionalMediaUrl(recipe.cover_photo_url),
+  });
+
   return {
     async listRecipes(
       params: RecipesListQueryParams = {},
@@ -145,9 +157,13 @@ export function createHttpRecipesClient(options: HttpRecipesClientOptions = {}):
     ): Promise<UiRecipeListResponse | null> {
       const qs = buildRecipesListQueryString(params);
       try {
-        return await api.requestJson(`/api/plugins/recipes${qs}`, parseUiRecipeListResponse, {
+        const parsed = await api.requestJson(`/api/plugins/recipes${qs}`, parseUiRecipeListResponse, {
           signal: reqOptions?.signal,
         });
+        return {
+          ...parsed,
+          recipes: parsed.recipes.map(resolveRecipeSummaryUrls),
+        };
       } catch (err) {
         if (err instanceof ApiClientError && err.status === 404) {
           return null;
@@ -161,11 +177,16 @@ export function createHttpRecipesClient(options: HttpRecipesClientOptions = {}):
       reqOptions?: { readonly signal?: AbortSignal }
     ): Promise<UiRecipeDetailResponse | null> {
       try {
-        return await api.requestJson(
+        const parsed = await api.requestJson(
           `/api/plugins/recipes/${encodeURIComponent(slugOrId)}`,
           parseUiRecipeDetailResponse,
           { signal: reqOptions?.signal }
         );
+        return {
+          ...parsed,
+          recipe: resolveRecipeSummaryUrls(parsed.recipe),
+          photos: parsed.photos.map(resolvePhotoUrls),
+        };
       } catch (err) {
         if (err instanceof ApiClientError && err.status === 404) {
           return null;
@@ -183,11 +204,15 @@ export function createHttpRecipesClient(options: HttpRecipesClientOptions = {}):
           ? `?limit=${Math.max(1, Math.min(100, Math.trunc(reqOptions.limit)))}`
           : '';
       try {
-        return await api.requestJson(
+        const parsed = await api.requestJson(
           `/api/plugins/recipes/by-person/${encodeURIComponent(personId)}${qs}`,
           parseUiRecipesByPersonResponse,
           { signal: reqOptions?.signal }
         );
+        return {
+          ...parsed,
+          recipes: parsed.recipes.map(resolveRecipeSummaryUrls),
+        };
       } catch (err) {
         if (err instanceof ApiClientError && err.status === 404) {
           return null;
@@ -200,12 +225,16 @@ export function createHttpRecipesClient(options: HttpRecipesClientOptions = {}):
       input: UiCreateRecipePayload,
       reqOptions?: { readonly signal?: AbortSignal }
     ): Promise<UiRecipeMutationResponse> {
-      return api.requestJson('/api/plugins/recipes', parseUiRecipeMutationResponse, {
+      const parsed = await api.requestJson('/api/plugins/recipes', parseUiRecipeMutationResponse, {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify(input),
         signal: reqOptions?.signal,
       });
+      return {
+        ...parsed,
+        recipe: resolveRecipeSummaryUrls(parsed.recipe),
+      };
     },
 
     async updateRecipe(
@@ -213,7 +242,7 @@ export function createHttpRecipesClient(options: HttpRecipesClientOptions = {}):
       input: UiUpdateRecipePayload,
       reqOptions?: { readonly signal?: AbortSignal }
     ): Promise<UiRecipeMutationResponse> {
-      return api.requestJson(
+      const parsed = await api.requestJson(
         `/api/plugins/recipes/${encodeURIComponent(slugOrId)}`,
         parseUiRecipeMutationResponse,
         {
@@ -223,6 +252,10 @@ export function createHttpRecipesClient(options: HttpRecipesClientOptions = {}):
           signal: reqOptions?.signal,
         }
       );
+      return {
+        ...parsed,
+        recipe: resolveRecipeSummaryUrls(parsed.recipe),
+      };
     },
 
     async deleteRecipe(slugOrId: string, reqOptions?: { readonly signal?: AbortSignal }): Promise<void> {
@@ -248,12 +281,16 @@ export function createHttpRecipesClient(options: HttpRecipesClientOptions = {}):
       if (input.sort_order !== undefined) {
         formData.set('sort_order', String(input.sort_order));
       }
-      return api.uploadMultipart(
+      const parsed = await api.uploadMultipart(
         `/api/plugins/recipes/${encodeURIComponent(recipeSlugOrId)}/photos`,
         formData,
         parseUiRecipePhotoMutationResponse,
         reqOptions
       );
+      return {
+        ...parsed,
+        photo: resolvePhotoUrls(parsed.photo),
+      };
     },
 
     async updateRecipePhoto(
@@ -262,7 +299,7 @@ export function createHttpRecipesClient(options: HttpRecipesClientOptions = {}):
       patch: UpdateRecipePhotoPatch,
       reqOptions?: { readonly signal?: AbortSignal }
     ): Promise<UiRecipePhotoMutationResponse> {
-      return api.requestJson(
+      const parsed = await api.requestJson(
         `/api/plugins/recipes/${encodeURIComponent(recipeSlugOrId)}/photos/${encodeURIComponent(photoId)}`,
         parseUiRecipePhotoMutationResponse,
         {
@@ -272,6 +309,10 @@ export function createHttpRecipesClient(options: HttpRecipesClientOptions = {}):
           signal: reqOptions?.signal,
         }
       );
+      return {
+        ...parsed,
+        photo: resolvePhotoUrls(parsed.photo),
+      };
     },
 
     async reorderRecipePhotos(
@@ -279,7 +320,7 @@ export function createHttpRecipesClient(options: HttpRecipesClientOptions = {}):
       photoIds: readonly string[],
       reqOptions?: { readonly signal?: AbortSignal }
     ): Promise<UiRecipePhotosReorderResponse> {
-      return api.requestJson(
+      const parsed = await api.requestJson(
         `/api/plugins/recipes/${encodeURIComponent(recipeSlugOrId)}/photos/reorder`,
         parseUiRecipePhotosReorderResponse,
         {
@@ -289,6 +330,10 @@ export function createHttpRecipesClient(options: HttpRecipesClientOptions = {}):
           signal: reqOptions?.signal,
         }
       );
+      return {
+        ...parsed,
+        photos: parsed.photos.map(resolvePhotoUrls),
+      };
     },
 
     async deleteRecipePhoto(

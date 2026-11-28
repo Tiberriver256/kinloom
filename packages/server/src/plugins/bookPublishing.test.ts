@@ -41,8 +41,10 @@ import {
   createMockBookPublisherAdapter,
   encodePdfLiteralString,
   evaluateImageDpi,
+  InMemoryBookPublishingJobsStore,
   inchesToMm,
   inspectPdfPrepress,
+  isMissingBookPublishingTableError,
   LULU_PRODUCTION_BASE_URL,
   LULU_SANDBOX_BASE_URL,
   mapLuluStatusToBookPrintJobStatus,
@@ -50,6 +52,7 @@ import {
   parseDecimalDollarsToCents,
   resolveLuluPodPackageId,
   runBookPrivacyGate,
+  SqlBookPublishingJobsStore,
   signLuluWebhookHmacHex,
   verifyLuluWebhookHmac,
 } from './bookPublishing.js';
@@ -1145,7 +1148,7 @@ describe('createBookPublishingServerPlugin off-by-default isolation, RBAC, secre
     expect(webhookJson.status).toBe('shipped');
   });
 
-  it('defers fallback artifact signing secret generation until first artifact request so Workers global-scope registration avoids crypto.getRandomValues', async () => {
+  it('avoids crypto.getRandomValues during registration, derives deterministic cross-isolate signing keys, persists PDFs in mediaStore, and cleans up revoked/expired artifacts', async () => {
     const siteConfig = makeSyntheticSiteConfig();
     const ports = createInMemoryServerPorts(siteConfig);
     await seedInMemoryRepo(ports);
@@ -1163,12 +1166,16 @@ describe('createBookPublishingServerPlugin off-by-default isolation, RBAC, secre
       throw new Error('Disallowed operation called within global scope (10021)');
     });
 
-    let bookPlugin: ReturnType<typeof createBookPublishingServerPlugin>;
-    let verifyFirstPlugin: ReturnType<typeof createBookPublishingServerPlugin>;
+    let isolateAPlugin: ReturnType<typeof createBookPublishingServerPlugin>;
+    let isolateBPlugin: ReturnType<typeof createBookPublishingServerPlugin>;
     try {
-      bookPlugin = createBookPublishingServerPlugin();
-      verifyFirstPlugin = createBookPublishingServerPlugin();
+      isolateAPlugin = createBookPublishingServerPlugin();
+      isolateBPlugin = createBookPublishingServerPlugin();
       expect(blockedSpy).not.toHaveBeenCalled();
+      // Dead unwired secret field is omitted from settingsSchema.
+      const allFieldKeys =
+        isolateAPlugin.settingsSchema?.sections.flatMap((s) => s.fields.map((f) => f.key)) ?? [];
+      expect(allFieldKeys).not.toContain('cloudflare_browser_api_token');
     } finally {
       blockedSpy.mockRestore();
     }
@@ -1180,9 +1187,14 @@ describe('createBookPublishingServerPlugin off-by-default isolation, RBAC, secre
     });
 
     try {
-      const server = createKinloomServer({
+      const serverA = createKinloomServer({
         siteConfig,
-        ports: { ...ports, plugins: [bookPlugin] },
+        ports: { ...ports, plugins: [isolateAPlugin] },
+        sessionSecret: SESSION_SECRET,
+      });
+      const serverB = createKinloomServer({
+        siteConfig,
+        ports: { ...ports, plugins: [isolateBPlugin] },
         sessionSecret: SESSION_SECRET,
       });
       expect(observedLengths).toEqual([]);
@@ -1195,7 +1207,8 @@ describe('createBookPublishingServerPlugin off-by-default isolation, RBAC, secre
       });
       observedLengths.length = 0;
 
-      const compileRes = await server.fetch(
+      // Compile on isolate A.
+      const compileRes = await serverA.fetch(
         new Request(`https://archive.example${BOOK_PUBLISHING_COMPILE_ROUTE}`, {
           method: 'POST',
           headers: {
@@ -1203,56 +1216,204 @@ describe('createBookPublishingServerPlugin off-by-default isolation, RBAC, secre
             origin: 'https://archive.example',
             'content-type': 'application/json',
           },
-          body: JSON.stringify({ title: 'Alder Lazy Secret Check', edition: 'public' }),
+          body: JSON.stringify({ title: 'Alder Cross-Isolate Check', edition: 'public' }),
         })
       );
       expect(compileRes.status).toBe(200);
-      expect(observedLengths.filter((len) => len === 32)).toHaveLength(1);
+      // Zero 32-byte random signing key calls because signing key derives deterministically from sessionSecret.
+      expect(observedLengths.filter((len) => len === 32)).toHaveLength(0);
 
       const compileJson = (await compileRes.json()) as {
         artifacts: { interior_pdf_url: string; cover_pdf_url: string };
       };
 
-      const callsAfterCompile = observedLengths.length;
-
-      const interiorRes = await server.fetch(
+      // Download BOTH artifacts from brand-new isolate B sharing mediaStore + sessionSecret!
+      const interiorRes = await serverB.fetch(
         new Request(`https://archive.example${compileJson.artifacts.interior_pdf_url}`)
       );
       expect(interiorRes.status).toBe(200);
       expect(interiorRes.headers.get('content-type')).toBe('application/pdf');
+      const interiorInfo = inspectPdfPrepress(new Uint8Array(await interiorRes.arrayBuffer()));
+      expect(interiorInfo.validHeader).toBe(true);
 
-      const coverRes = await server.fetch(
+      const coverRes = await serverB.fetch(
         new Request(`https://archive.example${compileJson.artifacts.cover_pdf_url}`)
       );
       expect(coverRes.status).toBe(200);
       expect(coverRes.headers.get('content-type')).toBe('application/pdf');
 
-      const badRes = await server.fetch(
+      // Forged token rejected cleanly without CSPRNG calls.
+      const callsBeforeBad = observedLengths.length;
+      const badRes = await serverB.fetch(
         new Request(`https://archive.example${BOOK_PUBLISHING_ARTIFACTS_ROUTE}/forged.sig`)
       );
       expect(badRes.status).toBe(401);
-      expect(observedLengths).toHaveLength(callsAfterCompile);
+      expect(observedLengths).toHaveLength(callsBeforeBad);
 
-      const verifyFirstServer = createKinloomServer({
-        siteConfig,
-        ports: { ...ports, plugins: [verifyFirstPlugin] },
-        sessionSecret: SESSION_SECRET,
+      // Advance clock past TTL -> token expires and returns 401.
+      ports.clock.advanceMs(3 * 60 * 60 * 1000);
+      const expiredRes = await serverB.fetch(
+        new Request(`https://archive.example${compileJson.artifacts.interior_pdf_url}`)
+      );
+      expect(expiredRes.status).toBe(401);
+
+      // Update publisher settings on isolate A -> cold isolate B getStatus reflects persisted publisher.
+      const freshAdminCookie = await createSessionCookie({
+        clock: ports.clock,
+        email: 'admin@archive.example',
+        role: 'admin',
+        displayName: 'Archive Admin',
       });
-      observedLengths.length = 0;
-
-      const firstVerifyRes = await verifyFirstServer.fetch(
-        new Request(`https://archive.example${BOOK_PUBLISHING_ARTIFACTS_ROUTE}/forged.sig`)
+      const saveRes = await serverA.fetch(
+        new Request(`https://archive.example/api/admin/plugin-settings/${BOOK_PUBLISHING_PLUGIN_ID}`, {
+          method: 'PUT',
+          headers: {
+            cookie: freshAdminCookie,
+            origin: 'https://archive.example',
+            'content-type': 'application/json',
+          },
+          body: JSON.stringify({
+            values: { publisher_provider: 'lulu', environment: 'production' },
+          }),
+        })
       );
-      expect(firstVerifyRes.status).toBe(401);
-      expect(observedLengths).toEqual([32]);
-
-      const secondVerifyRes = await verifyFirstServer.fetch(
-        new Request(`https://archive.example${BOOK_PUBLISHING_ARTIFACTS_ROUTE}/forged.sig`)
-      );
-      expect(secondVerifyRes.status).toBe(401);
-      expect(observedLengths).toEqual([32]);
+      expect(saveRes.status).toBe(200);
+      const coldStatus = await isolateBPlugin.getStatus?.({
+        siteConfig,
+        ports,
+        mode: 'private',
+      });
+      expect(coldStatus?.detail).toContain('publisher=lulu-production');
     } finally {
       countingSpy.mockRestore();
     }
+  });
+
+  it('persists, updates, clears artifacts, and falls back on missing tables in SqlBookPublishingJobsStore and InMemoryBookPublishingJobsStore', async () => {
+    expect(isMissingBookPublishingTableError(new Error('no such table: plugin_book_publishing_jobs'))).toBe(
+      true
+    );
+    expect(
+      isMissingBookPublishingTableError(
+        new Error('wrapper', { cause: new Error('no such table: plugin_book_publishing_jobs') })
+      )
+    ).toBe(true);
+    expect(
+      isMissingBookPublishingTableError(
+        new Error('wrapper', { cause: 'no such table: plugin_book_publishing_jobs' })
+      )
+    ).toBe(true);
+    expect(isMissingBookPublishingTableError('no such table: plugin_book_publishing_jobs')).toBe(true);
+    expect(isMissingBookPublishingTableError(new Error('unrelated error'))).toBe(false);
+    expect(isMissingBookPublishingTableError(null)).toBe(false);
+
+    const sampleJob = {
+      providerId: 'mock',
+      jobId: 'job-sql-1',
+      externalId: 'ext-1',
+      title: 'Alder Book',
+      status: 'created' as const,
+      statusDetail: 'Queued',
+      trackingUrls: ['https://track.example/1'],
+      sandbox: true,
+      quantity: 2,
+      spec: {
+        trimPreset: 'us-letter-landscape' as const,
+        binding: 'hardcover-casewrap-glossy' as const,
+        paperStock: '80lb-coated-white-color' as const,
+        interiorPageCount: 24,
+      },
+      updatedAt: '2026-11-27T12:00:00.000Z',
+    };
+
+    const memStore = new InMemoryBookPublishingJobsStore();
+    expect(await memStore.clearArtifactIds('missing')).toEqual([]);
+    await memStore.upsertJob(sampleJob, ['art_1', 'art_2']);
+    await memStore.upsertJob({ ...sampleJob, status: 'shipped' });
+    expect((await memStore.getJob('job-sql-1'))?.artifactIds).toEqual(['art_1', 'art_2']);
+    expect(await memStore.listJobs()).toHaveLength(1);
+    expect(await memStore.clearArtifactIds('job-sql-1')).toEqual(['art_1', 'art_2']);
+    expect(await memStore.clearArtifactIds('job-sql-1')).toEqual([]);
+
+    // Exercise SqlBookPublishingJobsStore happy path + missing-table fallback + non-missing rethrow
+    const rows = new Map<string, Record<string, unknown>>();
+    let mode: 'ok' | 'missing' | 'boom' = 'ok';
+    const fakeDb = {
+      adapterKind: 'd1',
+      namespace: 'book_publishing',
+      async query<T>(
+        _sql: string,
+        _params: readonly unknown[],
+        parseRow: (raw: Record<string, unknown>) => T
+      ): Promise<readonly T[]> {
+        if (mode === 'missing') throw new Error('no such table: plugin_book_publishing_jobs');
+        if (mode === 'boom') throw new Error('disk full');
+        return [...rows.values()].map((r) => parseRow(r));
+      },
+      async first<T>(
+        _sql: string,
+        params: readonly unknown[],
+        parseRow: (raw: Record<string, unknown>) => T
+      ): Promise<T | null> {
+        if (mode === 'missing') throw new Error('no such table: plugin_book_publishing_jobs');
+        if (mode === 'boom') throw new Error('disk full');
+        const found = rows.get(String(params[0]));
+        return found ? parseRow(found) : null;
+      },
+      async run(sql: string, params: readonly unknown[] = []): Promise<{ changes: number }> {
+        if (mode === 'missing') throw new Error('no such table: plugin_book_publishing_jobs');
+        if (mode === 'boom') throw new Error('disk full');
+        if (sql.startsWith('INSERT INTO')) {
+          rows.set(String(params[0]), {
+            job_id: params[0],
+            provider_id: params[1],
+            external_id: params[2],
+            title: params[3],
+            status: params[4],
+            status_detail: params[5],
+            tracking_urls_json: params[6],
+            sandbox: params[7],
+            quantity: params[8],
+            spec_json: params[9],
+            artifact_ids_json: params[10],
+            updated_at: params[11],
+          });
+        } else if (sql.startsWith('UPDATE')) {
+          const existing = rows.get(String(params[0]));
+          if (existing) {
+            rows.set(String(params[0]), { ...existing, artifact_ids_json: '[]' });
+          }
+        }
+        return { changes: 1 };
+      },
+      async batch(): Promise<readonly { changes: number }[]> {
+        return [];
+      },
+    };
+
+    const fallback = new InMemoryBookPublishingJobsStore();
+    const sqlStore = new SqlBookPublishingJobsStore(fakeDb, fallback);
+    await sqlStore.upsertJob(sampleJob, ['art_a', 'art_b']);
+    expect((await sqlStore.listJobs())[0]?.jobId).toBe('job-sql-1');
+    expect((await sqlStore.getJob('job-sql-1'))?.artifactIds).toEqual(['art_a', 'art_b']);
+    await sqlStore.upsertJob({ ...sampleJob, sandbox: false, statusDetail: undefined });
+    expect((await sqlStore.getJob('job-sql-1'))?.job.sandbox).toBe(false);
+    expect(await sqlStore.clearArtifactIds('job-sql-1')).toEqual(['art_a', 'art_b']);
+    expect(await sqlStore.clearArtifactIds('job-sql-1')).toEqual([]);
+    expect(await sqlStore.getJob('unknown')).toBeNull();
+
+    // Missing-table errors degrade cleanly to in-memory fallback
+    mode = 'missing';
+    await sqlStore.upsertJob(sampleJob, ['art_fb']);
+    expect(await sqlStore.listJobs()).toHaveLength(1);
+    expect((await sqlStore.getJob('job-sql-1'))?.artifactIds).toEqual(['art_fb']);
+    expect(await sqlStore.clearArtifactIds('job-sql-1')).toEqual(['art_fb']);
+
+    // Unrelated errors rethrow
+    mode = 'boom';
+    await expect(sqlStore.listJobs()).rejects.toThrow('disk full');
+    await expect(sqlStore.getJob('job-sql-1')).rejects.toThrow('disk full');
+    await expect(sqlStore.upsertJob(sampleJob)).rejects.toThrow('disk full');
+    await expect(sqlStore.clearArtifactIds('job-sql-1')).rejects.toThrow('disk full');
   });
 });

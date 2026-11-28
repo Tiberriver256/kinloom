@@ -41,6 +41,13 @@ export function createHttpBookPublishingClient(
   const credentials = resolvePluginRequestCredentials(apiBase, options.credentials);
 
   const apiUrl = (path: string): string => `${apiBase}${path}`;
+  const resolveArtifactUrl = (url: string): string => {
+    if (/^https?:\/\//i.test(url)) {
+      return url;
+    }
+    const normalized = url.startsWith('/') ? url : `/${url}`;
+    return apiUrl(normalized);
+  };
 
   return {
     async getStatus(reqOptions?: { readonly signal?: AbortSignal }): Promise<UiBookStatusResponse | null> {
@@ -82,7 +89,15 @@ export function createHttpBookPublishingClient(
       }
       const raw: unknown = await res.json();
       try {
-        return parseUiBookCompileResponse(raw);
+        const parsed = parseUiBookCompileResponse(raw);
+        return {
+          ...parsed,
+          artifacts: {
+            ...parsed.artifacts,
+            interior_pdf_url: resolveArtifactUrl(parsed.artifacts.interior_pdf_url),
+            cover_pdf_url: resolveArtifactUrl(parsed.artifacts.cover_pdf_url),
+          },
+        };
       } catch (err) {
         throw new ApiClientError(
           res.status,

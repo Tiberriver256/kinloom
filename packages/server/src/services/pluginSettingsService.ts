@@ -3,6 +3,8 @@ import {
   isSecretPluginSettingField,
   iteratePluginSettingFields,
   type KinloomSiteConfig,
+  type PluginRuntimeStatus,
+  PluginRuntimeStatusSchema,
   type PluginSecretFieldState,
   type PluginSettingScalarValue,
   type PluginSettingsSchema,
@@ -257,7 +259,22 @@ export class PluginSettingsService {
       }
     }
 
-    const status = entry.plugin.status ?? 'active';
+    let status: PluginRuntimeStatus = entry.plugin.status ?? 'active';
+    if (typeof entry.plugin.getStatus === 'function') {
+      try {
+        const probe = await entry.plugin.getStatus({
+          siteConfig: this.deps.siteConfig,
+          ports: this.deps.ports,
+          mode: this.deps.mode,
+        });
+        const parsedStatus = PluginRuntimeStatusSchema.safeParse(probe.status);
+        if (parsedStatus.success) {
+          status = parsedStatus.data;
+        }
+      } catch (error) {
+        this.reportPluginError(entry.plugin.id, error);
+      }
+    }
     const version = entry.plugin.version?.trim() ? entry.plugin.version.trim() : 'unversioned';
 
     return PluginSettingsSnapshotSchema.parse({

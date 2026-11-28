@@ -12,8 +12,10 @@ import {
   isEditSummaryValid,
   type KinloomSiteConfig,
   type MediaStore,
+  type PluginSettingsStore,
   type Pronunciation,
   type PronunciationAudioGenerator,
+  type PronunciationEnvDefaults,
   parseEntityPayload,
   type RawEvent,
   resolveEffectiveLiving,
@@ -26,6 +28,7 @@ import {
 import { randomBytes, toHex } from '../../crypto.js';
 import { KinloomHttpError } from '../../errors.js';
 import { generateAndStorePronunciationAudio } from '../pronunciationHelper.js';
+import { resolveEffectivePronunciationRuntime } from '../pronunciationRuntime.js';
 
 export interface WorkingEntityRecord {
   lifecycle: EntityLifecycleState;
@@ -40,6 +43,8 @@ export interface PayloadPolicyDeps {
   readonly siteConfig: KinloomSiteConfig;
   readonly mediaStore?: MediaStore;
   readonly pronunciationGenerator?: PronunciationAudioGenerator;
+  readonly pronunciationEnv?: PronunciationEnvDefaults;
+  readonly pluginSettingsStore?: PluginSettingsStore;
 }
 
 export function rowToPayload(row: StoredEntityRecord): EntityPayload {
@@ -283,14 +288,25 @@ export async function validateAndSanitizeEntityPayload(
 }
 
 export async function maybeGenerateEntityPronunciationAudio(
-  deps: Pick<PayloadPolicyDeps, 'clock' | 'siteConfig' | 'mediaStore' | 'pronunciationGenerator'>,
+  deps: Pick<
+    PayloadPolicyDeps,
+    | 'clock'
+    | 'siteConfig'
+    | 'mediaStore'
+    | 'pronunciationGenerator'
+    | 'pronunciationEnv'
+    | 'pluginSettingsStore'
+  >,
   params: {
     entityType: EntityType;
     sanitized: EntityPayload;
     previousPayload: EntityPayload | null;
   }
 ): Promise<EntityPayload> {
-  if (!deps.pronunciationGenerator || !deps.mediaStore) {
+  if (!deps.mediaStore) {
+    return params.sanitized;
+  }
+  if (!deps.pronunciationGenerator && !deps.pronunciationEnv && !deps.pluginSettingsStore) {
     return params.sanitized;
   }
   if (params.entityType !== 'person' && params.entityType !== 'place') {
@@ -358,15 +374,27 @@ export async function maybeGenerateEntityPronunciationAudio(
     return params.sanitized;
   }
 
+  const runtime = await resolveEffectivePronunciationRuntime({
+    pluginSettingsStore: deps.pluginSettingsStore,
+    injectedGenerator: deps.pronunciationGenerator,
+    envDefaults: deps.pronunciationEnv,
+  });
+  if (runtime.kind !== 'ready' || !runtime.config.autoGenerateOnSave) {
+    return params.sanitized;
+  }
+
   try {
     const stored = await generateAndStorePronunciationAudio({
-      generator: deps.pronunciationGenerator,
+      generator: runtime.generator,
       mediaStore: deps.mediaStore,
       entityType: params.entityType,
       text,
       phonetic: nextPron.phonetic,
       ipa: nextPron.ipa,
       language: nextPron.language,
+      ...(runtime.hasStoredSettings
+        ? { voice: runtime.config.defaultVoice, phonemeMode: runtime.config.phonemeMode }
+        : {}),
     });
     return {
       ...params.sanitized,

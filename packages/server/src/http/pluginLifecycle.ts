@@ -4,6 +4,7 @@ import type {
   KinloomServerPlugin as CoreKinloomServerPlugin,
   KinloomServerPluginContext as CoreKinloomServerPluginContext,
   KinloomServerPorts as CoreKinloomServerPorts,
+  KinloomServerPluginStatusContext,
   KinloomSiteConfig,
 } from '@kinloom/core';
 import type { PageVisitStatsStore } from '../plugins/pageVisitStatsTypes.js';
@@ -102,6 +103,9 @@ export function hasSecurityEventEmitter(
 export interface KinloomServerPlugin extends CoreKinloomServerPlugin {
   readonly documentContributions?: ServerDocumentContributions;
   readonly observabilityFlags?: ServerPluginObservabilityFlags;
+  getObservabilityFlags?(
+    ctx?: KinloomServerPluginStatusContext
+  ): ServerPluginObservabilityFlags | Promise<ServerPluginObservabilityFlags>;
   onRequestStart?(event: ServerRequestStartEvent): void | Promise<void>;
   onResponse?(event: ServerRequestResponseEvent): void | Promise<void>;
   onError?(event: ServerRequestErrorEvent): void | Promise<void>;

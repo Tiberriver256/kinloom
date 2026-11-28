@@ -294,6 +294,17 @@ export interface KinloomServerPluginContext {
   mode?: 'private' | 'public';
   /** Scoped database port when plugin declares databaseNamespace and host provides pluginDatabaseFactory. */
   pluginDb?: PluginDatabasePort;
+  /**
+   * Derives a domain-separated deterministic HMAC signing key for this plugin without exposing
+   * the host sessionSecret. Safe across Cloudflare Worker isolates.
+   */
+  readonly derivePluginSigningKey?: (purpose?: string) => Promise<string>;
+}
+
+export interface KinloomServerPluginStatusContext {
+  readonly siteConfig: KinloomSiteConfig;
+  readonly ports: KinloomServerPorts;
+  readonly mode: 'private' | 'public';
 }
 
 export interface KinloomServerPluginRoute {
@@ -329,7 +340,9 @@ export interface KinloomServerPlugin {
   readonly databaseNamespace?: string;
   /** Ordered, idempotent DDL migrations owned by this plugin. Requires databaseNamespace. */
   readonly migrations?: readonly PluginSqlMigration[];
-  getStatus?(): PluginStatusProbeResult | Promise<PluginStatusProbeResult>;
+  getStatus?(
+    ctx?: KinloomServerPluginStatusContext
+  ): PluginStatusProbeResult | Promise<PluginStatusProbeResult>;
   getReadonlySettings?(
     ctx: KinloomServerPluginReadonlySettingsContext
   ):
@@ -371,6 +384,8 @@ export interface PluginSettingsStore {
   }>;
 }
 
+export type PronunciationPhonemeMode = 'ipa' | 'arpabet' | 'plain';
+
 export interface PronunciationAudioResult {
   bytes: Uint8Array;
   contentType: string;
@@ -385,7 +400,14 @@ export interface PronunciationAudioGenerator {
     ipa?: string;
     language?: string;
     voice?: string;
+    phonemeMode?: PronunciationPhonemeMode;
   }): Promise<PronunciationAudioResult>;
+}
+
+export interface PronunciationEnvDefaults {
+  readonly geminiApiKey?: string;
+  readonly geminiModel?: string;
+  readonly fetchImpl?: typeof fetch;
 }
 
 export interface PronunciationLexiconStore {
@@ -404,6 +426,7 @@ export interface KinloomServerPorts {
   clock: Clock;
   assetHandler?: AssetHandler;
   pronunciationGenerator?: PronunciationAudioGenerator;
+  pronunciationEnv?: PronunciationEnvDefaults;
   pronunciationLexiconStore?: PronunciationLexiconStore;
   pluginSettingsStore?: PluginSettingsStore;
   pluginDatabaseFactory?: PluginDatabaseFactory;

@@ -12,7 +12,9 @@ import {
   type KinloomServerPlugin,
   type KinloomSiteConfig,
   type MediaStore,
+  type PluginSettingsStore,
   type PronunciationAudioGenerator,
+  type PronunciationEnvDefaults,
   type RevisionAuthor,
   type RevisionId,
   type RevisionLogStore,
@@ -39,6 +41,8 @@ export interface WikiWriteServiceDeps {
   siteConfig: KinloomSiteConfig;
   mediaStore?: MediaStore;
   pronunciationGenerator?: PronunciationAudioGenerator;
+  pronunciationEnv?: PronunciationEnvDefaults;
+  pluginSettingsStore?: PluginSettingsStore;
   plugins?: readonly KinloomServerPlugin[];
   onPluginError?: (pluginId: string, error: unknown) => void;
 }
@@ -49,6 +53,8 @@ export class WikiWriteService {
   private readonly siteConfig: KinloomSiteConfig;
   private readonly mediaStore?: MediaStore;
   private readonly pronunciationGenerator?: PronunciationAudioGenerator;
+  private readonly pronunciationEnv?: PronunciationEnvDefaults;
+  private readonly pluginSettingsStore?: PluginSettingsStore;
   private readonly commitPipeline: WikiCommitPipeline;
 
   constructor(deps: WikiWriteServiceDeps) {
@@ -57,6 +63,8 @@ export class WikiWriteService {
     this.siteConfig = deps.siteConfig;
     this.mediaStore = deps.mediaStore;
     this.pronunciationGenerator = deps.pronunciationGenerator;
+    this.pronunciationEnv = deps.pronunciationEnv;
+    this.pluginSettingsStore = deps.pluginSettingsStore;
     this.commitPipeline = new WikiCommitPipeline({
       repository: deps.repository,
       bundleCache: deps.bundleCache,
@@ -103,6 +111,8 @@ export class WikiWriteService {
         siteConfig: this.siteConfig,
         mediaStore: this.mediaStore,
         pronunciationGenerator: this.pronunciationGenerator,
+        pronunciationEnv: this.pronunciationEnv,
+        pluginSettingsStore: this.pluginSettingsStore,
       },
       {
         entityType: params.entityType,
@@ -189,6 +199,8 @@ export class WikiWriteService {
         siteConfig: this.siteConfig,
         mediaStore: this.mediaStore,
         pronunciationGenerator: this.pronunciationGenerator,
+        pronunciationEnv: this.pronunciationEnv,
+        pluginSettingsStore: this.pluginSettingsStore,
       },
       {
         entityType: params.entityType,

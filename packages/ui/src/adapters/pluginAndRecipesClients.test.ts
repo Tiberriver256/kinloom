@@ -697,4 +697,137 @@ describe('resolvePluginRequestCredentials & plugin client credentials option', (
 
     expect(seenCredentials).toEqual(['include', 'include', 'include', 'include']);
   });
+
+  it('resolves relative recipe photo/cover URLs and book publishing artifact URLs through apiBaseUrl', async () => {
+    const fetchImpl: typeof fetch = async (input) => {
+      const url = typeof input === 'string' ? input : input.toString();
+      if (url.endsWith('/api/plugins/recipes')) {
+        return new Response(
+          JSON.stringify({
+            recipes: [{ ...SAMPLE_RECIPE, cover_photo_url: '/api/plugins/recipes/photos/pho_1' }],
+            total: 1,
+            limit: 24,
+            offset: 0,
+            facets: { courses: ['bread'], tags: [] },
+            display: { show_home_widget: true },
+          }),
+          { status: 200, headers: { 'content-type': 'application/json' } }
+        );
+      }
+      if (url.endsWith('/api/plugins/recipes/sourdough-boule')) {
+        return new Response(
+          JSON.stringify({
+            recipe: { ...SAMPLE_RECIPE, cover_photo_url: '/api/plugins/recipes/photos/pho_1' },
+            photos: [
+              {
+                id: 'pho_1',
+                recipe_id: 'rec_1',
+                url: '/api/plugins/recipes/photos/pho_1',
+                mime_type: 'image/jpeg',
+                size_bytes: 1200,
+                width: 800,
+                height: 600,
+                orientation: 1,
+                caption: 'Front',
+                card_side: 'front',
+                sort_order: 0,
+                uploaded_by_name: 'Clara',
+                created_at: '2026-11-27T10:00:00.000Z',
+              },
+            ],
+            viewer_has_starred: false,
+            permissions: {
+              can_edit: false,
+              can_delete: false,
+              can_upload: false,
+              can_star: false,
+              can_comment: false,
+            },
+          }),
+          { status: 200, headers: { 'content-type': 'application/json' } }
+        );
+      }
+      if (url.endsWith('/api/plugins/book-publishing/compile')) {
+        return new Response(
+          JSON.stringify({
+            report: {
+              title: 'Family Book',
+              subtitle: '',
+              familyName: 'Alder',
+              edition: 'public',
+              colophonNotice: 'Public Edition',
+              generatedAt: '2026-11-27T10:00:00.000Z',
+              counts: {
+                includedPeople: 2,
+                excludedLivingPeople: 0,
+                includedEvents: 1,
+                includedPlaces: 1,
+                includedSources: 1,
+                includedMedia: 0,
+                excludedLivingMedia: 0,
+                includedNarratives: 0,
+                finalPageCount: 24,
+              },
+              coverDimensions: {
+                totalWidthIn: 24,
+                totalHeightIn: 10,
+                spineWidthIn: 0.25,
+                allowSpineText: false,
+                providerSku: '1100X0850FCPRESSCW080CW444GXX',
+              },
+              warnings: [],
+              privacy: {
+                edition: 'public',
+                livingPeopleExcluded: 0,
+                livingMediaExcluded: 0,
+                reviewFlagsDetected: 0,
+                reviewFlagsAcknowledged: false,
+              },
+            },
+            renderer: 'deterministic-pdf',
+            artifacts: {
+              interior_pdf_url: '/api/plugins/book-publishing/artifacts/tok-int',
+              cover_pdf_url: '/api/plugins/book-publishing/artifacts/tok-cov',
+              interior_bytes: 2048,
+              cover_bytes: 1024,
+              expires_at: '2026-11-27T12:00:00.000Z',
+            },
+          }),
+          { status: 200, headers: { 'content-type': 'application/json' } }
+        );
+      }
+      return new Response(null, { status: 404 });
+    };
+
+    const recipesClient = createHttpRecipesClient({
+      apiBaseUrl: 'https://api.archive.example/',
+      fetchImpl,
+    });
+    const list = await recipesClient.listRecipes();
+    expect(list?.recipes[0]?.cover_photo_url).toBe(
+      'https://api.archive.example/api/plugins/recipes/photos/pho_1'
+    );
+    const detail = await recipesClient.getRecipe('sourdough-boule');
+    expect(detail?.recipe.cover_photo_url).toBe(
+      'https://api.archive.example/api/plugins/recipes/photos/pho_1'
+    );
+    expect(detail?.photos[0]?.url).toBe('https://api.archive.example/api/plugins/recipes/photos/pho_1');
+
+    const bpClient = createHttpBookPublishingClient({
+      apiBaseUrl: 'https://api.archive.example/',
+      fetchImpl,
+    });
+    const compiled = await bpClient.compileBook({
+      trimPreset: 'us-letter-landscape',
+      binding: 'hardcover-casewrap-glossy',
+      paperStock: '80lb-coated-white-color',
+      edition: 'public',
+    });
+    expect(compiled.artifacts.interior_pdf_url).toBe(
+      'https://api.archive.example/api/plugins/book-publishing/artifacts/tok-int'
+    );
+    expect(compiled.artifacts.cover_pdf_url).toBe(
+      'https://api.archive.example/api/plugins/book-publishing/artifacts/tok-cov'
+    );
+  });
 });

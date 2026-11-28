@@ -4,14 +4,17 @@ import {
   type KinloomSiteConfig,
   type MediaStore,
   mergePronunciationLexicons,
+  type PluginSettingsStore,
   type Pronunciation,
   type PronunciationAudioGenerator,
+  type PronunciationEnvDefaults,
   type PronunciationLexiconStore,
   parseEntityPayload,
   resolveEffectiveLiving,
 } from '@kinloom/core';
 import { KinloomHttpError } from '../errors.js';
 import { generateAndStorePronunciationAudio, type StoredPronunciationAudio } from './pronunciationHelper.js';
+import { resolveEffectivePronunciationRuntime } from './pronunciationRuntime.js';
 
 export interface PronunciationServiceDeps {
   readonly repository: Pick<EntityReadStore, 'getEntity'>;
@@ -19,7 +22,9 @@ export interface PronunciationServiceDeps {
   readonly clock: Clock;
   readonly siteConfig: KinloomSiteConfig;
   readonly pronunciationGenerator?: PronunciationAudioGenerator;
+  readonly pronunciationEnv?: PronunciationEnvDefaults;
   readonly pronunciationLexiconStore?: PronunciationLexiconStore;
+  readonly pluginSettingsStore?: PluginSettingsStore;
 }
 
 export interface GenerateEntityPronunciationInput {
@@ -44,7 +49,9 @@ export class PronunciationService {
   private readonly clock: Clock;
   private readonly siteConfig: KinloomSiteConfig;
   private readonly pronunciationGenerator?: PronunciationAudioGenerator;
+  private readonly pronunciationEnv?: PronunciationEnvDefaults;
   private readonly pronunciationLexiconStore?: PronunciationLexiconStore;
+  private readonly pluginSettingsStore?: PluginSettingsStore;
 
   constructor(deps: PronunciationServiceDeps) {
     this.repository = deps.repository;
@@ -52,7 +59,9 @@ export class PronunciationService {
     this.clock = deps.clock;
     this.siteConfig = deps.siteConfig;
     this.pronunciationGenerator = deps.pronunciationGenerator;
+    this.pronunciationEnv = deps.pronunciationEnv;
     this.pronunciationLexiconStore = deps.pronunciationLexiconStore;
+    this.pluginSettingsStore = deps.pluginSettingsStore;
   }
 
   async loadMergedPronunciations(): Promise<Record<string, Pronunciation>> {
@@ -89,7 +98,21 @@ export class PronunciationService {
       defaultText = (parsedPlace.name || parsedPlace.full_name).trim();
     }
 
-    if (!this.pronunciationGenerator) {
+    const runtime = await resolveEffectivePronunciationRuntime({
+      pluginSettingsStore: this.pluginSettingsStore,
+      injectedGenerator: this.pronunciationGenerator,
+      envDefaults: this.pronunciationEnv,
+    });
+
+    if (runtime.kind === 'disabled') {
+      throw new KinloomHttpError(
+        503,
+        'PRONUNCIATION_DISABLED',
+        'Pronunciation audio generation is disabled in Admin Plugin Settings.'
+      );
+    }
+
+    if (runtime.kind !== 'ready') {
       throw new KinloomHttpError(
         503,
         'PRONUNCIATION_UNAVAILABLE',
@@ -106,15 +129,19 @@ export class PronunciationService {
       );
     }
 
+    const effectiveVoice =
+      input.voice?.trim() || (runtime.hasStoredSettings ? runtime.config.defaultVoice : undefined);
+
     return generateAndStorePronunciationAudio({
-      generator: this.pronunciationGenerator,
+      generator: runtime.generator,
       mediaStore: this.mediaStore,
       entityType: input.entityType,
       text,
       phonetic: input.phonetic,
       ipa: input.ipa,
       language: input.language,
-      voice: input.voice,
+      voice: effectiveVoice,
+      ...(runtime.hasStoredSettings ? { phonemeMode: runtime.config.phonemeMode } : {}),
     });
   }
 
@@ -155,16 +182,24 @@ export class PronunciationService {
     }
 
     const nextEntry: Pronunciation = { ...entry };
-    if (this.pronunciationGenerator) {
+    const runtime = await resolveEffectivePronunciationRuntime({
+      pluginSettingsStore: this.pluginSettingsStore,
+      injectedGenerator: this.pronunciationGenerator,
+      envDefaults: this.pronunciationEnv,
+    });
+    if (runtime.kind === 'ready' && runtime.config.autoGenerateOnSave) {
       try {
         const stored = await generateAndStorePronunciationAudio({
-          generator: this.pronunciationGenerator,
+          generator: runtime.generator,
           mediaStore: this.mediaStore,
           entityType: 'person',
           text: term,
           phonetic: nextEntry.phonetic,
           ipa: nextEntry.ipa,
           language: nextEntry.language,
+          ...(runtime.hasStoredSettings
+            ? { voice: runtime.config.defaultVoice, phonemeMode: runtime.config.phonemeMode }
+            : {}),
         });
         nextEntry.audio_url = stored.audio_url;
       } catch {

@@ -1,16 +1,20 @@
 import type { Person } from '@kinloom/core';
 import type React from 'react';
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { ArchivalSection } from '../../components/ArchivalLayout.js';
+import { useOptionalArchiveData } from '../../context/ArchiveDataContext.js';
 import { cx } from '../../lib/cx.js';
 import {
   formatRecipeCourseLabel,
   formatTotalRecipeDuration,
   type UiRecipeSummary,
 } from '../../lib/recipesModel.js';
+import { useKinloomPlugins } from '../PluginContext.js';
 import recipeStyles from './Recipes.module.css';
 import { useRecipesPlugin } from './RecipesContext.js';
+
+const RECIPES_SERVER_PLUGIN_ID = 'kinloom-recipes';
 
 export interface PersonRecipesSlotProps {
   readonly person: Person;
@@ -22,12 +26,21 @@ export interface PersonRecipesSlotProps {
  */
 export const PersonRecipesSlot: React.FC<PersonRecipesSlotProps> = ({ person }) => {
   const { client, basePath } = useRecipesPlugin();
+  const archiveData = useOptionalArchiveData();
+  const hasSessionLoader = Boolean(archiveData?.dataSource.getSession);
+  const session = archiveData?.session ?? null;
+  const sessionKey = session
+    ? `${session.principal_kind}:${session.authenticated ? 'auth' : 'anon'}`
+    : 'pending';
   const [recipes, setRecipes] = useState<readonly UiRecipeSummary[]>([]);
   const isLiving = person.is_living || person.full_name === 'Living';
 
   useEffect(() => {
     if (isLiving) {
       setRecipes([]);
+      return undefined;
+    }
+    if (hasSessionLoader && sessionKey === 'pending') {
       return undefined;
     }
     const controller = new AbortController();
@@ -48,7 +61,7 @@ export const PersonRecipesSlot: React.FC<PersonRecipesSlotProps> = ({ person }) 
       cancelled = true;
       controller.abort();
     };
-  }, [client, person.id, isLiving]);
+  }, [client, person.id, isLiving, hasSessionLoader, sessionKey]);
 
   if (isLiving || recipes.length === 0) {
     return null;
@@ -110,20 +123,25 @@ export const PersonRecipesSlot: React.FC<PersonRecipesSlotProps> = ({ person }) 
  */
 export const IndexRecipesWidget: React.FC = () => {
   const { client, basePath, showIndexWidget, pageTitle } = useRecipesPlugin();
+  const archiveData = useOptionalArchiveData();
+  const { subscribePluginSettings } = useKinloomPlugins();
+  const hasSessionLoader = Boolean(archiveData?.dataSource.getSession);
+  const session = archiveData?.session ?? null;
+  const sessionKey = session
+    ? `${session.principal_kind}:${session.authenticated ? 'auth' : 'anon'}`
+    : 'pending';
   const [recipes, setRecipes] = useState<readonly UiRecipeSummary[]>([]);
   const [allowedByServer, setAllowedByServer] = useState<boolean>(true);
 
-  useEffect(() => {
-    if (!showIndexWidget) {
-      setRecipes([]);
-      return undefined;
-    }
-    const controller = new AbortController();
-    let cancelled = false;
-    void client
-      .listRecipes({ sort: 'most_starred', limit: 4 }, { signal: controller.signal })
-      .then((res) => {
-        if (cancelled) {
+  const loadWidgetRecipes = useCallback(
+    async (signal?: AbortSignal): Promise<void> => {
+      if (!showIndexWidget) {
+        setRecipes([]);
+        return;
+      }
+      try {
+        const res = await client.listRecipes({ sort: 'most_starred', limit: 4 }, { signal });
+        if (signal?.aborted) {
           return;
         }
         if (res === null) {
@@ -137,17 +155,43 @@ export const IndexRecipesWidget: React.FC = () => {
         }
         setAllowedByServer(true);
         setRecipes(res.recipes);
-      })
-      .catch(() => {
-        if (!cancelled) {
+      } catch {
+        if (!signal?.aborted) {
           setRecipes([]);
         }
-      });
+      }
+    },
+    [client, showIndexWidget]
+  );
+
+  useEffect(() => {
+    return subscribePluginSettings(RECIPES_SERVER_PLUGIN_ID, (evt) => {
+      const nextShow = evt.snapshot?.values.show_home_widget;
+      if (typeof nextShow === 'boolean') {
+        setAllowedByServer(nextShow);
+        if (!nextShow) {
+          setRecipes([]);
+          return;
+        }
+      }
+      void loadWidgetRecipes();
+    });
+  }, [subscribePluginSettings, loadWidgetRecipes]);
+
+  useEffect(() => {
+    if (!showIndexWidget) {
+      setRecipes([]);
+      return undefined;
+    }
+    if (hasSessionLoader && sessionKey === 'pending') {
+      return undefined;
+    }
+    const controller = new AbortController();
+    void loadWidgetRecipes(controller.signal);
     return (): void => {
-      cancelled = true;
       controller.abort();
     };
-  }, [client, showIndexWidget]);
+  }, [loadWidgetRecipes, showIndexWidget, hasSessionLoader, sessionKey]);
 
   if (!showIndexWidget || !allowedByServer || recipes.length === 0) {
     return null;

@@ -1,7 +1,18 @@
 import type { ArchiveBundle, Place, PronunciationAudioGenerator, RawPerson } from '@kinloom/core';
 import { describe, expect, it, vi } from 'vitest';
 import { createInMemoryServerPorts } from '../adapters/inMemory.js';
+import { createPronunciationPlugin, PRONUNCIATION_PLUGIN_ID } from '../plugins/pronunciationPlugin.js';
+import {
+  buildPronunciationPrompt,
+  GeminiPronunciationAudioGenerator,
+  OpenAiSpeechPronunciationGenerator,
+  wrapPcmAsWav,
+} from '../services/pronunciationGenerators.js';
 import { computePronunciationPromptHash } from '../services/pronunciationHelper.js';
+import {
+  DEFAULT_PRONUNCIATION_RUNTIME_CONFIG,
+  resolveActivePronunciationGeneratorLabel,
+} from '../services/pronunciationRuntime.js';
 import {
   createSyntheticHistoricalPerson,
   createSyntheticLivingPerson,
@@ -780,5 +791,422 @@ describe('Shared pronunciation lexicon endpoints (GET /api/pronunciations, PUT /
     expect(putBody.pronunciation.source_url).toBe('https://en.wiktionary.org/wiki/Zeeland');
     expect(putBody.pronunciation.region).toBe('Netherlands');
     expect(putBody.pronunciation.variants?.[0]?.label).toBe('West Michigan');
+  });
+
+  it('honors Admin Plugin Settings (D1/store gemini_api_key, openai-speech adapter, fallback, phoneme_mode, auto_generate_on_save, disabled)', async () => {
+    // 1. Verify phonemeMode variations in buildPronunciationPrompt
+    expect(
+      buildPronunciationPrompt({
+        text: 'Goes',
+        ipa: 'ɣus',
+        phonetic: 'HOOS',
+        language: 'nl',
+        phonemeMode: 'plain',
+      })
+    ).toBe('Pronounce "Goes" in Dutch (nl) as HOOS.');
+    expect(
+      buildPronunciationPrompt({
+        text: 'Goes',
+        ipa: 'ɣus',
+        phonetic: 'HH UW S',
+        language: 'nl',
+        phonemeMode: 'arpabet',
+      })
+    ).toBe('Pronounce "Goes" in Dutch (nl) as ARPAbet HH UW S (IPA: /ɣus/).');
+    expect(
+      buildPronunciationPrompt({
+        text: '',
+        phonetic: 'HH UW S',
+        phonemeMode: 'arpabet',
+      })
+    ).toBe('ARPAbet HH UW S');
+
+    // 2. Verify OpenAiSpeechPronunciationGenerator directly (wav + mp3 + error handling)
+    const openAiCalls: Array<{ url: string; auth: string | null; body: Record<string, unknown> }> = [];
+    const openAiFetch: typeof fetch = async (input, init) => {
+      const url = typeof input === 'string' ? input : input.toString();
+      const headers = new Headers(init?.headers);
+      openAiCalls.push({
+        url,
+        auth: headers.get('authorization'),
+        body: JSON.parse(String(init?.body)) as Record<string, unknown>,
+      });
+      if (url.includes('fail.example')) {
+        return new Response('upstream error', { status: 502 });
+      }
+      if (url.includes('mp3.example')) {
+        return new Response(new Uint8Array([0x49, 0x44, 0x33]), {
+          status: 200,
+          headers: { 'content-type': 'audio/mpeg' },
+        });
+      }
+      return new Response(makeFakeWavBytes('openai-ok'), {
+        status: 200,
+        headers: { 'content-type': 'audio/wav' },
+      });
+    };
+
+    const mp3Gen = new OpenAiSpeechPronunciationGenerator({
+      baseUrl: 'https://mp3.example/v1/audio/speech',
+      apiKey: 'sk-test-openai',
+      model: 'tts-1',
+      defaultVoice: 'nova',
+      fetchFn: openAiFetch,
+    });
+    const mp3Audio = await mp3Gen.generate({ text: 'Mercer', phonetic: 'MER-ser', phonemeMode: 'plain' });
+    expect(mp3Audio.ext).toBe('mp3');
+    expect(mp3Audio.contentType).toBe('audio/mpeg');
+    expect(openAiCalls[0]?.auth).toBe('Bearer sk-test-openai');
+
+    const failGen = new OpenAiSpeechPronunciationGenerator({
+      baseUrl: 'https://fail.example/v1',
+      fetchFn: openAiFetch,
+    });
+    await expect(failGen.generate({ text: 'Mercer' })).rejects.toThrow(/HTTP 502/);
+
+    // 3. Full server integration with NO injected generator and NO env key: saved Admin Plugin Settings drive TTS!
+    const rawPcm = new Uint8Array([1, 2, 3, 4, 5, 6, 7, 8]);
+    let binary = '';
+    for (const b of rawPcm) {
+      binary += String.fromCharCode(b);
+    }
+    const base64Pcm = btoa(binary);
+
+    const observedFetchCalls: Array<{ url: string; headers: Headers; body: string }> = [];
+    const runtimeFetch: typeof fetch = async (input, init) => {
+      const url = typeof input === 'string' ? input : input.toString();
+      const headers = new Headers(init?.headers);
+      const body = String(init?.body ?? '');
+      observedFetchCalls.push({ url, headers, body });
+
+      if (url.includes('fail-primary.example')) {
+        return new Response('primary down', { status: 503 });
+      }
+      if (url.includes('generativelanguage.googleapis.com')) {
+        return new Response(
+          JSON.stringify({
+            candidates: [
+              {
+                content: {
+                  parts: [
+                    {
+                      inlineData: {
+                        mimeType: 'audio/L16;codec=pcm;rate=24000',
+                        data: base64Pcm,
+                      },
+                    },
+                  ],
+                },
+              },
+            ],
+          }),
+          { status: 200, headers: { 'content-type': 'application/json' } }
+        );
+      }
+      return new Response(makeFakeWavBytes('openai-runtime'), {
+        status: 200,
+        headers: { 'content-type': 'audio/wav' },
+      });
+    };
+
+    const siteConfig = createSyntheticSiteConfig();
+    const ports = createInMemoryServerPorts(siteConfig);
+    const server = createKinloomServer({
+      siteConfig,
+      ports: {
+        ...ports,
+        pronunciationEnv: { fetchImpl: runtimeFetch },
+        plugins: [createPronunciationPlugin()],
+      },
+      sessionSecret: SECRET,
+    });
+
+    const adminCookie = await createUserCookie(ports, {
+      email: 'admin@example.test',
+      display_name: 'Archive Admin',
+      role: 'admin',
+    });
+
+    const mercer = createSyntheticHistoricalPerson({
+      id: 'per_runtime_mercer',
+      slug: 'runtime-mercer',
+      full_name: 'Thomas Mercer',
+      given_name: 'Thomas',
+      surname: 'Mercer',
+    });
+    const seedRes = await server.fetch(
+      new Request(`${ORIGIN}/api/entities/person`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', origin: ORIGIN, cookie: adminCookie },
+        body: JSON.stringify({
+          entity_id: mercer.id,
+          data: mercer,
+          summary: 'Seed Thomas Mercer',
+          has_primary_source: true,
+        }),
+      })
+    );
+    expect(seedRes.status).toBe(201);
+
+    // Save Gemini API key + default_voice + default_model + phoneme_mode='plain' in Admin Plugin Settings
+    const saveGeminiRes = await server.fetch(
+      new Request(`${ORIGIN}/api/admin/plugin-settings/${PRONUNCIATION_PLUGIN_ID}`, {
+        method: 'PUT',
+        headers: { 'content-type': 'application/json', origin: ORIGIN, cookie: adminCookie },
+        body: JSON.stringify({
+          values: {
+            primary_backend: 'gemini',
+            fallback_backend: 'none',
+            default_model: 'gemini-custom-tts',
+            default_voice: 'Kore',
+            phoneme_mode: 'plain',
+            auto_generate_on_save: true,
+          },
+          secrets: {
+            gemini_api_key: { action: 'set', value: 'AIzaSyRuntimeSettingsKey_12345' },
+          },
+        }),
+      })
+    );
+    expect(saveGeminiRes.status).toBe(200);
+    const saveGeminiJson = (await saveGeminiRes.json()) as {
+      plugin: { readonly_values: { active_generator: string } };
+    };
+    expect(saveGeminiJson.plugin.readonly_values.active_generator).toBe('gemini-tts');
+
+    // System diagnostics reflects active generator from stored secret too
+    const diagRes = await server.fetch(
+      new Request(`${ORIGIN}/api/admin/system`, { headers: { cookie: adminCookie } })
+    );
+    const diagJson = (await diagRes.json()) as {
+      runtime: { adapters: { pronunciation_generator: string } };
+    };
+    expect(diagJson.runtime.adapters.pronunciation_generator).toBe('gemini-tts');
+
+    // Generate uses stored D1 key, model, voice, and plain phonemeMode (IPA omitted!)
+    const genRes = await server.fetch(
+      new Request(`${ORIGIN}/api/pronunciation/generate`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', origin: ORIGIN, cookie: adminCookie },
+        body: JSON.stringify({
+          entity_type: 'person',
+          entity_id: mercer.id,
+          phonetic: 'TOM-us MER-ser',
+          ipa: 'ˈmɜːrsər',
+        }),
+      })
+    );
+    expect(genRes.status).toBe(200);
+    expect(observedFetchCalls).toHaveLength(1);
+    expect(observedFetchCalls[0]?.url).toContain('gemini-custom-tts:generateContent');
+    expect(observedFetchCalls[0]?.headers.get('x-goog-api-key')).toBe('AIzaSyRuntimeSettingsKey_12345');
+    expect(observedFetchCalls[0]?.body).toContain('"voiceName":"Kore"');
+    expect(observedFetchCalls[0]?.body).toContain('TOM-us MER-ser');
+    expect(observedFetchCalls[0]?.body).not.toContain('ˈmɜːrsər');
+
+    // Primary openai-speech fails -> falls back to gemini seamlessly
+    await server.fetch(
+      new Request(`${ORIGIN}/api/admin/plugin-settings/${PRONUNCIATION_PLUGIN_ID}`, {
+        method: 'PUT',
+        headers: { 'content-type': 'application/json', origin: ORIGIN, cookie: adminCookie },
+        body: JSON.stringify({
+          values: {
+            primary_backend: 'openai-speech',
+            fallback_backend: 'gemini',
+            openai_base_url: 'https://fail-primary.example/v1',
+          },
+        }),
+      })
+    );
+    observedFetchCalls.length = 0;
+    const fallbackRes = await server.fetch(
+      new Request(`${ORIGIN}/api/pronunciation/generate`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', origin: ORIGIN, cookie: adminCookie },
+        body: JSON.stringify({
+          entity_type: 'person',
+          entity_id: mercer.id,
+          text: 'Fallback Test Term',
+        }),
+      })
+    );
+    expect(fallbackRes.status).toBe(200);
+    expect(observedFetchCalls).toHaveLength(2);
+    expect(observedFetchCalls[0]?.url).toBe('https://fail-primary.example/v1/audio/speech');
+    expect(observedFetchCalls[1]?.url).toContain('generativelanguage.googleapis.com');
+
+    // auto_generate_on_save = false skips TTS in PUT /api/pronunciations/:term
+    await server.fetch(
+      new Request(`${ORIGIN}/api/admin/plugin-settings/${PRONUNCIATION_PLUGIN_ID}`, {
+        method: 'PUT',
+        headers: { 'content-type': 'application/json', origin: ORIGIN, cookie: adminCookie },
+        body: JSON.stringify({
+          values: {
+            primary_backend: 'gemini',
+            fallback_backend: 'none',
+            auto_generate_on_save: false,
+          },
+        }),
+      })
+    );
+    observedFetchCalls.length = 0;
+    const noAutoRes = await server.fetch(
+      new Request(`${ORIGIN}/api/pronunciations/${encodeURIComponent('NoAutoTerm')}`, {
+        method: 'PUT',
+        headers: { 'content-type': 'application/json', origin: ORIGIN, cookie: adminCookie },
+        body: JSON.stringify({ phonetic: 'NO-aw-toh' }),
+      })
+    );
+    expect(noAutoRes.status).toBe(200);
+    const noAutoJson = (await noAutoRes.json()) as { pronunciation: { audio_url?: string } };
+    expect(noAutoJson.pronunciation.audio_url).toBeUndefined();
+    expect(observedFetchCalls).toHaveLength(0);
+
+    // primary_backend = 'disabled' returns 503 PRONUNCIATION_DISABLED and reports disabled status
+    await server.fetch(
+      new Request(`${ORIGIN}/api/admin/plugin-settings/${PRONUNCIATION_PLUGIN_ID}`, {
+        method: 'PUT',
+        headers: { 'content-type': 'application/json', origin: ORIGIN, cookie: adminCookie },
+        body: JSON.stringify({
+          values: { primary_backend: 'disabled', fallback_backend: 'none' },
+        }),
+      })
+    );
+    const disabledGenRes = await server.fetch(
+      new Request(`${ORIGIN}/api/pronunciation/generate`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', origin: ORIGIN, cookie: adminCookie },
+        body: JSON.stringify({ entity_type: 'person', entity_id: mercer.id }),
+      })
+    );
+    expect(disabledGenRes.status).toBe(503);
+    expect(((await disabledGenRes.json()) as { error: { code: string } }).error.code).toBe(
+      'PRONUNCIATION_DISABLED'
+    );
+
+    const disabledDiagRes = await server.fetch(
+      new Request(`${ORIGIN}/api/admin/system`, { headers: { cookie: adminCookie } })
+    );
+    const disabledDiagJson = (await disabledDiagRes.json()) as {
+      runtime: { adapters: { pronunciation_generator: string } };
+      plugins: Array<{ id: string; status: string }>;
+    };
+    expect(disabledDiagJson.runtime.adapters.pronunciation_generator).toBe('disabled');
+    expect(disabledDiagJson.plugins.find((p) => p.id === PRONUNCIATION_PLUGIN_ID)?.status).toBe('disabled');
+  });
+
+  it('exercises GeminiPronunciationAudioGenerator, OpenAiSpeechPronunciationGenerator, prompt branches, and runtime label resolver directly', async () => {
+    // Prompt branches (empty text + ipa/phonetic/language/arpabet/plain)
+    expect(buildPronunciationPrompt({ text: '', ipa: 'ɣus', phonetic: 'HOOS', language: 'nl' })).toBe(
+      'Pronounce in Dutch (nl) as /ɣus/ (guide: HOOS).'
+    );
+    expect(buildPronunciationPrompt({ text: '', ipa: 'ɣus', phonetic: 'HOOS' })).toBe('/ɣus/ (guide: HOOS)');
+    expect(buildPronunciationPrompt({ text: '', ipa: 'ɣus', language: 'nl' })).toBe(
+      'Pronounce in Dutch (nl) as /ɣus/.'
+    );
+    expect(buildPronunciationPrompt({ text: '', ipa: 'ɣus' })).toBe('/ɣus/');
+    expect(buildPronunciationPrompt({ text: '', phonetic: 'HOOS', language: 'nl' })).toBe(
+      'Pronounce in Dutch (nl) as HOOS.'
+    );
+    expect(buildPronunciationPrompt({ text: '', phonetic: 'HOOS' })).toBe('HOOS');
+    expect(buildPronunciationPrompt({ text: '' })).toBe('');
+    expect(
+      buildPronunciationPrompt({
+        text: '',
+        ipa: 'ɣus',
+        phonetic: 'HH UW S',
+        language: 'nl',
+        phonemeMode: 'arpabet',
+      })
+    ).toBe('Pronounce in Dutch (nl) as ARPAbet HH UW S (IPA: /ɣus/).');
+    expect(buildPronunciationPrompt({ text: 'Goes', phonetic: 'HH UW S', phonemeMode: 'arpabet' })).toBe(
+      'Pronounce "Goes" as ARPAbet HH UW S.'
+    );
+    expect(buildPronunciationPrompt({ text: 'Goes', ipa: 'ɣus', phonemeMode: 'arpabet' })).toBe(
+      'Pronounce "Goes" as /ɣus/.'
+    );
+    expect(buildPronunciationPrompt({ text: 'Goes', language: 'zz-custom' })).toBe(
+      'Pronounce "Goes" in zz-custom.'
+    );
+
+    // Constructor & input guards
+    expect(() => new GeminiPronunciationAudioGenerator({ apiKey: '   ' })).toThrow(/non-empty apiKey/);
+    expect(() => new OpenAiSpeechPronunciationGenerator({ baseUrl: '   ' })).toThrow(/non-empty baseUrl/);
+
+    const wavPassthrough = wrapPcmAsWav(new Uint8Array([1, 2, 3, 4]), 16000, 1, 16);
+    let wavBinary = '';
+    for (const b of wavPassthrough) {
+      wavBinary += String.fromCharCode(b);
+    }
+    const wavB64 = btoa(wavBinary);
+
+    const gemWav = new GeminiPronunciationAudioGenerator({
+      apiKey: 'k-test',
+      fetchFn: async () =>
+        new Response(
+          JSON.stringify({
+            candidates: [{ content: { parts: [{ inlineData: { mimeType: 'audio/wav', data: wavB64 } }] } }],
+          }),
+          { status: 200 }
+        ),
+    });
+    await expect(gemWav.generate({ text: '   ' })).rejects.toThrow(/must not be empty/);
+    const passthroughResult = await gemWav.generate({ text: 'Alder', voice: 'Puck' });
+    expect(passthroughResult.bytes).toEqual(wavPassthrough);
+
+    const gemErr = new GeminiPronunciationAudioGenerator({
+      apiKey: 'k-test',
+      fetchFn: async () => new Response('rate limit', { status: 429 }),
+    });
+    await expect(gemErr.generate({ text: 'Alder' })).rejects.toThrow(/HTTP 429/);
+
+    const gemBadSchema = new GeminiPronunciationAudioGenerator({
+      apiKey: 'k-test',
+      fetchFn: async () => new Response(JSON.stringify({ candidates: 'invalid' }), { status: 200 }),
+    });
+    await expect(gemBadSchema.generate({ text: 'Alder' })).rejects.toThrow(/JSON schema/);
+
+    const gemEmptyParts = new GeminiPronunciationAudioGenerator({
+      apiKey: 'k-test',
+      fetchFn: async () =>
+        new Response(JSON.stringify({ candidates: [{ content: { parts: [] } }] }), { status: 200 }),
+    });
+    await expect(gemEmptyParts.generate({ text: 'Alder' })).rejects.toThrow(/inline audio data/);
+
+    const openAiEmpty = new OpenAiSpeechPronunciationGenerator({
+      baseUrl: 'https://speech.example/v1',
+      fetchFn: async () => new Response(new Uint8Array(0), { status: 200 }),
+    });
+    await expect(openAiEmpty.generate({ text: '  ' })).rejects.toThrow(/must not be empty/);
+    await expect(openAiEmpty.generate({ text: 'Alder' })).rejects.toThrow(/empty audio body/);
+
+    // Runtime label resolver branches
+    expect(
+      resolveActivePronunciationGeneratorLabel({
+        config: { ...DEFAULT_PRONUNCIATION_RUNTIME_CONFIG, primaryBackend: 'disabled' },
+        configuredSecrets: { gemini_api_key: true },
+      })
+    ).toBe('disabled');
+    expect(
+      resolveActivePronunciationGeneratorLabel({
+        config: {
+          ...DEFAULT_PRONUNCIATION_RUNTIME_CONFIG,
+          primaryBackend: 'openai-speech',
+          fallbackBackend: 'gemini',
+          openAiBaseUrl: '',
+        },
+        configuredSecrets: {},
+        injectedGenerator: {
+          adapterKind: 'custom-tts',
+          generate: async () => ({ bytes: new Uint8Array(), contentType: 'audio/wav', ext: 'wav' }),
+        },
+      })
+    ).toBe('custom-tts');
+    expect(
+      resolveActivePronunciationGeneratorLabel({
+        config: DEFAULT_PRONUNCIATION_RUNTIME_CONFIG,
+        configuredSecrets: {},
+      })
+    ).toBe('none');
   });
 });

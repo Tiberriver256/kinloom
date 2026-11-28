@@ -4,6 +4,7 @@ import {
   type DiagnosticsPlatform,
   type HealthCheckResult,
   KINLOOM_CORE_VERSION,
+  type KinloomServerPluginStatusContext,
   type KinloomSiteConfig,
   type PluginRuntimeStatus,
   PluginRuntimeStatusSchema,
@@ -13,6 +14,11 @@ import type { KinloomServerPlugin, KinloomServerPorts } from '../http/pluginLife
 import type { RecentErrorRingBuffer } from '../http/recentErrorBuffer.js';
 import { sanitizeDiagnosticDetail } from '../http/redaction.js';
 import { KINLOOM_SERVER_VERSION } from '../version.js';
+import {
+  loadPersistedPronunciationConfig,
+  PRONUNCIATION_PLUGIN_ID,
+  resolveActivePronunciationGeneratorLabel,
+} from './pronunciationRuntime.js';
 
 const HEALTH_PROBE_MEDIA_KEY = '__kinloom_diagnostics_health_probe__';
 const SAFE_COMMIT_SHA_PATTERN = /^[0-9a-zA-Z._-]{4,64}$/;
@@ -133,18 +139,31 @@ export class SystemDiagnosticsService {
   async getReport(): Promise<AdminDiagnosticsReport> {
     const { ports, plugins, siteConfig, mode, diagnosticsConfig } = this.deps;
     const platform = detectPlatform(diagnosticsConfig?.platform);
+    const statusCtx: KinloomServerPluginStatusContext = {
+      siteConfig,
+      ports,
+      mode,
+    };
 
-    const [schemaMigrationLevel, repositoryProbe, bundleCacheProbe, mediaStoreProbe, pluginStatuses] =
-      await Promise.all([
-        this.probeSchemaMigrationLevel(),
-        this.probeRepository(),
-        this.probeBundleCache(),
-        this.probeMediaStore(),
-        Promise.all(plugins.map((plugin) => this.probePluginStatus(plugin))),
-      ]);
+    const [
+      schemaMigrationLevel,
+      repositoryProbe,
+      bundleCacheProbe,
+      mediaStoreProbe,
+      pluginStatuses,
+      observability,
+      pronunciationGeneratorLabel,
+    ] = await Promise.all([
+      this.probeSchemaMigrationLevel(),
+      this.probeRepository(),
+      this.probeBundleCache(),
+      this.probeMediaStore(),
+      Promise.all(plugins.map((plugin) => this.probePluginStatus(plugin, statusCtx))),
+      this.resolveObservabilityFlags(plugins, statusCtx),
+      this.resolvePronunciationGeneratorAdapter(ports),
+    ]);
 
     const authProviderConfigured = Boolean(ports.authProvider && ports.authProvider.configured !== false);
-    const observability = this.resolveObservabilityFlags(plugins);
 
     const rawReport: AdminDiagnosticsReport = {
       generated_at: ports.clock.nowIso(),
@@ -167,9 +186,7 @@ export class SystemDiagnosticsService {
           email_sender: ports.emailSender.adapterKind ?? 'custom',
           auth_provider_configured: authProviderConfigured,
           auth_provider_id: authProviderConfigured ? (ports.authProvider?.id ?? null) : null,
-          pronunciation_generator: ports.pronunciationGenerator
-            ? (ports.pronunciationGenerator.adapterKind ?? 'custom')
-            : 'none',
+          pronunciation_generator: pronunciationGeneratorLabel,
           pronunciation_lexicon_store: ports.pronunciationLexiconStore
             ? (ports.pronunciationLexiconStore.adapterKind ?? 'custom')
             : 'none',
@@ -211,19 +228,54 @@ export class SystemDiagnosticsService {
     return AdminDiagnosticsReportSchema.parse(rawReport);
   }
 
-  private resolveObservabilityFlags(plugins: readonly KinloomServerPlugin[]): {
+  private async resolvePronunciationGeneratorAdapter(ports: KinloomServerPorts): Promise<string> {
+    const { config } = await loadPersistedPronunciationConfig(ports.pluginSettingsStore);
+    const configuredSecrets: Record<string, boolean> = {};
+    if (ports.pluginSettingsStore) {
+      try {
+        const meta = await ports.pluginSettingsStore.getSecretMetadata(PRONUNCIATION_PLUGIN_ID);
+        for (const [key, entry] of Object.entries(meta)) {
+          configuredSecrets[key] = entry.configured === true;
+        }
+      } catch {
+        // Ignore secret metadata lookup failures in diagnostics probe.
+      }
+    }
+    return resolveActivePronunciationGeneratorLabel({
+      config,
+      configuredSecrets,
+      injectedGenerator: ports.pronunciationGenerator,
+      envDefaults: ports.pronunciationEnv,
+    });
+  }
+
+  private async resolveObservabilityFlags(
+    plugins: readonly KinloomServerPlugin[],
+    statusCtx: KinloomServerPluginStatusContext
+  ): Promise<{
     enabled: boolean;
     server_timing: boolean;
     security_telemetry: boolean;
     web_analytics: boolean;
-  } {
+  }> {
     let enabled = false;
     let serverTiming = false;
     let securityTelemetry = false;
     let webAnalytics = false;
 
     for (const plugin of plugins) {
-      const flags = plugin.observabilityFlags;
+      let flags = plugin.observabilityFlags;
+      if (typeof plugin.getObservabilityFlags === 'function') {
+        try {
+          flags = await plugin.getObservabilityFlags(statusCtx);
+        } catch (error) {
+          try {
+            this.deps.onPluginError?.(plugin.id, error);
+          } catch {
+            // Isolate reporter failures so diagnostics stay available.
+          }
+        }
+      }
       if (!flags?.enabled) {
         continue;
       }
@@ -421,13 +473,16 @@ export class SystemDiagnosticsService {
     }
   }
 
-  private async probePluginStatus(plugin: KinloomServerPlugin): Promise<PluginStatusRecord> {
+  private async probePluginStatus(
+    plugin: KinloomServerPlugin,
+    statusCtx: KinloomServerPluginStatusContext
+  ): Promise<PluginStatusRecord> {
     let status: PluginRuntimeStatus = normalizePluginStatus(plugin.status ?? 'active');
     let detail: string | null = null;
 
     if (typeof plugin.getStatus === 'function') {
       try {
-        const probe = await plugin.getStatus();
+        const probe = await plugin.getStatus(statusCtx);
         status = normalizePluginStatus(probe.status);
         detail = sanitizeDiagnosticDetail(probe.detail);
       } catch (error) {

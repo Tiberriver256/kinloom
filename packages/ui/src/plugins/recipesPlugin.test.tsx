@@ -21,7 +21,13 @@ import {
 import { ArchiveProvider } from '../context/ArchiveProvider.js';
 import { KinloomApp } from '../KinloomApp.js';
 import type { UiRecipeComment, UiRecipeDetail, UiRecipePhoto } from '../lib/recipesModel.js';
-import { useKinloomPluginContext, validateAndCompileUiPlugins } from './PluginContext.js';
+import {
+  KinloomPluginProvider,
+  useKinloomPluginContext,
+  useKinloomPlugins,
+  validateAndCompileUiPlugins,
+} from './PluginContext.js';
+import { IndexRecipesWidget, PersonRecipesSlot } from './recipes/RecipeSlots.js';
 import { useRecipesPlugin } from './recipes/RecipesContext.js';
 import { createRecipesUiPlugin } from './recipesPlugin.js';
 import type { KinloomUiPlugin } from './types.js';
@@ -29,6 +35,29 @@ import type { KinloomUiPlugin } from './types.js';
 declare global {
   var IS_REACT_ACT_ENVIRONMENT: boolean | undefined;
 }
+
+const RecipesBusHarness: React.FC<{ onBind: (fn: (show: boolean) => void) => void }> = ({ onBind }) => {
+  const { notifyPluginSettingsUpdated } = useKinloomPlugins();
+  onBind((show: boolean) => {
+    notifyPluginSettingsUpdated({
+      pluginId: 'kinloom-recipes',
+      source: 'plugin-settings-section',
+      snapshot: {
+        plugin_id: 'kinloom-recipes',
+        plugin_name: 'Family Recipe Sharing',
+        plugin_version: '0.59.0',
+        status: 'active',
+        schema: { sections: [] },
+        values: { show_home_widget: show },
+        secrets: {},
+        readonly_values: {},
+        updated_at: '2026-11-27T12:00:00.000Z',
+        updated_by: 'admin@archive.example',
+      },
+    });
+  });
+  return null;
+};
 
 globalThis.IS_REACT_ACT_ENVIRONMENT = true;
 window.scrollTo = () => {};
@@ -2745,6 +2774,135 @@ describe('Recipe Starring, Optimistic Rollback, and My Favorites UI (#50)', () =
     await flushUi();
     expect(container.querySelector('textarea')).toBeNull();
     expect(container.textContent).toContain('Sign in as a family archive member to join the discussion.');
+
+    act(() => {
+      root.unmount();
+    });
+    container.remove();
+  });
+
+  it('re-fetches IndexRecipesWidget and PersonRecipesSlot on session login transition and toggles home widget live via PluginSettingsBus', async () => {
+    const { MemoryRouter } = await import('react-router-dom');
+    const container = document.createElement('div');
+    document.body.appendChild(container);
+    const root = createRoot(container);
+
+    let signedIn = false;
+    let listCalls = 0;
+    let personCalls = 0;
+
+    const authGatedClient: RecipesClient = {
+      listRecipes: async () => {
+        listCalls += 1;
+        if (!signedIn) {
+          throw new Error('401 Unauthorized');
+        }
+        return {
+          recipes: [...SAMPLE_RECIPES],
+          total: SAMPLE_RECIPES.length,
+          limit: 4,
+          offset: 0,
+          facets: { courses: ['bread'], tags: ['heirloom'] },
+          display: { show_home_widget: true },
+        };
+      },
+      getRecipe: async () => null,
+      listRecipesByPerson: async (personId) => {
+        personCalls += 1;
+        if (!signedIn) {
+          throw new Error('401 Unauthorized');
+        }
+        return {
+          person_id: personId,
+          recipes: SAMPLE_RECIPES.filter((r) => r.attributed_person_id === personId),
+          total: 1,
+        };
+      },
+    };
+
+    let notifyShowWidget: ((show: boolean) => void) | null = null;
+    const plugin = createRecipesUiPlugin({ client: authGatedClient });
+    const ada = TEST_BUNDLE.people[0];
+
+    const renderWithSession = async (authenticated: boolean) => {
+      signedIn = authenticated;
+      await act(async () => {
+        root.render(
+          <MemoryRouter>
+            <ArchiveProvider
+              siteConfig={SITE_CONFIG}
+              initialBundle={TEST_BUNDLE}
+              initialReadings={{ version: 1, documents: {}, event_page_map: {} }}
+              dataSource={{
+                loadArchive: async () => ({ bundle: TEST_BUNDLE, etag: null, notModified: false }),
+                loadReadings: async () => ({ version: 1, documents: {}, event_page_map: {} }),
+                getSession: async () => ({
+                  session: {
+                    authenticated,
+                    principal_kind: authenticated ? 'user' : 'anonymous',
+                    ...(authenticated
+                      ? {
+                          role: 'editor' as const,
+                          email: 'member@archive.example',
+                          displayName: 'Family Member',
+                        }
+                      : {}),
+                  },
+                  capabilities: {
+                    canEdit: authenticated,
+                    canUploadMedia: authenticated,
+                    hasRevisionHistory: authenticated,
+                    hasTalk: authenticated,
+                    canManageSite: false,
+                  },
+                  authProviders: { google: false, magicLink: true },
+                }),
+              }}
+            >
+              <KinloomPluginProvider plugins={[plugin]}>
+                <RecipesBusHarness
+                  onBind={(fn) => {
+                    notifyShowWidget = fn;
+                  }}
+                />
+                <IndexRecipesWidget />
+                <PersonRecipesSlot person={ada} />
+              </KinloomPluginProvider>
+            </ArchiveProvider>
+          </MemoryRouter>
+        );
+      });
+      await flushUi();
+    };
+
+    // 1. Mount while anonymous -> 401 swallowed, widgets stay hidden
+    await renderWithSession(false);
+    expect(container.textContent).not.toContain('Oatmeal Honey Biscuits');
+
+    // 2. Transition session to signed-in user -> widgets re-fetch and render!
+    const listBefore = listCalls;
+    const personBefore = personCalls;
+    await renderWithSession(true);
+    expect(listCalls).toBeGreaterThan(listBefore);
+    expect(personCalls).toBeGreaterThan(personBefore);
+    expect(container.textContent).toContain('Family Recipe Box');
+    expect(container.textContent).toContain('Heirloom Recipes');
+    expect(container.textContent).toContain('Oatmeal Honey Biscuits');
+
+    // 3. Toggle show_home_widget OFF via PluginSettingsBus -> IndexRecipesWidget hides immediately!
+    await act(async () => {
+      notifyShowWidget?.(false);
+    });
+    await flushUi();
+    expect(container.textContent).not.toContain('Family Recipe Box');
+    expect(container.textContent).toContain('Heirloom Recipes');
+
+    // 4. Toggle show_home_widget ON via PluginSettingsBus -> IndexRecipesWidget re-appears!
+    await act(async () => {
+      notifyShowWidget?.(true);
+    });
+    await flushUi();
+    expect(container.textContent).toContain('Family Recipe Box');
 
     act(() => {
       root.unmount();

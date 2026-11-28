@@ -1,8 +1,10 @@
 import type {
   Clock,
   KinloomServerPluginReadonlySettingsContext,
+  KinloomServerPluginStatusContext,
   PluginSettingScalarValue,
   PluginSettingsSchema,
+  PluginSettingsStore,
 } from '@kinloom/core';
 import type {
   KinloomServerPlugin,
@@ -85,6 +87,8 @@ export interface WorkersObservabilityPluginOptions {
   readonly now?: () => number;
   /** Optional request ID generator fallback when no safe incoming request ID or cf-ray exists. */
   readonly generateRequestId?: () => string;
+  /** TTL in milliseconds for caching hydrated plugin settings per Worker isolate (default: 10000). */
+  readonly settingsCacheTtlMs?: number;
   /**
    * Opt-in security and abuse telemetry (structured security_event logs and fault-isolated alert sink).
    * Strictly OFF by default even when createWorkersObservabilityPlugin() is registered.
@@ -254,96 +258,107 @@ function isLogLevel(value: unknown): value is WorkersObservabilityLogLevel {
   return value === 'info' || value === 'warn' || value === 'error';
 }
 
+const DEFAULT_SETTINGS_CACHE_TTL_MS = 10_000;
+
 function buildWorkersObservabilitySettingsSchema(defaults: {
   readonly emitServerTiming: boolean;
   readonly includeRequestIdHeader: boolean;
   readonly minLogLevel: WorkersObservabilityLogLevel;
+  readonly includeEditableControls?: boolean;
 }): PluginSettingsSchema {
+  const includeEditableControls = defaults.includeEditableControls !== false;
+  const sections: PluginSettingsSchema['sections'] = [
+    {
+      id: 'runtime_status',
+      title: 'Runtime & Backend Status',
+      description:
+        'Read-only status derived from the active server ports and Worker deployment configuration.',
+      fields: [
+        {
+          key: 'runtime_platform',
+          label: 'Runtime Platform',
+          type: 'readonly',
+          defaultValue: 'portable-server',
+        },
+        {
+          key: 'storage_bindings',
+          label: 'Active Storage & Email Bindings',
+          type: 'readonly',
+          defaultValue: 'in-memory',
+        },
+        {
+          key: 'observability_status',
+          label: 'Observability Status',
+          type: 'readonly',
+          defaultValue: includeEditableControls ? 'active' : 'disabled',
+        },
+        {
+          key: 'server_timing_status',
+          label: 'Server-Timing Header',
+          type: 'readonly',
+          defaultValue: includeEditableControls && defaults.emitServerTiming ? 'enabled' : 'disabled',
+        },
+        {
+          key: 'security_telemetry_status',
+          label: 'Security Telemetry',
+          type: 'readonly',
+          defaultValue: 'disabled',
+        },
+        {
+          key: 'web_analytics_status',
+          label: 'Cloudflare Web Analytics',
+          type: 'readonly',
+          defaultValue: 'disabled',
+        },
+      ],
+    },
+    ...(includeEditableControls
+      ? [
+          {
+            id: 'telemetry_controls',
+            title: 'Safe Telemetry Controls',
+            description:
+              'Runtime toggles for privacy-safe HTTP telemetry headers and structured log verbosity.',
+            fields: [
+              {
+                key: 'emit_server_timing',
+                label: 'Emit Server-Timing headers',
+                type: 'boolean' as const,
+                defaultValue: defaults.emitServerTiming,
+                helpText:
+                  'Include W3C Server-Timing span durations (d1, r2, bundle, total) on API and bundle responses.',
+              },
+              {
+                key: 'include_request_id_header',
+                label: 'Include X-Request-Id header',
+                type: 'boolean' as const,
+                defaultValue: defaults.includeRequestIdHeader,
+                helpText:
+                  'Propagate or generate a privacy-safe X-Request-Id correlation header on responses.',
+              },
+              {
+                key: 'log_level_threshold',
+                label: 'Minimum Structured Log Level',
+                type: 'select' as const,
+                required: true,
+                defaultValue: defaults.minLogLevel,
+                helpText: 'Filter structured http_request telemetry logs by minimum severity level.',
+                options: [
+                  { value: 'info', label: 'Info (all requests)' },
+                  { value: 'warn', label: 'Warn (4xx and 5xx only)' },
+                  { value: 'error', label: 'Error (5xx only)' },
+                ],
+              },
+            ],
+          },
+        ]
+      : []),
+  ];
   return {
     title: 'Cloudflare Backend & Observability',
     description:
       'Inspect active Cloudflare runtime bindings and observability capabilities, and adjust safe request telemetry toggles.',
-    sections: [
-      {
-        id: 'runtime_status',
-        title: 'Runtime & Backend Status',
-        description:
-          'Read-only status derived from the active server ports and Worker deployment configuration.',
-        fields: [
-          {
-            key: 'runtime_platform',
-            label: 'Runtime Platform',
-            type: 'readonly',
-            defaultValue: 'portable-server',
-          },
-          {
-            key: 'storage_bindings',
-            label: 'Active Storage & Email Bindings',
-            type: 'readonly',
-            defaultValue: 'in-memory',
-          },
-          {
-            key: 'observability_status',
-            label: 'Observability Status',
-            type: 'readonly',
-            defaultValue: 'active',
-          },
-          {
-            key: 'server_timing_status',
-            label: 'Server-Timing Header',
-            type: 'readonly',
-            defaultValue: defaults.emitServerTiming ? 'enabled' : 'disabled',
-          },
-          {
-            key: 'security_telemetry_status',
-            label: 'Security Telemetry',
-            type: 'readonly',
-            defaultValue: 'disabled',
-          },
-          {
-            key: 'web_analytics_status',
-            label: 'Cloudflare Web Analytics',
-            type: 'readonly',
-            defaultValue: 'disabled',
-          },
-        ],
-      },
-      {
-        id: 'telemetry_controls',
-        title: 'Safe Telemetry Controls',
-        description: 'Runtime toggles for privacy-safe HTTP telemetry headers and structured log verbosity.',
-        fields: [
-          {
-            key: 'emit_server_timing',
-            label: 'Emit Server-Timing headers',
-            type: 'boolean',
-            defaultValue: defaults.emitServerTiming,
-            helpText:
-              'Include W3C Server-Timing span durations (d1, r2, bundle, total) on API and bundle responses.',
-          },
-          {
-            key: 'include_request_id_header',
-            label: 'Include X-Request-Id header',
-            type: 'boolean',
-            defaultValue: defaults.includeRequestIdHeader,
-            helpText: 'Propagate or generate a privacy-safe X-Request-Id correlation header on responses.',
-          },
-          {
-            key: 'log_level_threshold',
-            label: 'Minimum Structured Log Level',
-            type: 'select',
-            required: true,
-            defaultValue: defaults.minLogLevel,
-            helpText: 'Filter structured http_request telemetry logs by minimum severity level.',
-            options: [
-              { value: 'info', label: 'Info (all requests)' },
-              { value: 'warn', label: 'Warn (4xx and 5xx only)' },
-              { value: 'error', label: 'Error (5xx only)' },
-            ],
-          },
-        ],
-      },
-    ],
+    sections,
   };
 }
 
@@ -413,6 +428,7 @@ export function createWorkersObservabilityPlugin(
       emitServerTiming: false,
       includeRequestIdHeader: false,
       minLogLevel: 'info',
+      includeEditableControls: false,
     });
     return {
       id: WORKERS_OBSERVABILITY_PLUGIN_ID,
@@ -451,11 +467,79 @@ export function createWorkersObservabilityPlugin(
     };
   }
 
-  let emitServerTiming = options.emitServerTiming ?? true;
-  let includeRequestIdHeader = options.includeRequestIdHeader ?? true;
-  let minLogLevel: WorkersObservabilityLogLevel = 'info';
+  const initialEmitServerTiming = options.emitServerTiming ?? true;
+  const initialIncludeRequestIdHeader = options.includeRequestIdHeader ?? true;
+  const initialMinLogLevel: WorkersObservabilityLogLevel = 'info';
+
+  let emitServerTiming = initialEmitServerTiming;
+  let includeRequestIdHeader = initialIncludeRequestIdHeader;
+  let minLogLevel: WorkersObservabilityLogLevel = initialMinLogLevel;
   const sink: WorkersObservabilitySink = options.sink ?? defaultWorkersObservabilitySink;
   const generateRequestId = options.generateRequestId ?? defaultGenerateRequestId;
+  const settingsCacheTtlMs = Math.max(0, options.settingsCacheTtlMs ?? DEFAULT_SETTINGS_CACHE_TTL_MS);
+  let lastHydratedAtMs: number | null = null;
+  let lastHydratedStore: PluginSettingsStore | null = null;
+  let inflightHydration: Promise<void> | null = null;
+
+  function readCacheClockMs(): number {
+    if (options.clock) {
+      const parsed = Date.parse(options.clock.nowIso());
+      if (Number.isFinite(parsed)) {
+        return parsed;
+      }
+    }
+    return Date.now();
+  }
+
+  function applyPersistedValues(values: Readonly<Record<string, PluginSettingScalarValue>>): void {
+    emitServerTiming =
+      typeof values.emit_server_timing === 'boolean' ? values.emit_server_timing : initialEmitServerTiming;
+    includeRequestIdHeader =
+      typeof values.include_request_id_header === 'boolean'
+        ? values.include_request_id_header
+        : initialIncludeRequestIdHeader;
+    minLogLevel = isLogLevel(values.log_level_threshold) ? values.log_level_threshold : initialMinLogLevel;
+  }
+
+  async function hydrateSettings(store: PluginSettingsStore | undefined, force = false): Promise<void> {
+    if (!store) {
+      return;
+    }
+    const nowMs = readCacheClockMs();
+    if (
+      !force &&
+      lastHydratedStore === store &&
+      lastHydratedAtMs !== null &&
+      nowMs - lastHydratedAtMs < settingsCacheTtlMs
+    ) {
+      return;
+    }
+    if (!force && inflightHydration && lastHydratedStore === store) {
+      await inflightHydration;
+      return;
+    }
+    let run: Promise<void> | null = null;
+    run = (async (): Promise<void> => {
+      try {
+        const stored = await store.getSettings(WORKERS_OBSERVABILITY_PLUGIN_ID);
+        if (stored) {
+          applyPersistedValues(stored.values);
+        }
+        lastHydratedStore = store;
+        lastHydratedAtMs = readCacheClockMs();
+      } catch {
+        // Keep last known isolate values when settings store is unavailable.
+      } finally {
+        if (inflightHydration === run) {
+          inflightHydration = null;
+        }
+      }
+    })();
+    lastHydratedStore = store;
+    inflightHydration = run;
+    await run;
+  }
+
   const settingsSchema = buildWorkersObservabilitySettingsSchema({
     emitServerTiming,
     includeRequestIdHeader,
@@ -519,27 +603,35 @@ export function createWorkersObservabilityPlugin(
         webAnalytics: Boolean(documentContributions),
       };
     },
-    getStatus: () => ({
-      status: 'active',
-      detail: describeActiveFeatures(),
-    }),
-    getReadonlySettings: (ctx) =>
-      buildWorkersReadonlySettings(ctx, {
+    getObservabilityFlags: async (ctx?: KinloomServerPluginStatusContext) => {
+      await hydrateSettings(ctx?.ports.pluginSettingsStore, true);
+      return {
         enabled: true,
-        emitServerTiming,
+        serverTiming: emitServerTiming,
         securityTelemetry: Boolean(securityEventHandler),
         webAnalytics: Boolean(documentContributions),
-      }),
+      };
+    },
+    getStatus: async (ctx?: KinloomServerPluginStatusContext) => {
+      await hydrateSettings(ctx?.ports.pluginSettingsStore, true);
+      return {
+        status: 'active',
+        detail: describeActiveFeatures(),
+      };
+    },
+    getReadonlySettings: (ctx) => {
+      const effectiveServerTiming =
+        typeof ctx.values.emit_server_timing === 'boolean' ? ctx.values.emit_server_timing : emitServerTiming;
+      return buildWorkersReadonlySettings(ctx, {
+        enabled: true,
+        emitServerTiming: effectiveServerTiming,
+        securityTelemetry: Boolean(securityEventHandler),
+        webAnalytics: Boolean(documentContributions),
+      });
+    },
     onSettingsUpdated: (event) => {
-      if (typeof event.values.emit_server_timing === 'boolean') {
-        emitServerTiming = event.values.emit_server_timing;
-      }
-      if (typeof event.values.include_request_id_header === 'boolean') {
-        includeRequestIdHeader = event.values.include_request_id_header;
-      }
-      if (isLogLevel(event.values.log_level_threshold)) {
-        minLogLevel = event.values.log_level_threshold;
-      }
+      applyPersistedValues(event.values);
+      lastHydratedAtMs = readCacheClockMs();
     },
     ...(documentContributions ? { documentContributions } : {}),
 
@@ -553,6 +645,7 @@ export function createWorkersObservabilityPlugin(
     },
 
     async onResponse(event: ServerRequestResponseEvent): Promise<void> {
+      await hydrateSettings(event.ports?.pluginSettingsStore);
       const { telemetry } = event;
       const state = ensureState(telemetry.request, telemetry.metadata);
 

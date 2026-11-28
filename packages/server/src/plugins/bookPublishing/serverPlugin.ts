@@ -1,7 +1,9 @@
 import {
   compileArchive,
   extractCollectionsFromSnapshot,
+  type KinloomServerPluginContext,
   type KinloomServerPluginReadonlySettingsContext,
+  type KinloomServerPluginStatusContext,
   type PluginSettingScalarValue,
   type PluginSettingsSchema,
 } from '@kinloom/core';
@@ -13,6 +15,7 @@ import {
   hmacSignBase64Url,
   hmacVerifyBase64Url,
   randomBase64Url,
+  sha256Hex,
 } from '../../crypto.js';
 import { KinloomHttpError } from '../../errors.js';
 import { jsonResponse } from '../../http/httpPrimitives.js';
@@ -20,6 +23,13 @@ import type { KinloomServerPlugin, KinloomServerPorts } from '../../http/pluginL
 import { KINLOOM_SERVER_VERSION } from '../../version.js';
 import { compileArchivalBook } from './compiler.js';
 import { computeCoverDimensionsOffline, resolveLuluPodPackageId } from './geometry.js';
+import {
+  BOOK_PUBLISHING_DATABASE_NAMESPACE,
+  BOOK_PUBLISHING_PLUGIN_MIGRATIONS,
+  type BookPublishingJobsStore,
+  InMemoryBookPublishingJobsStore,
+  SqlBookPublishingJobsStore,
+} from './jobsStore.js';
 import { createDeterministicPdfRenderer } from './pdfEngine.js';
 import { BookPrivacyError } from './privacyGate.js';
 import {
@@ -99,7 +109,8 @@ export interface BookPublishingServerPluginOptions {
 }
 
 const DEFAULT_ARTIFACT_TTL_SECONDS = 2 * 60 * 60;
-const MAX_STORED_ARTIFACTS = 32;
+const ARTIFACT_MEDIA_PREFIX = 'plugins/book-publishing/';
+const SAFE_ARTIFACT_ID_PATTERN = /^[a-zA-Z0-9_-]{8,80}$/;
 
 const CompileBookRequestSchema = z.object({
   title: z.string().trim().max(160).optional(),
@@ -173,18 +184,22 @@ const LuluWebhookPayloadSchema = z.object({
     .optional(),
 });
 
-interface StoredArtifactEntry {
-  readonly artifactId: string;
-  readonly jobGroupId: string;
-  readonly kind: 'interior' | 'cover';
-  readonly bytes: Uint8Array;
-  readonly fileName: string;
-  readonly expiresAtMs: number;
-}
-
 interface ArtifactTokenPayload {
   readonly aid: string;
   readonly exp: number;
+  readonly fn: string;
+}
+
+function sanitizePdfFilename(raw: string): string {
+  const cleaned = raw.replace(/[^a-zA-Z0-9._-]/g, '-').slice(0, 96);
+  if (!cleaned) {
+    return 'kinloom-book.pdf';
+  }
+  return cleaned.endsWith('.pdf') ? cleaned : `${cleaned}.pdf`;
+}
+
+function artifactMediaKey(artifactId: string): string {
+  return `${ARTIFACT_MEDIA_PREFIX}${artifactId}.pdf`;
 }
 
 function buildBookPublishingSettingsSchema(initial: BookPublishingRuntimeConfig): PluginSettingsSchema {
@@ -349,16 +364,6 @@ function buildBookPublishingSettingsSchema(initial: BookPublishingRuntimeConfig)
             maxLength: 512,
             helpText: 'Write-only HMAC-SHA256 secret used to verify Lulu-HMAC-SHA256 webhook signatures.',
           },
-          {
-            key: 'cloudflare_browser_api_token',
-            label: 'Cloudflare Browser Rendering Token (Optional)',
-            type: 'string',
-            secret: true,
-            placeholder: 'Optional Cloudflare Browser Rendering API token',
-            minLength: 8,
-            maxLength: 512,
-            helpText: 'Optional write-only API token for headless Chromium PDF rendering on Cloudflare.',
-          },
         ],
       },
     ],
@@ -436,7 +441,7 @@ export function createBookPublishingServerPlugin(
     };
   }
 
-  let runtimeConfig: BookPublishingRuntimeConfig = {
+  const initialConfig: BookPublishingRuntimeConfig = {
     publisherProvider: options.defaultProvider ?? 'mock',
     environment: options.defaultEnvironment ?? 'sandbox',
     defaultTrimPreset: options.defaultTrimPreset ?? 'us-letter-landscape',
@@ -445,23 +450,36 @@ export function createBookPublishingServerPlugin(
     defaultShippingLevel: options.defaultShippingLevel ?? 'ground',
     contactEmail: options.defaultContactEmail ?? '',
   };
+  let runtimeConfig: BookPublishingRuntimeConfig = { ...initialConfig };
 
   const pdfRenderer: PdfRendererPort = options.pdfRenderer ?? createDeterministicPdfRenderer();
-  let cachedArtifactSigningSecret: string | null = options.artifactSigningSecret ?? null;
-  function getArtifactSigningSecret(): string {
-    if (cachedArtifactSigningSecret === null) {
-      cachedArtifactSigningSecret = randomBase64Url(32);
+  let fallbackRandomSigningSecret: string | null = options.artifactSigningSecret ?? null;
+  async function resolveArtifactSigningSecret(
+    ctx: Pick<KinloomServerPluginContext, 'derivePluginSigningKey'>
+  ): Promise<string> {
+    if (options.artifactSigningSecret) {
+      return options.artifactSigningSecret;
     }
-    return cachedArtifactSigningSecret;
+    if (typeof ctx.derivePluginSigningKey === 'function') {
+      return ctx.derivePluginSigningKey('book-artifacts');
+    }
+    if (fallbackRandomSigningSecret === null) {
+      fallbackRandomSigningSecret = randomBase64Url(32);
+    }
+    return fallbackRandomSigningSecret;
   }
   const artifactTokenTtlSeconds = options.artifactTokenTtlSeconds ?? DEFAULT_ARTIFACT_TTL_SECONDS;
 
   const settingsSchema = buildBookPublishingSettingsSchema(runtimeConfig);
   const mockPublisherSingleton = createMockBookPublisherAdapter();
-  const trackedJobs = new Map<string, BookPrintJobRecord>();
-  const jobGroupToArtifacts = new Map<string, string[]>();
-  const artifacts = new Map<string, StoredArtifactEntry>();
-  const revokedArtifacts = new Set<string>();
+  const fallbackJobsStore = new InMemoryBookPublishingJobsStore();
+
+  function resolveJobsStore(ctx: Pick<KinloomServerPluginContext, 'pluginDb'>): BookPublishingJobsStore {
+    if (ctx.pluginDb) {
+      return new SqlBookPublishingJobsStore(ctx.pluginDb, fallbackJobsStore);
+    }
+    return fallbackJobsStore;
+  }
 
   async function loadEffectiveConfigAndSecrets(ports: KinloomServerPorts): Promise<{
     readonly config: BookPublishingRuntimeConfig;
@@ -531,44 +549,46 @@ export function createBookPublishingServerPlugin(
   }
 
   async function storeSignedArtifact(params: {
-    readonly jobGroupId: string;
-    readonly kind: 'interior' | 'cover';
+    readonly ctx: KinloomServerPluginContext;
+    readonly ports: KinloomServerPorts;
     readonly bytes: Uint8Array;
     readonly fileName: string;
     readonly nowMs: number;
-  }): Promise<{ readonly token: string; readonly expiresAtIso: string }> {
+  }): Promise<{ readonly artifactId: string; readonly token: string; readonly expiresAtIso: string }> {
     const artifactId = `art_${randomBase64Url(12)}`;
     const expiresAtMs = params.nowMs + artifactTokenTtlSeconds * 1000;
+    const safeFileName = sanitizePdfFilename(params.fileName);
+    const sha256 = await sha256Hex(params.bytes);
+    const arrayBuffer = new Uint8Array(params.bytes).buffer;
 
-    if (artifacts.size >= MAX_STORED_ARTIFACTS) {
-      const oldestKey = artifacts.keys().next().value;
-      if (oldestKey) {
-        artifacts.delete(oldestKey);
-      }
-    }
-
-    artifacts.set(artifactId, {
-      artifactId,
-      jobGroupId: params.jobGroupId,
-      kind: params.kind,
-      bytes: params.bytes,
-      fileName: params.fileName,
-      expiresAtMs,
+    await params.ports.mediaStore.put({
+      key: artifactMediaKey(artifactId),
+      body: arrayBuffer,
+      contentType: 'application/pdf',
+      sha256,
     });
-    const list = jobGroupToArtifacts.get(params.jobGroupId) ?? [];
-    list.push(artifactId);
-    jobGroupToArtifacts.set(params.jobGroupId, list);
 
-    const payloadJson = JSON.stringify({ aid: artifactId, exp: expiresAtMs } satisfies ArtifactTokenPayload);
+    const payloadJson = JSON.stringify({
+      aid: artifactId,
+      exp: expiresAtMs,
+      fn: safeFileName,
+    } satisfies ArtifactTokenPayload);
     const payloadB64 = base64UrlEncodeString(payloadJson);
-    const sig = await hmacSignBase64Url(getArtifactSigningSecret(), payloadB64);
+    const signingKey = await resolveArtifactSigningSecret(params.ctx);
+    const sig = await hmacSignBase64Url(signingKey, payloadB64);
     return {
+      artifactId,
       token: `${payloadB64}.${sig}`,
       expiresAtIso: new Date(expiresAtMs).toISOString(),
     };
   }
 
-  async function verifyArtifactToken(token: string, nowMs: number): Promise<StoredArtifactEntry | null> {
+  async function verifyArtifactToken(
+    ctx: KinloomServerPluginContext,
+    ports: KinloomServerPorts,
+    token: string,
+    nowMs: number
+  ): Promise<{ readonly artifactId: string; readonly fileName: string } | null> {
     const parts = token.split('.');
     if (parts.length !== 2) {
       return null;
@@ -577,7 +597,8 @@ export function createBookPublishingServerPlugin(
     if (!payloadB64 || !sig) {
       return null;
     }
-    const valid = await hmacVerifyBase64Url(getArtifactSigningSecret(), payloadB64, sig);
+    const signingKey = await resolveArtifactSigningSecret(ctx);
+    const valid = await hmacVerifyBase64Url(signingKey, payloadB64, sig);
     if (!valid) {
       return null;
     }
@@ -596,30 +617,48 @@ export function createBookPublishingServerPlugin(
       ) {
         return null;
       }
-      parsed = raw as ArtifactTokenPayload;
+      const rawRec = raw as Record<string, unknown>;
+      const aid = rawRec.aid as string;
+      if (!SAFE_ARTIFACT_ID_PATTERN.test(aid)) {
+        return null;
+      }
+      parsed = {
+        aid,
+        exp: rawRec.exp as number,
+        fn: typeof rawRec.fn === 'string' ? sanitizePdfFilename(rawRec.fn) : 'kinloom-book.pdf',
+      };
     } catch {
       return null;
     }
-    if (nowMs > parsed.exp || revokedArtifacts.has(parsed.aid)) {
+    if (nowMs > parsed.exp) {
+      if (typeof ports.mediaStore.delete === 'function') {
+        try {
+          await ports.mediaStore.delete(artifactMediaKey(parsed.aid));
+        } catch {
+          // Best-effort cleanup of expired artifacts.
+        }
+      }
       return null;
     }
-    const entry = artifacts.get(parsed.aid);
-    if (!entry || nowMs > entry.expiresAtMs) {
-      return null;
-    }
-    return entry;
+    return { artifactId: parsed.aid, fileName: parsed.fn };
   }
 
-  function revokeArtifactsForJob(jobGroupId: string): void {
-    const ids = jobGroupToArtifacts.get(jobGroupId);
-    if (!ids) {
+  async function deleteArtifactObjects(
+    ports: KinloomServerPorts,
+    artifactIds: readonly string[]
+  ): Promise<void> {
+    if (typeof ports.mediaStore.delete !== 'function' || artifactIds.length === 0) {
       return;
     }
-    for (const id of ids) {
-      revokedArtifacts.add(id);
-      artifacts.delete(id);
-    }
-    jobGroupToArtifacts.delete(jobGroupId);
+    await Promise.all(
+      artifactIds.map(async (id) => {
+        try {
+          await ports.mediaStore.delete?.(artifactMediaKey(id));
+        } catch {
+          // Best-effort R2 cleanup on revocation.
+        }
+      })
+    );
   }
 
   async function loadArchiveBundleForBook(
@@ -666,24 +705,35 @@ export function createBookPublishingServerPlugin(
     documentation: BOOK_PUBLISHING_SERVER_DOCS,
     version: KINLOOM_SERVER_VERSION,
     status: 'active',
+    databaseNamespace: BOOK_PUBLISHING_DATABASE_NAMESPACE,
+    migrations: BOOK_PUBLISHING_PLUGIN_MIGRATIONS,
     settingsSchema,
 
-    getStatus: () => ({
-      status: 'active',
-      detail: `publisher=${resolveActivePublisherLabel(runtimeConfig)}, renderer=${pdfRenderer.adapterKind}`,
-    }),
+    getStatus: async (ctx?: KinloomServerPluginStatusContext) => {
+      let effective = runtimeConfig;
+      if (ctx?.ports.pluginSettingsStore) {
+        try {
+          const stored = await ctx.ports.pluginSettingsStore.getSettings(BOOK_PUBLISHING_PLUGIN_ID);
+          if (stored) {
+            effective = applySettingsValuesToConfig(stored.values, initialConfig);
+            runtimeConfig = effective;
+          }
+        } catch {
+          // Keep in-memory fallback when settings store is unavailable.
+        }
+      }
+      return {
+        status: 'active',
+        detail: `publisher=${resolveActivePublisherLabel(effective)}, renderer=${pdfRenderer.adapterKind}`,
+      };
+    },
 
     getReadonlySettings: (
       ctx: KinloomServerPluginReadonlySettingsContext
     ): Readonly<Record<string, PluginSettingScalarValue>> => {
-      const effective = applySettingsValuesToConfig(ctx.values, runtimeConfig);
+      const effective = applySettingsValuesToConfig(ctx.values, initialConfig);
       const configured: string[] = [];
-      for (const key of [
-        'lulu_client_id',
-        'lulu_client_secret',
-        'lulu_webhook_secret',
-        'cloudflare_browser_api_token',
-      ] as const) {
+      for (const key of ['lulu_client_id', 'lulu_client_secret', 'lulu_webhook_secret'] as const) {
         if (ctx.configuredSecrets[key]) {
           configured.push(key);
         }
@@ -696,7 +746,7 @@ export function createBookPublishingServerPlugin(
     },
 
     onSettingsUpdated: (event) => {
-      runtimeConfig = applySettingsValuesToConfig(event.values, runtimeConfig);
+      runtimeConfig = applySettingsValuesToConfig(event.values, initialConfig);
     },
 
     routes: [
@@ -733,6 +783,9 @@ export function createBookPublishingServerPlugin(
             previewReport = null;
           }
 
+          const jobsStore = resolveJobsStore(ctx);
+          const jobs = await jobsStore.listJobs();
+
           return jsonResponse(
             {
               plugin_id: BOOK_PUBLISHING_PLUGIN_ID,
@@ -762,7 +815,7 @@ export function createBookPublishingServerPlugin(
                     review_flags_detected: previewReport.privacy.reviewFlagsDetected,
                   }
                 : null,
-              jobs: [...trackedJobs.values()],
+              jobs,
             },
             200,
             { 'cache-control': 'no-store' }
@@ -830,18 +883,17 @@ export function createBookPublishingServerPlugin(
             pdfRenderer.renderCover(compiled, compiled.report.coverDimensions),
           ]);
 
-          const buildGroupId = `build_${randomBase64Url(8)}`;
           const [interiorArtifact, coverArtifact] = await Promise.all([
             storeSignedArtifact({
-              jobGroupId: buildGroupId,
-              kind: 'interior',
+              ctx,
+              ports: serverPorts,
               bytes: interiorPdf,
               fileName: 'kinloom-book-interior.pdf',
               nowMs,
             }),
             storeSignedArtifact({
-              jobGroupId: buildGroupId,
-              kind: 'cover',
+              ctx,
+              ports: serverPorts,
               bytes: coverPdf,
               fileName: 'kinloom-book-cover.pdf',
               nowMs,
@@ -1013,20 +1065,21 @@ export function createBookPublishingServerPlugin(
           const externalId = `kinloom-book-${randomBase64Url(8)}`;
           const [interiorArtifact, coverArtifact] = await Promise.all([
             storeSignedArtifact({
-              jobGroupId: externalId,
-              kind: 'interior',
+              ctx,
+              ports: serverPorts,
               bytes: interiorPdf,
               fileName: `${externalId}-interior.pdf`,
               nowMs,
             }),
             storeSignedArtifact({
-              jobGroupId: externalId,
-              kind: 'cover',
+              ctx,
+              ports: serverPorts,
               bytes: coverPdf,
               fileName: `${externalId}-cover.pdf`,
               nowMs,
             }),
           ]);
+          const createdArtifactIds = [interiorArtifact.artifactId, coverArtifact.artifactId];
 
           const interiorPdfUrl = `${ctx.url.origin}${BOOK_PUBLISHING_ARTIFACTS_ROUTE}/${interiorArtifact.token}`;
           const coverPdfUrl = `${ctx.url.origin}${BOOK_PUBLISHING_ARTIFACTS_ROUTE}/${coverArtifact.token}`;
@@ -1037,7 +1090,7 @@ export function createBookPublishingServerPlugin(
             coverPdfUrl,
           });
           if (!validation.interior.ok || !validation.cover.ok) {
-            revokeArtifactsForJob(externalId);
+            await deleteArtifactObjects(serverPorts, createdArtifactIds);
             throw new KinloomHttpError(
               422,
               'BOOK_PREFLIGHT_FAILED',
@@ -1061,11 +1114,8 @@ export function createBookPublishingServerPlugin(
             shippingLevel: parsed.data.shippingLevel ?? state.config.defaultShippingLevel,
           });
 
-          trackedJobs.set(job.jobId, job);
-          const createdArtifacts = jobGroupToArtifacts.get(externalId);
-          if (createdArtifacts) {
-            jobGroupToArtifacts.set(job.jobId, createdArtifacts);
-          }
+          const jobsStore = resolveJobsStore(ctx);
+          await jobsStore.upsertJob(job, createdArtifactIds);
 
           return jsonResponse(
             {
@@ -1084,8 +1134,10 @@ export function createBookPublishingServerPlugin(
         minRole: 'admin',
         async handle(ctx): Promise<Response> {
           const cleanPath = ctx.url.pathname.replace(/\/+$/, '');
+          const jobsStore = resolveJobsStore(ctx);
           if (cleanPath === BOOK_PUBLISHING_JOBS_ROUTE) {
-            return jsonResponse({ jobs: [...trackedJobs.values()] }, 200, {
+            const jobs = await jobsStore.listJobs();
+            return jsonResponse({ jobs }, 200, {
               'cache-control': 'no-store',
             });
           }
@@ -1100,9 +1152,10 @@ export function createBookPublishingServerPlugin(
           const serverPorts = ctx.ports as KinloomServerPorts;
           const state = await loadEffectiveConfigAndSecrets(serverPorts);
           const provider = resolvePublisherProvider(state);
+          const existingRow = await jobsStore.getJob(jobId);
+          const existing = existingRow?.job;
           try {
             const refreshed = await provider.getPrintJobStatus(jobId);
-            const existing = trackedJobs.get(jobId);
             const merged: BookPrintJobRecord = existing
               ? {
                   ...existing,
@@ -1113,10 +1166,9 @@ export function createBookPublishingServerPlugin(
                   updatedAt: refreshed.updatedAt,
                 }
               : refreshed;
-            trackedJobs.set(jobId, merged);
+            await jobsStore.upsertJob(merged);
             return jsonResponse({ job: merged }, 200, { 'cache-control': 'no-store' });
           } catch (err) {
-            const existing = trackedJobs.get(jobId);
             if (existing) {
               return jsonResponse({ job: existing }, 200, { 'cache-control': 'no-store' });
             }
@@ -1140,19 +1192,27 @@ export function createBookPublishingServerPlugin(
           const token = cleanPath.slice(BOOK_PUBLISHING_ARTIFACTS_ROUTE.length + 1);
           const serverPorts = ctx.ports as KinloomServerPorts;
           const nowMs = Date.parse(serverPorts.clock.nowIso()) || Date.now();
-          const artifact = await verifyArtifactToken(token, nowMs);
-          if (!artifact) {
+          const verified = await verifyArtifactToken(ctx, serverPorts, token, nowMs);
+          if (!verified) {
             throw new KinloomHttpError(
               401,
               'INVALID_ARTIFACT_TOKEN',
               'Book artifact token is invalid, expired, or revoked.'
             );
           }
-          return new Response(new Uint8Array(artifact.bytes).buffer, {
+          const stored = await serverPorts.mediaStore.get(artifactMediaKey(verified.artifactId));
+          if (!stored) {
+            throw new KinloomHttpError(
+              401,
+              'INVALID_ARTIFACT_TOKEN',
+              'Book artifact token is invalid, expired, or revoked.'
+            );
+          }
+          return new Response(stored.body, {
             status: 200,
             headers: {
               'content-type': 'application/pdf',
-              'content-disposition': `inline; filename="${artifact.fileName}"`,
+              'content-disposition': `inline; filename="${verified.fileName}"`,
               'cache-control': 'no-store',
               'x-robots-tag': 'noindex, nofollow',
             },
@@ -1210,9 +1270,11 @@ export function createBookPublishingServerPlugin(
           const trackingUrls = (parsed.data.data.line_items ?? []).flatMap((li) => li.tracking_urls ?? []);
           const nowIso = serverPorts.clock.nowIso();
 
-          const existing = trackedJobs.get(jobId);
+          const jobsStore = resolveJobsStore(ctx);
+          const existingRow = await jobsStore.getJob(jobId);
+          const existing = existingRow?.job;
           if (existing) {
-            trackedJobs.set(jobId, {
+            await jobsStore.upsertJob({
               ...existing,
               status: mappedStatus,
               statusDetail: statusDetail ?? existing.statusDetail,
@@ -1230,7 +1292,7 @@ export function createBookPublishingServerPlugin(
               defaultSpec,
               resolveLuluPodPackageId(defaultSpec)
             );
-            trackedJobs.set(jobId, {
+            await jobsStore.upsertJob({
               providerId: resolveActivePublisherLabel(state.config),
               jobId,
               externalId: jobId,
@@ -1253,7 +1315,8 @@ export function createBookPublishingServerPlugin(
             mappedStatus === 'canceled' ||
             mappedStatus === 'rejected'
           ) {
-            revokeArtifactsForJob(jobId);
+            const artifactIds = await jobsStore.clearArtifactIds(jobId);
+            await deleteArtifactObjects(serverPorts, artifactIds);
           }
 
           return jsonResponse(
