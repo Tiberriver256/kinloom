@@ -333,7 +333,7 @@ export const KinshipPage: React.FC = () => {
                   <p
                     style={{
                       margin: '0 0 12px',
-                      fontFamily: 'var(--font-mono)',
+                      fontFamily: 'var(--font-ui)',
                       fontSize: '0.78rem',
                       color: 'var(--text-secondary)',
                     }}
@@ -529,7 +529,7 @@ export const KinshipPage: React.FC = () => {
                     >
                       <div
                         style={{
-                          fontFamily: 'var(--font-mono)',
+                          fontFamily: 'var(--font-ui)',
                           fontSize: '0.78rem',
                           color: 'var(--text-secondary)',
                           marginBottom: 8,

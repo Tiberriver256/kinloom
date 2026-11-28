@@ -49,7 +49,7 @@
 }
 
 .pronunciation-lang {
-  font-family: var(--font-mono);
+  font-family: var(--font-ui);
   font-size: 0.75rem;
   text-transform: uppercase;
   letter-spacing: 0.05em;
@@ -304,8 +304,8 @@
 }
 
 .pronunciation-source {
-  font-family: var(--font-mono);
-  font-size: 0.7rem;
+  font-family: var(--font-ui);
+  font-size: 0.75rem;
   color: var(--text-secondary);
 }
 

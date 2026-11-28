@@ -40,8 +40,8 @@
   padding: 4px 8px;
   border-radius: var(--radius-sm);
   border: 1px solid currentColor;
-  font-family: var(--font-mono);
-  font-size: 0.72rem;
+  font-family: var(--font-ui);
+  font-size: 0.75rem;
   font-weight: 600;
   letter-spacing: 0.02em;
   line-height: 1.3;
@@ -78,8 +78,8 @@
 }
 
 .evidence-basis-tag {
-  font-family: var(--font-mono);
-  font-size: 0.72rem;
+  font-family: var(--font-ui);
+  font-size: 0.75rem;
   color: var(--text-secondary);
 }
 
@@ -148,8 +148,8 @@
   background: var(--surface-card);
   border: 1px solid var(--border-control);
   border-radius: 2px;
-  font-family: var(--font-mono);
-  font-size: 0.73rem;
+  font-family: var(--font-ui);
+  font-size: 0.75rem;
   font-weight: 600;
   color: var(--text-primary);
   text-decoration: none;

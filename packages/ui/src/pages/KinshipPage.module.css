@@ -37,8 +37,8 @@
 }
 
 .kinship-stat-label {
-  font-family: var(--font-mono);
-  font-size: 0.74rem;
+  font-family: var(--font-ui);
+  font-size: 0.75rem;
   letter-spacing: 0.05em;
   color: var(--text-secondary);
 }
@@ -75,7 +75,7 @@
 }
 
 .kinship-path-hint {
-  font-family: var(--font-mono);
+  font-family: var(--font-ui);
   font-size: 0.78rem;
   color: var(--text-secondary);
 }
@@ -163,8 +163,8 @@
 
 .kinship-mrca-badge {
   display: inline-block;
-  font-family: var(--font-mono);
-  font-size: 0.68rem;
+  font-family: var(--font-ui);
+  font-size: 0.75rem;
   text-transform: uppercase;
   letter-spacing: 0.05em;
   color: var(--accent-primary);
@@ -183,8 +183,8 @@
   align-items: center;
   justify-content: center;
   gap: 4px;
-  font-family: var(--font-mono);
-  font-size: 0.74rem;
+  font-family: var(--font-ui);
+  font-size: 0.75rem;
   color: var(--radar-copresence);
   border-bottom: 1px dashed var(--radar-copresence);
   padding: 2px 4px;

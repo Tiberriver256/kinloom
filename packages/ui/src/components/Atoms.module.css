@@ -326,7 +326,7 @@
   border-bottom: 1px solid var(--border-control);
   border-radius: 0;
   padding: 2px 0;
-  font-family: var(--font-mono);
+  font-family: var(--font-ui);
   font-size: 0.76rem;
   color: var(--text-secondary);
   cursor: pointer;
@@ -345,8 +345,8 @@
 
 .conflict-pill {
   display: inline-block;
-  font-family: var(--font-mono);
-  font-size: 0.74rem;
+  font-family: var(--font-ui);
+  font-size: 0.75rem;
   font-weight: 600;
   line-height: 1.3;
   padding: 4px 8px;

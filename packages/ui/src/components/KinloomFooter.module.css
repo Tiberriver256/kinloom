@@ -27,7 +27,7 @@
 }
 
 .kinloom-footer-link {
-  font-family: var(--font-mono);
+  font-family: var(--font-ui);
   font-size: 0.76rem;
   color: var(--text-secondary);
   border-bottom: none;
@@ -51,8 +51,8 @@
   display: inline-flex;
   align-items: center;
   gap: 8px;
-  font-family: var(--font-mono);
-  font-size: 0.74rem;
+  font-family: var(--font-ui);
+  font-size: 0.75rem;
   color: var(--text-secondary);
 }
 
