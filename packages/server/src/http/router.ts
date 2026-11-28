@@ -42,6 +42,7 @@ import { createAuthRouteHandler } from './routes/authRoutes.js';
 import { createMediaAndTalkRouteHandler } from './routes/mediaAndTalkRoutes.js';
 import { createPrivacyAndOgRouteHandler } from './routes/privacyAndOgRoutes.js';
 import { createPronunciationRouteHandler } from './routes/pronunciationRoutes.js';
+import { createPublicPwaRouteHandler } from './routes/pwaRoutes.js';
 import { createWikiRouteHandler } from './routes/wikiRoutes.js';
 import { applySecurityHeaders } from './securityHeaders.js';
 import { isSecureRequestUrl } from './session.js';
@@ -330,6 +331,11 @@ export function createKinloomServer(config: KinloomServerConfig): KinloomServer 
     privacyDisclosures: documentContributions?.privacyDisclosures,
   });
 
+  const handlePublicPwaAsset = createPublicPwaRouteHandler({
+    siteConfig: config.siteConfig,
+    assetHandler: config.ports.assetHandler,
+  });
+
   const routeHandlers: readonly HttpRouteHandler[] = [
     createAuthRouteHandler({
       authService,
@@ -363,6 +369,11 @@ export function createKinloomServer(config: KinloomServerConfig): KinloomServer 
     const publicDocResponse = await handlePublicPrivacyOrOg({ pathname, method, isSecure });
     if (publicDocResponse !== null) {
       return publicDocResponse;
+    }
+
+    const publicPwaResponse = await handlePublicPwaAsset({ request, pathname, method });
+    if (publicPwaResponse !== null) {
+      return publicPwaResponse;
     }
 
     const segments = pathname.split('/').filter(Boolean);

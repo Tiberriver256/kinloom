@@ -45,7 +45,7 @@ describe('kinloom brandkit command', () => {
     expect(ico.readUInt8(22)).toBe(32); // second frame width
   });
 
-  it('generates all 10 all-device brandkit assets with light/dark favicons and < 300 KB OG budget', async () => {
+  it('generates all 11 all-device brandkit and PWA assets with light/dark favicons, sw.js, and < 300 KB OG budget', async () => {
     const dir = await makeTempDir('kinloom-brandkit-default-');
     const outDir = path.join(dir, 'public');
 
@@ -60,6 +60,7 @@ describe('kinloom brandkit command', () => {
       'icon-512.png',
       'icon-maskable-512.png',
       'site.webmanifest',
+      'sw.js',
       'og-default.png',
     ]);
     expect(result.ogBytes).toBeLessThan(KINLOOM_OG_DIMENSIONS.recommendedMaxBytes);
@@ -93,11 +94,27 @@ describe('kinloom brandkit command', () => {
     expect(icoBuf.readUInt16LE(4)).toBe(3);
 
     const manifest = JSON.parse(await readFile(path.join(outDir, 'site.webmanifest'), 'utf8')) as {
+      id: string;
       name: string;
+      start_url: string;
+      scope: string;
+      display: string;
+      orientation: string;
       icons: Array<{ purpose: string; sizes: string }>;
     };
+    expect(manifest.id).toBe('/');
     expect(manifest.name).toBe('Kinloom');
+    expect(manifest.start_url).toBe('/');
+    expect(manifest.scope).toBe('/');
+    expect(manifest.display).toBe('standalone');
+    expect(manifest.orientation).toBe('any');
     expect(manifest.icons.some((i) => i.purpose === 'maskable' && i.sizes === '512x512')).toBe(true);
+
+    const swScript = await readFile(path.join(outDir, 'sw.js'), 'utf8');
+    expect(swScript).toContain('"/api"');
+    expect(swScript).toContain('"/media"');
+    expect(swScript).toContain('"/data"');
+    expect(swScript).not.toMatch(/\bcaches\.open\b/);
   });
 
   it('supports config-driven customization, vignette image, --no-force, and CLI dispatch', async () => {
@@ -155,19 +172,33 @@ describe('kinloom brandkit command', () => {
       stderr: (line) => stderr.push(line),
     };
 
-    const code = await runCli(['brandkit', '--config', configPath, '--out', outDir, '--print-head'], {
-      io,
-      cwd: dir,
-    });
+    const code = await runCli(
+      ['brandkit', '--config', configPath, '--out', outDir, '--base-url', '/alder/', '--print-head'],
+      {
+        io,
+        cwd: dir,
+      }
+    );
     expect(code).toBe(EXIT_OK);
     expect(stderr).toEqual([]);
     expect(stdout.join('\n')).toContain('Generated brandkit');
     expect(stdout.join('\n')).toContain('og:image');
+    expect(stdout.join('\n')).toContain('apple-mobile-web-app-capable');
+    expect(stdout.join('\n')).toContain('href="/alder/site.webmanifest"');
+
+    const manifest = JSON.parse(await readFile(path.join(outDir, 'site.webmanifest'), 'utf8')) as {
+      id: string;
+      start_url: string;
+      scope: string;
+    };
+    expect(manifest.id).toBe('/alder/');
+    expect(manifest.start_url).toBe('/alder/');
+    expect(manifest.scope).toBe('/alder/');
 
     const svg = await readFile(path.join(outDir, 'favicon.svg'), 'utf8');
     expect(svg).toContain('#2F5245');
 
-    // Re-running with --no-force skips all 8 existing files
+    // Re-running with --no-force skips all 11 existing files
     const skipResult = await runBrandkitCommand({ configPath, outDir, force: false, cwd: dir });
     expect(skipResult.files.every((f) => f.skipped)).toBe(true);
   });

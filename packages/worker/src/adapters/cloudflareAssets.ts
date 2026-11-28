@@ -1,28 +1,13 @@
+import { type AssetHandler, getPublicPwaAssetSpec, type KinloomSiteConfig } from '@kinloom/core';
 import {
-  type AssetHandler,
-  renderDarkFaviconSvg,
-  renderFaviconSvg,
-  renderLightFaviconSvg,
-} from '@kinloom/core';
-import { applySecurityHeaders } from '@kinloom/server';
+  applySecurityHeaders,
+  buildPublicPwaFallbackResponse,
+  isValidPublicPwaAssetResponse,
+  normalizePublicPwaAssetResponse,
+} from '@kinloom/server';
 import type { Fetcher } from '../types.js';
 
-const KINLOOM_FAVICON_FALLBACKS: Readonly<Record<string, string>> = {
-  '/favicon.svg': renderFaviconSvg(),
-  '/favicon-light.svg': renderLightFaviconSvg(),
-  '/favicon-dark.svg': renderDarkFaviconSvg(),
-};
-
 const STATIC_ASSET_EXTENSION_PATTERN = /\.[a-z0-9]{1,8}$/i;
-
-function isHtmlResponse(response: Response): boolean {
-  const contentType = response.headers.get('content-type')?.toLowerCase() ?? '';
-  return contentType.includes('text/html');
-}
-
-function isValidStaticAssetResponse(response: Response): boolean {
-  return response.status === 304 || (response.ok && !isHtmlResponse(response));
-}
 
 function notFoundPlainResponse(): Response {
   return new Response('Not Found', {
@@ -34,11 +19,20 @@ function notFoundPlainResponse(): Response {
   });
 }
 
+export interface CloudflareAssetHandlerOptions {
+  readonly siteConfig?: KinloomSiteConfig | null;
+}
+
 /**
  * Cloudflare ASSETS binding adapter for serving SPA routes and static files.
- * Never falls back to SPA HTML for /api/*, /media/*, /favicon.ico, /favicon.svg, or missing static assets.
+ * Never falls back to SPA HTML for /api/*, /media/*, /sources/*, PWA assets, or missing static files.
  */
-export function createCloudflareAssetHandler(assets?: Fetcher): AssetHandler {
+export function createCloudflareAssetHandler(
+  assets?: Fetcher,
+  options?: CloudflareAssetHandlerOptions
+): AssetHandler {
+  const siteConfig = options?.siteConfig ?? null;
+
   async function resolveAssetResponse(request: Request, url: URL): Promise<Response> {
     const pathname = url.pathname;
 
@@ -53,31 +47,17 @@ export function createCloudflareAssetHandler(assets?: Fetcher): AssetHandler {
       return notFoundPlainResponse();
     }
 
-    const fallbackFaviconSvg = KINLOOM_FAVICON_FALLBACKS[pathname];
-    if (fallbackFaviconSvg !== undefined) {
+    const headOnly = request.method.toUpperCase() === 'HEAD';
+    const pwaSpec = getPublicPwaAssetSpec(pathname);
+    if (pwaSpec) {
       if (assets) {
         const assetRes = await assets.fetch(request);
-        if (isValidStaticAssetResponse(assetRes)) {
-          return assetRes;
+        if (isValidPublicPwaAssetResponse(assetRes)) {
+          return normalizePublicPwaAssetResponse(assetRes, pwaSpec, headOnly);
         }
       }
-      return new Response(fallbackFaviconSvg, {
-        status: 200,
-        headers: {
-          'content-type': 'image/svg+xml; charset=utf-8',
-          'cache-control': 'public, max-age=86400',
-        },
-      });
-    }
-
-    if (pathname === '/favicon.ico') {
-      if (assets) {
-        const assetRes = await assets.fetch(request);
-        if (isValidStaticAssetResponse(assetRes)) {
-          return assetRes;
-        }
-      }
-      return notFoundPlainResponse();
+      const fallback = buildPublicPwaFallbackResponse(pwaSpec, siteConfig, headOnly);
+      return fallback ?? notFoundPlainResponse();
     }
 
     if (!assets) {
@@ -87,7 +67,7 @@ export function createCloudflareAssetHandler(assets?: Fetcher): AssetHandler {
     const directRes = await assets.fetch(request);
 
     if (STATIC_ASSET_EXTENSION_PATTERN.test(pathname)) {
-      if (isValidStaticAssetResponse(directRes)) {
+      if (isValidPublicPwaAssetResponse(directRes)) {
         return directRes;
       }
       return notFoundPlainResponse();

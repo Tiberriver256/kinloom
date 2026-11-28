@@ -416,3 +416,19 @@
     display: none;
   }
 }
+
+@media (display-mode: standalone) {
+  .topbar {
+    padding-top: calc(8px + env(safe-area-inset-top, 0px));
+    padding-left: calc(26px + env(safe-area-inset-left, 0px));
+    padding-right: calc(26px + env(safe-area-inset-right, 0px));
+  }
+}
+
+@media (display-mode: standalone) and (max-width: 1023px) {
+  .topbar {
+    padding-top: calc(6px + env(safe-area-inset-top, 0px));
+    padding-left: calc(12px + env(safe-area-inset-left, 0px));
+    padding-right: calc(12px + env(safe-area-inset-right, 0px));
+  }
+}

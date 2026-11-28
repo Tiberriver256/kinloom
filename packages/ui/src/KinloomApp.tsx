@@ -2,6 +2,7 @@ import type { ArchiveBundle, ArchiveDataSource, KinloomSiteConfig, ReadingsBundl
 import type React from 'react';
 import { lazy, Suspense, useEffect } from 'react';
 import { BrowserRouter, MemoryRouter, Navigate, Route, Routes, useLocation } from 'react-router-dom';
+import { registerKinloomServiceWorker } from './browser/registerServiceWorker.js';
 import { AppErrorBoundary } from './components/AppErrorBoundary.js';
 import statusShellStyles from './components/ArchiveStatusShell.module.css';
 import { BlankScreenWatchdog } from './components/BlankScreenWatchdog.js';
@@ -214,6 +215,13 @@ export const KinloomApp: React.FC<KinloomAppProps> = ({
       document.title = siteConfig.site.title;
     }
   }, [siteConfig.site.title]);
+
+  useEffect(() => {
+    if (initialEntries) {
+      return;
+    }
+    void registerKinloomServiceWorker({ baseUrl: resolvedBase });
+  }, [initialEntries, resolvedBase]);
 
   const rootStyle: React.CSSProperties | undefined =
     siteConfig.theme?.accent || siteConfig.theme?.accentDark

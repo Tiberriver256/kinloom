@@ -12,6 +12,7 @@ import {
   renderFaviconSvg,
   renderIconSvg,
   renderOgCardSvg,
+  renderPrivacySafeServiceWorkerScript,
   resolveBrandSpec,
 } from '@kinloom/core';
 import sharp from 'sharp';
@@ -81,6 +82,7 @@ export interface BrandkitCommandOptions {
   readonly surface?: BrandSurface;
   readonly markSvgPath?: string;
   readonly vignetteImagePath?: string;
+  readonly baseUrl?: string;
   readonly force?: boolean;
   readonly cwd?: string;
 }
@@ -185,6 +187,7 @@ export async function runBrandkitCommand(options: BrandkitCommandOptions): Promi
     surface: options.surface,
     customMarkInnerSvg,
     vignetteDataUri,
+    baseUrl: options.baseUrl,
   };
 
   const spec = resolveBrandSpec(siteConfig, overrides);
@@ -290,6 +293,10 @@ export async function runBrandkitCommand(options: BrandkitCommandOptions): Promi
   ]);
 
   const webManifest = `${JSON.stringify(buildWebManifest(siteConfig, overrides), null, 2)}\n`;
+  const serviceWorkerScript = renderPrivacySafeServiceWorkerScript({
+    baseUrl: options.baseUrl,
+    siteTitle: spec.title,
+  });
 
   const resolvedOutDir = path.resolve(cwd, outDirRaw);
   await mkdir(resolvedOutDir, { recursive: true });
@@ -305,6 +312,7 @@ export async function runBrandkitCommand(options: BrandkitCommandOptions): Promi
     ['icon-512.png', icon512Png],
     ['icon-maskable-512.png', iconMaskable512Png],
     ['site.webmanifest', webManifest],
+    ['sw.js', serviceWorkerScript],
     ['og-default.png', ogDefaultPng],
   ];
 

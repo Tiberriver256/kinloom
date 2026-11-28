@@ -215,23 +215,44 @@ describe('brandkit core primitives', () => {
     expect(split).toContain('href="data:image/jpeg;base64,AAAA"');
   });
 
-  it('builds a complete web manifest with any and maskable icons', () => {
+  it('builds a complete web manifest with standalone metadata, subpath baseUrl, and any + maskable icons', () => {
     const config = makeSampleConfig();
     const manifest = buildWebManifest(config);
+    expect(manifest.id).toBe('/');
     expect(manifest.name).toBe('Alder Family Archive');
+    expect(manifest.start_url).toBe('/');
+    expect(manifest.scope).toBe('/');
     expect(manifest.display).toBe('standalone');
-    expect(manifest.icons.map((i) => `${i.sizes}:${i.purpose}`)).toEqual([
-      '192x192:any',
-      '512x512:any',
-      '512x512:maskable',
+    expect(manifest.orientation).toBe('any');
+    expect(manifest.theme_color).toBe('#F5EFE2');
+    expect(manifest.background_color).toBe('#F5EFE2');
+    expect(manifest.icons.map((i) => `${i.src}:${i.sizes}:${i.purpose}`)).toEqual([
+      '/icon-192.png:192x192:any',
+      '/icon-512.png:512x512:any',
+      '/icon-maskable-512.png:512x512:maskable',
+    ]);
+
+    const subpathManifest = buildWebManifest(config, { baseUrl: '/kinloom' });
+    expect(subpathManifest.id).toBe('/kinloom/');
+    expect(subpathManifest.start_url).toBe('/kinloom/');
+    expect(subpathManifest.scope).toBe('/kinloom/');
+    expect(subpathManifest.icons.map((i) => i.src)).toEqual([
+      '/kinloom/icon-192.png',
+      '/kinloom/icon-512.png',
+      '/kinloom/icon-maskable-512.png',
     ]);
   });
 
-  it('renders complete head tags with color-scheme, pre-paint init, light/dark favicons, OG tags, and manifest', () => {
+  it('renders complete head tags with standalone PWA meta tags, color-scheme, pre-paint init, light/dark favicons, OG tags, and manifest', () => {
     const tags = renderBrandkitHeadTags(makeSampleConfig());
     expect(tags).toContain('<meta name="color-scheme" content="light dark" />');
     expect(tags).toContain(renderThemeInitScript());
+    expect(tags.match(/<script\b/g)).toHaveLength(1);
     expect(tags).toContain('name="theme-color" content="#171614" media="(prefers-color-scheme: dark)"');
+    expect(tags).toContain('<meta name="mobile-web-app-capable" content="yes" />');
+    expect(tags).toContain('<meta name="apple-mobile-web-app-capable" content="yes" />');
+    expect(tags).toContain('<meta name="apple-mobile-web-app-status-bar-style" content="default" />');
+    expect(tags).toContain('<meta name="apple-mobile-web-app-title" content="Alder Family" />');
     expect(tags).toContain(
       '<link rel="icon" type="image/svg+xml" media="(prefers-color-scheme: light)" href="/favicon-light.svg" />'
     );
@@ -244,6 +265,12 @@ describe('brandkit core primitives', () => {
     expect(tags).toContain('property="og:image:height" content="630"');
     expect(tags).toContain('rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png"');
     expect(tags).toContain('rel="manifest" href="/site.webmanifest"');
+
+    const subpathTags = renderBrandkitHeadTags(makeSampleConfig(), { baseUrl: '/kinloom/' });
+    expect(subpathTags).toContain(
+      'rel="apple-touch-icon" sizes="180x180" href="/kinloom/apple-touch-icon.png"'
+    );
+    expect(subpathTags).toContain('rel="manifest" href="/kinloom/site.webmanifest"');
   });
 
   it('strictly redacts living people in resolveRouteOgMetadata while allowing deceased ancestors', () => {

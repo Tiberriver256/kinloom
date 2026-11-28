@@ -49,6 +49,7 @@ export async function runBrandkit(rest: readonly string[], ctx: CliDispatchConte
       surface: { type: 'string' },
       mark: { type: 'string' },
       vignette: { type: 'string' },
+      'base-url': { type: 'string' },
       'print-head': { type: 'boolean', default: false },
       'no-force': { type: 'boolean', default: false },
     },
@@ -68,6 +69,7 @@ export async function runBrandkit(rest: readonly string[], ctx: CliDispatchConte
     surface: surface as 'parchment' | 'navy' | undefined,
     markSvgPath: values.mark,
     vignetteImagePath: values.vignette,
+    baseUrl: values['base-url'],
     force: !values['no-force'],
     cwd: ctx.cwd,
   });

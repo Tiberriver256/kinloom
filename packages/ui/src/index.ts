@@ -49,6 +49,7 @@ export {
 } from './adapters/staticDemoDataSource.js';
 export * from './browser/clientTelemetry.js';
 export * from './browser/ohmStyle.js';
+export * from './browser/registerServiceWorker.js';
 export type { AppErrorBoundaryProps } from './components/AppErrorBoundary.js';
 export { AppErrorBoundary } from './components/AppErrorBoundary.js';
 export type { ArchivalFileDropzoneProps } from './components/ArchivalFileDropzone.js';

@@ -1,9 +1,12 @@
 {
+  "id": "/",
   "name": "Lincoln & Todd Historical Archive",
   "short_name": "Lincoln & Todd",
   "description": "Public-domain ten-generation historical archive (1622–1985) tracing the Lincoln, Hanks, Todd, and Harlan branches from Hingham, Norfolk and County Longford across Massachusetts, New Jersey, Pennsylvania, Virginia, Kentucky, Indiana, Illinois, Iowa, Washington, D.C., and Vermont with primary NARA and Library of Congress records.",
   "start_url": "/",
+  "scope": "/",
   "display": "standalone",
+  "orientation": "any",
   "background_color": "#F5EFE2",
   "theme_color": "#F5EFE2",
   "icons": [

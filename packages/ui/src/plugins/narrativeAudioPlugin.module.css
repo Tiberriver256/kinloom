@@ -469,3 +469,19 @@
     margin: -8px 0;
   }
 }
+
+@media (display-mode: standalone) {
+  .narrative-audio-dock-inner {
+    padding-bottom: calc(10px + env(safe-area-inset-bottom, 0px));
+    padding-left: calc(18px + env(safe-area-inset-left, 0px));
+    padding-right: calc(18px + env(safe-area-inset-right, 0px));
+  }
+}
+
+@media (display-mode: standalone) and (max-width: 768px) {
+  .narrative-audio-dock-inner {
+    padding-bottom: calc(6px + env(safe-area-inset-bottom, 0px));
+    padding-left: calc(10px + env(safe-area-inset-left, 0px));
+    padding-right: calc(10px + env(safe-area-inset-right, 0px));
+  }
+}

@@ -40,7 +40,7 @@ Options:
   {
     name: 'brandkit',
     category: 'lifecycle',
-    summary: 'Generate all-device favicons, PWA icons, manifest, and Open Graph image',
+    summary: 'Generate all-device favicons, PWA icons, manifest, service worker, and Open Graph image',
     help: `Usage: kinloom brandkit [options]
 
 Options:
@@ -53,6 +53,7 @@ Options:
   --surface <theme>    Card/icon surface theme: 'parchment' or 'navy' (default: parchment)
   --mark <svg-path>    Custom SVG mark file to embed instead of default KinloomMark
   --vignette <imgPath> Optional archival vignette image for split-layout OG card
+  --base-url <path>    Optional deployment base path (default: /, e.g. /kinloom/)
   --print-head         Print ready-to-paste HTML <head> meta & icon tags
   --no-force           Skip files that already exist
   -h, --help           Show this help message`,

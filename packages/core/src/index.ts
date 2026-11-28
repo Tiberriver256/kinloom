@@ -40,6 +40,8 @@ export * from './machines/index.js';
 export * from './patchArchive.js';
 // Living-Person Privacy Filter
 export * from './privacy.js';
+// Standalone PWA Manifest, Asset Specs & Privacy-Safe Service Worker
+export * from './pwa.js';
 // Residence Spans & Place Ancestor Graph
 export * from './residenceSpans.js';
 // Wiki Revision Diff & Revert Engine

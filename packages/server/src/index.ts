@@ -158,6 +158,13 @@ export {
   renderPrivacyPolicyHtml,
 } from './http/routes/privacyAndOgRoutes.js';
 export {
+  buildPublicPwaFallbackResponse,
+  createPublicPwaRouteHandler,
+  isValidPublicPwaAssetResponse,
+  normalizePublicPwaAssetResponse,
+  type PublicPwaRouteHandlerDeps,
+} from './http/routes/pwaRoutes.js';
+export {
   type ApplySecurityHeadersOptions,
   applySecurityHeaders,
   buildContentSecurityPolicy,

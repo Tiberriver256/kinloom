@@ -20,6 +20,7 @@ import {
 } from './brandkitSvg.js';
 import { edtfYear } from './edtf.js';
 import { isPersonLivingPublic } from './privacy.js';
+import { joinPwaBasePath, normalizePwaBaseUrl } from './pwa.js';
 import type { KinloomSiteConfig, PrivacyConfig } from './schemas/config.js';
 import type { RawPerson } from './schemas/entities.js';
 
@@ -73,6 +74,7 @@ export interface BrandOverrides {
   readonly ogImageAlt?: string;
   readonly customMarkInnerSvg?: string;
   readonly vignetteDataUri?: string;
+  readonly baseUrl?: string;
 }
 
 export interface WebManifestIcon {
@@ -83,11 +85,14 @@ export interface WebManifestIcon {
 }
 
 export interface KinloomWebManifest {
+  readonly id: string;
   readonly name: string;
   readonly short_name: string;
   readonly description: string;
   readonly start_url: string;
+  readonly scope: string;
   readonly display: 'standalone';
+  readonly orientation: 'any';
   readonly background_color: string;
   readonly theme_color: string;
   readonly icons: readonly WebManifestIcon[];
@@ -177,29 +182,34 @@ export function buildWebManifest(
   overrides?: BrandOverrides
 ): KinloomWebManifest {
   const spec = resolveBrandSpec(config, overrides);
+  const baseUrl = normalizePwaBaseUrl(overrides?.baseUrl);
+  const surfaceColor = spec.surface === 'navy' ? spec.themeColorDark : spec.themeColorLight;
   return {
+    id: baseUrl,
     name: spec.title,
     short_name: spec.shortName,
     description: spec.description,
-    start_url: '/',
+    start_url: baseUrl,
+    scope: baseUrl,
     display: 'standalone',
-    background_color: spec.surface === 'navy' ? spec.themeColorDark : spec.themeColorLight,
-    theme_color: spec.surface === 'navy' ? spec.themeColorDark : spec.themeColorLight,
+    orientation: 'any',
+    background_color: surfaceColor,
+    theme_color: surfaceColor,
     icons: [
       {
-        src: '/icon-192.png',
+        src: joinPwaBasePath(baseUrl, 'icon-192.png'),
         sizes: '192x192',
         type: 'image/png',
         purpose: 'any',
       },
       {
-        src: '/icon-512.png',
+        src: joinPwaBasePath(baseUrl, 'icon-512.png'),
         sizes: '512x512',
         type: 'image/png',
         purpose: 'any',
       },
       {
-        src: '/icon-maskable-512.png',
+        src: joinPwaBasePath(baseUrl, 'icon-maskable-512.png'),
         sizes: '512x512',
         type: 'image/png',
         purpose: 'maskable',
@@ -217,8 +227,10 @@ export function renderBrandkitHeadTags(
   overrides?: BrandOverrides
 ): string {
   const spec = resolveBrandSpec(config, overrides);
+  const baseUrl = normalizePwaBaseUrl(overrides?.baseUrl);
   const siteName = escapeXml(spec.siteName);
   const title = escapeXml(spec.title);
+  const shortName = escapeXml(spec.shortName);
   const description = escapeXml(spec.description);
   const ogImage = escapeXml(spec.ogImagePath);
   const ogAlt = escapeXml(spec.ogImageAlt);
@@ -229,6 +241,10 @@ export function renderBrandkitHeadTags(
     renderThemeInitScript(),
     `<meta name="theme-color" content="${spec.themeColorLight}" media="(prefers-color-scheme: light)" />`,
     `<meta name="theme-color" content="${spec.themeColorDark}" media="(prefers-color-scheme: dark)" />`,
+    `<meta name="mobile-web-app-capable" content="yes" />`,
+    `<meta name="apple-mobile-web-app-capable" content="yes" />`,
+    `<meta name="apple-mobile-web-app-status-bar-style" content="default" />`,
+    `<meta name="apple-mobile-web-app-title" content="${shortName}" />`,
     `<meta property="og:site_name" content="${siteName}" />`,
     `<meta property="og:title" content="${title}" />`,
     `<meta property="og:description" content="${description}" />`,
@@ -242,12 +258,12 @@ export function renderBrandkitHeadTags(
     `<meta name="twitter:description" content="${description}" />`,
     `<meta name="twitter:image" content="${ogImage}" />`,
     `<meta name="twitter:image:alt" content="${ogAlt}" />`,
-    `<link rel="icon" href="/favicon.ico" sizes="48x48" />`,
-    `<link rel="icon" type="image/svg+xml" media="(prefers-color-scheme: light)" href="/favicon-light.svg" />`,
-    `<link rel="icon" type="image/svg+xml" media="(prefers-color-scheme: dark)" href="/favicon-dark.svg" />`,
-    `<link rel="icon" type="image/svg+xml" href="/favicon.svg" />`,
-    `<link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />`,
-    `<link rel="manifest" href="/site.webmanifest" />`,
+    `<link rel="icon" href="${joinPwaBasePath(baseUrl, 'favicon.ico')}" sizes="48x48" />`,
+    `<link rel="icon" type="image/svg+xml" media="(prefers-color-scheme: light)" href="${joinPwaBasePath(baseUrl, 'favicon-light.svg')}" />`,
+    `<link rel="icon" type="image/svg+xml" media="(prefers-color-scheme: dark)" href="${joinPwaBasePath(baseUrl, 'favicon-dark.svg')}" />`,
+    `<link rel="icon" type="image/svg+xml" href="${joinPwaBasePath(baseUrl, 'favicon.svg')}" />`,
+    `<link rel="apple-touch-icon" sizes="180x180" href="${joinPwaBasePath(baseUrl, 'apple-touch-icon.png')}" />`,
+    `<link rel="manifest" href="${joinPwaBasePath(baseUrl, 'site.webmanifest')}" />`,
   ].join('\n');
 }
 

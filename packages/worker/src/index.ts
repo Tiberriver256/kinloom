@@ -205,7 +205,10 @@ export {
   type WorkersObservabilitySink,
   type WorkersSecurityTelemetryOption,
 } from '@kinloom/server';
-export { createCloudflareAssetHandler } from './adapters/cloudflareAssets.js';
+export {
+  type CloudflareAssetHandlerOptions,
+  createCloudflareAssetHandler,
+} from './adapters/cloudflareAssets.js';
 export {
   buildMagicLinkEmailMessage,
   buildMagicLinkMimeMessage,
@@ -334,7 +337,9 @@ export function createCloudflareWorker(
               clientSecret: env.GOOGLE_CLIENT_SECRET,
             })
           : undefined);
-      const assetHandler = createCloudflareAssetHandler(env.ASSETS);
+      const assetHandler = createCloudflareAssetHandler(env.ASSETS, {
+        siteConfig: options.siteConfig,
+      });
       const pronunciationGenerator = options.pronunciationGenerator;
       const pronunciationEnv =
         env.GEMINI_API_KEY || env.GEMINI_TTS_MODEL || options.pronunciationFetch

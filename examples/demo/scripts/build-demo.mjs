@@ -1,6 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import {
+  buildWebManifest,
   compileArchive,
   parseEventsYaml,
   parseKinloomConfigYaml,
@@ -10,6 +11,7 @@ import {
   parsePeopleYaml,
   parsePlacesYaml,
   parseSourcesYaml,
+  renderPrivacySafeServiceWorkerScript,
 } from '@kinloom/core';
 
 const demoRoot = path.resolve(import.meta.dirname, '..');
@@ -112,6 +114,17 @@ for (const faviconFile of ['favicon.svg', 'favicon-light.svg', 'favicon-dark.svg
 
 // 2. Parse YAML inputs via @kinloom/core and compile archive.json
 const siteConfig = parseKinloomConfigYaml(readText('kinloom.config.yaml'));
+const demoBaseUrl = process.env.VITE_BASE_PATH || '/';
+fs.writeFileSync(
+  path.join(publicDir, 'site.webmanifest'),
+  `${JSON.stringify(buildWebManifest(siteConfig, { baseUrl: demoBaseUrl }), null, 2)}\n`,
+  'utf8',
+);
+fs.writeFileSync(
+  path.join(publicDir, 'sw.js'),
+  renderPrivacySafeServiceWorkerScript({ baseUrl: demoBaseUrl, siteTitle: siteConfig.site.title }),
+  'utf8',
+);
 const people = parsePeopleYaml(readText('people.yaml'));
 const places = parsePlacesYaml(readText('places.yaml'));
 const sources = parseSourcesYaml(readText('sources.yaml'));
