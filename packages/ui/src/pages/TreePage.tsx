@@ -8,6 +8,7 @@ import { EmptyStateNotice } from '../components/Atoms.js';
 import canvasSurfaceStyles from '../components/CanvasSurfacePrimitives.module.css';
 import { ExplorerTopBar } from '../components/ExplorerTopBar.js';
 import { TreeFocusDrawer } from '../components/tree/TreeFocusDrawer.js';
+import { TreeKinshipLoom } from '../components/tree/TreeKinshipLoom.js';
 import { TreeOrthogonalCanvas } from '../components/tree/TreeOrthogonalCanvas.js';
 import { TreePedigreeRoll } from '../components/tree/TreePedigreeRoll.js';
 import { TreeToolbar } from '../components/tree/TreeToolbar.js';
@@ -26,6 +27,7 @@ import {
   searchTreePeople,
 } from '../lib/archivalTreeModel.js';
 import { cx } from '../lib/cx.js';
+import { KINSHIP_LOOM_ZOOM_THRESHOLD } from '../lib/tree/kinshipLoomModel.js';
 import { KINLOOM_VOCABULARY } from '../lib/vocabulary.js';
 import controlStyles from '../styles/Controls.module.css';
 import layoutStyles from '../styles/Layout.module.css';
@@ -49,6 +51,7 @@ export const TreePage: React.FC = () => {
   const defaultBranchId = useMemo(() => resolveDefaultBranchId(siteConfig), [siteConfig]);
 
   const [surface, setSurface] = useState<TreeViewSurface>(initialPrefs.surface);
+  const [loomOpen, setLoomOpen] = useState<boolean>(() => searchParams.get('surface') === 'loom');
   const [mode, setMode] = useState<TreeLineageMode>(initialPrefs.mode);
   const [branchFilter, setBranchFilter] = useState<string>('all');
   const [selectedPersonId, setSelectedPersonId] = useState<string | null>(null);
@@ -546,6 +549,7 @@ export const TreePage: React.FC = () => {
           surface={surface}
           onSurfaceChange={(nextSurface) => {
             setSurface(nextSurface);
+            setLoomOpen(false);
             setMobileSearchOpen(false);
           }}
           searchQuery={searchQuery}
@@ -611,6 +615,23 @@ export const TreePage: React.FC = () => {
             }}
             onToggleUnionSiblings={handleToggleUnionSiblings}
           />
+        ) : loomOpen ? (
+          <TreeKinshipLoom
+            model={model}
+            selectedPersonId={selectedPerson?.id ?? null}
+            familyLabel={activeBranchLabel}
+            onSelectPerson={handleSelectPerson}
+            onReturnToChart={() => {
+              setLoomOpen(false);
+              if (canvas.zoomPercent < KINSHIP_LOOM_ZOOM_THRESHOLD) {
+                canvas.handleDiagramResetZoom();
+              }
+            }}
+            onSwitchToRoll={() => {
+              setLoomOpen(false);
+              setSurface('roll');
+            }}
+          />
         ) : (
           <>
             <div ref={stageRef} className={cx(treePageStyles, 'tree-stage')} style={stageStyle}>
@@ -657,10 +678,20 @@ export const TreePage: React.FC = () => {
                 canvas.handleDiagramZoomBy(1.28);
               }}
               onZoomOut={() => {
+                const nextZoom = Math.round(canvas.zoomPercent / 1.28);
+                if (nextZoom < KINSHIP_LOOM_ZOOM_THRESHOLD && model.totalVisibleCount > 0) {
+                  setLoomOpen(true);
+                  setLiveAnnouncement('Switched to Kinship Loom birth-year constellation view.');
+                  return;
+                }
                 canvas.handleDiagramZoomBy(1 / 1.28);
               }}
               onFit={canvas.animateFitToViewport}
               onResetZoom={canvas.handleDiagramResetZoom}
+              loomActive={loomOpen}
+              onToggleLoom={() => {
+                setLoomOpen((open) => !open);
+              }}
             />
           </>
         )}

@@ -1,0 +1,203 @@
+import type { Person } from '@kinloom/core';
+import type React from 'react';
+import { useCallback, useMemo, useRef, useState } from 'react';
+import { formatCardLifespan } from '../../lib/archivalTreeModel.js';
+import { cx } from '../../lib/cx.js';
+import { computeKinshipLoomLayout, computeKinshipLoomSpotlight } from '../../lib/tree/kinshipLoomModel.js';
+import type { ArchivalTreeModel } from '../../lib/tree/types.js';
+import controlStyles from '../../styles/Controls.module.css';
+import loomStyles from './TreeKinshipLoom.module.css';
+
+export interface TreeKinshipLoomProps {
+  readonly model: ArchivalTreeModel;
+  readonly selectedPersonId: string | null;
+  readonly familyLabel: string;
+  readonly onSelectPerson: (person: Person, fromKeyboard: boolean) => void;
+  readonly onReturnToChart: () => void;
+  readonly onSwitchToRoll: () => void;
+}
+
+export const TreeKinshipLoom: React.FC<TreeKinshipLoomProps> = ({
+  model,
+  selectedPersonId,
+  familyLabel,
+  onSelectPerson,
+  onReturnToChart,
+  onSwitchToRoll,
+}) => {
+  const [hoveredPersonId, setHoveredPersonId] = useState<string | null>(null);
+  const [focusedPersonId, setFocusedPersonId] = useState<string | null>(null);
+  const nodeRefs = useRef<Array<SVGGElement | null>>([]);
+
+  const layout = useMemo(() => computeKinshipLoomLayout({ model }), [model]);
+  const activeTraceId = focusedPersonId ?? hoveredPersonId ?? selectedPersonId;
+
+  const spotlight = useMemo(() => computeKinshipLoomSpotlight(model, activeTraceId), [model, activeTraceId]);
+
+  const activeTracePerson = useMemo(
+    () => (activeTraceId ? (layout.nodes.find((n) => n.person.id === activeTraceId)?.person ?? null) : null),
+    [layout.nodes, activeTraceId]
+  );
+
+  const handleNodeKeyDown = useCallback(
+    (e: React.KeyboardEvent<SVGGElement>, index: number, person: Person) => {
+      if (e.key === 'Enter' || e.key === ' ') {
+        e.preventDefault();
+        onSelectPerson(person, true);
+      } else if (e.key === 'ArrowRight' || e.key === 'ArrowDown') {
+        e.preventDefault();
+        const nextIdx = (index + 1) % layout.nodes.length;
+        nodeRefs.current[nextIdx]?.focus();
+      } else if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') {
+        e.preventDefault();
+        const prevIdx = (index - 1 + layout.nodes.length) % layout.nodes.length;
+        nodeRefs.current[prevIdx]?.focus();
+      } else if (e.key === 'Escape') {
+        setHoveredPersonId(null);
+        setFocusedPersonId(null);
+      }
+    },
+    [layout.nodes.length, onSelectPerson]
+  );
+
+  const hasSpotlight = spotlight !== null;
+
+  return (
+    <section
+      className={cx(loomStyles, 'kinship-loom-shell')}
+      aria-label={`${familyLabel} Kinship Loom birth-year constellation`}
+    >
+      <div className={cx(loomStyles, 'kinship-loom-bar')}>
+        <div className={cx(loomStyles, 'kinship-loom-meta')}>
+          <span className={cx(loomStyles, 'kinship-loom-title')}>Kinship Loom</span>
+          <span className={cx(loomStyles, 'kinship-loom-span')}>
+            {layout.minYear}–{layout.maxYear} · {layout.nodes.length}{' '}
+            {layout.nodes.length === 1 ? 'person' : 'people'}
+          </span>
+          {activeTracePerson && spotlight ? (
+            <span className={cx(loomStyles, 'kinship-loom-trace')}>
+              Trace My Thread: <strong>{activeTracePerson.full_name}</strong> (
+              {formatCardLifespan(activeTracePerson)}){' · '}
+              {spotlight.ancestorCount} {spotlight.ancestorCount === 1 ? 'ancestor' : 'ancestors'},{' '}
+              {spotlight.descendantCount} {spotlight.descendantCount === 1 ? 'descendant' : 'descendants'}
+            </span>
+          ) : (
+            <span className={cx(loomStyles, 'kinship-loom-hint')}>
+              Hover or Tab onto any ancestor to trace their direct thread
+            </span>
+          )}
+        </div>
+        <div className={cx(loomStyles, 'kinship-loom-actions')}>
+          <button type="button" className={cx(controlStyles, 'pill-btn')} onClick={onReturnToChart}>
+            Detail Chart
+          </button>
+          <button type="button" className={cx(controlStyles, 'pill-btn')} onClick={onSwitchToRoll}>
+            Reading Roll
+          </button>
+        </div>
+      </div>
+
+      <div className={cx(loomStyles, 'kinship-loom-canvas-wrap')}>
+        <svg
+          className={cx(loomStyles, `kinship-loom-svg${hasSpotlight ? ' has-spotlight' : ''}`)}
+          viewBox={`0 0 ${layout.width} ${layout.height}`}
+          role="group"
+          aria-label={`${familyLabel} birth-year river constellation (${layout.minYear}–${layout.maxYear})`}
+        >
+          <g className={cx(loomStyles, 'kinship-loom-axis')}>
+            {layout.decadeTicks.map((tick) => (
+              <g key={tick.year} transform={`translate(0, ${tick.y})`}>
+                <line
+                  x1={64}
+                  y1={0}
+                  x2={layout.width - 24}
+                  y2={0}
+                  className={cx(loomStyles, 'kinship-loom-gridline')}
+                />
+                <text x={56} y={4} textAnchor="end" className={cx(loomStyles, 'kinship-loom-year-label')}>
+                  {tick.year}
+                </text>
+              </g>
+            ))}
+          </g>
+
+          <g className={cx(loomStyles, 'kinship-loom-threads')}>
+            {layout.threads.map((thread) => {
+              const isLit = Boolean(
+                spotlight?.highlightedPersonIds.has(thread.fromPersonId) &&
+                  spotlight.highlightedPersonIds.has(thread.toPersonId)
+              );
+              return (
+                <path
+                  key={thread.id}
+                  d={thread.path}
+                  data-lit={isLit ? 'true' : 'false'}
+                  className={cx(
+                    loomStyles,
+                    `kinship-loom-thread kind-${thread.kind}${thread.isCrossBranch ? ' is-cross-branch' : ''}${isLit ? ' is-lit' : ''}`
+                  )}
+                />
+              );
+            })}
+          </g>
+
+          <g className={cx(loomStyles, 'kinship-loom-nodes')}>
+            {layout.nodes.map((node, idx) => {
+              const pid = node.person.id;
+              const isLit = Boolean(spotlight?.highlightedPersonIds.has(pid));
+              const isFocus = activeTraceId === pid;
+              const lifespan = formatCardLifespan(node.person);
+              return (
+                <g
+                  key={pid}
+                  ref={(el) => {
+                    nodeRefs.current[idx] = el;
+                  }}
+                  transform={`translate(${node.x}, ${node.y})`}
+                  role="button"
+                  tabIndex={0}
+                  aria-label={`${node.person.full_name} (${lifespan})`}
+                  aria-pressed={selectedPersonId === pid}
+                  data-person-id={pid}
+                  data-lit={isLit ? 'true' : 'false'}
+                  className={cx(
+                    loomStyles,
+                    `kinship-loom-node${isLit ? ' is-lit' : ''}${isFocus ? ' is-focus' : ''}${node.isAnchor ? ' is-anchor' : ''}`
+                  )}
+                  onMouseEnter={() => {
+                    setHoveredPersonId(pid);
+                  }}
+                  onMouseLeave={() => {
+                    setHoveredPersonId((cur) => (cur === pid ? null : cur));
+                  }}
+                  onFocus={() => {
+                    setFocusedPersonId(pid);
+                  }}
+                  onBlur={() => {
+                    setFocusedPersonId((cur) => (cur === pid ? null : cur));
+                  }}
+                  onClick={() => {
+                    onSelectPerson(node.person, false);
+                  }}
+                  onKeyDown={(e) => {
+                    handleNodeKeyDown(e, idx, node.person);
+                  }}
+                >
+                  <circle
+                    r={isFocus ? 7 : node.isAnchor ? 6.5 : 5}
+                    className={cx(loomStyles, 'kinship-loom-dot')}
+                  />
+                  {(isFocus || isLit || layout.nodes.length <= 24) && (
+                    <text x={10} y={4} className={cx(loomStyles, 'kinship-loom-node-label')}>
+                      {node.person.full_name}
+                    </text>
+                  )}
+                </g>
+              );
+            })}
+          </g>
+        </svg>
+      </div>
+    </section>
+  );
+};

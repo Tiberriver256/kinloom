@@ -1,0 +1,175 @@
+/* ==========================================================================
+   Macro Kinship Loom Birth-Year River Constellation (#72)
+   ========================================================================== */
+.kinship-loom-shell {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-height: 0;
+  background: var(--surface-canvas);
+}
+
+.kinship-loom-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 16px;
+  padding: 10px 16px;
+  border-bottom: 1px solid var(--border-decorative);
+  background: var(--surface-card);
+}
+
+.kinship-loom-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 6px 14px;
+  min-width: 0;
+}
+
+.kinship-loom-title {
+  font-family: var(--font-serif);
+  font-size: 1rem;
+  font-weight: 700;
+  color: var(--surface-header);
+}
+
+.kinship-loom-span {
+  font-family: var(--font-mono);
+  font-size: 0.78rem;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-secondary);
+}
+
+.kinship-loom-trace,
+.kinship-loom-hint {
+  font-family: var(--font-mono);
+  font-size: 0.76rem;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-secondary);
+}
+
+.kinship-loom-trace strong {
+  color: var(--accent-primary);
+}
+
+.kinship-loom-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.kinship-loom-canvas-wrap {
+  flex: 1 1 auto;
+  min-height: 420px;
+  overflow: auto;
+  padding: 12px 16px 24px;
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+}
+
+.kinship-loom-svg {
+  width: 100%;
+  max-width: 1120px;
+  height: auto;
+  background: var(--surface-card);
+  border: 1px solid var(--border-decorative);
+  border-radius: var(--radius-sm);
+}
+
+.kinship-loom-gridline {
+  stroke: var(--border-decorative);
+  stroke-width: 1;
+  stroke-dasharray: 3 4;
+}
+
+.kinship-loom-year-label {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  fill: var(--text-secondary);
+}
+
+.kinship-loom-thread {
+  fill: none;
+  stroke: var(--accent-primary);
+  stroke-width: 1.4;
+  stroke-opacity: 0.32;
+  transition:
+    opacity 0.16s ease,
+    stroke-opacity 0.16s ease,
+    stroke-width 0.16s ease;
+}
+
+.kinship-loom-thread:global(.kind-union) {
+  stroke: var(--accent-secondary);
+  stroke-dasharray: 3 3;
+  stroke-opacity: 0.36;
+}
+
+.kinship-loom-thread:global(.is-cross-branch) {
+  stroke: var(--accent-primary);
+  stroke-width: 1.7;
+  stroke-opacity: 0.44;
+}
+
+.kinship-loom-svg:global(.has-spotlight) .kinship-loom-thread {
+  opacity: 0.15;
+}
+
+.kinship-loom-svg:global(.has-spotlight) .kinship-loom-thread:global(.is-lit) {
+  opacity: 1;
+  stroke-opacity: 0.95;
+  stroke-width: 2.3;
+}
+
+.kinship-loom-node {
+  cursor: pointer;
+  outline: none;
+  transition: opacity 0.16s ease;
+}
+
+.kinship-loom-dot {
+  fill: var(--surface-header);
+  stroke: var(--surface-card);
+  stroke-width: 1.5;
+  transition:
+    fill 0.14s ease,
+    r 0.14s ease;
+}
+
+.kinship-loom-node:global(.is-anchor) .kinship-loom-dot,
+.kinship-loom-node:global(.is-focus) .kinship-loom-dot {
+  fill: var(--accent-primary);
+}
+
+.kinship-loom-node:focus-visible .kinship-loom-dot {
+  stroke: var(--action-focus);
+  stroke-width: 2.5;
+}
+
+.kinship-loom-node-label {
+  font-family: var(--font-serif);
+  font-size: 11px;
+  fill: var(--text-primary);
+  pointer-events: none;
+}
+
+.kinship-loom-svg:global(.has-spotlight) .kinship-loom-node {
+  opacity: 0.15;
+}
+
+.kinship-loom-svg:global(.has-spotlight) .kinship-loom-node:global(.is-lit) {
+  opacity: 1;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .kinship-loom-thread,
+  .kinship-loom-node,
+  .kinship-loom-dot {
+    transition: none;
+  }
+}
