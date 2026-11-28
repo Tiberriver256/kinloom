@@ -311,15 +311,18 @@ export const MIGRATE_HELP = `Usage: kinloom migrate [options]
 
 Inspect a Kinloom Cloudflare D1 database and idempotently apply only pending SQL migrations.
 Checks sqlite_master and PRAGMA table_info(...) so existing databases created before d1_migrations tracking existed never fail on already-present tables or columns.
+Auto-discovers enabled built-in @kinloom/server plugin SQL migrations (such as recipes and book-publishing) from kinloom.config.yaml and worker entry files alongside <repo>/migrations/plugins/.
 
 Options:
-  --repo <dir>               Archive repository root containing wrangler.jsonc, wrangler.json, or wrangler.toml (default: current directory)
-  --plugin-migrations <dir>  Optional directory containing namespaced plugin migrations (<dir>/<namespace>/<NNNN>_<id>.sql); auto-discovers <repo>/migrations/plugins when present
-  --remote                   Target the remote Cloudflare D1 database (default)
-  --local                    Target the local Wrangler D1 database
-  --dry-run                  Inspect schema and report applied vs pending migrations without executing any writes
-  --json                     Emit structured JSON status and verification report
-  -h, --help                 Show this help message`;
+  --repo <dir>                  Archive repository root containing wrangler.jsonc, wrangler.json, or wrangler.toml (default: current directory)
+  --plugin-migrations <dir>     Optional directory containing namespaced plugin migrations (<dir>/<namespace>/<NNNN>_<id>.sql); auto-discovers <repo>/migrations/plugins when present
+  --include-enabled-plugins     Auto-discover and apply enabled built-in @kinloom/server plugin SQL migrations (default: true)
+  --no-include-enabled-plugins  Skip auto-discovery of built-in @kinloom/server plugin SQL migrations
+  --remote                      Target the remote Cloudflare D1 database (default)
+  --local                       Target the local Wrangler D1 database
+  --dry-run                     Inspect schema and report applied vs pending migrations without executing any writes
+  --json                        Emit structured JSON status and verification report
+  -h, --help                    Show this help message`;
 
 export const SCREENSHOTS_HELP = `Usage: kinloom screenshots --url <baseUrl> [options]
 

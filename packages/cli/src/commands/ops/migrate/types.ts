@@ -38,6 +38,8 @@ export interface AppliedPluginLedgerEntry {
   readonly checksumSha256: string;
 }
 
+export type PluginMigrationSource = 'filesystem' | 'builtin';
+
 export interface DiscoveredPluginMigration {
   readonly pluginId: string;
   readonly namespace: string;
@@ -47,6 +49,7 @@ export interface DiscoveredPluginMigration {
   readonly sql: string;
   readonly checksumSha256: string;
   readonly requirements: MigrationSchemaRequirements;
+  readonly source?: PluginMigrationSource;
 }
 
 export interface PluginMigrationStatusEntry {
@@ -84,6 +87,7 @@ export interface MigrateCommandOptions {
   readonly json?: boolean;
   readonly migrationsDir?: string;
   readonly pluginMigrationsDir?: string | undefined;
+  readonly includeEnabledPlugins?: boolean;
   readonly wranglerBin?: string;
   readonly execWrangler?: WranglerExecutor;
 }
@@ -102,6 +106,7 @@ export interface MigrateCommandResult {
   readonly verified: boolean;
   readonly rendered: string;
   readonly pluginMigrationsDir?: string;
+  readonly enabledBuiltInPlugins?: readonly string[];
   readonly pluginApplied?: readonly PluginMigrationStatusEntry[];
   readonly pluginPending?: readonly PluginMigrationStatusEntry[];
   readonly pluginExecuted?: readonly string[];

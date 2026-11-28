@@ -209,6 +209,8 @@ export async function runMigrate(rest: readonly string[], ctx: CliDispatchContex
     options: {
       repo: { type: 'string' },
       'plugin-migrations': { type: 'string' },
+      'include-enabled-plugins': { type: 'boolean', default: false },
+      'no-include-enabled-plugins': { type: 'boolean', default: false },
       remote: { type: 'boolean', default: false },
       local: { type: 'boolean', default: false },
       'dry-run': { type: 'boolean', default: false },
@@ -218,7 +220,13 @@ export async function runMigrate(rest: readonly string[], ctx: CliDispatchContex
   if (values.remote && values.local) {
     throw new CliValidationError('Specify either `--remote` or `--local`, not both.');
   }
+  if (values['include-enabled-plugins'] && values['no-include-enabled-plugins']) {
+    throw new CliValidationError(
+      'Specify either `--include-enabled-plugins` or `--no-include-enabled-plugins`, not both.'
+    );
+  }
   const target = values.local ? 'local' : 'remote';
+  const includeEnabledPlugins = !values['no-include-enabled-plugins'];
   const [{ runMigrateCommand }, { measureCommand }] = await Promise.all([
     import('../commands/ops/migrate.js'),
     import('../commands/ops/telemetry.js'),
@@ -235,6 +243,7 @@ export async function runMigrate(rest: readonly string[], ctx: CliDispatchContex
       runMigrateCommand({
         repoDir: values.repo ?? ctx.cwd,
         pluginMigrationsDir: values['plugin-migrations'],
+        includeEnabledPlugins,
         target,
         dryRun: values['dry-run'],
         json: values.json,

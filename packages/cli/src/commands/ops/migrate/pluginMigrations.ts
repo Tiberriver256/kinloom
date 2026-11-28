@@ -137,6 +137,7 @@ export async function discoverPluginMigrations(
         sql: item.sql,
         checksumSha256: await computeMigrationChecksum(item.sql),
         requirements: parseMigrationSchemaRequirements(item.sql, item.version),
+        source: 'filesystem',
       });
     }
   }

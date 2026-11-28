@@ -168,10 +168,14 @@ export {
 } from './media-dedupe.js';
 export {
   type AppliedPluginLedgerEntry,
+  BUILTIN_SERVER_PLUGIN_MIGRATIONS,
+  type BuiltInServerPluginMigrationSpec,
   type D1DatabaseBinding,
   type D1SchemaSnapshot,
   type DiscoveredMigration,
   type DiscoveredPluginMigration,
+  detectEnabledBuiltInPlugins,
+  discoverBuiltInPluginMigrations,
   discoverMigrations,
   discoverPluginMigrations,
   evaluateMigrationStatus,
@@ -183,6 +187,8 @@ export {
   type MigrationColumnRequirement,
   type MigrationSchemaRequirements,
   type MigrationStatusEntry,
+  mergePluginMigrations,
+  type PluginMigrationSource,
   type PluginMigrationStatusEntry,
   parseMigrationSchemaRequirements,
   resolveD1DatabaseBinding,

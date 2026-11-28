@@ -1,8 +1,16 @@
 import path from 'node:path';
 import {
+  BUILTIN_SERVER_PLUGIN_MIGRATIONS,
+  type BuiltInServerPluginMigrationSpec,
+  detectEnabledBuiltInPlugins,
+  discoverBuiltInPluginMigrations,
+  mergePluginMigrations,
+} from './migrate/builtinPlugins.js';
+import {
   defaultWranglerExecutor,
   executeD1Command,
   executeD1File,
+  executePluginMigrationFile,
   inspectD1Schema,
 } from './migrate/d1Client.js';
 import {
@@ -43,14 +51,20 @@ export type {
   MigrationColumnRequirement,
   MigrationSchemaRequirements,
   MigrationStatusEntry,
+  PluginMigrationSource,
   PluginMigrationStatusEntry,
 } from './migrate/types.js';
 export {
+  BUILTIN_SERVER_PLUGIN_MIGRATIONS,
+  type BuiltInServerPluginMigrationSpec,
+  detectEnabledBuiltInPlugins,
+  discoverBuiltInPluginMigrations,
   discoverMigrations,
   discoverPluginMigrations,
   evaluateMigrationStatus,
   evaluatePluginMigrationStatus,
   formatMigrateReport,
+  mergePluginMigrations,
   parseMigrationSchemaRequirements,
   resolveD1DatabaseBinding,
   resolveMigrationsDir,
@@ -61,12 +75,20 @@ export async function runMigrateCommand(options: MigrateCommandOptions = {}): Pr
   const repoDir = path.resolve(options.repoDir ?? process.cwd());
   const target: MigrateTarget = options.target ?? 'remote';
   const dryRun = Boolean(options.dryRun);
+  const includeEnabledPlugins = options.includeEnabledPlugins ?? true;
   const binding = resolveD1DatabaseBinding(repoDir);
   const migrationsDir = resolveMigrationsDir(repoDir, options.migrationsDir, binding.migrationsDirHint);
   const migrations = discoverMigrations(migrationsDir);
   const pluginMigrationsDir = resolvePluginMigrationsDir(repoDir, options.pluginMigrationsDir);
-  const pluginMigrations = pluginMigrationsDir ? await discoverPluginMigrations(pluginMigrationsDir) : [];
+  const filesystemPluginMigrations = pluginMigrationsDir
+    ? await discoverPluginMigrations(pluginMigrationsDir)
+    : [];
+  const builtInDiscovery = includeEnabledPlugins
+    ? await discoverBuiltInPluginMigrations(repoDir)
+    : { enabledPlugins: [] as readonly string[], migrations: [] };
+  const pluginMigrations = mergePluginMigrations(filesystemPluginMigrations, builtInDiscovery.migrations);
   const hasPluginMigrations = pluginMigrations.length > 0;
+  const enabledBuiltInPlugins = builtInDiscovery.enabledPlugins;
 
   const ctx: MigrateExecContext = {
     repoDir,
@@ -101,9 +123,10 @@ export async function runMigrateCommand(options: MigrateCommandOptions = {}): Pr
       pending,
       executed: [] as string[],
       verified: pending.length === 0 && pluginPendingBefore.length === 0,
-      ...(hasPluginMigrations && pluginMigrationsDir
+      ...(pluginMigrationsDir ? { pluginMigrationsDir } : {}),
+      ...(enabledBuiltInPlugins.length > 0 ? { enabledBuiltInPlugins } : {}),
+      ...(hasPluginMigrations
         ? {
-            pluginMigrationsDir,
             pluginApplied,
             pluginPending: pluginPendingBefore,
             pluginExecuted: [] as string[],
@@ -139,7 +162,7 @@ export async function runMigrateCommand(options: MigrateCommandOptions = {}): Pr
     if (!pendingPluginKeys.has(key)) {
       continue;
     }
-    await executeD1File(ctx, pluginMigration.filePath);
+    await executePluginMigrationFile(ctx, pluginMigration);
     await executeD1Command(ctx, buildPluginLedgerInsertSql(pluginMigration, new Date().toISOString()));
     pluginExecuted.push(`${pluginMigration.namespace}/${pluginMigration.migrationId}`);
     pluginExecutedKeys.add(key);
@@ -170,9 +193,10 @@ export async function runMigrateCommand(options: MigrateCommandOptions = {}): Pr
     pending,
     executed,
     verified,
-    ...(hasPluginMigrations && pluginMigrationsDir
+    ...(pluginMigrationsDir ? { pluginMigrationsDir } : {}),
+    ...(enabledBuiltInPlugins.length > 0 ? { enabledBuiltInPlugins } : {}),
+    ...(hasPluginMigrations
       ? {
-          pluginMigrationsDir,
           pluginApplied,
           pluginPending,
           pluginExecuted,

@@ -29,11 +29,22 @@ export function formatMigrateReport(result: Omit<MigrateCommandResult, 'rendered
     lines.push('Post-migration schema verification passed.');
   }
 
-  if (result.pluginMigrationsDir) {
+  const hasPluginSection =
+    Boolean(result.pluginMigrationsDir) ||
+    (result.enabledBuiltInPlugins?.length ?? 0) > 0 ||
+    (result.pluginApplied?.length ?? 0) > 0 ||
+    (result.pluginPending?.length ?? 0) > 0;
+
+  if (hasPluginSection) {
     const pluginApplied = result.pluginApplied ?? [];
     const pluginPending = result.pluginPending ?? [];
     const pluginExecuted = result.pluginExecuted ?? [];
-    lines.push(`Plugin migrations: ${result.pluginMigrationsDir}`);
+    if (result.pluginMigrationsDir) {
+      lines.push(`Plugin migrations: ${result.pluginMigrationsDir}`);
+    }
+    if (result.enabledBuiltInPlugins && result.enabledBuiltInPlugins.length > 0) {
+      lines.push(`Built-in plugins: ${result.enabledBuiltInPlugins.join(', ')}`);
+    }
     lines.push(
       `Plugin summary: ${pluginApplied.length} applied, ${pluginPending.length} pending, ${pluginExecuted.length} executed`
     );
