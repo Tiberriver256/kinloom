@@ -15,16 +15,21 @@ import { probeD1SchemaMigrationLevel } from './adapters/d1/schemaProbe.js';
 import { D1PageVisitStatsStore } from './adapters/d1PageVisitStatsStore.js';
 import {
   AdminObservabilityStatsResponseSchema,
+  createBookPublishingServerPlugin,
   createCloudflareWorker,
   createPageVisitStatsPlugin,
+  createRecipesServerPlugin,
   createWorkersObservabilityPlugin,
   type D1Database,
   type ExecutionContext,
   type Fetcher,
   type KinloomWorkerEnv,
   PAGE_VISIT_STATS_ADMIN_ROUTE,
+  PAGE_VISIT_STATS_BEACON_ROUTE,
+  PAGE_VISIT_STATS_CONFIG_ROUTE,
   PAGE_VISIT_STATS_PLUGIN_ID,
   PAGE_VISIT_STATS_PUBLIC_COUNT_ROUTE,
+  PublicObservabilityConfigResponseSchema,
   PublicPageVisitCountResponseSchema,
   type R2Bucket,
 } from './index.js';
@@ -226,14 +231,41 @@ describe('Cloudflare Worker D1PageVisitStatsStore & opt-in page visit stats (Min
       expect(createRes.status).toBe(201);
     }
 
-    // Record real HTML visits (deceased counted, living & bot skipped) via ctx.waitUntil:
-    await worker.fetch(new Request(`${CONTRACT_TEST_ORIGIN}/`), env, fakeCtx);
+    // Unauthenticated HTML GET on private archive records 0 visits (P1-5)
     await worker.fetch(new Request(`${CONTRACT_TEST_ORIGIN}/person/arthur-worker`), env, fakeCtx);
-    await worker.fetch(new Request(`${CONTRACT_TEST_ORIGIN}/person/arthur-worker`), env, fakeCtx);
-    await worker.fetch(new Request(`${CONTRACT_TEST_ORIGIN}/person/living-worker-person`), env, fakeCtx);
+    await Promise.all(waitUntilTasks.splice(0, waitUntilTasks.length));
+    expect(await store.getTotalViews()).toBe(0);
+
+    // Record authenticated HTML visits + SPA beacon (deceased counted, living & bot skipped) via ctx.waitUntil:
+    const authHeaders = { cookie: adminCookie };
+    await worker.fetch(new Request(`${CONTRACT_TEST_ORIGIN}/`, { headers: authHeaders }), env, fakeCtx);
+    await worker.fetch(
+      new Request(`${CONTRACT_TEST_ORIGIN}/person/arthur-worker`, { headers: authHeaders }),
+      env,
+      fakeCtx
+    );
+    const beaconRes = await worker.fetch(
+      new Request(`${CONTRACT_TEST_ORIGIN}${PAGE_VISIT_STATS_BEACON_ROUTE}`, {
+        method: 'POST',
+        headers: {
+          'content-type': 'application/json',
+          origin: CONTRACT_TEST_ORIGIN,
+          cookie: adminCookie,
+        },
+        body: JSON.stringify({ path: '/person/arthur-worker' }),
+      }),
+      env,
+      fakeCtx
+    );
+    expect(beaconRes.status).toBe(204);
+    await worker.fetch(
+      new Request(`${CONTRACT_TEST_ORIGIN}/person/living-worker-person`, { headers: authHeaders }),
+      env,
+      fakeCtx
+    );
     await worker.fetch(
       new Request(`${CONTRACT_TEST_ORIGIN}/person/arthur-worker`, {
-        headers: { 'user-agent': 'Googlebot/2.1' },
+        headers: { ...authHeaders, 'user-agent': 'Googlebot/2.1' },
       }),
       env,
       fakeCtx
@@ -309,30 +341,58 @@ describe('Cloudflare Worker D1PageVisitStatsStore & opt-in page visit stats (Min
     );
     expect(putPref.status).toBe(200);
 
-    // Fresh Worker instance reads persisted D1 setting cleanly:
+    // Fresh Worker instance reads persisted D1 setting cleanly and enforces archive_read on private mode:
     const freshWorker = createCloudflareWorker({
       siteConfig,
       clock,
       plugins: [createPageVisitStatsPlugin({ clock })],
     });
-    const publicCount = PublicPageVisitCountResponseSchema.parse(
-      await (
+    expect(typeof createRecipesServerPlugin).toBe('function');
+    expect(typeof createBookPublishingServerPlugin).toBe('function');
+
+    // Unauthenticated read on private Worker returns 401
+    expect(
+      (
         await freshWorker.fetch(
           new Request(
             `${CONTRACT_TEST_ORIGIN}${PAGE_VISIT_STATS_PUBLIC_COUNT_ROUTE}?kind=person&slug=arthur-worker`
           ),
           env
         )
-      ).json()
+      ).status
+    ).toBe(401);
+
+    const cfgRes = await freshWorker.fetch(
+      new Request(`${CONTRACT_TEST_ORIGIN}${PAGE_VISIT_STATS_CONFIG_ROUTE}`, {
+        headers: { cookie: adminCookie },
+      }),
+      env
     );
+    expect(cfgRes.status).toBe(200);
+    expect(cfgRes.headers.get('cache-control')).toBe('private, no-cache');
+    expect(PublicObservabilityConfigResponseSchema.parse(await cfgRes.json()).public_badges_enabled).toBe(
+      true
+    );
+
+    const publicCountRes = await freshWorker.fetch(
+      new Request(
+        `${CONTRACT_TEST_ORIGIN}${PAGE_VISIT_STATS_PUBLIC_COUNT_ROUTE}?kind=person&slug=arthur-worker`,
+        { headers: { cookie: adminCookie } }
+      ),
+      env
+    );
+    expect(publicCountRes.status).toBe(200);
+    expect(publicCountRes.headers.get('cache-control')).toBe('private, no-cache');
+    const publicCount = PublicPageVisitCountResponseSchema.parse(await publicCountRes.json());
     expect(publicCount.total_views).toBe(2);
 
-    // Living person always returns 404 on public count endpoint:
+    // Living person always returns 404 on authenticated count endpoint:
     expect(
       (
         await freshWorker.fetch(
           new Request(
-            `${CONTRACT_TEST_ORIGIN}${PAGE_VISIT_STATS_PUBLIC_COUNT_ROUTE}?kind=person&slug=living-worker-person`
+            `${CONTRACT_TEST_ORIGIN}${PAGE_VISIT_STATS_PUBLIC_COUNT_ROUTE}?kind=person&slug=living-worker-person`,
+            { headers: { cookie: adminCookie } }
           ),
           env
         )

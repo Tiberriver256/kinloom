@@ -1,3 +1,5 @@
+export const BOOK_PUBLISHING_SERVER_PLUGIN_ID = 'kinloom-book-publishing';
+
 export const UI_BOOK_TRIM_PRESETS = [
   { id: 'us-letter-landscape', label: 'US Letter Landscape (11 × 8.5 in)' },
   { id: 'a4-landscape', label: 'A4 Landscape (11.69 × 8.27 in)' },

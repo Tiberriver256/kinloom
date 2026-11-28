@@ -275,8 +275,16 @@ describe('PersonPage, IndexPage, PlacePage, LocalSurveyMap, and TreePage behavio
   it('renders PersonPage with portrait, family strip, timeline scrubber, milestone cards, media lightbox, and GEDCOM export', async () => {
     const createObjectURL = vi.fn(() => 'blob:mock-gedcom');
     const revokeObjectURL = vi.fn();
-    Object.defineProperty(URL, 'createObjectURL', { value: createObjectURL, configurable: true });
-    Object.defineProperty(URL, 'revokeObjectURL', { value: revokeObjectURL, configurable: true });
+    Object.defineProperty(URL, 'createObjectURL', {
+      value: createObjectURL,
+      writable: true,
+      configurable: true,
+    });
+    Object.defineProperty(URL, 'revokeObjectURL', {
+      value: revokeObjectURL,
+      writable: true,
+      configurable: true,
+    });
 
     const container = mountEl(
       <MemoryRouter initialEntries={['/person/henry-alder']}>

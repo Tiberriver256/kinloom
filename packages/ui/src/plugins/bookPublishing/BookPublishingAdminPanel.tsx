@@ -3,6 +3,7 @@ import { useCallback, useEffect, useId, useState } from 'react';
 import wikiChromeStyles from '../../components/wiki/WikiChrome.module.css';
 import wikiPanelStyles from '../../components/wiki/WikiPanels.module.css';
 import {
+  BOOK_PUBLISHING_SERVER_PLUGIN_ID,
   formatBookByteSize,
   formatBookCurrencyCents,
   formatBookJobStatusLabel,
@@ -23,6 +24,7 @@ import {
 } from '../../lib/bookPublishingModel.js';
 import { cx } from '../../lib/cx.js';
 import layoutStyles from '../../styles/Layout.module.css';
+import { useKinloomPlugins } from '../PluginContext.js';
 import styles from './BookPublishing.module.css';
 import { useBookPublishingContext } from './BookPublishingContext.js';
 
@@ -33,6 +35,7 @@ type ActionFeedback =
 
 export const BookPublishingAdminPanel: React.FC = () => {
   const { client } = useBookPublishingContext();
+  const { subscribePluginSettings } = useKinloomPlugins();
   const idPrefix = useId();
 
   const [status, setStatus] = useState<UiBookStatusResponse | null>(null);
@@ -114,6 +117,14 @@ export const BookPublishingAdminPanel: React.FC = () => {
       controller.abort();
     };
   }, [loadStatus]);
+
+  useEffect(() => {
+    return subscribePluginSettings(BOOK_PUBLISHING_SERVER_PLUGIN_ID, (evt) => {
+      if (evt.source === 'plugin-settings-section') {
+        void loadStatus();
+      }
+    });
+  }, [subscribePluginSettings, loadStatus]);
 
   const effectivePages = compiled?.report.counts.finalPageCount ?? status?.readiness?.estimated_pages ?? 24;
   const isProductionMode = status?.publisher_provider === 'lulu' && status?.environment === 'production';

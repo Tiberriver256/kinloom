@@ -606,10 +606,19 @@ describe('createOpenFinancePlugin server integration', () => {
       displayName: 'Family Editor',
     });
 
-    // Public GET succeeds with exact totals and allowlisted URLs
+    // Public GET succeeds with exact totals, allowlisted URLs, no-cache header, and ETag revalidation
     const pubRes = await server.fetch(new Request(`https://archive.example${OPEN_FINANCE_PUBLIC_ROUTE}`));
     expect(pubRes.status).toBe(200);
-    expect(pubRes.headers.get('cache-control')).toBe('public, max-age=60');
+    expect(pubRes.headers.get('cache-control')).toBe('no-cache');
+    const pubEtag = pubRes.headers.get('etag');
+    expect(pubEtag).toMatch(/^"of-[0-9a-f]{24}"$/);
+    const revalRes = await server.fetch(
+      new Request(`https://archive.example${OPEN_FINANCE_PUBLIC_ROUTE}`, {
+        headers: { 'if-none-match': pubEtag ?? '' },
+      })
+    );
+    expect(revalRes.status).toBe(304);
+    expect(revalRes.headers.get('cache-control')).toBe('no-cache');
     const pubBody = (await pubRes.json()) as OpenFinancePublicSummary;
     expect(pubBody.page_title).toBe('Alder Archive Open Finance');
     expect(pubBody.totals.annual_operating_cents).toBe(7200);
@@ -804,6 +813,42 @@ describe('createOpenFinancePlugin server integration', () => {
     );
     expect(badPrimarySettings.status).toBe(422);
 
+    // Declarative PUT rejects schema-invalid cost_ledger_json array and accepts cleared cost_ledger_json + auto primary_platform
+    const badLedgerSchema = await server.fetch(
+      new Request(`https://archive.example/api/admin/plugin-settings/${OPEN_FINANCE_PLUGIN_ID}`, {
+        method: 'PUT',
+        headers: {
+          cookie: adminCookie,
+          origin: 'https://archive.example',
+          'content-type': 'application/json',
+        },
+        body: JSON.stringify({
+          values: {
+            cost_ledger_json: JSON.stringify([{ invalid: true }]),
+          },
+        }),
+      })
+    );
+    expect(badLedgerSchema.status).toBe(422);
+
+    const clearedLedgerPut = await server.fetch(
+      new Request(`https://archive.example/api/admin/plugin-settings/${OPEN_FINANCE_PLUGIN_ID}`, {
+        method: 'PUT',
+        headers: {
+          cookie: adminCookie,
+          origin: 'https://archive.example',
+          'content-type': 'application/json',
+        },
+        body: JSON.stringify({
+          values: {
+            primary_platform: 'auto',
+            cost_ledger_json: '',
+          },
+        }),
+      })
+    );
+    expect(clearedLedgerPut.status).toBe(200);
+
     // Declarative PUT with valid PayPal.me URL updates public summary
     const goodSettingsPut = await server.fetch(
       new Request(`https://archive.example/api/admin/plugin-settings/${OPEN_FINANCE_PLUGIN_ID}`, {
@@ -895,5 +940,166 @@ describe('createOpenFinancePlugin server integration', () => {
       })
     );
     expect(adminSubPut.status).toBe(404);
+  });
+
+  it('enforces archive_read in private mode with private no-cache headers and preserves auxiliary keys across PluginSettingsSection saves', async () => {
+    const ports = createInMemoryServerPorts(siteConfig, { initialIso: '2026-11-27T12:00:00.000Z' });
+    const clock = ports.clock;
+    await ports.repository.upsertUser({
+      email: 'steward@archive.example',
+      display_name: 'Archive Steward',
+      role: 'admin',
+      added_by: 'system:bootstrap',
+      added_at: '2026-01-01T00:00:00.000Z',
+      last_login_at: null,
+    });
+    const rawBackupToken = 'kinloom_read_backup_probe_token_12345';
+    const { sha256Hex } = await import('../crypto.js');
+    await ports.repository.createAgentToken({
+      token_id: 'tok_backup',
+      label: 'Synthetic Probe',
+      scope: 'read_backup',
+      token_hash: await sha256Hex(rawBackupToken),
+      created_by: 'steward@archive.example',
+      created_at: '2026-01-01T00:00:00.000Z',
+      revoked_at: null,
+    });
+
+    const plugin = createOpenFinancePlugin();
+    const server = createKinloomServer({
+      siteConfig,
+      ports: { ...ports, plugins: [plugin] },
+      sessionSecret: SESSION_SECRET,
+      mode: 'private',
+    });
+
+    // Private archive: anonymous caller gets 401 (no ledger leak!)
+    const anonRes = await server.fetch(new Request(`https://archive.example${OPEN_FINANCE_PUBLIC_ROUTE}`));
+    expect(anonRes.status).toBe(401);
+
+    // Private archive: read_backup agent token succeeds with private, no-cache
+    const agentRes = await server.fetch(
+      new Request(`https://archive.example${OPEN_FINANCE_PUBLIC_ROUTE}`, {
+        headers: { authorization: `Bearer ${rawBackupToken}` },
+      })
+    );
+    expect(agentRes.status).toBe(200);
+    expect(agentRes.headers.get('cache-control')).toBe('private, no-cache');
+
+    const adminCookie = await createSessionCookie({
+      clock,
+      email: 'steward@archive.example',
+      role: 'admin',
+      displayName: 'Archive Steward',
+    });
+
+    // Save Funding Goal + custom platform labels/order via OpenFinanceAdminPanel endpoint
+    const saveAdminRes = await server.fetch(
+      new Request(`https://archive.example${OPEN_FINANCE_ADMIN_ROUTE}`, {
+        method: 'PUT',
+        headers: {
+          cookie: adminCookie,
+          origin: 'https://archive.example',
+          'content-type': 'application/json',
+        },
+        body: JSON.stringify({
+          page_title: 'Private Archive Support',
+          nav_label: 'Support',
+          currency: 'USD',
+          visibility: { show_support_page: true, show_in_nav: false, show_in_footer: false },
+          platforms: [
+            {
+              platform: 'ko_fi',
+              handle: 'alderarchive',
+              label: 'Buy Us Coffee on Ko-fi',
+              description: 'Keeps backups online',
+              enabled: true,
+            },
+            {
+              platform: 'github_sponsors',
+              handle: 'alder-archive',
+              label: 'GitHub Sponsors Custom',
+              enabled: true,
+            },
+          ],
+          cost_items: [
+            {
+              id: 'cost-1',
+              label: 'Domain',
+              category: 'domain',
+              cadence: 'annual',
+              amount_cents: 1200,
+              active: true,
+            },
+          ],
+          funding_goal: {
+            enabled: true,
+            period: 'annual',
+            target_cents: 12000,
+            received_cents: 4500,
+            label: '2026 Hosting Goal',
+            as_of_date: '2026-11-27',
+          },
+        }),
+      })
+    );
+    expect(saveAdminRes.status).toBe(200);
+
+    // Now toggle show_in_nav & show_in_footer via declarative PluginSettingsSection endpoint
+    const putSettingsRes = await server.fetch(
+      new Request(`https://archive.example/api/admin/plugin-settings/${OPEN_FINANCE_PLUGIN_ID}`, {
+        method: 'PUT',
+        headers: {
+          cookie: adminCookie,
+          origin: 'https://archive.example',
+          'content-type': 'application/json',
+        },
+        body: JSON.stringify({
+          values: {
+            show_in_nav: true,
+            show_in_footer: true,
+          },
+        }),
+      })
+    );
+    expect(putSettingsRes.status).toBe(200);
+    const settingsPayload = (await putSettingsRes.json()) as {
+      plugin: {
+        schema: { sections: Array<{ id: string; fields: Array<{ key: string; helpText?: string }> }> };
+      };
+    };
+    const visSection = settingsPayload.plugin.schema.sections.find((s) => s.id === 'visibility');
+    expect(visSection?.fields.find((f) => f.key === 'show_in_nav')?.helpText).toContain(
+      'Publish Open Finance & Support page'
+    );
+    expect(visSection?.fields.find((f) => f.key === 'show_in_footer')?.helpText).toContain(
+      'Publish Open Finance & Support page'
+    );
+
+    // Verify platform_order_json (custom labels + order) AND funding_goal_json survived losslessly!
+    const afterRes = await server.fetch(
+      new Request(`https://archive.example${OPEN_FINANCE_PUBLIC_ROUTE}`, {
+        headers: { cookie: adminCookie },
+      })
+    );
+    expect(afterRes.status).toBe(200);
+    expect(afterRes.headers.get('cache-control')).toBe('private, no-cache');
+    const afterSummary = (await afterRes.json()) as OpenFinancePublicSummary;
+    expect(afterSummary.visibility).toEqual({
+      show_support_page: true,
+      show_in_nav: true,
+      show_in_footer: true,
+    });
+    expect(afterSummary.platforms.map((p) => ({ platform: p.platform, label: p.label }))).toEqual([
+      { platform: 'ko_fi', label: 'Buy Us Coffee on Ko-fi' },
+      { platform: 'github_sponsors', label: 'GitHub Sponsors Custom' },
+    ]);
+    expect(afterSummary.funding_goal).toMatchObject({
+      period: 'annual',
+      target_cents: 12000,
+      received_cents: 4500,
+      label: '2026 Hosting Goal',
+      as_of_date: '2026-11-27',
+    });
   });
 });

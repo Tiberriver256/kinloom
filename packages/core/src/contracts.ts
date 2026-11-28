@@ -13,6 +13,7 @@ import type {
   RevisionQuery,
   Sha256Hex,
   StoredEntityRecord,
+  StoredEntityRow,
   UserRecord,
 } from './contractsPrimitives.js';
 import type { KinloomSiteConfig } from './schemas/config.js';
@@ -103,6 +104,10 @@ export interface PrefetchedWriteContext {
 export interface EntityReadStore {
   getHeadRevisionId(): Promise<RevisionId>;
   getEntity(entityType: EntityType, entityId: string): Promise<StoredEntityRecord | null>;
+  getEntityBySlug?(
+    entityType: 'person' | 'place' | 'narrative',
+    slugOrId: string
+  ): Promise<StoredEntityRow | null>;
   getEntitiesBatch?(keys: readonly EntityLookupKey[]): Promise<Map<string, StoredEntityRecord | null>>;
   prefetchWriteContext?(keys: readonly EntityLookupKey[]): Promise<PrefetchedWriteContext>;
   getLivingPersonIds(): Promise<ReadonlySet<string>>;
@@ -264,7 +269,7 @@ export type CallerPrincipal =
   | { kind: 'user'; email: string; display_name: string; role: UserRole }
   | { kind: 'agent'; token_id: string; label: string; scope: AgentTokenScope };
 
-export type PluginRouteMinRole = 'public' | 'viewer' | 'editor' | 'admin';
+export type PluginRouteMinRole = 'public' | 'archive_read' | 'viewer' | 'editor' | 'admin';
 
 export interface KinloomServerPluginContext {
   request: Request;
@@ -272,6 +277,8 @@ export interface KinloomServerPluginContext {
   principal: CallerPrincipal;
   siteConfig: KinloomSiteConfig;
   ports: KinloomServerPorts;
+  /** Effective archive visibility mode ('private' or 'public'). */
+  mode?: 'private' | 'public';
   /** Scoped database port when plugin declares databaseNamespace and host provides pluginDatabaseFactory. */
   pluginDb?: PluginDatabasePort;
 }

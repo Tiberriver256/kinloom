@@ -68,6 +68,29 @@ export class InMemoryEntityAndMutationStore
     return row ? structuredClone(row) : null;
   }
 
+  async getEntityBySlug(
+    entityType: 'person' | 'place' | 'narrative',
+    slugOrId: string
+  ): Promise<StoredEntityRow | null> {
+    const byId = this.entities.get(entityCompositeKey(entityType, slugOrId));
+    if (byId && byId.deleted_at === null) {
+      return structuredClone(byId);
+    }
+    for (const row of this.entities.values()) {
+      if (row.entity_type !== entityType || row.deleted_at !== null) {
+        continue;
+      }
+      if (row.slug === slugOrId || row.entity_id === slugOrId) {
+        return structuredClone(row);
+      }
+      const rawDataSlug = (row.data as Record<string, unknown>).slug;
+      if (typeof rawDataSlug === 'string' && rawDataSlug === slugOrId) {
+        return structuredClone(row);
+      }
+    }
+    return null;
+  }
+
   async getEntitiesBatch(keys: readonly EntityLookupKey[]): Promise<Map<string, StoredEntityRecord | null>> {
     const result = new Map<string, StoredEntityRecord | null>();
     for (const key of keys) {

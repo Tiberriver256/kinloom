@@ -184,23 +184,27 @@ export function requireMinRole(
   principal: CallerPrincipal,
   minRole: PluginRouteMinRole,
   options?: {
+    mode?: 'private' | 'public';
     allowAgentScopes?: readonly AgentTokenScope[];
     adminForbiddenCode?: 'ADMIN_REQUIRED' | 'FORBIDDEN';
     telemetry?: Partial<SecurityEventQueueTarget>;
     bearerRejected?: boolean;
   }
 ): void {
-  if (minRole === 'public') {
+  const effectiveMinRole: Exclude<PluginRouteMinRole, 'archive_read'> =
+    minRole === 'archive_read' ? (options?.mode === 'public' ? 'public' : 'viewer') : minRole;
+
+  if (effectiveMinRole === 'public') {
     return;
   }
 
   if (principal.kind === 'anonymous') {
-    if ((minRole === 'editor' || minRole === 'admin') && !options?.bearerRejected) {
+    if ((effectiveMinRole === 'editor' || effectiveMinRole === 'admin') && !options?.bearerRejected) {
       options?.telemetry?.queueSecurityEvent?.({
         type: 'auth.write.forbidden',
         status: 401,
         reason: 'unauthenticated',
-        requiredRole: minRole,
+        requiredRole: effectiveMinRole,
         actorKind: 'anonymous',
       });
     }
@@ -218,7 +222,7 @@ export function requireMinRole(
       reason: 'insufficient_scope',
     });
     const code =
-      minRole === 'admin' && options?.adminForbiddenCode === 'ADMIN_REQUIRED'
+      effectiveMinRole === 'admin' && options?.adminForbiddenCode === 'ADMIN_REQUIRED'
         ? 'ADMIN_REQUIRED'
         : 'FORBIDDEN';
     throw new KinloomHttpError(
@@ -228,7 +232,7 @@ export function requireMinRole(
     );
   }
 
-  if (minRole === 'viewer') {
+  if (effectiveMinRole === 'viewer') {
     return;
   }
 
@@ -237,11 +241,11 @@ export function requireMinRole(
       type: 'auth.write.forbidden',
       status: 403,
       reason: 'invite_read_only',
-      requiredRole: minRole,
+      requiredRole: effectiveMinRole,
       actorKind: 'invite_viewer',
     });
     const code =
-      minRole === 'admin' && options?.adminForbiddenCode === 'ADMIN_REQUIRED'
+      effectiveMinRole === 'admin' && options?.adminForbiddenCode === 'ADMIN_REQUIRED'
         ? 'ADMIN_REQUIRED'
         : 'FORBIDDEN';
     throw new KinloomHttpError(
@@ -251,11 +255,11 @@ export function requireMinRole(
     );
   }
 
-  if (minRole === 'editor') {
+  if (effectiveMinRole === 'editor') {
     return;
   }
 
-  // minRole === 'admin'
+  // effectiveMinRole === 'admin'
   if (principal.role !== 'admin') {
     options?.telemetry?.queueSecurityEvent?.({
       type: 'auth.write.forbidden',

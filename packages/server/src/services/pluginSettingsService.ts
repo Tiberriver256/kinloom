@@ -233,12 +233,18 @@ export class PluginSettingsService {
     const resolvedReadonly: Record<string, PluginSettingScalarValue> = { ...readonlyValues };
 
     if (typeof entry.plugin.getReadonlySettings === 'function') {
+      const readonlyCtxValues: Record<string, PluginSettingScalarValue> = { ...mergedValues };
+      for (const preserveKey of entry.schema.preserveKeys ?? []) {
+        if (!Object.hasOwn(readonlyCtxValues, preserveKey) && Object.hasOwn(storedValues, preserveKey)) {
+          readonlyCtxValues[preserveKey] = storedValues[preserveKey] ?? null;
+        }
+      }
       try {
         const dynamicReadonly = await entry.plugin.getReadonlySettings({
           siteConfig: this.deps.siteConfig,
           ports: this.deps.ports,
           mode: this.deps.mode,
-          values: { ...mergedValues },
+          values: readonlyCtxValues,
           configuredSecrets,
         });
         for (const key of Object.keys(readonlyValues)) {

@@ -60,6 +60,8 @@ export interface KinloomUiPluginSlots {
   readonly appShell?: KinloomUiPluginSlotRenderer;
   /** Optional inline slot inside the primary ExplorerTopBar navigation bar. */
   readonly topBarNav?: KinloomUiPluginSlotRenderer;
+  /** Optional mobile menu item slot inside the ExplorerTopBar responsive Archive Menu. */
+  readonly topBarMobileMenu?: KinloomUiPluginSlotRenderer;
   /** Optional inline slot inside the KinloomFooter navigation bar. */
   readonly footer?: KinloomUiPluginSlotRenderer;
   /** Admin-only settings slot rendered inside AdminSettingsShell alongside Core Application Settings. */

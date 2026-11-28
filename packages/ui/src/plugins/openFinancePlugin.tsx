@@ -6,7 +6,11 @@ import {
 } from '../lib/openFinanceModel.js';
 import { KINLOOM_UI_VERSION } from '../version.js';
 import { OpenFinanceAdminPanel } from './openFinance/OpenFinanceAdminPanel.js';
-import { OpenFinanceFooterLink, OpenFinanceNavLink } from './openFinance/OpenFinanceChromeSlots.js';
+import {
+  OpenFinanceFooterLink,
+  OpenFinanceMobileMenuLink,
+  OpenFinanceNavLink,
+} from './openFinance/OpenFinanceChromeSlots.js';
 import { bindOpenFinanceProvider } from './openFinance/OpenFinanceContext.js';
 import { OpenFinanceSupportPage } from './openFinance/OpenFinanceSupportPage.js';
 import type { KinloomUiPlugin, KinloomUiPluginSlotContext } from './types.js';
@@ -27,6 +31,8 @@ export interface OpenFinanceUiPluginOptions {
   readonly config?: UiOpenFinanceConfigInput;
   /** Optional API base URL passed to the default HTTP client. */
   readonly apiBaseUrl?: string;
+  /** Optional fetch credentials mode passed to the default HTTP client. */
+  readonly credentials?: RequestCredentials;
   /** Optional injected transport client for hermetic tests or custom backends. */
   readonly client?: OpenFinanceClient;
   /**
@@ -58,7 +64,10 @@ export function createOpenFinancePlugin(options: OpenFinanceUiPluginOptions = {}
   const client: OpenFinanceClient | null = options.client
     ? options.client
     : shouldUseHttpClient
-      ? createHttpOpenFinanceClient({ apiBaseUrl: options.apiBaseUrl })
+      ? createHttpOpenFinanceClient({
+          apiBaseUrl: options.apiBaseUrl,
+          credentials: options.credentials,
+        })
       : null;
 
   const provider = bindOpenFinanceProvider({
@@ -81,6 +90,7 @@ export function createOpenFinancePlugin(options: OpenFinanceUiPluginOptions = {}
     ],
     slots: {
       topBarNav: () => <OpenFinanceNavLink />,
+      topBarMobileMenu: () => <OpenFinanceMobileMenuLink />,
       footer: () => <OpenFinanceFooterLink />,
       adminSettings: (ctx: KinloomUiPluginSlotContext) =>
         ctx.capabilities.canManageSite ? <OpenFinanceAdminPanel /> : null,

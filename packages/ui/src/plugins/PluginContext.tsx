@@ -7,9 +7,10 @@ import type {
   Narrative,
   Person,
   Place,
+  PluginSettingsSnapshot,
 } from '@kinloom/core';
 import type React from 'react';
-import { createContext, useCallback, useContext, useMemo } from 'react';
+import { createContext, Fragment, useCallback, useContext, useMemo, useRef } from 'react';
 import { createHttpPluginApiClient, type PluginApiClient } from '../adapters/pluginApiClient.js';
 import statusShellStyles from '../components/ArchiveStatusShell.module.css';
 import type {
@@ -29,6 +30,14 @@ import { RESERVED_UI_ROUTE_PATHS, validateAndCompileUiPlugins } from './validate
 
 export { RESERVED_UI_ROUTE_PATHS, validateAndCompileUiPlugins };
 
+export interface PluginSettingsSyncEvent {
+  readonly pluginId: string;
+  readonly snapshot?: PluginSettingsSnapshot;
+  readonly source: 'plugin-settings-section' | 'plugin-panel';
+}
+
+export type PluginSettingsListener = (event: PluginSettingsSyncEvent) => void;
+
 export interface KinloomPluginContextValue {
   readonly plugins: readonly KinloomUiPlugin[];
   readonly routes: readonly (KinloomUiPluginRoute & { pluginId: string })[];
@@ -36,6 +45,8 @@ export interface KinloomPluginContextValue {
   readonly entityEditForms: Readonly<Partial<Record<EntityType, EntityEditFormEntry>>>;
   readonly entityCreateForms: Readonly<Partial<Record<EntityType, EntityCreateFormEntry>>>;
   readonly apiClient: PluginApiClient;
+  readonly subscribePluginSettings: (pluginId: string | '*', listener: PluginSettingsListener) => () => void;
+  readonly notifyPluginSettingsUpdated: (event: PluginSettingsSyncEvent) => void;
 }
 
 export interface KinloomPluginRuntimeContext {
@@ -54,6 +65,10 @@ const EMPTY_EDIT_FORMS: Readonly<Partial<Record<EntityType, EntityEditFormEntry>
 const EMPTY_CREATE_FORMS: Readonly<Partial<Record<EntityType, EntityCreateFormEntry>>> = {};
 const DEFAULT_PLUGIN_API_CLIENT: PluginApiClient = createHttpPluginApiClient();
 
+const NOOP_UNSUBSCRIBE = (): void => {};
+const NOOP_SUBSCRIBE = (): (() => void) => NOOP_UNSUBSCRIBE;
+const NOOP_NOTIFY = (): void => {};
+
 const KinloomPluginContext = createContext<KinloomPluginContextValue>({
   plugins: EMPTY_PLUGINS,
   routes: [],
@@ -61,6 +76,8 @@ const KinloomPluginContext = createContext<KinloomPluginContextValue>({
   entityEditForms: EMPTY_EDIT_FORMS,
   entityCreateForms: EMPTY_CREATE_FORMS,
   apiClient: DEFAULT_PLUGIN_API_CLIENT,
+  subscribePluginSettings: NOOP_SUBSCRIBE,
+  notifyPluginSettingsUpdated: NOOP_NOTIFY,
 });
 
 export interface KinloomPluginProviderProps {
@@ -69,17 +86,50 @@ export interface KinloomPluginProviderProps {
   children: React.ReactNode;
 }
 
+interface PluginSettingsSubscription {
+  readonly pluginId: string | '*';
+  readonly listener: PluginSettingsListener;
+}
+
 export const KinloomPluginProvider: React.FC<KinloomPluginProviderProps> = ({
   plugins = EMPTY_PLUGINS,
   apiClient = DEFAULT_PLUGIN_API_CLIENT,
   children,
 }) => {
+  const subscriptionsRef = useRef<Set<PluginSettingsSubscription>>(new Set());
+
+  const subscribePluginSettings = useCallback(
+    (pluginId: string | '*', listener: PluginSettingsListener): (() => void) => {
+      const entry: PluginSettingsSubscription = { pluginId, listener };
+      subscriptionsRef.current.add(entry);
+      return () => {
+        subscriptionsRef.current.delete(entry);
+      };
+    },
+    []
+  );
+
+  const notifyPluginSettingsUpdated = useCallback((event: PluginSettingsSyncEvent): void => {
+    for (const sub of [...subscriptionsRef.current]) {
+      if (sub.pluginId !== '*' && sub.pluginId !== event.pluginId) {
+        continue;
+      }
+      try {
+        sub.listener(event);
+      } catch {
+        // Isolate subscriber failures so one panel error cannot block sibling updates.
+      }
+    }
+  }, []);
+
   const value = useMemo<KinloomPluginContextValue>(
     () => ({
       ...validateAndCompileUiPlugins(plugins),
       apiClient,
+      subscribePluginSettings,
+      notifyPluginSettingsUpdated,
     }),
-    [plugins, apiClient]
+    [plugins, apiClient, subscribePluginSettings, notifyPluginSettingsUpdated]
   );
 
   const wrappedChildren = plugins.reduceRight<React.ReactNode>((acc, plugin) => {
@@ -177,13 +227,21 @@ export interface PluginSlotProps {
   place?: Place;
   narrative?: Narrative;
   className?: string;
+  as?: 'div' | 'fragment';
 }
 
 /**
  * Renders every plugin contribution registered for `name`.
  * Returns `null` when no plugins contribute output so empty slots add zero DOM clutter.
  */
-export const PluginSlot: React.FC<PluginSlotProps> = ({ name, person, place, narrative, className }) => {
+export const PluginSlot: React.FC<PluginSlotProps> = ({
+  name,
+  person,
+  place,
+  narrative,
+  className,
+  as = 'div',
+}) => {
   const { plugins } = useKinloomPlugins();
   const { bundle, siteConfig, baseUrl, session, capabilities } = useArchiveData();
 
@@ -211,15 +269,23 @@ export const PluginSlot: React.FC<PluginSlotProps> = ({ name, person, place, nar
     const output = renderer(slotCtx);
     if (output !== null && output !== undefined && output !== false) {
       rendered.push(
-        <div key={`${plugin.id}:${name}`} className={'kinloom-plugin-slot-item'} data-plugin-id={plugin.id}>
-          {output}
-        </div>
+        as === 'fragment' ? (
+          <Fragment key={`${plugin.id}:${name}`}>{output}</Fragment>
+        ) : (
+          <div key={`${plugin.id}:${name}`} className={'kinloom-plugin-slot-item'} data-plugin-id={plugin.id}>
+            {output}
+          </div>
+        )
       );
     }
   }
 
   if (rendered.length === 0) {
     return null;
+  }
+
+  if (as === 'fragment') {
+    return <>{rendered}</>;
   }
 
   return (

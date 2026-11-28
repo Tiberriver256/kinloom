@@ -11,6 +11,7 @@ import {
   isDeceasedPersonForBadge,
   isPublicNarrativeForBadge,
   parseAdminObservabilityStats,
+  parsePublicObservabilityConfig,
   parsePublicPageVisitCount,
   selectTopPagesByCategory,
   type UiAdminObservabilityStats,
@@ -129,6 +130,64 @@ describe('observabilityStatsModel pure helpers and HTTP adapter', () => {
     expect(
       parsePublicPageVisitCount({ entity_kind: 'person', route_key: '', entity_slug: 'a', total_views: 1 })
     ).toBeNull();
+    expect(
+      parsePublicPageVisitCount({
+        entity_kind: 'place',
+        route_key: '/place/oak',
+        entity_slug: '',
+        total_views: 1,
+      })
+    ).toBeNull();
+    expect(
+      parsePublicPageVisitCount({
+        entity_kind: 'narrative',
+        route_key: '/narrative/story',
+        entity_slug: 'story',
+        total_views: -1,
+      })
+    ).toBeNull();
+    expect(
+      parsePublicPageVisitCount({
+        entity_kind: 'narrative',
+        route_key: '/narrative/story',
+        entity_slug: 'story',
+        total_views: 1.5,
+      })
+    ).toBeNull();
+
+    // parsePublicObservabilityConfig covers null, missing boolean, defaults, and explicit booleans
+    expect(parsePublicObservabilityConfig(null)).toBeNull();
+    expect(parsePublicObservabilityConfig({ enabled: true })).toBeNull();
+    expect(parsePublicObservabilityConfig({ public_badges_enabled: false })).toEqual({
+      enabled: true,
+      public_badges_enabled: false,
+      record_spa_beacons: true,
+    });
+    expect(
+      parsePublicObservabilityConfig({
+        enabled: false,
+        public_badges_enabled: true,
+        record_spa_beacons: false,
+      })
+    ).toEqual({
+      enabled: false,
+      public_badges_enabled: true,
+      record_spa_beacons: false,
+    });
+
+    // Additional malformed admin payload field guards
+    expect(() => parseAdminObservabilityStats({ ...valid, generated_at: '' })).toThrow(/generated_at/);
+    expect(() => parseAdminObservabilityStats({ ...valid, public_badges_enabled: 'yes' })).toThrow(
+      /public_badges_enabled/
+    );
+    expect(() => parseAdminObservabilityStats({ ...valid, bundle_revision: -1 })).toThrow(/bundle_revision/);
+    expect(() => parseAdminObservabilityStats({ ...valid, top_pages: 'not-array' })).toThrow(/top_pages/);
+    expect(() =>
+      parseAdminObservabilityStats({
+        ...valid,
+        top_pages: [{ route_key: '/p', entity_kind: 'person', entity_slug: 123, title: 'x', views: 1 }],
+      })
+    ).toThrow(/entity_slug/);
   });
 
   it('computes SVG chart geometry, labels, category slices, and living-person badge guards', () => {

@@ -509,6 +509,8 @@ export const ExplorerTopBar: React.FC = () => {
                     );
                   })}
 
+                  <PluginSlot name="topBarMobileMenu" as="fragment" />
+
                   {isSignedInMember && capabilities.hasRevisionHistory && (
                     <li>
                       <Link

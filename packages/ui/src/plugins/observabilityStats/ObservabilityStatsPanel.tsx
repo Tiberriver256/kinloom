@@ -9,6 +9,7 @@ import {
   formatCacheHitRatio,
   formatEntityKindLabel,
   formatVisitCount,
+  OBSERVABILITY_STATS_SERVER_PLUGIN_ID,
   selectTopPagesByCategory,
   type TopPagesCategoryFilter,
   type UiAdminObservabilityStats,
@@ -16,6 +17,7 @@ import {
 } from '../../lib/observabilityStatsModel.js';
 import controlStyles from '../../styles/Controls.module.css';
 import layoutStyles from '../../styles/Layout.module.css';
+import { useKinloomPlugins } from '../PluginContext.js';
 import styles from './ObservabilityStats.module.css';
 import { useObservabilityStatsContext } from './ObservabilityStatsContext.js';
 
@@ -39,6 +41,7 @@ const CATEGORY_OPTIONS: readonly { readonly value: TopPagesCategoryFilter; reado
 
 export const ObservabilityStatsPanel: React.FC = () => {
   const { client, defaultWindow, setShowPublicBadges } = useObservabilityStatsContext();
+  const { subscribePluginSettings, notifyPluginSettingsUpdated } = useKinloomPlugins();
   const idPrefix = useId();
 
   const [activeWindow, setActiveWindow] = useState<UiObservabilityStatsWindow>(defaultWindow);
@@ -89,6 +92,18 @@ export const ObservabilityStatsPanel: React.FC = () => {
     };
   }, [activeWindow, loadStats]);
 
+  useEffect(() => {
+    return subscribePluginSettings(OBSERVABILITY_STATS_SERVER_PLUGIN_ID, (evt) => {
+      if (evt.source === 'plugin-settings-section') {
+        const nextFlag = evt.snapshot?.values.show_public_visit_badges;
+        if (typeof nextFlag === 'boolean') {
+          setStats((prev) => (prev ? { ...prev, public_badges_enabled: nextFlag } : prev));
+        }
+        void loadStats(activeWindow);
+      }
+    });
+  }, [subscribePluginSettings, activeWindow, loadStats]);
+
   const handleTogglePublicBadges = async (nextChecked: boolean): Promise<void> => {
     if (toggling) {
       return;
@@ -99,6 +114,10 @@ export const ObservabilityStatsPanel: React.FC = () => {
       const saved = await client.setPublicBadgesEnabled(nextChecked);
       setShowPublicBadges(saved);
       setStats((prev) => (prev ? { ...prev, public_badges_enabled: saved } : prev));
+      notifyPluginSettingsUpdated({
+        pluginId: OBSERVABILITY_STATS_SERVER_PLUGIN_ID,
+        source: 'plugin-panel',
+      });
       setToggleFeedback({
         kind: 'success',
         message: saved ? 'Public visit counts enabled.' : 'Public visit counts hidden.',

@@ -18,10 +18,13 @@ import {
   InMemoryPageVisitStatsStore,
   isBotUserAgent,
   PAGE_VISIT_STATS_ADMIN_ROUTE,
+  PAGE_VISIT_STATS_BEACON_ROUTE,
+  PAGE_VISIT_STATS_CONFIG_ROUTE,
   PAGE_VISIT_STATS_PLUGIN_ID,
   PAGE_VISIT_STATS_PRIVACY_SUMMARY,
   PAGE_VISIT_STATS_PUBLIC_COUNT_ROUTE,
   type PageVisitStatsStore,
+  PublicObservabilityConfigResponseSchema,
   PublicPageVisitCountResponseSchema,
   parseVisitRouteCandidate,
   staticRouteLabel,
@@ -266,6 +269,7 @@ describe('Privacy-first Page Visit Stats plugin (Issue #39)', () => {
 
     const server = createKinloomServer({
       siteConfig,
+      mode: 'public',
       ports: {
         ...ports,
         assetHandler: createHtmlAssetHandler(),
@@ -563,6 +567,7 @@ describe('Privacy-first Page Visit Stats plugin (Issue #39)', () => {
 
     const server = createKinloomServer({
       siteConfig,
+      mode: 'public',
       ports: {
         ...ports,
         assetHandler: createHtmlAssetHandler(),
@@ -648,5 +653,366 @@ describe('Privacy-first Page Visit Stats plugin (Issue #39)', () => {
     });
     mem.clear();
     expect(await mem.getTotalViews()).toBe(0);
+  });
+
+  it('enforces archive_read, private-mode unauthenticated suppression, config endpoint, SPA beacon, and read_backup media access', async () => {
+    const siteConfig = createSyntheticSiteConfig();
+    const ports = createInMemoryServerPorts(siteConfig, { initialIso: '2026-11-27T12:00:00.000Z' });
+    const clock = ports.clock;
+
+    await ports.repository.upsertUser({
+      email: 'admin@archive.example',
+      display_name: 'Archive Admin',
+      role: 'admin',
+      added_by: 'system:bootstrap',
+      added_at: '2026-01-01T00:00:00.000Z',
+      last_login_at: null,
+    });
+    const rawBackupToken = 'kinloom_read_backup_media_probe_token';
+    const { sha256Hex } = await import('../crypto.js');
+    await ports.repository.createAgentToken({
+      token_id: 'tok_probe_read',
+      label: 'Read Backup Probe',
+      scope: 'read_backup',
+      token_hash: await sha256Hex(rawBackupToken),
+      created_by: 'admin@archive.example',
+      created_at: '2026-01-01T00:00:00.000Z',
+      revoked_at: null,
+    });
+
+    const deceased = createSyntheticHistoricalPerson({
+      id: 'per_ada',
+      slug: 'ada-alder',
+      full_name: 'Ada Alder',
+    });
+    const living = createSyntheticLivingPerson({
+      id: 'per_living_priv',
+      slug: 'living-private',
+      full_name: 'Living Private',
+    });
+    const place: Place = {
+      ...createSyntheticPlace(),
+      id: 'plc_harbor',
+      slug: 'harbor-town',
+      name: 'Harbor Town',
+      full_name: 'Harbor Town, Maine',
+    };
+    await ports.repository.commitAtomicMutations({
+      batch_id: null,
+      author: { author_id: 'admin@archive.example', author_name: 'Archive Admin', author_type: 'human' },
+      nowIso: '2026-11-27T11:00:00.000Z',
+      operations: [
+        {
+          entity_type: 'person',
+          entity_id: deceased.id,
+          slug: deceased.slug,
+          action: 'create',
+          expected_parent_revision_id: null,
+          summary: 'Seed deceased',
+          has_primary_source: true,
+          before_json: null,
+          after_json: { ...deceased },
+        },
+        {
+          entity_type: 'person',
+          entity_id: living.id,
+          slug: living.slug,
+          action: 'create',
+          expected_parent_revision_id: null,
+          summary: 'Seed living',
+          has_primary_source: true,
+          before_json: null,
+          after_json: { ...living },
+        },
+        {
+          entity_type: 'place',
+          entity_id: place.id,
+          slug: place.slug,
+          action: 'create',
+          expected_parent_revision_id: null,
+          summary: 'Seed place',
+          has_primary_source: true,
+          before_json: null,
+          after_json: { ...place },
+        },
+      ],
+    });
+
+    // Seed one media object to verify read_backup agent scope on GET /media/*
+    const mediaBytes = new Uint8Array([1, 2, 3, 4]);
+    await ports.mediaStore.put({
+      key: 'media/sample.bin',
+      body: mediaBytes.buffer,
+      contentType: 'application/octet-stream',
+      sha256: await sha256Hex('sample'),
+    });
+
+    let snapshotLoads = 0;
+    const origLoadSnapshot = ports.repository.loadActiveSnapshot.bind(ports.repository);
+    ports.repository.loadActiveSnapshot = async () => {
+      snapshotLoads += 1;
+      return origLoadSnapshot();
+    };
+
+    const store = new InMemoryPageVisitStatsStore();
+    const visitPlugin = createPageVisitStatsPlugin({ store, clock, publicVisitBadges: true });
+    const server = createKinloomServer({
+      siteConfig,
+      mode: 'private',
+      ports: {
+        ...ports,
+        assetHandler: createHtmlAssetHandler(),
+        plugins: [visitPlugin],
+      },
+      sessionSecret: SECRET,
+    });
+
+    // Unauthenticated HTML GET on private archive must NOT inflate visit counts (P1-5)
+    expect((await server.fetch(new Request(`${ORIGIN}/person/ada-alder`))).status).toBe(200);
+    expect(await store.getTotalViews()).toBe(0);
+
+    // Unauthenticated observability endpoints return 401 on private archive (P1-4)
+    expect((await server.fetch(new Request(`${ORIGIN}${PAGE_VISIT_STATS_CONFIG_ROUTE}`))).status).toBe(401);
+    expect(
+      (
+        await server.fetch(
+          new Request(`${ORIGIN}${PAGE_VISIT_STATS_PUBLIC_COUNT_ROUTE}?kind=person&slug=ada-alder`)
+        )
+      ).status
+    ).toBe(401);
+    expect(
+      (
+        await server.fetch(
+          new Request(`${ORIGIN}${PAGE_VISIT_STATS_BEACON_ROUTE}`, {
+            method: 'POST',
+            headers: { 'content-type': 'application/json', origin: ORIGIN },
+            body: JSON.stringify({ path: '/person/ada-alder' }),
+          })
+        )
+      ).status
+    ).toBe(401);
+
+    // read_backup agent token can access GET /media/* and GET /api/observability/config
+    const mediaRes = await server.fetch(
+      new Request(`${ORIGIN}/media/sample.bin`, {
+        headers: { authorization: `Bearer ${rawBackupToken}` },
+      })
+    );
+    expect(mediaRes.status).toBe(200);
+
+    const cfgRes = await server.fetch(
+      new Request(`${ORIGIN}${PAGE_VISIT_STATS_CONFIG_ROUTE}`, {
+        headers: { authorization: `Bearer ${rawBackupToken}` },
+      })
+    );
+    expect(cfgRes.status).toBe(200);
+    expect(cfgRes.headers.get('cache-control')).toBe('private, no-cache');
+    expect(PublicObservabilityConfigResponseSchema.parse(await cfgRes.json())).toEqual({
+      enabled: true,
+      public_badges_enabled: true,
+      record_spa_beacons: true,
+    });
+
+    // Authenticated HTML GET on private archive records 1 visit
+    const adminCookie = await createUserCookie(clock, 'admin', 'admin@archive.example');
+    expect(
+      (await server.fetch(new Request(`${ORIGIN}/person/ada-alder`, { headers: { cookie: adminCookie } })))
+        .status
+    ).toBe(200);
+    expect(await store.getPageTotalViews('/person/ada-alder')).toBe(1);
+
+    // SPA beacon records deceased person, place, and static route, while skipping living, /admin, bots, prefetch
+    const sendBeacon = (path: string, extraHeaders?: Record<string, string>) =>
+      server.fetch(
+        new Request(`${ORIGIN}${PAGE_VISIT_STATS_BEACON_ROUTE}`, {
+          method: 'POST',
+          headers: {
+            'content-type': 'application/json',
+            origin: ORIGIN,
+            cookie: adminCookie,
+            ...extraHeaders,
+          },
+          body: JSON.stringify({ path }),
+        })
+      );
+
+    expect((await sendBeacon('/person/ada-alder')).status).toBe(204);
+    expect((await sendBeacon('/place/harbor-town')).status).toBe(204);
+    expect((await sendBeacon('/tree')).status).toBe(204);
+    expect((await sendBeacon('/person/living-private')).status).toBe(204);
+    expect((await sendBeacon('/admin')).status).toBe(204);
+    expect((await sendBeacon('/person/ada-alder', { 'user-agent': 'Googlebot/2.1' })).status).toBe(204);
+    expect((await sendBeacon('/person/ada-alder', { 'sec-purpose': 'prefetch' })).status).toBe(204);
+
+    // Invalid beacon body returns 400; cross-origin cookie beacon returns 403 CSRF
+    expect(
+      (
+        await server.fetch(
+          new Request(`${ORIGIN}${PAGE_VISIT_STATS_BEACON_ROUTE}`, {
+            method: 'POST',
+            headers: { 'content-type': 'application/json', origin: ORIGIN, cookie: adminCookie },
+            body: 'not-json',
+          })
+        )
+      ).status
+    ).toBe(400);
+    expect(
+      (
+        await server.fetch(
+          new Request(`${ORIGIN}${PAGE_VISIT_STATS_BEACON_ROUTE}`, {
+            method: 'POST',
+            headers: {
+              'content-type': 'application/json',
+              origin: 'https://evil.example',
+              cookie: adminCookie,
+            },
+            body: JSON.stringify({ path: '/tree' }),
+          })
+        )
+      ).status
+    ).toBe(403);
+
+    expect(await store.getPageTotalViews('/person/ada-alder')).toBe(2);
+    expect(await store.getPageTotalViews('/place/harbor-town')).toBe(1);
+    expect(await store.getPageTotalViews('/tree')).toBe(1);
+    expect(await store.getPageTotalViews('/person/living-private')).toBe(0);
+
+    // Badge read returns private, no-cache and exact count without full snapshot scan!
+    const badgeRes = await server.fetch(
+      new Request(`${ORIGIN}${PAGE_VISIT_STATS_PUBLIC_COUNT_ROUTE}?kind=person&slug=ada-alder`, {
+        headers: { cookie: adminCookie },
+      })
+    );
+    expect(badgeRes.status).toBe(200);
+    expect(badgeRes.headers.get('cache-control')).toBe('private, no-cache');
+    expect(PublicPageVisitCountResponseSchema.parse(await badgeRes.json()).total_views).toBe(2);
+    expect(snapshotLoads).toBe(0);
+
+    // Extra subpaths return 404; schema-invalid beacon body returns 400
+    expect(
+      (
+        await server.fetch(
+          new Request(`${ORIGIN}${PAGE_VISIT_STATS_CONFIG_ROUTE}/extra`, {
+            headers: { cookie: adminCookie },
+          })
+        )
+      ).status
+    ).toBe(404);
+    expect(
+      (
+        await server.fetch(
+          new Request(`${ORIGIN}${PAGE_VISIT_STATS_BEACON_ROUTE}/extra`, {
+            method: 'POST',
+            headers: { 'content-type': 'application/json', origin: ORIGIN, cookie: adminCookie },
+            body: JSON.stringify({ path: '/tree' }),
+          })
+        )
+      ).status
+    ).toBe(404);
+    expect(
+      (
+        await server.fetch(
+          new Request(`${ORIGIN}${PAGE_VISIT_STATS_BEACON_ROUTE}`, {
+            method: 'POST',
+            headers: { 'content-type': 'application/json', origin: ORIGIN, cookie: adminCookie },
+            body: JSON.stringify({ path: '' }),
+          })
+        )
+      ).status
+    ).toBe(400);
+
+    // Public narrative and living-linked narrative via beacon + public mode Cache-Control + catalog fallback
+    const publicNarrative = createSyntheticNarrative({
+      id: 'nar_public_beacon',
+      slug: 'public-beacon-story',
+      title: 'Public Beacon Story',
+      person_ids: [deceased.id],
+    });
+    const livingNarrative = createSyntheticNarrative({
+      id: 'nar_living_beacon',
+      slug: 'living-beacon-story',
+      title: 'Living Beacon Story',
+      person_ids: [living.id],
+    });
+    await ports.repository.commitAtomicMutations({
+      batch_id: null,
+      author: { author_id: 'admin@archive.example', author_name: 'Archive Admin', author_type: 'human' },
+      nowIso: '2026-11-27T11:30:00.000Z',
+      operations: [
+        {
+          entity_type: 'narrative',
+          entity_id: publicNarrative.id,
+          slug: publicNarrative.slug ?? publicNarrative.id,
+          action: 'create',
+          expected_parent_revision_id: null,
+          summary: 'Seed public narrative',
+          has_primary_source: true,
+          before_json: null,
+          after_json: { ...publicNarrative },
+        },
+        {
+          entity_type: 'narrative',
+          entity_id: livingNarrative.id,
+          slug: livingNarrative.slug ?? livingNarrative.id,
+          action: 'create',
+          expected_parent_revision_id: null,
+          summary: 'Seed living narrative',
+          has_primary_source: true,
+          before_json: null,
+          after_json: { ...livingNarrative },
+        },
+      ],
+    });
+
+    expect((await sendBeacon('/narrative/public-beacon-story')).status).toBe(204);
+    expect((await sendBeacon('/narrative/living-beacon-story')).status).toBe(204);
+    expect(await store.getPageTotalViews('/narrative/public-beacon-story')).toBe(1);
+    expect(await store.getPageTotalViews('/narrative/living-beacon-story')).toBe(0);
+
+    // Public mode serves GET /api/observability/config with Cache-Control: no-cache and handles repositories without getEntityBySlug
+    const fallbackRepo = {
+      ...ports.repository,
+      getEntityBySlug: undefined,
+    };
+    const publicStore = new InMemoryPageVisitStatsStore();
+    const publicServer = createKinloomServer({
+      siteConfig,
+      mode: 'public',
+      ports: {
+        ...ports,
+        repository: fallbackRepo,
+        assetHandler: createHtmlAssetHandler(),
+        plugins: [
+          createPageVisitStatsPlugin({
+            store: publicStore,
+            publicVisitBadges: true,
+          }),
+        ],
+      },
+      sessionSecret: SECRET,
+    });
+
+    const publicCfgRes = await publicServer.fetch(new Request(`${ORIGIN}${PAGE_VISIT_STATS_CONFIG_ROUTE}`));
+    expect(publicCfgRes.status).toBe(200);
+    expect(publicCfgRes.headers.get('cache-control')).toBe('no-cache');
+
+    for (const fallbackPath of [
+      '/person/ada-alder',
+      '/place/harbor-town',
+      '/narrative/public-beacon-story',
+      '/person/missing-person',
+    ]) {
+      const r = await publicServer.fetch(
+        new Request(`${ORIGIN}${PAGE_VISIT_STATS_BEACON_ROUTE}`, {
+          method: 'POST',
+          headers: { 'content-type': 'application/json', origin: ORIGIN },
+          body: JSON.stringify({ path: fallbackPath }),
+        })
+      );
+      expect(r.status).toBe(204);
+    }
+    expect(await publicStore.getPageTotalViews('/person/ada-alder')).toBe(1);
+    expect(await publicStore.getPageTotalViews('/place/harbor-town')).toBe(1);
+    expect(await publicStore.getPageTotalViews('/narrative/public-beacon-story')).toBe(1);
   });
 });

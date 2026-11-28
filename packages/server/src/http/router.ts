@@ -1,4 +1,4 @@
-import type { KinloomServerPluginRoute, KinloomSiteConfig } from '@kinloom/core';
+import type { CallerPrincipal, KinloomServerPluginRoute, KinloomSiteConfig } from '@kinloom/core';
 import { KinloomHttpError, toErrorResponseData } from '../errors.js';
 import { AdminService } from '../services/adminService.js';
 import { AuthService } from '../services/authService.js';
@@ -327,7 +327,8 @@ export function createKinloomServer(config: KinloomServerConfig): KinloomServer 
 
   async function handleRequest(
     request: Request,
-    telemetry?: ServerRequestTelemetryTracker
+    telemetry?: ServerRequestTelemetryTracker,
+    onPrincipalResolved?: (principal: CallerPrincipal) => void
   ): Promise<Response> {
     const url = new URL(request.url);
     const pathname = url.pathname;
@@ -349,6 +350,7 @@ export function createKinloomServer(config: KinloomServerConfig): KinloomServer 
       clock: config.ports.clock,
       telemetry,
     });
+    onPrincipalResolved?.(auth.principal);
 
     const ctx: HttpRequestContext = {
       request,
@@ -372,14 +374,21 @@ export function createKinloomServer(config: KinloomServerConfig): KinloomServer 
     if (matchedPluginRoute) {
       const { route: pluginRoute, pluginId, databaseNamespace } = matchedPluginRoute;
       enforceCsrfOrigin(request, url, auth.authMethod, telemetry);
-      requireMinRole(auth.principal, pluginRoute.minRole, {
+      const effectiveMinRole =
+        pluginRoute.minRole === 'archive_read'
+          ? mode === 'public'
+            ? 'public'
+            : 'viewer'
+          : pluginRoute.minRole;
+      requireMinRole(auth.principal, effectiveMinRole, {
+        mode,
         allowAgentScopes:
-          pluginRoute.minRole === 'viewer'
+          effectiveMinRole === 'viewer'
             ? ['write_batch', 'read_backup']
-            : pluginRoute.minRole === 'editor'
+            : effectiveMinRole === 'editor'
               ? ['write_batch']
               : [],
-        adminForbiddenCode: pluginRoute.minRole === 'admin' ? 'ADMIN_REQUIRED' : 'FORBIDDEN',
+        adminForbiddenCode: effectiveMinRole === 'admin' ? 'ADMIN_REQUIRED' : 'FORBIDDEN',
         telemetry,
         bearerRejected: auth.bearerRejected,
       });
@@ -393,6 +402,7 @@ export function createKinloomServer(config: KinloomServerConfig): KinloomServer 
         principal: auth.principal,
         siteConfig: config.siteConfig,
         ports: config.ports,
+        mode,
         ...(pluginDb ? { pluginDb } : {}),
         ...(telemetry ? { emitSecurityEvent: (payload) => telemetry.queueSecurityEvent(payload) } : {}),
       };
@@ -482,8 +492,12 @@ export function createKinloomServer(config: KinloomServerConfig): KinloomServer 
         );
       }
 
+      let resolvedPrincipal: CallerPrincipal = { kind: 'anonymous' };
+
       try {
-        const response = await handleRequest(request, tracker);
+        const response = await handleRequest(request, tracker, (principal) => {
+          resolvedPrincipal = principal;
+        });
         const secured = await finalizeServerResponse({
           request,
           pathname: url.pathname,
@@ -511,6 +525,7 @@ export function createKinloomServer(config: KinloomServerConfig): KinloomServer 
             ports: config.ports,
             siteConfig: config.siteConfig,
             mode,
+            principal: resolvedPrincipal,
           },
           config.onPluginError
         );
@@ -559,6 +574,7 @@ export function createKinloomServer(config: KinloomServerConfig): KinloomServer 
             ports: config.ports,
             siteConfig: config.siteConfig,
             mode,
+            principal: resolvedPrincipal,
           },
           config.onPluginError
         );

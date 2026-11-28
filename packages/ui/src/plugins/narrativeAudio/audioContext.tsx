@@ -3,17 +3,28 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useRef, use
 import { cx } from '../../lib/cx.js';
 import audioPluginStyles from '../narrativeAudioPlugin.module.css';
 
+export type NarrativeAudioKind = 'biography' | 'family_story' | 'research_note' | 'memoir';
+
+export interface NarrativeAudioLabels {
+  readonly marginLabel: string;
+  readonly dockLabel: string;
+  readonly returnLabel: string;
+}
+
 export interface NarrativeAudioTrackMeta {
   readonly file: string;
   readonly duration_seconds?: number;
   readonly editor_notes_start_seconds?: number;
   readonly story_voice?: string;
   readonly notes_voice?: string;
+  readonly label?: string;
 }
 
 export interface ActiveNarrativeAudioTrack {
   readonly narrativeId: string;
   readonly narrativeTitle: string;
+  readonly narrativeKind: NarrativeAudioKind;
+  readonly customLabel?: string | null;
   readonly personName: string | null;
   readonly personSlug: string | null;
   readonly personInitials: string;
@@ -22,6 +33,54 @@ export interface ActiveNarrativeAudioTrack {
   readonly editorNotesStart: number | null;
   readonly storyVoice: string;
   readonly notesVoice: string;
+}
+
+const NARRATIVE_AUDIO_KIND_LABELS: Readonly<Record<NarrativeAudioKind, NarrativeAudioLabels>> = {
+  biography: {
+    marginLabel: 'Listen to Biography',
+    dockLabel: 'Biography Narration',
+    returnLabel: '↩ Biography',
+  },
+  family_story: {
+    marginLabel: 'Listen to Story',
+    dockLabel: 'Story Narration',
+    returnLabel: '↩ Story',
+  },
+  research_note: {
+    marginLabel: 'Listen to Research Note',
+    dockLabel: 'Research Note Narration',
+    returnLabel: '↩ Note',
+  },
+  memoir: {
+    marginLabel: 'Listen to Memoir',
+    dockLabel: 'Memoir Narration',
+    returnLabel: '↩ Memoir',
+  },
+};
+
+export function resolveNarrativeAudioLabels(
+  track: Pick<ActiveNarrativeAudioTrack, 'narrativeKind' | 'customLabel'>
+): NarrativeAudioLabels {
+  const custom = track.customLabel?.trim();
+  if (custom) {
+    return {
+      marginLabel: `Listen to ${custom}`,
+      dockLabel: `${custom} Narration`,
+      returnLabel: `↩ ${custom}`,
+    };
+  }
+  const kind: NarrativeAudioKind = track.narrativeKind;
+  switch (kind) {
+    case 'biography':
+    case 'family_story':
+    case 'research_note':
+    case 'memoir':
+      return NARRATIVE_AUDIO_KIND_LABELS[kind];
+    default: {
+      const _exhaustive: never = kind;
+      return _exhaustive;
+    }
+  }
 }
 
 export interface NarrativeAudioPluginOptions {
@@ -38,6 +97,7 @@ const PLAYBACK_SPEEDS = [1, 1.25, 1.5, 0.85] as const;
 export interface NarrativeAudioContextValue {
   readonly activeTrack: ActiveNarrativeAudioTrack | null;
   readonly isPlaying: boolean;
+  readonly playbackError: string | null;
   readonly currentTime: number;
   readonly duration: number;
   readonly playbackRate: number;
@@ -56,10 +116,14 @@ export function useNarrativeAudio(): NarrativeAudioContextValue | null {
   return useContext(NarrativeAudioContext);
 }
 
+const AUDIO_LOAD_ERROR_MESSAGE =
+  'Audio narration could not be loaded. Check your connection or sign-in session and try again.';
+
 export const NarrativeAudioProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const [activeTrack, setActiveTrack] = useState<ActiveNarrativeAudioTrack | null>(null);
   const [isPlaying, setIsPlaying] = useState(false);
+  const [playbackError, setPlaybackError] = useState<string | null>(null);
   const [currentTime, setCurrentTime] = useState(0);
   const [measuredDuration, setMeasuredDuration] = useState<number | null>(null);
   const [playbackRate, setPlaybackRate] = useState<number>(1);
@@ -71,8 +135,14 @@ export const NarrativeAudioProvider: React.FC<{ children: React.ReactNode }> = (
     try {
       const result = el.play();
       if (result && typeof result.catch === 'function') {
-        result.catch(() => {
-          // Ignore autoplay/jsdom rejections while preserving UI intent.
+        result.catch((err: unknown) => {
+          const name = err instanceof Error ? err.name : '';
+          const message = err instanceof Error ? err.message : '';
+          if (name === 'NotAllowedError' || name === 'AbortError' || /not implemented/i.test(message)) {
+            return;
+          }
+          setIsPlaying(false);
+          setPlaybackError(AUDIO_LOAD_ERROR_MESSAGE);
         });
       }
     } catch {
@@ -117,6 +187,7 @@ export const NarrativeAudioProvider: React.FC<{ children: React.ReactNode }> = (
 
   const toggleTrack = useCallback(
     (track: ActiveNarrativeAudioTrack) => {
+      setPlaybackError(null);
       if (activeTrack?.narrativeId === track.narrativeId) {
         setIsPlaying((prev) => !prev);
         return;
@@ -134,6 +205,7 @@ export const NarrativeAudioProvider: React.FC<{ children: React.ReactNode }> = (
     if (!activeTrack) {
       return;
     }
+    setPlaybackError(null);
     setIsPlaying((prev) => !prev);
   }, [activeTrack]);
 
@@ -151,6 +223,7 @@ export const NarrativeAudioProvider: React.FC<{ children: React.ReactNode }> = (
 
   const seekTrack = useCallback(
     (track: ActiveNarrativeAudioTrack, seconds: number, autoPlay = false) => {
+      setPlaybackError(null);
       const max = track.duration && track.duration > 0 ? track.duration : Number.POSITIVE_INFINITY;
       const clamped = Math.max(0, Math.min(seconds, max));
       if (activeTrack?.narrativeId === track.narrativeId) {
@@ -191,6 +264,7 @@ export const NarrativeAudioProvider: React.FC<{ children: React.ReactNode }> = (
       audioRef.current.currentTime = 0;
     }
     setIsPlaying(false);
+    setPlaybackError(null);
     setActiveTrack(null);
     setCurrentTime(0);
     setMeasuredDuration(null);
@@ -200,6 +274,7 @@ export const NarrativeAudioProvider: React.FC<{ children: React.ReactNode }> = (
     () => ({
       activeTrack,
       isPlaying,
+      playbackError,
       currentTime,
       duration,
       playbackRate,
@@ -214,6 +289,7 @@ export const NarrativeAudioProvider: React.FC<{ children: React.ReactNode }> = (
     [
       activeTrack,
       isPlaying,
+      playbackError,
       currentTime,
       duration,
       playbackRate,
@@ -241,13 +317,21 @@ export const NarrativeAudioProvider: React.FC<{ children: React.ReactNode }> = (
           setCurrentTime(event.currentTarget.currentTime);
         }}
         onLoadedMetadata={(event) => {
+          setPlaybackError(null);
           const d = event.currentTarget.duration;
           if (Number.isFinite(d) && d > 0) {
             setMeasuredDuration(d);
           }
         }}
+        onCanPlay={() => {
+          setPlaybackError(null);
+        }}
         onEnded={() => {
           setIsPlaying(false);
+        }}
+        onError={() => {
+          setIsPlaying(false);
+          setPlaybackError(AUDIO_LOAD_ERROR_MESSAGE);
         }}
       />
     </NarrativeAudioContext.Provider>

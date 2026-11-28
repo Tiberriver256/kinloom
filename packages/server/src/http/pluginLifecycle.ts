@@ -1,4 +1,5 @@
 import type {
+  CallerPrincipal,
   Clock,
   KinloomServerPlugin as CoreKinloomServerPlugin,
   KinloomServerPluginContext as CoreKinloomServerPluginContext,
@@ -66,6 +67,7 @@ export interface ServerRequestResponseEvent {
   readonly ports?: KinloomServerPorts;
   readonly siteConfig?: KinloomSiteConfig;
   readonly mode?: 'private' | 'public';
+  readonly principal?: CallerPrincipal;
 }
 
 export interface ServerRequestErrorEvent {
@@ -152,7 +154,9 @@ const EXACT_STATIC_ROUTES = new Set<string>([
   '/api/admin/system',
   '/api/admin/plugin-settings',
   '/api/admin/observability/stats',
+  '/api/observability/config',
   '/api/observability/page-visits',
+  '/api/observability/page-visits/beacon',
   '/privacy',
   '/og/site.svg',
   '/data/bundle.json',

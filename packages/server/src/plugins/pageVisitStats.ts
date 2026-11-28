@@ -19,6 +19,8 @@ import {
   computeCacheSummary,
   fillDailySeries,
   formatUtcDayBucket,
+  isBotUserAgent,
+  isPrefetchRequest,
   parseVisitRouteCandidate,
   shiftUtcDay,
   shouldRecordPageVisit,
@@ -33,13 +35,18 @@ import {
   type ObservabilityStatsWindow,
   ObservabilityStatsWindowSchema,
   PAGE_VISIT_STATS_ADMIN_ROUTE,
+  PAGE_VISIT_STATS_BEACON_ROUTE,
+  PAGE_VISIT_STATS_CONFIG_ROUTE,
   PAGE_VISIT_STATS_PLUGIN_ID,
   PAGE_VISIT_STATS_PRIVACY_DISCLOSURE_ID,
   PAGE_VISIT_STATS_PRIVACY_SUMMARY,
   PAGE_VISIT_STATS_PUBLIC_COUNT_ROUTE,
+  PageVisitBeaconRequestSchema,
   type PageVisitEntityKind,
   type PageVisitStatsStore,
   type PageVisitTopRow,
+  type PublicObservabilityConfigResponse,
+  PublicObservabilityConfigResponseSchema,
   type PublicPageVisitCountResponse,
   PublicPageVisitCountResponseSchema,
   type TopVisitedPage,
@@ -74,15 +81,21 @@ export {
   type ObservabilityStatsWindow,
   ObservabilityStatsWindowSchema,
   PAGE_VISIT_STATS_ADMIN_ROUTE,
+  PAGE_VISIT_STATS_BEACON_ROUTE,
+  PAGE_VISIT_STATS_CONFIG_ROUTE,
   PAGE_VISIT_STATS_PLUGIN_ID,
   PAGE_VISIT_STATS_PRIVACY_DISCLOSURE_ID,
   PAGE_VISIT_STATS_PRIVACY_SUMMARY,
   PAGE_VISIT_STATS_PUBLIC_COUNT_ROUTE,
+  type PageVisitBeaconRequest,
+  PageVisitBeaconRequestSchema,
   type PageVisitEntityKind,
   PageVisitEntityKindSchema,
   type PageVisitIncrementInput,
   type PageVisitStatsStore,
   type PageVisitTopRow,
+  type PublicObservabilityConfigResponse,
+  PublicObservabilityConfigResponseSchema,
   type PublicPageVisitCountResponse,
   PublicPageVisitCountResponseSchema,
   type TopVisitedPage,
@@ -107,8 +120,12 @@ export interface PageVisitStatsPluginOptions {
    * places, and non-living narratives. Strictly OFF by default.
    */
   readonly publicVisitBadges?: boolean;
-  /** Minimum role for the optional public single-page count endpoint when badges are enabled. Defaults to 'public'. */
-  readonly publicEndpointMinRole?: 'public' | 'viewer';
+  /**
+   * Minimum role for read-only observability endpoints (`/api/observability/config`,
+   * `/api/observability/page-visits`, `/api/observability/page-visits/beacon`).
+   * Defaults to 'archive_read' ('viewer' on private archives, 'public' on public archives).
+   */
+  readonly publicEndpointMinRole?: 'public' | 'archive_read' | 'viewer';
   /** Default stats window for GET /api/admin/observability/stats. Defaults to '30d'. */
   readonly defaultWindow?: ObservabilityStatsWindow;
   /** Max rows returned in top_pages. Defaults to 15 (clamped 1..50). */
@@ -243,6 +260,69 @@ async function buildSafeEntityCatalog(repository: ArchiveRepository): Promise<Sa
     placesByKey,
     publicNarrativesByKey,
   };
+}
+
+async function resolveSafeSingleEntity(
+  repository: ArchiveRepository,
+  kind: Exclude<PageVisitEntityKind, 'route'>,
+  rawSlug: string
+): Promise<SafeEntityInfo | null> {
+  if (typeof repository.getEntityBySlug === 'function') {
+    const [row, livingIds] =
+      kind === 'place'
+        ? [await repository.getEntityBySlug(kind, rawSlug), null]
+        : await Promise.all([repository.getEntityBySlug(kind, rawSlug), repository.getLivingPersonIds()]);
+
+    if (!row || row.deleted_at !== null) {
+      return null;
+    }
+
+    if (kind === 'person') {
+      const person = parseEntityPayload('person', row.data);
+      if (isLivingPersonEntity(person, livingIds ?? new Set<string>())) {
+        return null;
+      }
+      return {
+        id: person.id,
+        slug: person.slug,
+        title: person.full_name.trim() || person.slug,
+      };
+    }
+
+    if (kind === 'place') {
+      const place = parseEntityPayload('place', row.data);
+      return {
+        id: place.id,
+        slug: place.slug,
+        title: (place.full_name || place.name).trim() || place.slug,
+      };
+    }
+
+    const narrative = parseEntityPayload('narrative', row.data);
+    const linkedPeople = narrative.person_ids ?? [];
+    if (livingIds && linkedPeople.some((personId) => livingIds.has(personId))) {
+      return null;
+    }
+    const slug = narrative.slug || narrative.id;
+    return {
+      id: narrative.id,
+      slug,
+      title: narrative.title.trim() || slug,
+    };
+  }
+
+  const catalog = await buildSafeEntityCatalog(repository);
+  if (kind === 'person') {
+    return catalog.deceasedPeopleByKey.get(rawSlug) ?? null;
+  }
+  if (kind === 'place') {
+    return catalog.placesByKey.get(rawSlug) ?? null;
+  }
+  return catalog.publicNarrativesByKey.get(rawSlug) ?? null;
+}
+
+function observabilityReadCacheControl(mode: 'private' | 'public' | undefined): string {
+  return mode === 'public' ? 'no-cache' : 'private, no-cache';
 }
 
 function buildSettingsSchema(defaults: {
@@ -426,7 +506,7 @@ export function createPageVisitStatsPlugin(options: PageVisitStatsPluginOptions 
   let defaultWindow: ObservabilityStatsWindow = options.defaultWindow ?? '30d';
   const topPagesLimit = clampInt(options.topPagesLimit, 15, 1, 50);
   const topByKindLimit = clampInt(options.topByKindLimit, 10, 1, 25);
-  const publicEndpointMinRole = options.publicEndpointMinRole ?? 'public';
+  const publicEndpointMinRole = options.publicEndpointMinRole ?? 'archive_read';
 
   const settingsSchema = buildSettingsSchema({
     publicVisitBadges,
@@ -445,9 +525,11 @@ export function createPageVisitStatsPlugin(options: PageVisitStatsPluginOptions 
         if (stored) {
           if (typeof stored.values.show_public_visit_badges === 'boolean') {
             showPublicBadges = stored.values.show_public_visit_badges;
+            publicVisitBadges = showPublicBadges;
           }
           if (isWindowValue(stored.values.default_window)) {
             preferredWindow = stored.values.default_window;
+            defaultWindow = preferredWindow;
           }
         }
       } catch {
@@ -625,6 +707,89 @@ export function createPageVisitStatsPlugin(options: PageVisitStatsPluginOptions 
       },
       {
         method: 'GET',
+        pathPrefix: PAGE_VISIT_STATS_CONFIG_ROUTE,
+        minRole: publicEndpointMinRole,
+        async handle(ctx): Promise<Response> {
+          if (ctx.url.pathname.replace(/\/+$/, '') !== PAGE_VISIT_STATS_CONFIG_ROUTE) {
+            throw new KinloomHttpError(404, 'NOT_FOUND', `Route GET ${ctx.url.pathname} was not found.`);
+          }
+          const serverPorts = ctx.ports as KinloomServerPorts;
+          const prefs = await resolvePersistedPreferences(serverPorts);
+          const payload: PublicObservabilityConfigResponse = PublicObservabilityConfigResponseSchema.parse({
+            enabled: true,
+            public_badges_enabled: prefs.showPublicBadges,
+            record_spa_beacons: true,
+          });
+          return jsonResponse(payload, 200, {
+            'cache-control': observabilityReadCacheControl(ctx.mode),
+          });
+        },
+      },
+      {
+        method: 'POST',
+        pathPrefix: PAGE_VISIT_STATS_BEACON_ROUTE,
+        minRole: publicEndpointMinRole,
+        async handle(ctx): Promise<Response> {
+          if (ctx.url.pathname.replace(/\/+$/, '') !== PAGE_VISIT_STATS_BEACON_ROUTE) {
+            throw new KinloomHttpError(404, 'NOT_FOUND', `Route POST ${ctx.url.pathname} was not found.`);
+          }
+          if (isPrefetchRequest(ctx.request) || isBotUserAgent(ctx.request.headers.get('user-agent'))) {
+            return new Response(null, { status: 204, headers: { 'cache-control': 'no-store' } });
+          }
+
+          let rawBody: unknown;
+          try {
+            rawBody = await ctx.request.json();
+          } catch {
+            throw new KinloomHttpError(400, 'VALIDATION_ERROR', 'Expected JSON body with a path string.');
+          }
+          const parsedBody = PageVisitBeaconRequestSchema.safeParse(rawBody);
+          if (!parsedBody.success) {
+            throw new KinloomHttpError(
+              400,
+              'VALIDATION_ERROR',
+              parsedBody.error.issues[0]?.message ?? 'Invalid page visit beacon payload.'
+            );
+          }
+
+          const candidate = parseVisitRouteCandidate(parsedBody.data.path);
+          if (!candidate) {
+            return new Response(null, { status: 204, headers: { 'cache-control': 'no-store' } });
+          }
+
+          const serverPorts = ctx.ports as KinloomServerPorts;
+          const store = resolveStore(options.store, serverPorts, fallbackStore);
+          const dayUtc = formatUtcDayBucket(readNowIso(serverPorts));
+
+          if (candidate.kind === 'route') {
+            await store.incrementVisit({
+              routeKey: candidate.routeKey,
+              entityKind: 'route',
+              entitySlug: null,
+              dayUtc,
+            });
+            return new Response(null, { status: 204, headers: { 'cache-control': 'no-store' } });
+          }
+
+          const safeEntity = await resolveSafeSingleEntity(
+            serverPorts.repository,
+            candidate.kind,
+            candidate.rawSlug
+          );
+          if (safeEntity) {
+            await store.incrementVisit({
+              routeKey: buildEntityRouteKey(candidate.kind, safeEntity.slug),
+              entityKind: candidate.kind,
+              entitySlug: safeEntity.slug,
+              dayUtc,
+            });
+          }
+
+          return new Response(null, { status: 204, headers: { 'cache-control': 'no-store' } });
+        },
+      },
+      {
+        method: 'GET',
         pathPrefix: PAGE_VISIT_STATS_PUBLIC_COUNT_ROUTE,
         minRole: publicEndpointMinRole,
         async handle(ctx): Promise<Response> {
@@ -647,15 +812,7 @@ export function createPageVisitStatsPlugin(options: PageVisitStatsPluginOptions 
             );
           }
 
-          const catalog = await buildSafeEntityCatalog(serverPorts.repository);
-          let resolved: SafeEntityInfo | undefined;
-          if (query.kind === 'person') {
-            resolved = catalog.deceasedPeopleByKey.get(query.rawSlug);
-          } else if (query.kind === 'place') {
-            resolved = catalog.placesByKey.get(query.rawSlug);
-          } else {
-            resolved = catalog.publicNarrativesByKey.get(query.rawSlug);
-          }
+          const resolved = await resolveSafeSingleEntity(serverPorts.repository, query.kind, query.rawSlug);
 
           // Living people, living-linked narratives, and unknown slugs all return 404 identically.
           if (!resolved) {
@@ -677,7 +834,9 @@ export function createPageVisitStatsPlugin(options: PageVisitStatsPluginOptions 
             total_views: totalViews,
           });
 
-          return jsonResponse(body, 200, { 'cache-control': 'public, max-age=60' });
+          return jsonResponse(body, 200, {
+            'cache-control': observabilityReadCacheControl(ctx.mode),
+          });
         },
       },
     ],
@@ -694,11 +853,16 @@ export function createPageVisitStatsPlugin(options: PageVisitStatsPluginOptions 
           ? cacheStatus
           : null;
 
-      const recordPage = shouldRecordPageVisit({
-        request: event.telemetry.request,
-        status: event.status,
-        contentType: event.response.headers.get('content-type'),
-      });
+      const skipPrivateAnonymous =
+        event.mode === 'private' && (!event.principal || event.principal.kind === 'anonymous');
+
+      const recordPage =
+        !skipPrivateAnonymous &&
+        shouldRecordPageVisit({
+          request: event.telemetry.request,
+          status: event.status,
+          contentType: event.response.headers.get('content-type'),
+        });
 
       const candidate = recordPage
         ? parseVisitRouteCandidate(new URL(event.telemetry.request.url).pathname)
@@ -731,15 +895,11 @@ export function createPageVisitStatsPlugin(options: PageVisitStatsPluginOptions 
           return;
         }
 
-        const catalog = await buildSafeEntityCatalog(serverPorts.repository);
-        let safeEntity: SafeEntityInfo | undefined;
-        if (candidate.kind === 'person') {
-          safeEntity = catalog.deceasedPeopleByKey.get(candidate.rawSlug);
-        } else if (candidate.kind === 'place') {
-          safeEntity = catalog.placesByKey.get(candidate.rawSlug);
-        } else {
-          safeEntity = catalog.publicNarrativesByKey.get(candidate.rawSlug);
-        }
+        const safeEntity = await resolveSafeSingleEntity(
+          serverPorts.repository,
+          candidate.kind,
+          candidate.rawSlug
+        );
 
         if (!safeEntity) {
           return;

@@ -450,4 +450,68 @@ describe('Declarative PluginSettingsSchema contract & validation', () => {
       validatePluginSettingFieldValue({ key: 'sec', label: 'Key', type: 'string', secret: true }, '   ', {})
     ).toMatch(/cannot be empty/);
   });
+
+  it('validates preserveKeys and carries auxiliary keys forward untouched during declarative updates', () => {
+    const schemaWithPreserve: PluginSettingsSchema = {
+      title: 'Hybrid Plugin',
+      preserveKeys: ['platform_order_json', 'funding_goal_json'],
+      sections: [
+        {
+          id: 'main',
+          title: 'Main',
+          fields: [
+            { key: 'show_in_footer', label: 'Show in Footer', type: 'boolean', defaultValue: false },
+            { key: 'api_secret', label: 'API Secret', type: 'secret' },
+          ],
+        },
+      ],
+    };
+
+    const serialized = validatePluginSettingsSchemaDefinition(schemaWithPreserve, 'hybrid-plugin');
+    expect(serialized.sections).toHaveLength(1);
+    expect('preserveKeys' in serialized).toBe(false);
+
+    // Rejects invalid key, duplicate key, and secret collision in preserveKeys
+    expect(() =>
+      validatePluginSettingsSchemaDefinition(
+        { ...schemaWithPreserve, preserveKeys: ['123-invalid'] },
+        'hybrid-plugin'
+      )
+    ).toThrow(/not a valid setting key/);
+    expect(() =>
+      validatePluginSettingsSchemaDefinition(
+        { ...schemaWithPreserve, preserveKeys: ['dup_key', 'dup_key'] },
+        'hybrid-plugin'
+      )
+    ).toThrow(/duplicate preserveKeys/);
+    expect(() =>
+      validatePluginSettingsSchemaDefinition(
+        { ...schemaWithPreserve, preserveKeys: ['api_secret'] },
+        'hybrid-plugin'
+      )
+    ).toThrow(/collides with a write-only secret/);
+
+    // Preserves declared auxiliary keys while still dropping unknown unpreserved keys
+    const result = validatePluginSettingsUpdate({
+      schema: schemaWithPreserve,
+      currentValues: {
+        show_in_footer: false,
+        platform_order_json: '[{"platform":"ko_fi","label":"Custom CTA"}]',
+        funding_goal_json: '{"enabled":true,"target_cents":5000}',
+        stray_unpreserved: 'drop-me',
+      },
+      currentSecrets: { api_secret: { configured: false, updated_at: null } },
+      update: { values: { show_in_footer: true } },
+    });
+
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(result.nextValues).toEqual({
+        show_in_footer: true,
+        platform_order_json: '[{"platform":"ko_fi","label":"Custom CTA"}]',
+        funding_goal_json: '{"enabled":true,"target_cents":5000}',
+      });
+      expect('stray_unpreserved' in result.nextValues).toBe(false);
+    }
+  });
 });

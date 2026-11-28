@@ -13,6 +13,7 @@ import {
   type UiBookSubmitJobResponse,
 } from '../lib/bookPublishingModel.js';
 import { ApiClientError, parseErrorEnvelope, stripTrailingSlash } from './httpWiki/httpClient.js';
+import { resolvePluginRequestCredentials } from './pluginApiClient.js';
 
 export interface BookPublishingClient {
   getStatus(options?: { readonly signal?: AbortSignal }): Promise<UiBookStatusResponse | null>;
@@ -25,6 +26,7 @@ export interface BookPublishingClient {
 export interface HttpBookPublishingClientOptions {
   readonly apiBaseUrl?: string;
   readonly fetchImpl?: typeof fetch;
+  readonly credentials?: RequestCredentials;
 }
 
 /**
@@ -36,13 +38,14 @@ export function createHttpBookPublishingClient(
 ): BookPublishingClient {
   const apiBase = stripTrailingSlash(options.apiBaseUrl ?? '');
   const fetchImpl = options.fetchImpl ?? ((...args) => fetch(...args));
+  const credentials = resolvePluginRequestCredentials(apiBase, options.credentials);
 
   const apiUrl = (path: string): string => `${apiBase}${path}`;
 
   return {
     async getStatus(reqOptions?: { readonly signal?: AbortSignal }): Promise<UiBookStatusResponse | null> {
       const res = await fetchImpl(apiUrl('/api/plugins/book-publishing/status'), {
-        credentials: 'same-origin',
+        credentials,
         headers: { accept: 'application/json' },
         signal: reqOptions?.signal,
       });
@@ -67,7 +70,7 @@ export function createHttpBookPublishingClient(
     async compileBook(input: UiBookCompileInput): Promise<UiBookCompileResponse> {
       const res = await fetchImpl(apiUrl('/api/plugins/book-publishing/compile'), {
         method: 'POST',
-        credentials: 'same-origin',
+        credentials,
         headers: {
           accept: 'application/json',
           'content-type': 'application/json',
@@ -92,7 +95,7 @@ export function createHttpBookPublishingClient(
     async estimateCost(input: UiBookEstimateInput): Promise<UiBookEstimateResponse> {
       const res = await fetchImpl(apiUrl('/api/plugins/book-publishing/estimate'), {
         method: 'POST',
-        credentials: 'same-origin',
+        credentials,
         headers: {
           accept: 'application/json',
           'content-type': 'application/json',
@@ -117,7 +120,7 @@ export function createHttpBookPublishingClient(
     async submitPrintJob(input: UiBookSubmitJobInput): Promise<UiBookSubmitJobResponse> {
       const res = await fetchImpl(apiUrl('/api/plugins/book-publishing/jobs'), {
         method: 'POST',
-        credentials: 'same-origin',
+        credentials,
         headers: {
           accept: 'application/json',
           'content-type': 'application/json',
@@ -141,7 +144,7 @@ export function createHttpBookPublishingClient(
 
     async getJobStatus(jobId: string): Promise<UiBookPrintJob> {
       const res = await fetchImpl(apiUrl(`/api/plugins/book-publishing/jobs/${encodeURIComponent(jobId)}`), {
-        credentials: 'same-origin',
+        credentials,
         headers: { accept: 'application/json' },
       });
       if (!res.ok) {

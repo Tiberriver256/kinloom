@@ -3,7 +3,11 @@ import { Link } from 'react-router-dom';
 import { formatDurationSeconds } from '../../components/MediaPlayer.js';
 import { cx } from '../../lib/cx.js';
 import audioPluginStyles from '../narrativeAudioPlugin.module.css';
-import { type ActiveNarrativeAudioTrack, useNarrativeAudio } from './audioContext.js';
+import {
+  type ActiveNarrativeAudioTrack,
+  resolveNarrativeAudioLabels,
+  useNarrativeAudio,
+} from './audioContext.js';
 
 export const NarrativeAudioMarginBar: React.FC<{ readonly track: ActiveNarrativeAudioTrack }> = ({
   track,
@@ -15,6 +19,8 @@ export const NarrativeAudioMarginBar: React.FC<{ readonly track: ActiveNarrative
 
   const isThisTrack = audio.activeTrack?.narrativeId === track.narrativeId;
   const isPlayingThis = isThisTrack && audio.isPlaying;
+  const trackError = isThisTrack ? audio.playbackError : null;
+  const labels = resolveNarrativeAudioLabels(track);
   const currentSec = isThisTrack ? audio.currentTime : 0;
   const totalSec = (isThisTrack ? audio.duration : track.duration) ?? 0;
   const notesStart = track.editorNotesStart;
@@ -57,7 +63,7 @@ export const NarrativeAudioMarginBar: React.FC<{ readonly track: ActiveNarrative
               `narrative-audio-voice-label ${inNotes ? 'is-notes' : 'is-story'}`
             )}
           >
-            {inNotes ? `Editor's Notes · ${track.notesVoice}` : `Listen to Biography · ${track.storyVoice}`}
+            {inNotes ? `Editor's Notes · ${track.notesVoice}` : `${labels.marginLabel} · ${track.storyVoice}`}
           </span>
           <span className={cx(audioPluginStyles, 'narrative-audio-time')}>
             {totalLabel ? `${currentLabel} / ${totalLabel}` : currentLabel}
@@ -132,10 +138,19 @@ export const NarrativeAudioMarginBar: React.FC<{ readonly track: ActiveNarrative
               audio.seekTrack(track, inNotes ? 0 : notesStart, true);
             }}
           >
-            {inNotes ? '↩ Story' : `Editor's notes ${notesStartLabel}`}
+            {inNotes ? labels.returnLabel : `Editor's notes ${notesStartLabel}`}
           </button>
         )}
       </div>
+      {trackError && (
+        <div
+          className={cx(audioPluginStyles, 'narrative-audio-error')}
+          role="alert"
+          data-testid="narrative-audio-error"
+        >
+          {trackError}
+        </div>
+      )}
     </div>
   );
 };
@@ -146,7 +161,8 @@ export const NarrativeAudioDock: React.FC = () => {
     return null;
   }
 
-  const { activeTrack, isPlaying, currentTime, duration, playbackRate } = audio;
+  const { activeTrack, isPlaying, playbackError, currentTime, duration, playbackRate } = audio;
+  const labels = resolveNarrativeAudioLabels(activeTrack);
   const notesStart = activeTrack.editorNotesStart;
   const inNotes = notesStart !== null && currentTime >= notesStart;
   const pct = duration > 0 ? Math.min(100, (currentTime / duration) * 100) : 0;
@@ -198,10 +214,19 @@ export const NarrativeAudioDock: React.FC = () => {
             <div className={cx(audioPluginStyles, 'narrative-audio-dock-sub')}>
               {inNotes
                 ? `Editor's Notes (${activeTrack.notesVoice})`
-                : `Biography Narration (${activeTrack.storyVoice})`}
+                : `${labels.dockLabel} (${activeTrack.storyVoice})`}
               {' · '}
               <span>{totalLabel ? `${currentLabel} / ${totalLabel}` : currentLabel}</span>
             </div>
+            {playbackError && (
+              <div
+                className={cx(audioPluginStyles, 'narrative-audio-dock-error')}
+                role="alert"
+                data-testid="narrative-audio-dock-error"
+              >
+                {playbackError}
+              </div>
+            )}
           </div>
         </div>
 
@@ -255,7 +280,7 @@ export const NarrativeAudioDock: React.FC = () => {
                 audio.seek(inNotes ? 0 : notesStart);
               }}
             >
-              {inNotes ? '↩ Story' : 'Notes'}
+              {inNotes ? labels.returnLabel : 'Notes'}
             </button>
           )}
           <button

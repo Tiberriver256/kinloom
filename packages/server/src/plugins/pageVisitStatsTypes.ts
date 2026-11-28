@@ -2,7 +2,9 @@ import { z } from 'zod';
 
 export const PAGE_VISIT_STATS_PLUGIN_ID = 'kinloom-page-visit-stats';
 export const PAGE_VISIT_STATS_ADMIN_ROUTE = '/api/admin/observability/stats';
+export const PAGE_VISIT_STATS_CONFIG_ROUTE = '/api/observability/config';
 export const PAGE_VISIT_STATS_PUBLIC_COUNT_ROUTE = '/api/observability/page-visits';
+export const PAGE_VISIT_STATS_BEACON_ROUTE = '/api/observability/page-visits/beacon';
 export const PAGE_VISIT_STATS_PRIVACY_DISCLOSURE_ID = 'kinloom-page-visit-stats';
 export const PAGE_VISIT_STATS_PRIVACY_SUMMARY =
   'This archive records optional, cookie-free aggregate page visit counts per route and UTC day on its server instance, with zero cookies, zero user fingerprinting, zero raw IP storage, and strict exclusion of living relatives.';
@@ -70,6 +72,20 @@ export const PublicPageVisitCountResponseSchema = z.object({
   total_views: z.number().int().nonnegative(),
 });
 export type PublicPageVisitCountResponse = z.infer<typeof PublicPageVisitCountResponseSchema>;
+
+export const PublicObservabilityConfigResponseSchema = z.object({
+  enabled: z.literal(true),
+  public_badges_enabled: z.boolean(),
+  record_spa_beacons: z.boolean(),
+});
+export type PublicObservabilityConfigResponse = z.infer<typeof PublicObservabilityConfigResponseSchema>;
+
+export const PageVisitBeaconRequestSchema = z
+  .object({
+    path: z.string().trim().min(1).max(256),
+  })
+  .strict();
+export type PageVisitBeaconRequest = z.infer<typeof PageVisitBeaconRequestSchema>;
 
 export interface PageVisitIncrementInput {
   readonly routeKey: string;

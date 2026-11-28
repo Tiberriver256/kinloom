@@ -180,6 +180,11 @@ export interface PluginSettingsSchema {
   readonly title?: string;
   readonly description?: string;
   readonly sections: readonly PluginSettingsSection[];
+  /**
+   * Optional auxiliary non-secret keys persisted in plugin_settings.values_json by a dedicated
+   * plugin admin endpoint that must be carried forward untouched during declarative settings saves.
+   */
+  readonly preserveKeys?: readonly string[];
 }
 
 export const PluginSecretFieldStateSchema = z.object({
@@ -364,6 +369,36 @@ export function validatePluginSettingsSchemaDefinition(
           );
         }
       }
+    }
+  }
+
+  if (schema.preserveKeys !== undefined) {
+    const secretKeys = new Set<string>();
+    for (const section of parsed.sections) {
+      for (const field of section.fields) {
+        if (isSecretPluginSettingField(field)) {
+          secretKeys.add(field.key);
+        }
+      }
+    }
+    const seenPreserveKeys = new Set<string>();
+    for (const rawKey of schema.preserveKeys) {
+      const keyResult = PluginSettingFieldBaseShape.key.safeParse(rawKey);
+      if (!keyResult.success) {
+        throw new RangeError(
+          `Plugin '${pluginId}' preserveKeys entry '${rawKey}' is not a valid setting key.`
+        );
+      }
+      const key = keyResult.data;
+      if (seenPreserveKeys.has(key)) {
+        throw new RangeError(`Plugin '${pluginId}' declares duplicate preserveKeys entry '${key}'.`);
+      }
+      if (secretKeys.has(key)) {
+        throw new RangeError(
+          `Plugin '${pluginId}' preserveKeys entry '${key}' collides with a write-only secret field.`
+        );
+      }
+      seenPreserveKeys.add(key);
     }
   }
 
@@ -602,9 +637,13 @@ export function validatePluginSettingsUpdate(params: {
   const { values: defaults } = extractPluginSettingsDefaults(schema);
   const nextValues: Record<string, PluginSettingScalarValue> = { ...defaults };
 
+  const preservedKeys = new Set<string>(schema.preserveKeys ?? []);
+
   for (const [key, storedVal] of Object.entries(currentValues)) {
     const field = fieldsByKey.get(key);
     if (field && field.type !== 'readonly' && !isSecretPluginSettingField(field)) {
+      nextValues[key] = storedVal;
+    } else if (!field && preservedKeys.has(key)) {
       nextValues[key] = storedVal;
     }
   }

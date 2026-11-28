@@ -122,6 +122,7 @@ export interface HttpRecipesClientOptions {
   readonly apiBaseUrl?: string;
   readonly fetchImpl?: typeof fetch;
   readonly apiClient?: PluginApiClient;
+  readonly credentials?: RequestCredentials;
 }
 
 /**
@@ -134,6 +135,7 @@ export function createHttpRecipesClient(options: HttpRecipesClientOptions = {}):
     createHttpPluginApiClient({
       apiBaseUrl: options.apiBaseUrl,
       fetchImpl: options.fetchImpl,
+      credentials: options.credentials,
     });
 
   return {

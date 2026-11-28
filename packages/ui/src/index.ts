@@ -31,7 +31,10 @@ export type {
   HttpPluginApiClientOptions,
   PluginApiClient,
 } from './adapters/pluginApiClient.js';
-export { createHttpPluginApiClient } from './adapters/pluginApiClient.js';
+export {
+  createHttpPluginApiClient,
+  resolvePluginRequestCredentials,
+} from './adapters/pluginApiClient.js';
 export type {
   HttpRecipesClientOptions,
   RecipesClient,
@@ -299,12 +302,16 @@ export {
 } from './plugins/bookPublishingPlugin.js';
 export type {
   ActiveNarrativeAudioTrack,
+  NarrativeAudioKind,
+  NarrativeAudioLabels,
   NarrativeAudioPluginOptions,
   NarrativeAudioTrackMeta,
 } from './plugins/narrativeAudioPlugin.js';
 export {
   createNarrativeAudioPlugin,
   readNarrativeAudioMeta,
+  resolveNarrativeAudioKind,
+  resolveNarrativeAudioLabels,
 } from './plugins/narrativeAudioPlugin.js';
 export type { ObservabilityStatsUiPluginOptions } from './plugins/observabilityStatsPlugin.js';
 export {
@@ -320,6 +327,8 @@ export type {
   KinloomPluginContextValue,
   KinloomPluginProviderProps,
   KinloomPluginRuntimeContext,
+  PluginSettingsListener,
+  PluginSettingsSyncEvent,
   PluginSlotProps,
 } from './plugins/PluginContext.js';
 // Extension & Plugin Seam

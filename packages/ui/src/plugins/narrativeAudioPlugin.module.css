@@ -201,6 +201,26 @@
   color: var(--accent-primary);
 }
 
+.narrative-audio-error {
+  flex: 1 0 100%;
+  font-family: var(--font-mono);
+  font-size: 0.74rem;
+  color: var(--diff-del-fg);
+  background: var(--diff-del-bg);
+  border: 1px solid var(--border-decorative);
+  border-radius: var(--radius-sm);
+  padding: 6px 10px;
+}
+
+.narrative-audio-dock-error {
+  margin-top: 3px;
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  color: var(--text-inverse);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
 /* Persistent Cross-Page Listening Dock */
 
 .narrative-audio-dock {

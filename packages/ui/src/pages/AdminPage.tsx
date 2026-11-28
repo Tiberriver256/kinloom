@@ -20,6 +20,7 @@ import { SignInModal } from '../components/wiki/SignInModal.js';
 import wikiPanelStyles from '../components/wiki/WikiPanels.module.css';
 import { useArchiveData } from '../context/ArchiveDataContext.js';
 import { cx } from '../lib/cx.js';
+import { useKinloomPlugins } from '../plugins/PluginContext.js';
 import controlStyles from '../styles/Controls.module.css';
 import layoutStyles from '../styles/Layout.module.css';
 import { AdminSettingsShell } from './admin/AdminSettingsShell.js';
@@ -37,6 +38,7 @@ export interface AdminPageProps {
 
 export const AdminPage: React.FC<AdminPageProps> = ({ adminClient, extraSettingsPanels }) => {
   const { session, dataSource, adminDataSource, capabilities } = useArchiveData();
+  const { subscribePluginSettings, notifyPluginSettingsUpdated } = useKinloomPlugins();
   const client: AdminDataSource | null = adminClient ?? adminDataSource ?? dataSource.admin ?? null;
 
   const [users, setUsers] = useState<readonly UserRecord[]>([]);
@@ -127,10 +129,25 @@ export const AdminPage: React.FC<AdminPageProps> = ({ adminClient, extraSettings
       setPluginSettings((prev) =>
         prev.map((item) => (item.plugin_id === updated.plugin_id ? updated : item))
       );
+      notifyPluginSettingsUpdated({
+        pluginId: updated.plugin_id,
+        snapshot: updated,
+        source: 'plugin-settings-section',
+      });
+      void loadDiagnostics();
       return updated;
     },
-    [client]
+    [client, notifyPluginSettingsUpdated, loadDiagnostics]
   );
+
+  useEffect(() => {
+    return subscribePluginSettings('*', (evt) => {
+      if (evt.source === 'plugin-panel') {
+        void loadPluginSettings();
+        void loadDiagnostics();
+      }
+    });
+  }, [subscribePluginSettings, loadPluginSettings, loadDiagnostics]);
 
   const scheduleCopyReset = (key: string): void => {
     if (!mountedRef.current || typeof window === 'undefined') {

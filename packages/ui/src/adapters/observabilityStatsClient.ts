@@ -1,12 +1,15 @@
 import {
   OBSERVABILITY_STATS_SERVER_PLUGIN_ID,
   parseAdminObservabilityStats,
+  parsePublicObservabilityConfig,
   parsePublicPageVisitCount,
   type UiAdminObservabilityStats,
   type UiObservabilityStatsWindow,
+  type UiPublicObservabilityConfig,
   type UiPublicPageVisitCount,
 } from '../lib/observabilityStatsModel.js';
 import { ApiClientError, parseErrorEnvelope, stripTrailingSlash } from './httpWiki/httpClient.js';
+import { resolvePluginRequestCredentials } from './pluginApiClient.js';
 
 export interface ObservabilityStatsClient {
   getAdminStats(
@@ -14,15 +17,21 @@ export interface ObservabilityStatsClient {
     options?: { readonly signal?: AbortSignal }
   ): Promise<UiAdminObservabilityStats | null>;
   setPublicBadgesEnabled(enabled: boolean): Promise<boolean>;
+  getPublicConfig?(options?: {
+    readonly signal?: AbortSignal;
+    readonly cache?: RequestCache;
+  }): Promise<UiPublicObservabilityConfig | null>;
   getPublicPageVisitCount(
     params: { readonly kind: 'person' | 'place' | 'narrative'; readonly slug: string },
     options?: { readonly signal?: AbortSignal }
   ): Promise<UiPublicPageVisitCount | null>;
+  recordPageVisit?(path: string, options?: { readonly signal?: AbortSignal }): Promise<void>;
 }
 
 export interface HttpObservabilityStatsClientOptions {
   readonly apiBaseUrl?: string;
   readonly fetchImpl?: typeof fetch;
+  readonly credentials?: RequestCredentials;
 }
 
 /**
@@ -34,6 +43,7 @@ export function createHttpObservabilityStatsClient(
 ): ObservabilityStatsClient {
   const apiBase = stripTrailingSlash(options.apiBaseUrl ?? '');
   const fetchImpl = options.fetchImpl ?? ((...args) => fetch(...args));
+  const credentials = resolvePluginRequestCredentials(apiBase, options.credentials);
 
   const apiUrl = (path: string): string => `${apiBase}${path}`;
 
@@ -44,7 +54,7 @@ export function createHttpObservabilityStatsClient(
     ): Promise<UiAdminObservabilityStats | null> {
       const qs = new URLSearchParams({ window }).toString();
       const res = await fetchImpl(apiUrl(`/api/admin/observability/stats?${qs}`), {
-        credentials: 'same-origin',
+        credentials,
         headers: { accept: 'application/json' },
         signal: reqOptions?.signal,
       });
@@ -71,7 +81,7 @@ export function createHttpObservabilityStatsClient(
         apiUrl(`/api/admin/plugin-settings/${encodeURIComponent(OBSERVABILITY_STATS_SERVER_PLUGIN_ID)}`),
         {
           method: 'PUT',
-          credentials: 'same-origin',
+          credentials,
           headers: {
             accept: 'application/json',
             'content-type': 'application/json',
@@ -102,6 +112,27 @@ export function createHttpObservabilityStatsClient(
       return enabled;
     },
 
+    async getPublicConfig(reqOptions?: {
+      readonly signal?: AbortSignal;
+      readonly cache?: RequestCache;
+    }): Promise<UiPublicObservabilityConfig | null> {
+      try {
+        const res = await fetchImpl(apiUrl('/api/observability/config'), {
+          credentials,
+          headers: { accept: 'application/json' },
+          signal: reqOptions?.signal,
+          ...(reqOptions?.cache ? { cache: reqOptions.cache } : {}),
+        });
+        if (!res.ok) {
+          return null;
+        }
+        const raw: unknown = await res.json();
+        return parsePublicObservabilityConfig(raw);
+      } catch {
+        return null;
+      }
+    },
+
     async getPublicPageVisitCount(
       params: { readonly kind: 'person' | 'place' | 'narrative'; readonly slug: string },
       reqOptions?: { readonly signal?: AbortSignal }
@@ -109,7 +140,7 @@ export function createHttpObservabilityStatsClient(
       const qs = new URLSearchParams({ kind: params.kind, slug: params.slug }).toString();
       try {
         const res = await fetchImpl(apiUrl(`/api/observability/page-visits?${qs}`), {
-          credentials: 'same-origin',
+          credentials,
           headers: { accept: 'application/json' },
           signal: reqOptions?.signal,
         });
@@ -120,6 +151,27 @@ export function createHttpObservabilityStatsClient(
         return parsePublicPageVisitCount(raw);
       } catch {
         return null;
+      }
+    },
+
+    async recordPageVisit(path: string, reqOptions?: { readonly signal?: AbortSignal }): Promise<void> {
+      const trimmed = path.trim();
+      if (!trimmed) {
+        return;
+      }
+      try {
+        await fetchImpl(apiUrl('/api/observability/page-visits/beacon'), {
+          method: 'POST',
+          credentials,
+          keepalive: true,
+          headers: {
+            'content-type': 'application/json',
+          },
+          body: JSON.stringify({ path: trimmed }),
+          signal: reqOptions?.signal,
+        });
+      } catch {
+        // Best-effort beacon: never disrupt navigation or throw into UI boundaries.
       }
     },
   };

@@ -15,8 +15,10 @@ import {
   type UiRecipeDetail,
   type UiRecipePhoto,
 } from '../lib/recipesModel.js';
+import { createHttpBookPublishingClient } from './bookPublishingClient.js';
 import { ApiClientError } from './httpWiki/httpClient.js';
-import { createHttpPluginApiClient } from './pluginApiClient.js';
+import { createHttpOpenFinanceClient } from './openFinanceClient.js';
+import { createHttpPluginApiClient, resolvePluginRequestCredentials } from './pluginApiClient.js';
 import { createHttpRecipesClient, createStaticRecipesClient } from './recipesClient.js';
 
 const SAMPLE_RECIPE: UiRecipeDetail = {
@@ -636,5 +638,63 @@ describe('apiError pure helpers and error envelope parsing', () => {
       expect(parsed.code).toBe('HTTP_502');
       expect(parsed.message).toBe('HTTP 502 Bad Gateway');
     }
+  });
+});
+
+describe('resolvePluginRequestCredentials & plugin client credentials option', () => {
+  it('defaults to same-origin for relative URLs, include for explicit overrides, and passes credentials through all plugin HTTP clients', async () => {
+    expect(resolvePluginRequestCredentials('')).toBe('same-origin');
+    expect(resolvePluginRequestCredentials('/api')).toBe('same-origin');
+    expect(resolvePluginRequestCredentials('https://api.example.test', 'include')).toBe('include');
+    expect(resolvePluginRequestCredentials('https://api.example.test', 'omit')).toBe('omit');
+
+    const seenCredentials: Array<RequestCredentials | undefined> = [];
+    const fetchImpl: typeof fetch = async (input, init) => {
+      seenCredentials.push(init?.credentials);
+      const url = typeof input === 'string' ? input : input.toString();
+      if (url.includes('open-finance/summary')) {
+        return new Response(null, { status: 404 });
+      }
+      if (url.includes('book-publishing/status')) {
+        return new Response(null, { status: 404 });
+      }
+      if (url.includes('/api/plugins/recipes')) {
+        return new Response(null, { status: 404 });
+      }
+      return new Response(JSON.stringify({ ok: true }), {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      });
+    };
+
+    const apiClient = createHttpPluginApiClient({
+      apiBaseUrl: 'https://api.example.test',
+      credentials: 'include',
+      fetchImpl,
+    });
+    await apiClient.requestJson('/ok', (raw) => raw);
+
+    const ofClient = createHttpOpenFinanceClient({
+      apiBaseUrl: 'https://api.example.test',
+      credentials: 'include',
+      fetchImpl,
+    });
+    await ofClient.getPublicSummary({ cache: 'no-store' });
+
+    const bpClient = createHttpBookPublishingClient({
+      apiBaseUrl: 'https://api.example.test',
+      credentials: 'include',
+      fetchImpl,
+    });
+    await bpClient.getStatus();
+
+    const recipesClient = createHttpRecipesClient({
+      apiBaseUrl: 'https://api.example.test',
+      credentials: 'include',
+      fetchImpl,
+    });
+    await recipesClient.listRecipes();
+
+    expect(seenCredentials).toEqual(['include', 'include', 'include', 'include']);
   });
 });

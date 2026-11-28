@@ -117,7 +117,7 @@ export function createMediaAndTalkRouteHandler(deps: MediaAndTalkRouteHandlerDep
 
     if (method === 'GET' && segments.length >= 2 && (segments[0] === 'media' || segments[0] === 'sources')) {
       requireMinRole(auth.principal, 'viewer', {
-        allowAgentScopes: ['write_batch'],
+        allowAgentScopes: ['write_batch', 'read_backup'],
         telemetry,
         bearerRejected: auth.bearerRejected,
       });

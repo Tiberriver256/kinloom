@@ -12,6 +12,7 @@ import {
   formatCostCategoryLabel,
   formatUiCurrencyCents,
   normalizeUiOpenFinanceConfig,
+  OPEN_FINANCE_SERVER_PLUGIN_ID,
   parseDecimalMoneyToCents,
   UI_DONATION_PLATFORM_IDS,
   UI_DONATION_PLATFORM_REGISTRY,
@@ -27,6 +28,7 @@ import {
   type UiOpenFinanceCurrency,
 } from '../../lib/openFinanceModel.js';
 import layoutStyles from '../../styles/Layout.module.css';
+import { useKinloomPlugins } from '../PluginContext.js';
 import styles from './OpenFinance.module.css';
 import { useOpenFinanceContext } from './OpenFinanceContext.js';
 
@@ -241,6 +243,7 @@ function buildConfigInputFromDraft(
 
 export const OpenFinanceAdminPanel: React.FC = () => {
   const { client, initialConfig, applyAdminUpdate } = useOpenFinanceContext();
+  const { subscribePluginSettings, notifyPluginSettingsUpdated } = useKinloomPlugins();
   const idPrefix = useId();
 
   const [draft, setDraft] = useState<OpenFinanceDraftState>(() =>
@@ -299,6 +302,14 @@ export const OpenFinanceAdminPanel: React.FC = () => {
       controller.abort();
     };
   }, [loadConfig]);
+
+  useEffect(() => {
+    return subscribePluginSettings(OPEN_FINANCE_SERVER_PLUGIN_ID, (evt) => {
+      if (evt.source === 'plugin-settings-section') {
+        void loadConfig();
+      }
+    });
+  }, [subscribePluginSettings, loadConfig]);
 
   const availablePlatformsToAdd = useMemo(() => {
     const configured = new Set(draft.platforms.map((p) => p.platform));
@@ -431,6 +442,10 @@ export const OpenFinanceAdminPanel: React.FC = () => {
       setUpdatedAt(saved.updated_at);
       setUpdatedBy(saved.updated_by);
       applyAdminUpdate(saved);
+      notifyPluginSettingsUpdated({
+        pluginId: OPEN_FINANCE_SERVER_PLUGIN_ID,
+        source: 'plugin-panel',
+      });
       setFeedback({ kind: 'success', message: 'Open Finance settings saved.' });
     } catch (err) {
       setFeedback({

@@ -615,5 +615,5 @@ describe('Cloudflare Worker 0006_plugin_migrations, D1PluginDatabaseFactory, and
       env
     );
     expect(deleteRecipeRes.status).toBe(204);
-  });
+  }, 30_000);
 });

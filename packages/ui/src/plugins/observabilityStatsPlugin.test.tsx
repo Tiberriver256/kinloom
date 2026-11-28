@@ -1,28 +1,70 @@
 /** @vitest-environment jsdom */
-import type { ArchiveBundle, KinloomSiteConfig, Narrative, Person, Place } from '@kinloom/core';
+import type {
+  AdminDataSource,
+  ArchiveBundle,
+  ArchiveSessionState,
+  KinloomSiteConfig,
+  Narrative,
+  Person,
+  Place,
+  PluginSettingsSnapshot,
+} from '@kinloom/core';
 import { compileArchive, parseKinloomConfig } from '@kinloom/core';
 import { act } from 'react';
 import { createRoot } from 'react-dom/client';
-import { MemoryRouter } from 'react-router-dom';
-import { describe, expect, it } from 'vitest';
-import type { ObservabilityStatsClient } from '../adapters/observabilityStatsClient.js';
+import { Link, MemoryRouter, Route, Routes } from 'react-router-dom';
+import { describe, expect, it, vi } from 'vitest';
+import {
+  createHttpObservabilityStatsClient,
+  type ObservabilityStatsClient,
+} from '../adapters/observabilityStatsClient.js';
+import { useArchiveData } from '../context/ArchiveDataContext.js';
 import { ArchiveProvider } from '../context/ArchiveProvider.js';
-import type {
-  UiAdminObservabilityStats,
-  UiObservabilityStatsWindow,
+import {
+  OBSERVABILITY_STATS_SERVER_PLUGIN_ID,
+  type UiAdminObservabilityStats,
+  type UiObservabilityStatsWindow,
 } from '../lib/observabilityStatsModel.js';
+import { AdminPage } from '../pages/AdminPage.js';
 import { AdminSettingsShell } from '../pages/admin/AdminSettingsShell.js';
 import {
   createObservabilityStatsPlugin,
   OBSERVABILITY_STATS_UI_PLUGIN_ID,
 } from './observabilityStatsPlugin.js';
-import { KinloomPluginProvider, PluginSlot } from './PluginContext.js';
+import { KinloomPluginProvider, PluginSlot, useKinloomPlugins } from './PluginContext.js';
 
 declare global {
   var IS_REACT_ACT_ENVIRONMENT: boolean | undefined;
 }
 
 globalThis.IS_REACT_ACT_ENVIRONMENT = true;
+
+const SnapshotlessBusTrigger: React.FC = () => {
+  const { notifyPluginSettingsUpdated } = useKinloomPlugins();
+  return (
+    <button
+      type="button"
+      data-testid="trigger-snapshotless-bus"
+      onClick={() => {
+        notifyPluginSettingsUpdated({
+          pluginId: 'kinloom-page-visit-stats',
+          source: 'plugin-settings-section',
+        });
+      }}
+    >
+      Notify
+    </button>
+  );
+};
+
+const ReloadArchiveTrigger: React.FC = () => {
+  const { reloadArchive } = useArchiveData();
+  return (
+    <button type="button" data-testid="reload-archive-btn" onClick={reloadArchive}>
+      Reload
+    </button>
+  );
+};
 
 const siteConfig: KinloomSiteConfig = parseKinloomConfig({
   site: {
@@ -483,13 +525,474 @@ describe('ObservabilityStats UI plugin (AdminSettingsShell dashboard & per-page 
 
     expect(container.querySelector('[data-testid="page-visit-badge-person"]')?.textContent).toBe('19 visits');
     expect(container.querySelector('[data-testid="page-visit-badge-place"]')?.textContent).toBe('1 visit');
-    expect(container.querySelector('[data-testid="page-visit-badge-narrative"]')?.textContent).toBe(
-      '7 visits'
-    );
+    // P1-6: narrativeHeader omits permanently-zero narrative badges until standalone narrative routes exist
+    expect(container.querySelector('[data-testid="page-visit-badge-narrative"]')).toBeNull();
 
     // Living person and living-linked narrative never trigger any network call or badge render!
-    expect(queriedSlugs).toEqual(['person:arthur-alder', 'place:oakridge-ohio', 'narrative:oakridge-mill']);
+    expect(queriedSlugs).toEqual(['person:arthur-alder', 'place:oakridge-ohio']);
 
+    act(() => {
+      root.unmount();
+    });
+    container.remove();
+  });
+
+  it('hydrates showPublicBadges from /api/observability/config on mount and login transition, and sends SPA visit beacons', async () => {
+    const beacons: string[] = [];
+    let configCalls = 0;
+    const client: ObservabilityStatsClient = {
+      async getAdminStats() {
+        return null;
+      },
+      async setPublicBadgesEnabled(enabled) {
+        return enabled;
+      },
+      async getPublicConfig() {
+        configCalls += 1;
+        return { enabled: true, public_badges_enabled: true, record_spa_beacons: true };
+      },
+      async getPublicPageVisitCount(params) {
+        return {
+          route_key: `/${params.kind}/${params.slug}`,
+          entity_kind: params.kind,
+          entity_slug: params.slug,
+          total_views: 11,
+        };
+      },
+      async recordPageVisit(path) {
+        beacons.push(path);
+      },
+    };
+
+    const plugin = createObservabilityStatsPlugin({ client, showPublicVisitBadges: false });
+    const deceasedPerson = testBundle.people.find((p) => p.slug === 'arthur-alder') as Person;
+
+    const container = document.createElement('div');
+    document.body.append(container);
+    const root = createRoot(container);
+
+    const anonSession: ArchiveSessionState = {
+      authenticated: false,
+      principal_kind: 'anonymous',
+    };
+    const memberSession: ArchiveSessionState = {
+      authenticated: true,
+      principal_kind: 'user',
+      role: 'editor',
+      email: 'editor@archive.example',
+      displayName: 'Family Editor',
+    };
+
+    let isAuthed = false;
+    const loader = {
+      async loadArchive() {
+        if (!isAuthed) {
+          throw new Error('Authentication required');
+        }
+        return testBundle;
+      },
+      async loadReadings() {
+        return null;
+      },
+    };
+
+    const renderWithState = (session: ArchiveSessionState) => (
+      <MemoryRouter initialEntries={['/person/arthur-alder']}>
+        <ArchiveProvider
+          siteConfig={siteConfig}
+          loader={loader}
+          initialBundle={null}
+          session={session}
+          plugins={[plugin]}
+        >
+          <ReloadArchiveTrigger />
+          <Link to="/place/oakridge-ohio" data-testid="go-place">
+            Go Place
+          </Link>
+          <Routes>
+            <Route
+              path="/person/:slug"
+              element={<PluginSlot name="personDetail" person={deceasedPerson} />}
+            />
+            <Route path="/place/:slug" element={<div>Place View</div>} />
+          </Routes>
+          <PluginSlot name="appShell" />
+        </ArchiveProvider>
+      </MemoryRouter>
+    );
+
+    // 1. Private-mode unauthenticated gate (bundle === null, anonymous): zero config calls, zero beacons, zero badges
+    await act(async () => {
+      root.render(renderWithState(anonSession));
+      await new Promise((r) => setTimeout(r, 25));
+    });
+    expect(configCalls).toBe(0);
+    expect(beacons).toEqual([]);
+    expect(container.querySelector('[data-testid="page-visit-badge-person"]')).toBeNull();
+
+    // 2. User signs in & archive loads -> provider re-hydrates showPublicBadges=true from /api/observability/config and records landing beacon
+    isAuthed = true;
+    await act(async () => {
+      root.render(renderWithState(memberSession));
+      container.querySelector<HTMLButtonElement>('[data-testid="reload-archive-btn"]')?.click();
+      await new Promise((r) => setTimeout(r, 40));
+    });
+    expect(configCalls).toBe(1);
+    expect(container.querySelector('[data-testid="page-visit-badge-person"]')?.textContent).toBe('11 visits');
+    expect(beacons).toEqual(['/person/arthur-alder']);
+
+    // 3. SPA client-side navigation fires beacon for the new route
+    const link = container.querySelector<HTMLAnchorElement>('[data-testid="go-place"]');
+    await act(async () => {
+      link?.click();
+      await new Promise((r) => setTimeout(r, 25));
+    });
+    expect(beacons).toEqual(['/person/arthur-alder', '/place/oakridge-ohio']);
+
+    act(() => {
+      root.unmount();
+    });
+    container.remove();
+  });
+
+  it('synchronizes show_public_visit_badges bidirectionally via PluginSettingsBus between AdminPage and ObservabilityStats', async () => {
+    let persistedBadges = false;
+    let getPluginSettingsCount = 0;
+    let getDiagnosticsCount = 0;
+
+    const buildSnapshot = (enabled: boolean): PluginSettingsSnapshot => ({
+      plugin_id: OBSERVABILITY_STATS_SERVER_PLUGIN_ID,
+      plugin_name: 'Page Visit Stats',
+      plugin_version: '0.54.2',
+      status: 'active',
+      schema: {
+        title: 'Page Visit Stats',
+        sections: [
+          {
+            id: 'display_preferences',
+            title: 'Display Preferences',
+            fields: [
+              {
+                key: 'show_public_visit_badges',
+                label: 'Show public visit counts on entity pages',
+                type: 'boolean',
+                defaultValue: false,
+              },
+            ],
+          },
+        ],
+      },
+      values: { show_public_visit_badges: enabled },
+      secrets: {},
+      readonly_values: {},
+      updated_at: '2026-11-27T12:00:00.000Z',
+      updated_by: 'admin@archive.example',
+    });
+
+    const statsClient: ObservabilityStatsClient = {
+      async getAdminStats() {
+        return {
+          generated_at: '2026-11-27T12:00:00.000Z',
+          window: '30d',
+          privacy_mode: 'aggregate-cookie-free',
+          public_badges_enabled: persistedBadges,
+          bundle_revision: 1,
+          workers_observability_paired: false,
+          totals: { views_7d: 3, views_30d: 3, views_all_time: 3 },
+          cache: { hits: 0, misses: 0, not_modified: 0, total_requests: 0, hit_ratio: null },
+          daily_trend: [{ day_utc: '2026-11-27', views: 3 }],
+          top_pages: [],
+          top_by_kind: { people: [], places: [], narratives: [] },
+        };
+      },
+      async setPublicBadgesEnabled(enabled) {
+        persistedBadges = enabled;
+        return enabled;
+      },
+      async getPublicConfig() {
+        return { enabled: true, public_badges_enabled: persistedBadges, record_spa_beacons: true };
+      },
+      async getPublicPageVisitCount(params) {
+        return {
+          route_key: `/${params.kind}/${params.slug}`,
+          entity_kind: params.kind,
+          entity_slug: params.slug,
+          total_views: 4,
+        };
+      },
+    };
+
+    const adminClient: AdminDataSource = {
+      async listUsers() {
+        return [];
+      },
+      async updateUserRole() {
+        throw new Error('unused');
+      },
+      async listInvites() {
+        return [];
+      },
+      async createInvite() {
+        throw new Error('unused');
+      },
+      async revokeInvite() {},
+      async listAgentTokens() {
+        return [];
+      },
+      async createAgentToken() {
+        throw new Error('unused');
+      },
+      async revokeAgentToken() {},
+      async getSystemDiagnostics() {
+        getDiagnosticsCount += 1;
+        return null as unknown as ReturnType<NonNullable<AdminDataSource['getSystemDiagnostics']>>;
+      },
+      async getPluginSettings() {
+        getPluginSettingsCount += 1;
+        return [buildSnapshot(persistedBadges)];
+      },
+      async updatePluginSettings(_pluginId, input) {
+        persistedBadges = Boolean(input.values?.show_public_visit_badges);
+        return buildSnapshot(persistedBadges);
+      },
+    };
+
+    const plugin = createObservabilityStatsPlugin({ client: statsClient, showPublicVisitBadges: false });
+    const deceasedPerson = testBundle.people.find((p) => p.slug === 'arthur-alder') as Person;
+
+    const container = document.createElement('div');
+    document.body.append(container);
+    const root = createRoot(container);
+
+    await act(async () => {
+      root.render(
+        <MemoryRouter initialEntries={['/admin']}>
+          <ArchiveProvider
+            siteConfig={siteConfig}
+            initialBundle={testBundle}
+            plugins={[plugin]}
+            capabilities={{ canManageSite: true }}
+            session={{
+              authenticated: true,
+              principal_kind: 'user',
+              role: 'admin',
+              email: 'admin@archive.example',
+              displayName: 'Archive Steward',
+            }}
+          >
+            <AdminPage adminClient={adminClient} />
+            <PluginSlot name="personDetail" person={deceasedPerson} />
+          </ArchiveProvider>
+        </MemoryRouter>
+      );
+      await new Promise((r) => setTimeout(r, 40));
+    });
+
+    // Initially OFF everywhere
+    const panelSwitch = () =>
+      container.querySelector<HTMLInputElement>('[data-testid="obs-public-badges-switch"]');
+    expect(panelSwitch()?.checked).toBe(false);
+    expect(container.querySelector('[data-testid="page-visit-badge-person"]')).toBeNull();
+
+    const diagBefore = getDiagnosticsCount;
+    // Save ON in PluginSettingsSection -> ObservabilityStatsPanel switch & live PageVisitBadge flip ON immediately!
+    const settingsCheckbox = container.querySelector<HTMLInputElement>(
+      '[data-testid="plugin-settings-card-kinloom-page-visit-stats"] input[type="checkbox"]'
+    );
+    expect(settingsCheckbox).not.toBeNull();
+    await act(async () => {
+      settingsCheckbox?.click();
+    });
+    const saveBtn = container.querySelector<HTMLButtonElement>(
+      '[data-testid="plugin-settings-card-kinloom-page-visit-stats"] button[type="submit"]'
+    );
+    expect(saveBtn).not.toBeNull();
+    await act(async () => {
+      saveBtn?.click();
+      await new Promise((r) => setTimeout(r, 40));
+    });
+    expect(panelSwitch()?.checked).toBe(true);
+    expect(container.querySelector('[data-testid="page-visit-badge-person"]')?.textContent).toBe('4 visits');
+    expect(getDiagnosticsCount).toBeGreaterThan(diagBefore);
+
+    // Toggle OFF inside ObservabilityStatsPanel -> AdminPage reloads pluginSettings via PluginSettingsBus!
+    const settingsCountBefore = getPluginSettingsCount;
+    await act(async () => {
+      panelSwitch()?.click();
+      await new Promise((r) => setTimeout(r, 40));
+    });
+    expect(getPluginSettingsCount).toBeGreaterThan(settingsCountBefore);
+    expect(container.querySelector('[data-testid="page-visit-badge-person"]')).toBeNull();
+
+    act(() => {
+      root.unmount();
+    });
+    container.remove();
+  });
+
+  it('exercises HTTP observabilityStatsClient getPublicConfig, recordPageVisit, and credentials option', async () => {
+    const calls: Array<{ url: string; init?: RequestInit }> = [];
+    const fetchImpl = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = typeof input === 'string' ? input : input.toString();
+      calls.push({ url, init });
+      if (url.endsWith('/api/observability/config')) {
+        return new Response(
+          JSON.stringify({ enabled: true, public_badges_enabled: true, record_spa_beacons: true }),
+          { status: 200, headers: { 'content-type': 'application/json' } }
+        );
+      }
+      return new Response(null, { status: 204 });
+    });
+
+    const httpClient = createHttpObservabilityStatsClient({
+      apiBaseUrl: 'https://api.archive.example',
+      credentials: 'include',
+      fetchImpl: fetchImpl as unknown as typeof fetch,
+    });
+
+    const cfg = await httpClient.getPublicConfig?.({ cache: 'no-store' });
+    expect(cfg).toEqual({ enabled: true, public_badges_enabled: true, record_spa_beacons: true });
+    expect(calls[0]?.url).toBe('https://api.archive.example/api/observability/config');
+    expect(calls[0]?.init?.credentials).toBe('include');
+    expect(calls[0]?.init?.cache).toBe('no-store');
+
+    await httpClient.recordPageVisit?.('/person/arthur-alder');
+    expect(calls[1]?.url).toBe('https://api.archive.example/api/observability/page-visits/beacon');
+    expect(calls[1]?.init?.method).toBe('POST');
+    expect(calls[1]?.init?.credentials).toBe('include');
+    expect(calls[1]?.init?.keepalive).toBe(true);
+    expect(calls[1]?.init?.body).toBe(JSON.stringify({ path: '/person/arthur-alder' }));
+
+    // Blank path skips network call; non-200 and network errors return null / swallow errors safely
+    await httpClient.recordPageVisit?.('   ');
+    expect(calls).toHaveLength(2);
+
+    const errorClient = createHttpObservabilityStatsClient({
+      apiBaseUrl: 'https://api.archive.example',
+      fetchImpl: (async (input: RequestInfo | URL) => {
+        const url = typeof input === 'string' ? input : input.toString();
+        if (url.endsWith('/api/observability/config')) {
+          return new Response(null, { status: 401 });
+        }
+        throw new Error('offline');
+      }) as unknown as typeof fetch,
+    });
+    expect(await errorClient.getPublicConfig?.()).toBeNull();
+    await expect(errorClient.recordPageVisit?.('/tree')).resolves.toBeUndefined();
+
+    const throwingConfigClient = createHttpObservabilityStatsClient({
+      fetchImpl: (async () => {
+        throw new Error('network error');
+      }) as unknown as typeof fetch,
+    });
+    expect(await throwingConfigClient.getPublicConfig?.()).toBeNull();
+  });
+
+  it('skips SPA beacons when disabled, hidden, or matching the initial server HTML path, and falls back to getPublicConfig on snapshotless bus events', async () => {
+    const beacons: string[] = [];
+    let configCalls = 0;
+    let shouldThrowConfig = false;
+    let recordSpaBeaconsFlag = false;
+
+    const edgeClient: ObservabilityStatsClient = {
+      async getAdminStats() {
+        return null;
+      },
+      async setPublicBadgesEnabled(next) {
+        return next;
+      },
+      async getPublicPageVisitCount() {
+        return null;
+      },
+      async getPublicConfig() {
+        configCalls += 1;
+        if (shouldThrowConfig) {
+          throw new Error('temporary outage');
+        }
+        return {
+          enabled: true,
+          public_badges_enabled: true,
+          record_spa_beacons: recordSpaBeaconsFlag,
+        };
+      },
+      async recordPageVisit(path) {
+        beacons.push(path);
+      },
+    };
+
+    const originalPathname = window.location.pathname;
+    window.history.replaceState({}, '', '/places');
+
+    const container = document.createElement('div');
+    document.body.append(container);
+    const root = createRoot(container);
+    const plugin = createObservabilityStatsPlugin({ client: edgeClient });
+
+    // 1. recordSpaBeacons === false skips beacon
+    await act(async () => {
+      root.render(
+        <MemoryRouter initialEntries={['/places']}>
+          <ArchiveProvider siteConfig={siteConfig} initialBundle={testBundle}>
+            <KinloomPluginProvider plugins={[plugin]}>
+              <PluginSlot name="appShell" />
+              <SnapshotlessBusTrigger />
+            </KinloomPluginProvider>
+          </ArchiveProvider>
+        </MemoryRouter>
+      );
+      await new Promise((r) => setTimeout(r, 25));
+    });
+    expect(beacons).toEqual([]);
+
+    // 2. Snapshotless PluginSettingsBus event triggers fallback getPublicConfig (and handles errors)
+    const callsBeforeNotify = configCalls;
+    shouldThrowConfig = true;
+    await act(async () => {
+      container.querySelector<HTMLButtonElement>('[data-testid="trigger-snapshotless-bus"]')?.click();
+      await new Promise((r) => setTimeout(r, 20));
+    });
+    expect(configCalls).toBe(callsBeforeNotify + 1);
+
+    // 3. Re-enable recordSpaBeacons: initial load matching window.location.pathname ('/places') is deduplicated
+    shouldThrowConfig = false;
+    recordSpaBeaconsFlag = true;
+    await act(async () => {
+      root.render(
+        <MemoryRouter initialEntries={['/places']}>
+          <ArchiveProvider siteConfig={siteConfig} initialBundle={testBundle}>
+            <KinloomPluginProvider plugins={[createObservabilityStatsPlugin({ client: edgeClient })]}>
+              <PluginSlot name="appShell" />
+            </KinloomPluginProvider>
+          </ArchiveProvider>
+        </MemoryRouter>
+      );
+      await new Promise((r) => setTimeout(r, 25));
+    });
+    expect(beacons).toEqual([]);
+
+    // 4. Hidden visibilityState suppresses beacons even on a non-initial route
+    const origVisibility = Object.getOwnPropertyDescriptor(document, 'visibilityState');
+    Object.defineProperty(document, 'visibilityState', { configurable: true, value: 'hidden' });
+    await act(async () => {
+      root.render(
+        <MemoryRouter initialEntries={['/tree']}>
+          <ArchiveProvider siteConfig={siteConfig} initialBundle={testBundle}>
+            <KinloomPluginProvider plugins={[createObservabilityStatsPlugin({ client: edgeClient })]}>
+              <PluginSlot name="appShell" />
+            </KinloomPluginProvider>
+          </ArchiveProvider>
+        </MemoryRouter>
+      );
+      await new Promise((r) => setTimeout(r, 25));
+    });
+    expect(beacons).toEqual([]);
+
+    if (origVisibility) {
+      Object.defineProperty(document, 'visibilityState', origVisibility);
+    } else {
+      delete (document as unknown as Record<string, unknown>).visibilityState;
+    }
+    window.history.replaceState({}, '', originalPathname);
     act(() => {
       root.unmount();
     });

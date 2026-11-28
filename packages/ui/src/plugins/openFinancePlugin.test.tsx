@@ -1,19 +1,30 @@
 /** @vitest-environment jsdom */
-import type { ArchiveBundle, KinloomSiteConfig } from '@kinloom/core';
+import type {
+  AdminDataSource,
+  ArchiveBundle,
+  ArchiveSessionState,
+  KinloomSiteConfig,
+  PluginSettingsSnapshot,
+} from '@kinloom/core';
 import { compileArchive, parseKinloomConfig } from '@kinloom/core';
 import { act } from 'react';
 import { createRoot } from 'react-dom/client';
 import { MemoryRouter } from 'react-router-dom';
 import { describe, expect, it, vi } from 'vitest';
+import { ApiClientError } from '../adapters/httpWiki/httpClient.js';
 import { createHttpOpenFinanceClient, type OpenFinanceClient } from '../adapters/openFinanceClient.js';
+import { ExplorerTopBar } from '../components/ExplorerTopBar.js';
+import { KinloomFooter } from '../components/KinloomFooter.js';
 import { ArchiveProvider } from '../context/ArchiveProvider.js';
 import { KinloomApp } from '../KinloomApp.js';
 import {
   buildUiOpenFinanceSummaryFromConfig,
   normalizeUiOpenFinanceConfig,
+  OPEN_FINANCE_SERVER_PLUGIN_ID,
   type UiOpenFinanceAdminConfigPayload,
   type UiOpenFinanceConfigInput,
 } from '../lib/openFinanceModel.js';
+import { AdminPage } from '../pages/AdminPage.js';
 import { AdminSettingsShell } from '../pages/admin/AdminSettingsShell.js';
 import { createOpenFinancePlugin, OPEN_FINANCE_UI_PLUGIN_ID } from './openFinancePlugin.js';
 
@@ -836,6 +847,269 @@ describe('createOpenFinancePlugin default-off and public/admin UI', () => {
     });
     await flushUi();
     expect(container.textContent).toContain('Open Finance settings saved.');
+
+    await act(async () => {
+      root.unmount();
+    });
+    container.remove();
+  });
+
+  it('re-fetches OpenFinanceProvider on session login transition and syncs live nav, mobile menu, and footer via PluginSettingsBus', async () => {
+    let showInNav = false;
+    let showInFooter = false;
+    let showSupportPage = false;
+    let isAuthed = false;
+    const summaryCacheModes: Array<RequestCache | undefined> = [];
+    let adminGetPluginSettingsCalls = 0;
+
+    const currentConfig = () =>
+      normalizeUiOpenFinanceConfig({
+        page_title: 'Support Alder Archive',
+        nav_label: 'Support',
+        visibility: {
+          show_support_page: showSupportPage,
+          show_in_nav: showInNav,
+          show_in_footer: showInFooter,
+        },
+        platforms: [{ platform: 'ko_fi', handle: 'alderarchive', enabled: true }],
+      });
+
+    const ofClient: OpenFinanceClient = {
+      async getPublicSummary(options) {
+        summaryCacheModes.push(options?.cache);
+        if (!isAuthed) {
+          throw new ApiClientError(401, 'UNAUTHORIZED', 'Authentication is required.');
+        }
+        return buildUiOpenFinanceSummaryFromConfig(currentConfig(), '2026-11-27T12:00:00.000Z');
+      },
+      async getAdminConfig() {
+        const cfg = currentConfig();
+        return {
+          config: cfg,
+          summary: buildUiOpenFinanceSummaryFromConfig(cfg, '2026-11-27T12:00:00.000Z'),
+          updated_at: '2026-11-27T12:00:00.000Z',
+          updated_by: 'admin@archive.example',
+          persistence_available: true,
+        };
+      },
+      async saveAdminConfig(input) {
+        const cfg = normalizeUiOpenFinanceConfig(input);
+        showSupportPage = cfg.visibility.show_support_page;
+        showInNav = cfg.visibility.show_in_nav;
+        showInFooter = cfg.visibility.show_in_footer;
+        return {
+          config: cfg,
+          summary: buildUiOpenFinanceSummaryFromConfig(cfg, '2026-11-27T12:05:00.000Z'),
+          updated_at: '2026-11-27T12:05:00.000Z',
+          updated_by: 'admin@archive.example',
+          persistence_available: true,
+        };
+      },
+    };
+
+    const buildSettingsSnapshot = (): PluginSettingsSnapshot => ({
+      plugin_id: OPEN_FINANCE_SERVER_PLUGIN_ID,
+      plugin_name: 'Open Finance & Donations',
+      plugin_version: '0.54.2',
+      status: 'active',
+      schema: {
+        title: 'Open Finance & Donations',
+        sections: [
+          {
+            id: 'visibility',
+            title: 'Visibility & Messaging',
+            fields: [
+              {
+                key: 'show_support_page',
+                label: 'Publish Open Finance & Support page',
+                type: 'boolean',
+                defaultValue: false,
+              },
+              {
+                key: 'show_in_nav',
+                label: 'Show Support link in top navigation',
+                type: 'boolean',
+                defaultValue: false,
+              },
+              {
+                key: 'show_in_footer',
+                label: 'Show Support link in site footer',
+                type: 'boolean',
+                defaultValue: false,
+              },
+            ],
+          },
+        ],
+      },
+      values: {
+        show_support_page: showSupportPage,
+        show_in_nav: showInNav,
+        show_in_footer: showInFooter,
+      },
+      secrets: {},
+      readonly_values: {},
+      updated_at: '2026-11-27T12:00:00.000Z',
+      updated_by: 'admin@archive.example',
+    });
+
+    const adminClient: AdminDataSource = {
+      async listUsers() {
+        return [];
+      },
+      async updateUserRole() {
+        throw new Error('unused');
+      },
+      async listInvites() {
+        return [];
+      },
+      async createInvite() {
+        throw new Error('unused');
+      },
+      async revokeInvite() {},
+      async listAgentTokens() {
+        return [];
+      },
+      async createAgentToken() {
+        throw new Error('unused');
+      },
+      async revokeAgentToken() {},
+      async getPluginSettings() {
+        adminGetPluginSettingsCalls += 1;
+        return [buildSettingsSnapshot()];
+      },
+      async updatePluginSettings(_pluginId, input) {
+        if (typeof input.values?.show_support_page === 'boolean') {
+          showSupportPage = input.values.show_support_page;
+        }
+        if (typeof input.values?.show_in_nav === 'boolean') {
+          showInNav = input.values.show_in_nav;
+        }
+        if (typeof input.values?.show_in_footer === 'boolean') {
+          showInFooter = input.values.show_in_footer;
+        }
+        return buildSettingsSnapshot();
+      },
+    };
+
+    const plugin = createOpenFinancePlugin({ client: ofClient });
+    const container = document.createElement('div');
+    document.body.appendChild(container);
+    const root = createRoot(container);
+
+    const anonSession: ArchiveSessionState = {
+      authenticated: false,
+      principal_kind: 'anonymous',
+    };
+    const adminSession: ArchiveSessionState = {
+      authenticated: true,
+      principal_kind: 'user',
+      role: 'admin',
+      email: 'admin@archive.example',
+      displayName: 'Archive Steward',
+    };
+
+    const renderView = (session: ArchiveSessionState, showAdmin: boolean) => (
+      <MemoryRouter initialEntries={['/admin']}>
+        <ArchiveProvider
+          siteConfig={siteConfig}
+          initialBundle={emptyBundle}
+          plugins={[plugin]}
+          session={session}
+          capabilities={{ canManageSite: session.role === 'admin' }}
+        >
+          {showAdmin ? (
+            <AdminPage adminClient={adminClient} />
+          ) : (
+            <>
+              <ExplorerTopBar />
+              <KinloomFooter />
+            </>
+          )}
+        </ArchiveProvider>
+      </MemoryRouter>
+    );
+
+    // 1. Mount logged out (401 on private archive) -> links absent, no stuck error
+    await act(async () => {
+      root.render(renderView(anonSession, false));
+    });
+    await flushUi();
+    expect(container.querySelector('[data-testid="open-finance-nav-link"]')).toBeNull();
+
+    // 2. Sign in as admin -> OpenFinanceProvider re-fetches immediately on session change
+    isAuthed = true;
+    await act(async () => {
+      root.render(renderView(adminSession, true));
+    });
+    await flushUi();
+    expect(summaryCacheModes.length).toBeGreaterThanOrEqual(2);
+    expect(container.querySelector('[data-testid="open-finance-nav-link"]')).toBeNull();
+    expect(container.querySelector('[data-testid="open-finance-footer-link"]')).toBeNull();
+
+    // Open mobile/account disclosure menu before enabling visibility -> mobile menu link is omitted
+    const menuBtnBefore = container.querySelector<HTMLButtonElement>('button[aria-expanded][aria-controls]');
+    expect(menuBtnBefore).not.toBeNull();
+    await act(async () => {
+      menuBtnBefore?.click();
+    });
+    expect(container.querySelector('[data-testid="open-finance-mobile-nav-link"]')).toBeNull();
+    await act(async () => {
+      menuBtnBefore?.click();
+    });
+
+    // 3. Toggle all three visibility switches ON in PluginSettingsSection and save
+    const settingsCard = container.querySelector<HTMLElement>(
+      `[data-testid="plugin-settings-card-${OPEN_FINANCE_SERVER_PLUGIN_ID}"]`
+    );
+    expect(settingsCard).not.toBeNull();
+    const toggles = Array.from(
+      settingsCard?.querySelectorAll<HTMLInputElement>('input[type="checkbox"]') ?? []
+    );
+    expect(toggles).toHaveLength(3);
+    await act(async () => {
+      for (const toggle of toggles) {
+        toggle.click();
+      }
+    });
+    const saveSettingsBtn = container.querySelector<HTMLButtonElement>(
+      `[data-testid="plugin-settings-card-${OPEN_FINANCE_SERVER_PLUGIN_ID}"] button[type="submit"]`
+    );
+    expect(saveSettingsBtn).not.toBeNull();
+    await act(async () => {
+      saveSettingsBtn?.click();
+    });
+    await flushUi();
+
+    // Provider refreshed with cache: 'no-store' and nav + footer links appear live!
+    expect(summaryCacheModes).toContain('no-store');
+    expect(container.querySelector('[data-testid="open-finance-nav-link"]')?.textContent).toBe('Support');
+    expect(container.querySelector('[data-testid="open-finance-footer-link"]')?.textContent).toBe('Support');
+
+    // Open mobile/account disclosure menu in ExplorerTopBar -> OpenFinanceMobileMenuLink renders inside list!
+    const menuBtn = container.querySelector<HTMLButtonElement>('button[aria-expanded][aria-controls]');
+    expect(menuBtn).not.toBeNull();
+    await act(async () => {
+      menuBtn?.click();
+    });
+    const mobileLink = container.querySelector<HTMLAnchorElement>(
+      '[data-testid="open-finance-mobile-nav-link"]'
+    );
+    expect(mobileLink).not.toBeNull();
+    expect(mobileLink?.getAttribute('role')).toBeNull();
+    expect(mobileLink?.closest('li')?.closest('ul')).not.toBeNull();
+    expect(mobileLink?.textContent).toBe('Support');
+
+    // 4. Saving from OpenFinanceAdminPanel notifies AdminPage to reload PluginSettingsSection!
+    const settingsCallsBeforePanelSave = adminGetPluginSettingsCalls;
+    const panelSaveBtn = container.querySelector<HTMLButtonElement>(
+      '[data-testid="admin-open-finance-panel"] button[type="submit"]'
+    );
+    expect(panelSaveBtn).not.toBeNull();
+    await act(async () => {
+      panelSaveBtn?.click();
+    });
+    await flushUi();
+    expect(adminGetPluginSettingsCalls).toBeGreaterThan(settingsCallsBeforePanelSave);
 
     await act(async () => {
       root.unmount();

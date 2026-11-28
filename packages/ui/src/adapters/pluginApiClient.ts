@@ -21,6 +21,39 @@ export interface HttpPluginApiClientOptions {
   readonly apiBaseUrl?: string;
   /** Optional custom fetch implementation for hermetic tests or custom runtimes. */
   readonly fetchImpl?: typeof fetch;
+  /**
+   * Optional fetch credentials mode. Defaults to 'same-origin' for relative/same-origin URLs,
+   * and 'include' when `apiBaseUrl` is a cross-origin absolute URL in a browser context.
+   */
+  readonly credentials?: RequestCredentials;
+}
+
+/**
+ * Resolves the effective fetch credentials mode for plugin HTTP clients.
+ * Uses explicit override when supplied; otherwise defaults to 'include' for cross-origin
+ * absolute `apiBaseUrl` in a browser context and 'same-origin' otherwise.
+ */
+export function resolvePluginRequestCredentials(
+  apiBaseUrl?: string,
+  explicit?: RequestCredentials
+): RequestCredentials {
+  if (explicit !== undefined) {
+    return explicit;
+  }
+  const trimmed = apiBaseUrl?.trim() ?? '';
+  if (/^https?:\/\//i.test(trimmed)) {
+    const currentOrigin = typeof window !== 'undefined' ? window.location?.origin : undefined;
+    if (currentOrigin && currentOrigin !== 'null') {
+      try {
+        if (new URL(trimmed).origin !== currentOrigin) {
+          return 'include';
+        }
+      } catch {
+        return 'same-origin';
+      }
+    }
+  }
+  return 'same-origin';
 }
 
 /**
@@ -31,6 +64,7 @@ export interface HttpPluginApiClientOptions {
 export function createHttpPluginApiClient(options: HttpPluginApiClientOptions = {}): PluginApiClient {
   const apiBase = stripTrailingSlash(options.apiBaseUrl ?? '');
   const fetchImpl = options.fetchImpl ?? ((...args) => fetch(...args));
+  const credentials = resolvePluginRequestCredentials(apiBase, options.credentials);
 
   const resolveUrl = (path: string): string => {
     const normalizedPath = path.startsWith('/') ? path : `/${path}`;
@@ -51,7 +85,7 @@ export function createHttpPluginApiClient(options: HttpPluginApiClientOptions = 
       }
       const res = await fetchImpl(resolveUrl(path), {
         ...init,
-        credentials: 'same-origin',
+        credentials,
         headers,
       });
       if (!res.ok) {
@@ -86,7 +120,7 @@ export function createHttpPluginApiClient(options: HttpPluginApiClientOptions = 
     ): Promise<T> {
       const res = await fetchImpl(resolveUrl(path), {
         method: 'POST',
-        credentials: 'same-origin',
+        credentials,
         headers: { accept: 'application/json' },
         body: formData,
         signal: reqOptions?.signal,
@@ -118,7 +152,7 @@ export function createHttpPluginApiClient(options: HttpPluginApiClientOptions = 
     async deleteNoContent(path: string, reqOptions?: { readonly signal?: AbortSignal }): Promise<void> {
       const res = await fetchImpl(resolveUrl(path), {
         method: 'DELETE',
-        credentials: 'same-origin',
+        credentials,
         headers: { accept: 'application/json' },
         signal: reqOptions?.signal,
       });

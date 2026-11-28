@@ -5,6 +5,7 @@ import type {
   PluginSettingsSchema,
 } from '@kinloom/core';
 import { z } from 'zod';
+import { matchesIfNoneMatch, sha256Hex } from '../crypto.js';
 import { KinloomHttpError } from '../errors.js';
 import { jsonResponse } from '../http/httpPrimitives.js';
 import type { KinloomServerPlugin, KinloomServerPorts } from '../http/pluginLifecycle.js';
@@ -92,8 +93,11 @@ export interface OpenFinancePluginOptions {
   readonly enabled?: boolean;
   /** Optional initial open-finance configuration (strictly validated at plugin registration time). */
   readonly config?: OpenFinanceConfigInput;
-  /** Minimum role for GET /api/open-finance/summary. Defaults to 'public'. */
-  readonly publicEndpointMinRole?: 'public' | 'viewer';
+  /**
+   * Minimum role for GET /api/open-finance/summary.
+   * Defaults to 'archive_read' ('viewer' on private archives, 'public' on public archives).
+   */
+  readonly publicEndpointMinRole?: 'public' | 'archive_read' | 'viewer';
 }
 
 function buildSettingsSchema(initialConfig: OpenFinanceConfig): PluginSettingsSchema {
@@ -130,6 +134,7 @@ function buildSettingsSchema(initialConfig: OpenFinanceConfig): PluginSettingsSc
     title: 'Open Finance & Community Donations',
     description:
       'Publish transparent archive operating costs and strictly allowlisted external donation links. Zero payment custody and zero third-party payment scripts.',
+    preserveKeys: ['platform_order_json', 'funding_goal_json'],
     sections: [
       {
         id: 'status',
@@ -185,12 +190,14 @@ function buildSettingsSchema(initialConfig: OpenFinanceConfig): PluginSettingsSc
             label: 'Show Support link in top navigation',
             type: 'boolean',
             defaultValue: initialConfig.visibility.show_in_nav,
+            helpText: "Requires 'Publish Open Finance & Support page' to be enabled.",
           },
           {
             key: 'show_in_footer',
             label: 'Show Support link in site footer',
             type: 'boolean',
             defaultValue: initialConfig.visibility.show_in_footer,
+            helpText: "Requires 'Publish Open Finance & Support page' to be enabled.",
           },
           {
             key: 'page_title',
@@ -326,7 +333,7 @@ export function createOpenFinancePlugin(options: OpenFinancePluginOptions = {}):
   let lastUpdatedAt: string | null = null;
   let lastUpdatedBy: string | null = null;
 
-  const publicEndpointMinRole = options.publicEndpointMinRole ?? 'public';
+  const publicEndpointMinRole = options.publicEndpointMinRole ?? 'archive_read';
   const settingsSchema = buildSettingsSchema(runtimeConfig);
 
   async function resolveCurrentState(ports: KinloomServerPorts): Promise<{
@@ -348,6 +355,9 @@ export function createOpenFinancePlugin(options: OpenFinancePluginOptions = {}):
       const stored = await ports.pluginSettingsStore.getSettings(OPEN_FINANCE_PLUGIN_ID);
       if (stored) {
         const resolved = settingsValuesToOpenFinanceConfig(stored.values, runtimeConfig);
+        runtimeConfig = resolved;
+        lastUpdatedAt = stored.updated_at;
+        lastUpdatedBy = stored.updated_by;
         return {
           config: resolved,
           updatedAt: stored.updated_at,
@@ -410,7 +420,22 @@ export function createOpenFinancePlugin(options: OpenFinancePluginOptions = {}):
           const serverPorts = ctx.ports as KinloomServerPorts;
           const state = await resolveCurrentState(serverPorts);
           const summary = buildOpenFinancePublicSummary(state.config, state.updatedAt);
-          return jsonResponse(summary, 200, { 'cache-control': 'public, max-age=60' });
+          const cacheControl = ctx.mode === 'public' ? 'no-cache' : 'private, no-cache';
+          const hash = await sha256Hex(JSON.stringify(summary));
+          const etag = `"of-${hash.slice(0, 24)}"`;
+          if (matchesIfNoneMatch(ctx.request.headers.get('if-none-match'), etag)) {
+            return new Response(null, {
+              status: 304,
+              headers: {
+                'cache-control': cacheControl,
+                etag,
+              },
+            });
+          }
+          return jsonResponse(summary, 200, {
+            'cache-control': cacheControl,
+            etag,
+          });
         },
       },
       {

@@ -4,14 +4,24 @@ import { initialsOf, resolveAssetUrl } from '../components/Atoms.js';
 import { KINLOOM_UI_VERSION } from '../version.js';
 import {
   type ActiveNarrativeAudioTrack,
+  type NarrativeAudioKind,
+  type NarrativeAudioLabels,
   type NarrativeAudioPluginOptions,
   NarrativeAudioProvider,
   type NarrativeAudioTrackMeta,
+  resolveNarrativeAudioLabels,
 } from './narrativeAudio/audioContext.js';
 import { NarrativeAudioDock, NarrativeAudioMarginBar } from './narrativeAudio/NarrativeAudioPlayers.js';
 import type { KinloomUiPlugin, KinloomUiPluginSlotContext } from './types.js';
 
-export type { ActiveNarrativeAudioTrack, NarrativeAudioPluginOptions, NarrativeAudioTrackMeta };
+export type {
+  ActiveNarrativeAudioTrack,
+  NarrativeAudioKind,
+  NarrativeAudioLabels,
+  NarrativeAudioPluginOptions,
+  NarrativeAudioTrackMeta,
+};
+export { resolveNarrativeAudioLabels };
 
 function asPositiveFiniteNumber(value: unknown): number | undefined {
   if (typeof value === 'number' && Number.isFinite(value) && value >= 0) {
@@ -25,6 +35,36 @@ function asNonEmptyString(value: unknown): string | undefined {
     return value.trim();
   }
   return undefined;
+}
+
+/**
+ * Resolves the display narrative kind for audio narration controls from explicit `narrative.kind`,
+ * falling back to `subject_person_id` / single-person biography heuristics when `kind` is omitted.
+ */
+export function resolveNarrativeAudioKind(
+  narrative: Narrative,
+  person: Person | undefined
+): NarrativeAudioKind {
+  if (
+    narrative.kind === 'biography' ||
+    narrative.kind === 'family_story' ||
+    narrative.kind === 'research_note' ||
+    narrative.kind === 'memoir'
+  ) {
+    return narrative.kind;
+  }
+  if (person && narrative.subject_person_id === person.id) {
+    return 'biography';
+  }
+  if (
+    person &&
+    narrative.subject_person_id === undefined &&
+    narrative.person_ids.length === 1 &&
+    narrative.person_ids[0] === person.id
+  ) {
+    return 'biography';
+  }
+  return 'family_story';
 }
 
 /**
@@ -46,6 +86,7 @@ export function readNarrativeAudioMeta(narrative: Narrative | undefined): Narrat
   }
   const durationSeconds = asPositiveFiniteNumber(record.duration_seconds);
   const notesStart = asPositiveFiniteNumber(record.editor_notes_start_seconds);
+  const label = asNonEmptyString(record.label);
   return {
     file,
     duration_seconds: durationSeconds,
@@ -55,6 +96,7 @@ export function readNarrativeAudioMeta(narrative: Narrative | undefined): Narrat
         : undefined,
     story_voice: asNonEmptyString(record.story_voice),
     notes_voice: asNonEmptyString(record.notes_voice),
+    ...(label !== undefined ? { label } : {}),
   };
 }
 
@@ -81,6 +123,8 @@ export function createNarrativeAudioPlugin(options: NarrativeAudioPluginOptions 
     const track: ActiveNarrativeAudioTrack = {
       narrativeId: ctx.narrative.id,
       narrativeTitle: ctx.narrative.title,
+      narrativeKind: resolveNarrativeAudioKind(ctx.narrative, ctx.person),
+      customLabel: meta.label ?? null,
       personName: ctx.person?.full_name ?? null,
       personSlug: ctx.person?.slug ?? null,
       personInitials: ctx.person ? initialsOf(ctx.person.full_name) : '♫',

@@ -380,8 +380,16 @@ describe('CreateEntityModal all kinds, EntityEditDrawer conflict/retry/dirty-clo
   });
 
   it('exercises PlacePage local history + not-found, IndexPage GEDCOM export, and ArchiveProvider loader/error paths', async () => {
-    Object.defineProperty(URL, 'createObjectURL', { value: vi.fn(() => 'blob:ged'), configurable: true });
-    Object.defineProperty(URL, 'revokeObjectURL', { value: vi.fn(), configurable: true });
+    Object.defineProperty(URL, 'createObjectURL', {
+      value: vi.fn(() => 'blob:ged'),
+      writable: true,
+      configurable: true,
+    });
+    Object.defineProperty(URL, 'revokeObjectURL', {
+      value: vi.fn(),
+      writable: true,
+      configurable: true,
+    });
 
     // PlacePage with local history + decade filter + not found
     const placeEl = mountEl(

@@ -17,6 +17,7 @@ import {
   type RevisionRecord,
   resolveEffectiveLiving,
   type StoredEntityRecord,
+  type StoredEntityRow,
 } from '@kinloom/core';
 import { SystemClock } from '@kinloom/server';
 import type { D1Database, D1PreparedStatement } from '../../types.js';
@@ -223,6 +224,23 @@ export class D1EntityReadStore implements EntityReadStore, RevisionLogStore {
          WHERE entity_type = ? AND entity_id = ?`
     )
       .bind(entityType, entityId)
+      .first<unknown>();
+    return rawRow !== null ? mapEntityRow(parseDbEntityRow(rawRow)) : null;
+  }
+
+  async getEntityBySlug(
+    entityType: 'person' | 'place' | 'narrative',
+    slugOrId: string
+  ): Promise<StoredEntityRow | null> {
+    const rawRow = await prepareD1Statement(
+      this.db,
+      `SELECT entity_type, entity_id, slug, data_json, current_revision_id,
+                has_primary_source, deleted_at, updated_at
+         FROM entities
+         WHERE entity_type = ? AND deleted_at IS NULL AND (slug = ? OR entity_id = ?)
+         LIMIT 1`
+    )
+      .bind(entityType, slugOrId, slugOrId)
       .first<unknown>();
     return rawRow !== null ? mapEntityRow(parseDbEntityRow(rawRow)) : null;
   }

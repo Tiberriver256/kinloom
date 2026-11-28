@@ -6,9 +6,13 @@ import {
   type UiOpenFinancePublicSummary,
 } from '../lib/openFinanceModel.js';
 import { ApiClientError, parseErrorEnvelope, stripTrailingSlash } from './httpWiki/httpClient.js';
+import { resolvePluginRequestCredentials } from './pluginApiClient.js';
 
 export interface OpenFinanceClient {
-  getPublicSummary(options?: { readonly signal?: AbortSignal }): Promise<UiOpenFinancePublicSummary | null>;
+  getPublicSummary(options?: {
+    readonly signal?: AbortSignal;
+    readonly cache?: RequestCache;
+  }): Promise<UiOpenFinancePublicSummary | null>;
   getAdminConfig(options?: {
     readonly signal?: AbortSignal;
   }): Promise<UiOpenFinanceAdminConfigPayload | null>;
@@ -18,6 +22,7 @@ export interface OpenFinanceClient {
 export interface HttpOpenFinanceClientOptions {
   readonly apiBaseUrl?: string;
   readonly fetchImpl?: typeof fetch;
+  readonly credentials?: RequestCredentials;
 }
 
 /**
@@ -27,17 +32,20 @@ export interface HttpOpenFinanceClientOptions {
 export function createHttpOpenFinanceClient(options: HttpOpenFinanceClientOptions = {}): OpenFinanceClient {
   const apiBase = stripTrailingSlash(options.apiBaseUrl ?? '');
   const fetchImpl = options.fetchImpl ?? ((...args) => fetch(...args));
+  const credentials = resolvePluginRequestCredentials(apiBase, options.credentials);
 
   const apiUrl = (path: string): string => `${apiBase}${path}`;
 
   return {
     async getPublicSummary(reqOptions?: {
       readonly signal?: AbortSignal;
+      readonly cache?: RequestCache;
     }): Promise<UiOpenFinancePublicSummary | null> {
       const res = await fetchImpl(apiUrl('/api/open-finance/summary'), {
-        credentials: 'same-origin',
+        credentials,
         headers: { accept: 'application/json' },
         signal: reqOptions?.signal,
+        ...(reqOptions?.cache ? { cache: reqOptions.cache } : {}),
       });
       if (res.status === 404) {
         return null;
@@ -61,7 +69,7 @@ export function createHttpOpenFinanceClient(options: HttpOpenFinanceClientOption
       readonly signal?: AbortSignal;
     }): Promise<UiOpenFinanceAdminConfigPayload | null> {
       const res = await fetchImpl(apiUrl('/api/admin/open-finance/config'), {
-        credentials: 'same-origin',
+        credentials,
         headers: { accept: 'application/json' },
         signal: reqOptions?.signal,
       });
@@ -86,7 +94,7 @@ export function createHttpOpenFinanceClient(options: HttpOpenFinanceClientOption
     async saveAdminConfig(input: UiOpenFinanceConfigInput): Promise<UiOpenFinanceAdminConfigPayload> {
       const res = await fetchImpl(apiUrl('/api/admin/open-finance/config'), {
         method: 'PUT',
-        credentials: 'same-origin',
+        credentials,
         headers: {
           accept: 'application/json',
           'content-type': 'application/json',

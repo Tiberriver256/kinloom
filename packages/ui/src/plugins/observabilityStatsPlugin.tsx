@@ -2,15 +2,12 @@ import {
   createHttpObservabilityStatsClient,
   type ObservabilityStatsClient,
 } from '../adapters/observabilityStatsClient.js';
-import {
-  isDeceasedPersonForBadge,
-  isPublicNarrativeForBadge,
-  type UiObservabilityStatsWindow,
-} from '../lib/observabilityStatsModel.js';
+import { isDeceasedPersonForBadge, type UiObservabilityStatsWindow } from '../lib/observabilityStatsModel.js';
 import { KINLOOM_UI_VERSION } from '../version.js';
 import { bindObservabilityStatsProvider } from './observabilityStats/ObservabilityStatsContext.js';
 import { ObservabilityStatsPanel } from './observabilityStats/ObservabilityStatsPanel.js';
 import { PageVisitBadge } from './observabilityStats/PageVisitBadge.js';
+import { PageVisitBeaconTracker } from './observabilityStats/PageVisitBeaconTracker.js';
 import type { KinloomUiPlugin, KinloomUiPluginSlotContext } from './types.js';
 
 export const OBSERVABILITY_STATS_UI_PLUGIN_ID = 'kinloom-observability-stats-ui';
@@ -25,6 +22,8 @@ export interface ObservabilityStatsUiPluginOptions {
   readonly id?: string;
   /** Optional API base URL passed to the default HTTP client. */
   readonly apiBaseUrl?: string;
+  /** Optional fetch credentials mode passed to the default HTTP client. */
+  readonly credentials?: RequestCredentials;
   /** Optional injected transport client for hermetic tests or custom backends. */
   readonly client?: ObservabilityStatsClient;
   /** Initial display state for per-page visit badges. Defaults to false (off until enabled). */
@@ -36,7 +35,7 @@ export interface ObservabilityStatsUiPluginOptions {
 /**
  * Optional, off-by-default Kinloom UI plugin that renders the privacy-first Archive Traffic &
  * Page Visit Stats dashboard in AdminSettingsShell and optional subtle archival visit count badges
- * on deceased person, place, and non-living narrative views.
+ * on deceased person and place views, plus SPA route visit beacons.
  */
 export function createObservabilityStatsPlugin(
   options: ObservabilityStatsUiPluginOptions = {}
@@ -52,7 +51,12 @@ export function createObservabilityStatsPlugin(
     };
   }
 
-  const client = options.client ?? createHttpObservabilityStatsClient({ apiBaseUrl: options.apiBaseUrl });
+  const client =
+    options.client ??
+    createHttpObservabilityStatsClient({
+      apiBaseUrl: options.apiBaseUrl,
+      credentials: options.credentials,
+    });
   const initialShowPublicBadges = options.showPublicVisitBadges ?? false;
   const defaultWindow = options.defaultWindow ?? '30d';
 
@@ -69,6 +73,7 @@ export function createObservabilityStatsPlugin(
     status: 'active',
     provider,
     slots: {
+      appShell: () => <PageVisitBeaconTracker />,
       adminSettings: (ctx: KinloomUiPluginSlotContext) =>
         ctx.capabilities.canManageSite ? <ObservabilityStatsPanel /> : null,
       personDetail: (ctx: KinloomUiPluginSlotContext) => {
@@ -82,13 +87,6 @@ export function createObservabilityStatsPlugin(
           return null;
         }
         return <PageVisitBadge entityKind="place" entitySlug={ctx.place.slug} />;
-      },
-      narrativeHeader: (ctx: KinloomUiPluginSlotContext) => {
-        if (!ctx.narrative || !isPublicNarrativeForBadge(ctx.narrative, ctx.person, ctx.bundle?.people)) {
-          return null;
-        }
-        const slug = ctx.narrative.slug || ctx.narrative.id;
-        return <PageVisitBadge entityKind="narrative" entitySlug={slug} />;
       },
     },
   };

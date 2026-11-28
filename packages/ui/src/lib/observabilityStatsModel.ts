@@ -55,6 +55,12 @@ export interface UiPublicPageVisitCount {
   readonly total_views: number;
 }
 
+export interface UiPublicObservabilityConfig {
+  readonly enabled: boolean;
+  readonly public_badges_enabled: boolean;
+  readonly record_spa_beacons: boolean;
+}
+
 export type TopPagesCategoryFilter = 'all' | 'people' | 'places' | 'narratives';
 
 export interface DailyTrendBarGeometry {
@@ -240,6 +246,20 @@ export function parsePublicPageVisitCount(raw: unknown): UiPublicPageVisitCount 
     entity_kind: kind,
     entity_slug: raw.entity_slug,
     total_views: raw.total_views,
+  };
+}
+
+export function parsePublicObservabilityConfig(raw: unknown): UiPublicObservabilityConfig | null {
+  if (!isRecord(raw)) {
+    return null;
+  }
+  if (typeof raw.public_badges_enabled !== 'boolean') {
+    return null;
+  }
+  return {
+    enabled: typeof raw.enabled === 'boolean' ? raw.enabled : true,
+    public_badges_enabled: raw.public_badges_enabled,
+    record_spa_beacons: typeof raw.record_spa_beacons === 'boolean' ? raw.record_spa_beacons : true,
   };
 }
 

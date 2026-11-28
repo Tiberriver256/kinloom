@@ -2945,6 +2945,7 @@ describe('CreateEntityModal, NarrativeAudioPlayers, useDialogFocusTrap, AppError
     const track: ActiveNarrativeAudioTrack = {
       narrativeId: 'nar_bio',
       narrativeTitle: 'Life of Henry Alder',
+      narrativeKind: 'biography',
       personName: 'Henry Alder',
       personSlug: 'henry-alder',
       personInitials: 'HA',
