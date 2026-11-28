@@ -223,12 +223,18 @@ test.describe('Wave 50B UX regression suite', () => {
     expect(archiveBtnBox?.height ?? 0).toBeGreaterThanOrEqual(44);
 
     await archiveMenuBtn.click();
-    const menuItems = page.locator('.topbar-account-menu [role="menuitem"]');
+    const menuItems = page.locator('.topbar-account-menu ul li > a, .topbar-account-menu ul li > button');
     await expect(menuItems).toHaveCount(3);
-    await expect(page.getByRole('menuitem', { name: 'Sources', exact: true })).toBeVisible();
-    await expect(page.getByRole('menuitem', { name: 'Evidence & Sources' })).toBeVisible();
-    await expect(page.getByRole('menuitem', { name: 'Kinship Finder' })).toBeVisible();
-    await page.getByRole('menuitem', { name: 'Evidence & Sources' }).click();
+    await expect(
+      page.locator('.topbar-account-menu').getByRole('button', { name: 'Reading Room', exact: true })
+    ).toBeVisible();
+    await expect(
+      page.locator('.topbar-account-menu').getByRole('link', { name: 'Evidence & Sources' })
+    ).toBeVisible();
+    await expect(
+      page.locator('.topbar-account-menu').getByRole('link', { name: 'Kinship Finder' })
+    ).toBeVisible();
+    await page.locator('.topbar-account-menu').getByRole('link', { name: 'Evidence & Sources' }).click();
     await expect(page).toHaveURL(/\/evidence$/);
 
     // P1-5: Evidence singular/plural grammar + 44px touch targets on mobile
@@ -385,7 +391,7 @@ test.describe('Wave 50B UX regression suite', () => {
     expect(crumbContrast ?? 0).toBeGreaterThanOrEqual(4.5);
 
     // 9. P2-2: SourceReaderDrawer transcript sheet starts at y <= 280px on 1280x800
-    await page.getByRole('button', { name: 'Sources' }).click();
+    await page.getByRole('button', { name: 'Reading Room' }).click();
     await expect(page.locator('.transcript-sheet')).toBeVisible();
     const sheetBox = await page.locator('.transcript-sheet').boundingBox();
     expect(sheetBox?.y ?? 999).toBeLessThanOrEqual(280);
@@ -739,7 +745,7 @@ test.describe('Wave 50B UX regression suite', () => {
     expect(searchRestored).toBe(true);
 
     // SourceReaderDrawer: aria-modal, Tab trap, tablist ArrowRight without turning pages, Escape restore
-    const sourcesBtn = page.locator('header.topbar button', { hasText: 'Sources' });
+    const sourcesBtn = page.locator('header.topbar button', { hasText: 'Reading Room' });
     await sourcesBtn.focus();
     await sourcesBtn.click();
     const readerDialog = page.locator('dialog.source-reader-backdrop[open]');
@@ -770,7 +776,7 @@ test.describe('Wave 50B UX regression suite', () => {
     await page.keyboard.press('Escape');
     await expect(readerDialog).toHaveCount(0);
     const sourcesRestored = await page.evaluate(() =>
-      document.activeElement?.textContent?.includes('Sources')
+      document.activeElement?.textContent?.includes('Reading Room')
     );
     expect(sourcesRestored).toBe(true);
 

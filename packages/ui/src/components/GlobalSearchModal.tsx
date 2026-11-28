@@ -3,6 +3,7 @@ import { searchArchive } from '@kinloom/core';
 import type React from 'react';
 import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { type RecentlyViewedItem, readRecentlyViewed } from '../browser/recentlyViewed.js';
 import { useArchiveData } from '../context/ArchiveDataContext.js';
 import { useArchiveUi } from '../context/ArchiveUiContext.js';
 import { useDialogFocusTrap } from '../hooks/useDialogFocusTrap.js';
@@ -106,6 +107,13 @@ export const GlobalSearchModal: React.FC = () => {
     }
     return suggestions.slice(0, 6);
   }, [bundle, siteConfig.anchorYears]);
+
+  const recentlyViewed = useMemo<RecentlyViewedItem[]>(() => {
+    if (!searchOpen) {
+      return [];
+    }
+    return readRecentlyViewed();
+  }, [searchOpen]);
 
   const totalSourcePages = useMemo(() => {
     if (!readings) {
@@ -300,6 +308,41 @@ export const GlobalSearchModal: React.FC = () => {
             </>
           ) : (
             <div style={{ padding: '14px 16px' }}>
+              {recentlyViewed.length > 0 && (
+                <div style={{ marginBottom: 14 }}>
+                  <div
+                    style={{
+                      fontFamily: 'var(--font-mono)',
+                      fontSize: '0.74rem',
+                      letterSpacing: '0.05em',
+                      textTransform: 'uppercase',
+                      color: 'var(--text-secondary)',
+                      marginBottom: 6,
+                    }}
+                  >
+                    Recently viewed
+                  </div>
+                  <div className="kl-cluster">
+                    {recentlyViewed.map((item) => (
+                      <button
+                        key={`${item.kind}:${item.slug}`}
+                        type="button"
+                        className={cx(searchModalStyles, 'global-search-suggestion-chip')}
+                        onClick={() => {
+                          closeSearch();
+                          setQuery('');
+                          void navigate(
+                            item.kind === 'person' ? `/person/${item.slug}` : `/place/${item.slug}`
+                          );
+                        }}
+                      >
+                        {item.label}
+                        {item.meta ? ` (${item.meta})` : ''}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
               <div
                 style={{
                   fontFamily: 'var(--font-mono)',

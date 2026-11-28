@@ -8,6 +8,7 @@ import {
 } from '@kinloom/core';
 import type React from 'react';
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { Link, useInRouterContext } from 'react-router-dom';
 import { triggerTextDownload } from '../browser/download.js';
 import { useArchiveData } from '../context/ArchiveDataContext.js';
 import { useArchiveUi } from '../context/ArchiveUiContext.js';
@@ -30,9 +31,18 @@ import {
 } from './sourceReader/SourceReaderStage.js';
 
 export const SourceReaderDrawer: React.FC = () => {
-  const { readings, readingsLoading, readingsError, siteConfig, featuredDocumentId, baseUrl } =
-    useArchiveData();
+  const {
+    bundle,
+    peopleById,
+    readings,
+    readingsLoading,
+    readingsError,
+    siteConfig,
+    featuredDocumentId,
+    baseUrl,
+  } = useArchiveData();
   const { sourceReader, closeSourceReader } = useArchiveUi();
+  const inRouter = useInRouterContext();
 
   const closeBtnRef = useRef<HTMLButtonElement | null>(null);
   const scanZoomCloseBtnRef = useRef<HTMLButtonElement | null>(null);
@@ -158,12 +168,45 @@ export const SourceReaderDrawer: React.FC = () => {
       .filter((idx) => idx >= 0);
   }, [currentDoc, searchTerm]);
 
+  const safeIdx = currentDoc ? Math.max(0, Math.min(pageIdx, Math.max(0, currentDoc.pages.length - 1))) : 0;
+  const currentPage = currentDoc?.pages[safeIdx] || null;
+
+  const citedByLinks = useMemo(() => {
+    if (!readings || !bundle || !currentDoc || !currentPage) {
+      return [];
+    }
+    const items: Array<{ readonly key: string; readonly label: string; readonly to: string }> = [];
+    const seen = new Set<string>();
+    for (const ev of bundle.events) {
+      const mappedPage = readings.event_page_map[ev.id]?.[currentDoc.source_id];
+      if (mappedPage !== currentPage.page) {
+        continue;
+      }
+      for (const participant of ev.participants) {
+        const person = peopleById.get(participant.person_id);
+        if (!person || (person.is_living && person.full_name.trim() === 'Living')) {
+          continue;
+        }
+        const to = `/person/${person.slug}?event=${encodeURIComponent(ev.id)}`;
+        const key = `${person.id}:${ev.id}`;
+        if (seen.has(key)) {
+          continue;
+        }
+        seen.add(key);
+        const dateSuffix = ev.display_date || ev.edtf_date ? ` (${ev.display_date || ev.edtf_date})` : '';
+        items.push({
+          key,
+          label: `${person.full_name} — ${ev.title}${dateSuffix}`,
+          to,
+        });
+      }
+    }
+    return items.slice(0, 8);
+  }, [readings, bundle, peopleById, currentDoc, currentPage]);
+
   if (!sourceReader) {
     return null;
   }
-
-  const safeIdx = currentDoc ? Math.max(0, Math.min(pageIdx, Math.max(0, currentDoc.pages.length - 1))) : 0;
-  const currentPage = currentDoc?.pages[safeIdx] || null;
   const hasScan = Boolean(currentPage?.image_url);
   const effectiveMode: ReaderViewMode = hasScan ? viewMode : 'text';
   const scanSrc = currentPage?.image_url ? resolveAssetUrl(currentPage.image_url, baseUrl) : '';
@@ -264,7 +307,7 @@ export const SourceReaderDrawer: React.FC = () => {
             className={cx(controlStyles, 'pill-btn')}
             onClick={closeSourceReader}
           >
-            Close [Esc]
+            <span>Close</span> <kbd className="kl-kbd">Esc</kbd>
           </button>
         </div>
 
@@ -462,6 +505,35 @@ export const SourceReaderDrawer: React.FC = () => {
                 setScanZoomOpen(true);
               }}
             />
+
+            {citedByLinks.length > 0 && (
+              <nav className={cx(readerStyles, 'source-cited-by-strip')} aria-label="Cited by">
+                <span className={cx(readerStyles, 'source-cited-by-label')}>Cited by</span>
+                <div className="kl-cluster">
+                  {citedByLinks.map((item) =>
+                    inRouter ? (
+                      <Link
+                        key={item.key}
+                        to={item.to}
+                        className={cx(readerStyles, 'source-cited-by-link')}
+                        onClick={closeSourceReader}
+                      >
+                        {item.label}
+                      </Link>
+                    ) : (
+                      <a
+                        key={item.key}
+                        href={item.to}
+                        className={cx(readerStyles, 'source-cited-by-link')}
+                        onClick={closeSourceReader}
+                      >
+                        {item.label}
+                      </a>
+                    )
+                  )}
+                </div>
+              </nav>
+            )}
 
             <div className={cx(readerStyles, 'source-download-bar source-download-footer')}>
               <button

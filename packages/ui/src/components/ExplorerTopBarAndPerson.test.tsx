@@ -155,15 +155,15 @@ describe('ExplorerTopBar mobile & account menu behavior', () => {
       accountBtn?.click();
     });
 
-    const menu = container.querySelector('[role="menu"]');
+    const menu = container.querySelector('.topbar-account-menu');
     expect(menu?.textContent).toContain('Morgan Reid');
-    expect(menu?.textContent).toContain('Sources');
+    expect(menu?.textContent).toContain('Reading Room');
     expect(menu?.textContent).toContain('Revision History');
     expect(menu?.textContent).toContain('Site Administration');
     expect(menu?.textContent).toContain('Sign Out');
 
     const sourcesItem = [...(menu?.querySelectorAll('button') ?? [])].find(
-      (b) => b.textContent?.trim() === 'Sources'
+      (b) => b.textContent?.trim() === 'Reading Room'
     );
     act(() => {
       sourcesItem?.click();
@@ -191,8 +191,8 @@ describe('ExplorerTopBar mobile & account menu behavior', () => {
       menuBtn?.click();
     });
 
-    const menu = container.querySelector('[role="menu"]');
-    expect(menu?.textContent).toContain('Sources');
+    const menu = container.querySelector('.topbar-account-menu');
+    expect(menu?.textContent).toContain('Reading Room');
     expect(menu?.textContent).toContain('Evidence & Sources');
     expect(menu?.textContent).toContain('Kinship Finder');
     expect(menu?.textContent).not.toContain('Sign Out');
@@ -235,9 +235,9 @@ describe('ExplorerTopBar mobile & account menu behavior', () => {
     act(() => {
       menuBtn?.click();
     });
-    const menuSignInBtn = [...container.querySelectorAll<HTMLButtonElement>('[role="menuitem"]')].find(
-      (b) => b.textContent?.trim() === 'Sign in to edit'
-    );
+    const menuSignInBtn = [
+      ...container.querySelectorAll<HTMLButtonElement>('.topbar-account-menu a, .topbar-account-menu button'),
+    ].find((b) => b.textContent?.trim() === 'Sign in to edit');
     expect(menuSignInBtn).not.toBeNull();
     act(() => {
       menuSignInBtn?.click();

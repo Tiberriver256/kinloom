@@ -1,7 +1,8 @@
 import { buildPersonThumbMap, resolvePlacePronunciation } from '@kinloom/core';
 import type React from 'react';
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
+import { recordRecentlyViewed } from '../browser/recentlyViewed.js';
 import { resolveAssetUrl } from '../components/Atoms.js';
 import atomStyles from '../components/Atoms.module.css';
 import { ExplorerTopBar } from '../components/ExplorerTopBar.js';
@@ -59,6 +60,18 @@ export const PlacePage: React.FC = () => {
   );
 
   const place = slug ? placesBySlug.get(slug) : undefined;
+
+  useEffect(() => {
+    if (!place) {
+      return;
+    }
+    recordRecentlyViewed({
+      kind: 'place',
+      slug: place.slug,
+      label: place.name,
+      meta: place.full_name !== place.name ? place.full_name : undefined,
+    });
+  }, [place]);
 
   const matchingPlaceIds = useMemo(
     () =>

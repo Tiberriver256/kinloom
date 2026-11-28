@@ -537,7 +537,7 @@ describe('SourceReaderDrawer, GlobalSearchModal, MediaUploaderModal, and Atoms b
     await flushUi();
     expect(atoms.textContent).toContain('ARCHIVAL PHOTOGRAPH · ZOOM VIEW');
     const closeLightbox = Array.from(atoms.querySelectorAll('button')).find((b) =>
-      b.textContent?.includes('Close [Esc]')
+      /Close.*Esc/i.test(b.textContent || '')
     );
     act(() => {
       closeLightbox?.click();

@@ -6,9 +6,10 @@ import {
   partitionPersonNarratives,
 } from '@kinloom/core';
 import type React from 'react';
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { triggerPersonGedcomDownload } from '../browser/download.js';
+import { recordRecentlyViewed } from '../browser/recentlyViewed.js';
 import { resolveAssetUrl } from '../components/Atoms.js';
 import { ExplorerTopBar } from '../components/ExplorerTopBar.js';
 import { KinloomFooter } from '../components/KinloomFooter.js';
@@ -21,6 +22,7 @@ import { WikiActionBar, type WikiEntityTab } from '../components/wiki/WikiAction
 import { useArchiveData } from '../context/ArchiveDataContext.js';
 import { useArchiveUi } from '../context/ArchiveUiContext.js';
 import { cx } from '../lib/cx.js';
+import { isRedactedLivingPlaceholder } from '../lib/tree/types.js';
 import { formatReaderLoadError, KINLOOM_VOCABULARY } from '../lib/vocabulary.js';
 import { PluginSlot } from '../plugins/PluginContext.js';
 import controlStyles from '../styles/Controls.module.css';
@@ -64,6 +66,18 @@ export const PersonPage: React.FC = () => {
   const { openSourceInspector } = useArchiveUi();
 
   const person = slug ? peopleBySlug.get(slug) : undefined;
+
+  useEffect(() => {
+    if (!person || isRedactedLivingPlaceholder(person)) {
+      return;
+    }
+    const meta = person.is_living
+      ? person.birth_year
+        ? `b. ${person.birth_year}`
+        : 'Living'
+      : `${person.birth_year || '?'}–${person.death_year || '?'}`;
+    recordRecentlyViewed({ kind: 'person', slug: person.slug, label: person.full_name, meta });
+  }, [person]);
 
   const [lightbox, setLightbox] = useState<PersonLightboxState>({ kind: 'closed' });
   const [showAllMedia, setShowAllMedia] = useState(false);

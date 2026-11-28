@@ -149,7 +149,7 @@ test('opt-in Family Recipe Box browse, filter, detail, PersonPage slot, IndexPag
     expect(hasOverflow).toBe(false);
 
     await page.getByRole('button', { name: 'Archive menu' }).click();
-    await expect(page.getByRole('menuitem', { name: 'Recipes' })).toBeVisible();
+    await expect(page.locator('.topbar-account-menu').getByRole('link', { name: 'Recipes' })).toBeVisible();
   } finally {
     await wiki.close();
   }

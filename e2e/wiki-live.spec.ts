@@ -76,8 +76,12 @@ test('backend modularity: same KinloomApp responds to Static Files vs Live HTTP 
   await expect(page.getByRole('button', { name: 'Add Photo' })).toBeVisible();
 
   await page.getByRole('button', { name: /Account menu for/ }).click();
-  await expect(page.getByRole('menuitem', { name: 'Revision History' })).toBeVisible();
-  await expect(page.getByRole('menuitem', { name: 'Site Administration' })).toHaveCount(0);
+  await expect(
+    page.locator('.topbar-account-menu').getByRole('link', { name: 'Revision History' })
+  ).toBeVisible();
+  await expect(
+    page.locator('.topbar-account-menu').getByRole('link', { name: 'Site Administration' })
+  ).toHaveCount(0);
 });
 
 test('1. read-only invite shows viewer banner and magic-link sign-in auto-enrolls strictly as editor', async ({
@@ -112,7 +116,7 @@ test('1. read-only invite shows viewer banner and magic-link sign-in auto-enroll
   const accountBtn = page.getByRole('button', { name: /Account menu for/ });
   await expect(accountBtn).toBeVisible();
   await accountBtn.click();
-  const accountMenu = page.getByRole('menu', { name: 'Account options' });
+  const accountMenu = page.getByRole('navigation', { name: 'Account options' });
   await expect(accountMenu.locator('.wiki-role-chip')).toHaveText('Editor');
   await expect(accountMenu).not.toContainText('Site Administration');
 

@@ -44,7 +44,7 @@ export const KINLOOM_VOCABULARY = {
     kinshipFull: 'Kinship Finder',
     evidence: 'Evidence',
     evidenceFull: 'Evidence & Sources',
-    sources: 'Sources',
+    sources: 'Reading Room',
     searchDesktop: 'Search (/)',
     searchAria: 'Search archive',
     searchTooltip: 'Search people, places, events, and source pages (/ or ⌘K)',

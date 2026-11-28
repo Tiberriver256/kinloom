@@ -98,6 +98,33 @@
   font-weight: 700;
 }
 
+.nav-search-btn {
+  padding: 3px 9px;
+  border: 1px solid var(--border-control);
+  border-radius: var(--radius-sm);
+  background: var(--surface-card);
+  color: var(--text-primary);
+}
+
+.topbar-disclosure-panel {
+  box-shadow: 0 14px 36px rgba(27, 42, 65, 0.24);
+  border: 1px solid var(--border-control);
+}
+
+.topbar-disclosure-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.topbar-disclosure-danger-item {
+  border-top: 1px solid var(--border-decorative);
+  margin-top: 4px;
+  padding-top: 4px;
+}
+
 .person-switcher {
   background: transparent;
   color: var(--text-primary);
@@ -210,12 +237,23 @@
     flex-shrink: 0;
     padding: 4px 10px;
     font-size: 0.9rem;
+    font-weight: 500;
     white-space: nowrap;
     min-height: 44px;
     min-width: 44px;
     display: inline-flex;
     align-items: center;
     justify-content: center;
+  }
+
+  .nav-pill:global(.nav-axis) {
+    font-weight: 500;
+    color: var(--text-secondary);
+  }
+
+  .nav-pill:global(.active) {
+    font-weight: 700;
+    color: var(--radar-copresence);
   }
 
   .year-readout,

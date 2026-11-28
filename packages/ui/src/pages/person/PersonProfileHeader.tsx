@@ -155,6 +155,16 @@ export const PersonProfileHeader: React.FC<PersonProfileHeaderProps> = ({
           )}
         </div>
         <div className={cx(personStyles, 'person-header-actions print-hide')}>
+          {!isRedactedPerson && (
+            <>
+              <Link to={`/tree?focus=${person.slug}`} className={cx(atomStyles, 'ink-link-btn')}>
+                In Tree
+              </Link>
+              <Link to={`/kinship?from=${person.slug}`} className={cx(atomStyles, 'ink-link-btn')}>
+                Trace Kinship
+              </Link>
+            </>
+          )}
           {routePlaceCount > 1 && (
             <Link to={`/map?person=${person.slug}`} className={cx(atomStyles, 'ink-link-btn')}>
               Their route

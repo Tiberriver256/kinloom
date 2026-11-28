@@ -8,14 +8,45 @@
   align-items: center;
   gap: 6px;
   overflow-x: auto;
-  scrollbar-width: none;
+  scrollbar-width: thin;
   min-width: 0;
   max-width: 100%;
-  padding-bottom: 4px;
-  padding-right: 18px;
+  padding: 2px 12px 6px 2px;
+  scroll-padding-inline: 12px;
   -webkit-overflow-scrolling: touch;
-  mask-image: linear-gradient(to right, black 92%, transparent 100%);
-  -webkit-mask-image: linear-gradient(to right, black 92%, transparent 100%);
+}
+
+.source-cited-by-strip {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 8px 0 10px;
+  border-bottom: 1px solid var(--border-decorative);
+}
+
+.source-cited-by-label {
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--text-secondary);
+}
+
+.source-cited-by-link {
+  font-family: var(--font-serif);
+  font-size: 0.86rem;
+  color: var(--surface-header);
+  text-decoration: none;
+  border-bottom: 1px dotted var(--border-control);
+  padding: 1px 0;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .source-cited-by-link:hover {
+    color: var(--radar-copresence);
+    border-bottom-color: var(--radar-copresence);
+  }
 }
 
 .source-collection-tabs::-webkit-scrollbar {

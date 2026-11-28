@@ -273,7 +273,7 @@ describe('canonical UI vocabulary helpers', () => {
   test('exposes canonical labels and formats pronunciation scope prefixes and photo/document counts', () => {
     assert.equal(KINLOOM_VOCABULARY.tree.directLine, 'Direct Line');
     assert.equal(KINLOOM_VOCABULARY.tree.diedYoung, 'Died young');
-    assert.equal(KINLOOM_VOCABULARY.nav.sources, 'Sources');
+    assert.equal(KINLOOM_VOCABULARY.nav.sources, 'Reading Room');
 
     assert.equal(formatPronunciationScopePrefix('full'), undefined);
     assert.equal(formatPronunciationScopePrefix('surname'), 'Surname');

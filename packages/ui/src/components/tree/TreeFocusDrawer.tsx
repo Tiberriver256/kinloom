@@ -66,9 +66,8 @@ export const TreeFocusDrawer: React.FC<TreeFocusDrawerProps> = ({
     ? formatCardLifespan(person)
     : `${person.birth_edtf || '?'} — ${person.death_edtf || '?'}`;
 
-  const primaryPlaceName = person.primary_place_id
-    ? (placesById.get(person.primary_place_id)?.full_name ?? 'Unrecorded')
-    : 'Unrecorded';
+  const primaryPlace = person.primary_place_id ? placesById.get(person.primary_place_id) : undefined;
+  const primaryPlaceName = primaryPlace?.full_name ?? 'Unrecorded';
 
   const resolvedThumb = thumbUrl ? resolveAssetUrl(thumbUrl, baseUrl) : null;
 
@@ -163,7 +162,13 @@ export const TreeFocusDrawer: React.FC<TreeFocusDrawerProps> = ({
           <span className={cx(treeFocusStyles, 'tree-focus-meta-key')}>
             {KINLOOM_VOCABULARY.tree.primaryPlaceLabel}
           </span>{' '}
-          {primaryPlaceName}
+          {primaryPlace ? (
+            <Link to={`/place/${primaryPlace.slug}`} className={cx(treeFocusStyles, 'tree-focus-place-link')}>
+              {primaryPlace.full_name}
+            </Link>
+          ) : (
+            primaryPlaceName
+          )}
         </div>
         {kinSummaryParts.length > 0 && (
           <div className={cx(treeFocusStyles, 'tree-focus-kin-summary')}>{kinSummaryParts.join(' · ')}</div>

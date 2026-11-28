@@ -643,15 +643,15 @@ describe('Map, Tree, TopBar, Context, Telemetry, NarrativeAudio, and Pages behav
     expect(document.activeElement?.id).toBe('main-content');
 
     // Account menu open -> Escape closes -> reopen -> outside pointerdown closes -> reopen -> Sign Out
-    const accountBtn = container.querySelector<HTMLButtonElement>('button[aria-haspopup="menu"]');
+    const accountBtn = container.querySelector<HTMLButtonElement>('button[aria-expanded]');
     act(() => {
       accountBtn?.click();
     });
-    expect(container.querySelector('[role="menu"]')).toBeTruthy();
+    expect(container.querySelector('.topbar-account-menu')).toBeTruthy();
     act(() => {
       document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
     });
-    expect(container.querySelector('[role="menu"]')).toBeNull();
+    expect(container.querySelector('.topbar-account-menu')).toBeNull();
 
     act(() => {
       accountBtn?.click();
@@ -659,7 +659,7 @@ describe('Map, Tree, TopBar, Context, Telemetry, NarrativeAudio, and Pages behav
     act(() => {
       document.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true }));
     });
-    expect(container.querySelector('[role="menu"]')).toBeNull();
+    expect(container.querySelector('.topbar-account-menu')).toBeNull();
 
     act(() => {
       accountBtn?.click();

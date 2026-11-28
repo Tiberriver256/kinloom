@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useId, useRef, useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { useArchiveData } from '../context/ArchiveDataContext.js';
 import { useArchiveUi } from '../context/ArchiveUiContext.js';
@@ -22,12 +22,13 @@ export const ExplorerTopBar: React.FC = () => {
   const location = useLocation();
   const navPluginRoutes = selectVisiblePluginNavRoutes(pluginRoutes, session, capabilities);
 
+  const disclosureMenuId = useId();
   const [accountOpen, setAccountOpen] = useState(false);
   const [signInOpen, setSignInOpen] = useState(false);
   const headerRef = useRef<HTMLElement | null>(null);
   const accountMenuRef = useRef<HTMLDivElement | null>(null);
   const accountTriggerRef = useRef<HTMLButtonElement | null>(null);
-  const accountDropdownRef = useRef<HTMLDivElement | null>(null);
+  const accountDropdownRef = useRef<HTMLElement | null>(null);
 
   useEffect(() => {
     const headerEl = headerRef.current;
@@ -79,7 +80,7 @@ export const ExplorerTopBar: React.FC = () => {
       return undefined;
     }
     const firstMenuItem = accountDropdownRef.current?.querySelector<HTMLElement>(
-      '[role="menuitem"]:not([disabled])'
+      'a[href], button:not([disabled])'
     );
     firstMenuItem?.focus();
     const onPointerDown = (event: PointerEvent): void => {
@@ -155,15 +156,25 @@ export const ExplorerTopBar: React.FC = () => {
               {KINLOOM_VOCABULARY.nav.places}
             </Link>
             <Link
-              to="/time"
-              className={cx(topBarStyles, `nav-pill nav-axis ${isTimeActive ? 'active' : ''}`)}
-              aria-current={isTimeActive ? 'page' : undefined}
+              to="/evidence"
+              className={cx(
+                topBarStyles,
+                `nav-pill nav-axis nav-pill-desktop-only ${location.pathname === '/evidence' ? 'active' : ''}`
+              )}
+              aria-current={location.pathname === '/evidence' ? 'page' : undefined}
             >
-              {KINLOOM_VOCABULARY.nav.time}
+              {KINLOOM_VOCABULARY.nav.evidence}
             </Link>
 
             <span className={cx(topBarStyles, 'nav-divider nav-pill-desktop-only')} aria-hidden="true" />
 
+            <Link
+              to="/time"
+              className={cx(topBarStyles, `nav-pill ${isTimeActive ? 'active' : ''}`)}
+              aria-current={isTimeActive ? 'page' : undefined}
+            >
+              {KINLOOM_VOCABULARY.nav.time}
+            </Link>
             <Link
               to="/tree"
               className={cx(topBarStyles, `nav-pill ${location.pathname === '/tree' ? 'active' : ''}`)}
@@ -187,16 +198,6 @@ export const ExplorerTopBar: React.FC = () => {
               aria-current={location.pathname === '/kinship' ? 'page' : undefined}
             >
               {KINLOOM_VOCABULARY.nav.kinship}
-            </Link>
-            <Link
-              to="/evidence"
-              className={cx(
-                topBarStyles,
-                `nav-pill nav-pill-desktop-only ${location.pathname === '/evidence' ? 'active' : ''}`
-              )}
-              aria-current={location.pathname === '/evidence' ? 'page' : undefined}
-            >
-              {KINLOOM_VOCABULARY.nav.evidence}
             </Link>
 
             {navPluginRoutes.map((route) => {
@@ -243,7 +244,7 @@ export const ExplorerTopBar: React.FC = () => {
 
           <button
             type="button"
-            className={cx(topBarStyles, 'nav-pill nav-pill-desktop-only')}
+            className={cx(topBarStyles, 'nav-pill nav-search-btn nav-pill-desktop-only')}
             onClick={openSearch}
             aria-label={KINLOOM_VOCABULARY.nav.searchDesktop}
             title={KINLOOM_VOCABULARY.nav.searchTooltip}
@@ -299,7 +300,7 @@ export const ExplorerTopBar: React.FC = () => {
                 type="button"
                 className={cx(wikiChromeStyles, `topbar-account-btn ${accountOpen ? 'is-open' : ''}`)}
                 aria-expanded={accountOpen}
-                aria-haspopup="menu"
+                aria-controls={disclosureMenuId}
                 aria-label={`Account menu for ${memberLabel}`}
                 onClick={() => {
                   setAccountOpen((open) => !open);
@@ -330,7 +331,7 @@ export const ExplorerTopBar: React.FC = () => {
                 type="button"
                 className={cx(topBarStyles, `topbar-mobile-icon-btn ${accountOpen ? 'is-open' : ''}`)}
                 aria-expanded={accountOpen}
-                aria-haspopup="menu"
+                aria-controls={disclosureMenuId}
                 aria-label="Archive menu"
                 title="Archive menu"
                 onClick={() => {
@@ -353,10 +354,13 @@ export const ExplorerTopBar: React.FC = () => {
             )}
 
             {accountOpen && (
-              <div
+              <nav
+                id={disclosureMenuId}
                 ref={accountDropdownRef}
-                className={cx(wikiChromeStyles, 'topbar-account-menu')}
-                role="menu"
+                className={joinClasses(
+                  cx(wikiChromeStyles, 'topbar-account-menu'),
+                  cx(topBarStyles, 'topbar-disclosure-panel')
+                )}
                 aria-label={isSignedInMember ? 'Account options' : 'Archive menu'}
               >
                 {isSignedInMember && (
@@ -369,146 +373,153 @@ export const ExplorerTopBar: React.FC = () => {
                 )}
 
                 {isInviteViewer && (
-                  <>
-                    <div className={cx(wikiChromeStyles, 'topbar-account-menu-header')}>
-                      <strong>
-                        {session?.inviteLabel ? `Invite: ${session.inviteLabel}` : 'Family Invite'}
-                      </strong>
-                      <span className={cx(wikiChromeStyles, 'wiki-role-chip')}>Viewer</span>
-                    </div>
-                    <button
-                      type="button"
-                      role="menuitem"
-                      className={cx(wikiChromeStyles, 'topbar-account-item')}
-                      onClick={() => {
-                        setAccountOpen(false);
-                        setSignInOpen(true);
-                      }}
-                    >
-                      Sign in to edit
-                    </button>
-                    <div className={cx(wikiChromeStyles, 'topbar-account-divider')} role="separator" />
-                  </>
+                  <div className={cx(wikiChromeStyles, 'topbar-account-menu-header')}>
+                    <strong>
+                      {session?.inviteLabel ? `Invite: ${session.inviteLabel}` : 'Family Invite'}
+                    </strong>
+                    <span className={cx(wikiChromeStyles, 'wiki-role-chip')}>Viewer</span>
+                  </div>
                 )}
 
-                <button
-                  type="button"
-                  role="menuitem"
-                  className={joinClasses(
-                    cx(wikiChromeStyles, 'topbar-account-item'),
-                    cx(topBarStyles, 'topbar-account-item-mobile-only')
+                <ul className={cx(topBarStyles, 'topbar-disclosure-list')}>
+                  {isInviteViewer && (
+                    <li>
+                      <button
+                        type="button"
+                        className={cx(wikiChromeStyles, 'topbar-account-item')}
+                        onClick={() => {
+                          setAccountOpen(false);
+                          setSignInOpen(true);
+                        }}
+                      >
+                        Sign in to edit
+                      </button>
+                    </li>
                   )}
-                  onClick={handleOpenSources}
-                >
-                  {KINLOOM_VOCABULARY.nav.sources}
-                </button>
 
-                <Link
-                  to="/evidence"
-                  role="menuitem"
-                  className={joinClasses(
-                    cx(wikiChromeStyles, 'topbar-account-item'),
-                    cx(topBarStyles, 'topbar-account-item-mobile-only'),
-                    location.pathname === '/evidence' ? 'active' : ''
-                  )}
-                  onClick={() => {
-                    setAccountOpen(false);
-                  }}
-                >
-                  {KINLOOM_VOCABULARY.nav.evidenceFull}
-                </Link>
+                  <li className={cx(topBarStyles, 'topbar-account-item-mobile-only')}>
+                    <button
+                      type="button"
+                      className={cx(wikiChromeStyles, 'topbar-account-item')}
+                      onClick={handleOpenSources}
+                    >
+                      {KINLOOM_VOCABULARY.nav.sources}
+                    </button>
+                  </li>
 
-                <Link
-                  to="/kinship"
-                  role="menuitem"
-                  className={joinClasses(
-                    cx(wikiChromeStyles, 'topbar-account-item'),
-                    cx(topBarStyles, 'topbar-account-item-mobile-only'),
-                    location.pathname === '/kinship' ? 'active' : ''
-                  )}
-                  onClick={() => {
-                    setAccountOpen(false);
-                  }}
-                >
-                  {KINLOOM_VOCABULARY.nav.kinshipFull}
-                </Link>
-
-                {navPluginRoutes.map((route) => {
-                  const isActive = isPluginNavRouteActive(route, location.pathname);
-                  return (
+                  <li className={cx(topBarStyles, 'topbar-account-item-mobile-only')}>
                     <Link
-                      key={`mobile:${route.pluginId}:${route.path}`}
-                      to={route.path}
-                      role="menuitem"
+                      to="/evidence"
                       className={joinClasses(
                         cx(wikiChromeStyles, 'topbar-account-item'),
-                        cx(topBarStyles, 'topbar-account-item-mobile-only'),
-                        isActive ? 'active' : ''
+                        location.pathname === '/evidence' ? 'active' : ''
                       )}
-                      aria-current={isActive ? 'page' : undefined}
+                      aria-current={location.pathname === '/evidence' ? 'page' : undefined}
                       onClick={() => {
                         setAccountOpen(false);
                       }}
                     >
-                      {route.navIcon && (
-                        <span className={cx(topBarStyles, 'nav-pill-icon')} aria-hidden="true">
-                          {route.navIcon}
-                        </span>
-                      )}
-                      <span>{route.navLabel}</span>
+                      {KINLOOM_VOCABULARY.nav.evidenceFull}
                     </Link>
-                  );
-                })}
+                  </li>
 
-                {isSignedInMember && capabilities.hasRevisionHistory && (
-                  <Link
-                    to="/changes"
-                    role="menuitem"
-                    className={cx(
-                      wikiChromeStyles,
-                      `topbar-account-item ${location.pathname === '/changes' ? 'active' : ''}`
-                    )}
-                    onClick={() => {
-                      setAccountOpen(false);
-                    }}
-                  >
-                    {KINLOOM_VOCABULARY.nav.recentChanges}
-                  </Link>
-                )}
-
-                {isSignedInMember && capabilities.canManageSite && (
-                  <Link
-                    to="/admin"
-                    role="menuitem"
-                    className={cx(
-                      wikiChromeStyles,
-                      `topbar-account-item ${location.pathname === '/admin' ? 'active' : ''}`
-                    )}
-                    onClick={() => {
-                      setAccountOpen(false);
-                    }}
-                  >
-                    {KINLOOM_VOCABULARY.nav.siteSettings}
-                  </Link>
-                )}
-
-                {isSignedInMember && dataSource.logout && (
-                  <>
-                    <div className={cx(wikiChromeStyles, 'topbar-account-divider')} role="separator" />
-                    <button
-                      type="button"
-                      role="menuitem"
-                      className={cx(wikiChromeStyles, 'topbar-account-item is-danger')}
-                      disabled={signingOut}
+                  <li className={cx(topBarStyles, 'topbar-account-item-mobile-only')}>
+                    <Link
+                      to="/kinship"
+                      className={joinClasses(
+                        cx(wikiChromeStyles, 'topbar-account-item'),
+                        location.pathname === '/kinship' ? 'active' : ''
+                      )}
+                      aria-current={location.pathname === '/kinship' ? 'page' : undefined}
                       onClick={() => {
-                        handleLogout();
+                        setAccountOpen(false);
                       }}
                     >
-                      {signingOut ? 'Signing out…' : 'Sign Out'}
-                    </button>
-                  </>
-                )}
-              </div>
+                      {KINLOOM_VOCABULARY.nav.kinshipFull}
+                    </Link>
+                  </li>
+
+                  {navPluginRoutes.map((route) => {
+                    const isActive = isPluginNavRouteActive(route, location.pathname);
+                    return (
+                      <li
+                        key={`mobile:${route.pluginId}:${route.path}`}
+                        className={cx(topBarStyles, 'topbar-account-item-mobile-only')}
+                      >
+                        <Link
+                          to={route.path}
+                          className={joinClasses(
+                            cx(wikiChromeStyles, 'topbar-account-item'),
+                            isActive ? 'active' : ''
+                          )}
+                          aria-current={isActive ? 'page' : undefined}
+                          onClick={() => {
+                            setAccountOpen(false);
+                          }}
+                        >
+                          {route.navIcon && (
+                            <span className={cx(topBarStyles, 'nav-pill-icon')} aria-hidden="true">
+                              {route.navIcon}
+                            </span>
+                          )}
+                          <span>{route.navLabel}</span>
+                        </Link>
+                      </li>
+                    );
+                  })}
+
+                  {isSignedInMember && capabilities.hasRevisionHistory && (
+                    <li>
+                      <Link
+                        to="/changes"
+                        className={cx(
+                          wikiChromeStyles,
+                          `topbar-account-item ${location.pathname === '/changes' ? 'active' : ''}`
+                        )}
+                        aria-current={location.pathname === '/changes' ? 'page' : undefined}
+                        onClick={() => {
+                          setAccountOpen(false);
+                        }}
+                      >
+                        {KINLOOM_VOCABULARY.nav.recentChanges}
+                      </Link>
+                    </li>
+                  )}
+
+                  {isSignedInMember && capabilities.canManageSite && (
+                    <li>
+                      <Link
+                        to="/admin"
+                        className={cx(
+                          wikiChromeStyles,
+                          `topbar-account-item ${location.pathname === '/admin' ? 'active' : ''}`
+                        )}
+                        aria-current={location.pathname === '/admin' ? 'page' : undefined}
+                        onClick={() => {
+                          setAccountOpen(false);
+                        }}
+                      >
+                        {KINLOOM_VOCABULARY.nav.siteSettings}
+                      </Link>
+                    </li>
+                  )}
+
+                  {isSignedInMember && dataSource.logout && (
+                    <li className={cx(topBarStyles, 'topbar-disclosure-danger-item')}>
+                      <button
+                        type="button"
+                        className={cx(wikiChromeStyles, 'topbar-account-item is-danger')}
+                        disabled={signingOut}
+                        onClick={() => {
+                          handleLogout();
+                        }}
+                      >
+                        {signingOut ? 'Signing out…' : 'Sign Out'}
+                      </button>
+                    </li>
+                  )}
+                </ul>
+              </nav>
             )}
           </div>
         </div>

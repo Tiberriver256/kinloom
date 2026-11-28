@@ -281,7 +281,9 @@ describe('Final behavioral coverage pass across TopBar, Tree search, AdminPage, 
         accountBtn.click();
       });
       await flushUi();
-      const menuLinks = Array.from(bar.querySelectorAll('[role="menuitem"]')) as HTMLElement[];
+      const menuLinks = Array.from(
+        bar.querySelectorAll('.topbar-account-menu a, .topbar-account-menu button')
+      ) as HTMLElement[];
       for (const item of menuLinks.slice(0, 4)) {
         act(() => {
           item.click();

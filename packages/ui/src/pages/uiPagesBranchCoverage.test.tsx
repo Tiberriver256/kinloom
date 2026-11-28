@@ -4043,7 +4043,7 @@ describe('Wave 2 branch coverage: telemetry, evidence, audio plugin, popovers, m
         </ArchiveProvider>
       </MemoryRouter>
     );
-    const acctBtn = topMount.container.querySelector<HTMLButtonElement>('button[aria-haspopup="menu"]');
+    const acctBtn = topMount.container.querySelector<HTMLButtonElement>('button[aria-expanded]');
     act(() => {
       acctBtn?.click();
     });
@@ -4067,9 +4067,7 @@ describe('Wave 2 branch coverage: telemetry, evidence, audio plugin, popovers, m
         </ArchiveProvider>
       </MemoryRouter>
     );
-    const inviteAcctBtn = inviteTopMount.container.querySelector<HTMLButtonElement>(
-      'button[aria-haspopup="menu"]'
-    );
+    const inviteAcctBtn = inviteTopMount.container.querySelector<HTMLButtonElement>('button[aria-expanded]');
     if (inviteAcctBtn) {
       act(() => {
         inviteAcctBtn.click();

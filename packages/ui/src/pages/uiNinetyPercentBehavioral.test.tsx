@@ -2332,7 +2332,11 @@ describe('UI >=90% behavioral completion suite across pages, drawers, and machin
     };
     openMenu();
     act(() => {
-      [...topBarView.querySelectorAll<HTMLButtonElement>('[role="menuitem"]')]
+      [
+        ...topBarView.querySelectorAll<HTMLButtonElement>(
+          '.topbar-account-menu a, .topbar-account-menu button'
+        ),
+      ]
         .find((b) => b.textContent?.includes('Sign in to edit'))
         ?.click();
     });
@@ -2342,7 +2346,7 @@ describe('UI >=90% behavioral completion suite across pages, drawers, and machin
     for (const itemText of ['Sources', 'Evidence', 'Kinship']) {
       openMenu();
       act(() => {
-        [...topBarView.querySelectorAll<HTMLElement>('[role="menuitem"]')]
+        [...topBarView.querySelectorAll<HTMLElement>('.topbar-account-menu a, .topbar-account-menu button')]
           .find((el) => el.textContent?.includes(itemText))
           ?.click();
       });

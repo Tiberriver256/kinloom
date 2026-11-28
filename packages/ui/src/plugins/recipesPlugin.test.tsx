@@ -516,7 +516,9 @@ describe('KinloomUiPlugin seams, ArchivalPrimitives, and Family Recipes UI (#47)
     act(() => {
       archiveMenuBtn?.click();
     });
-    const mobileMenuItems = [...container.querySelectorAll('[role="menuitem"]')].map((el) => el.textContent);
+    const mobileMenuItems = [
+      ...container.querySelectorAll('.topbar-account-menu a, .topbar-account-menu button'),
+    ].map((el) => el.textContent);
     expect(mobileMenuItems.some((txt) => txt?.includes('Recipes'))).toBe(true);
 
     // 2. PersonPage renders personRelated for deceased Ada Lovelace, and hides it for living person

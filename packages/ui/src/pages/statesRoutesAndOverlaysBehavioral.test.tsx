@@ -460,7 +460,7 @@ describe('Loading/error states, KinloomApp routes, ExplorerTopBar, Atoms actions
     });
     await flushUi();
     const closeLb = Array.from(c.querySelectorAll('button')).find((b) =>
-      b.textContent?.includes('Close [Esc]')
+      /Close.*Esc/i.test(b.textContent || '')
     );
     act(() => {
       closeLb?.click();
